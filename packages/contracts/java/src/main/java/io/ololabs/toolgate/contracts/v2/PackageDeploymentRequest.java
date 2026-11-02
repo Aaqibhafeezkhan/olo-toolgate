@@ -11,6 +11,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param deviceGroupIds canonical deviceGroupIds value
  * @param privateRanges canonical privateRanges value
  * @param destinationTls canonical destinationTls value
+ * @param effectPolicies canonical effectPolicies value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record PackageDeploymentRequest(
@@ -19,7 +20,8 @@ public record PackageDeploymentRequest(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "hostIds", required = false) java.util.List<String> hostIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceGroupIds", required = false) java.util.List<String> deviceGroupIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "privateRanges", required = false) java.util.List<PrivateRangeApproval> privateRanges,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "destinationTls", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> destinationTls
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "destinationTls", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> destinationTls,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectPolicies", required = false) java.util.List<RouteEffectPolicy> effectPolicies
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +31,7 @@ public record PackageDeploymentRequest(
      * @param deviceGroupIds canonical deviceGroupIds value
      * @param privateRanges canonical privateRanges value
      * @param destinationTls canonical destinationTls value
+     * @param effectPolicies canonical effectPolicies value
      */
     public PackageDeploymentRequest {
         java.util.Objects.requireNonNull(packageDigest, "packageDigest");
@@ -38,5 +41,8 @@ public record PackageDeploymentRequest(
         deviceGroupIds = deviceGroupIds == null ? null : java.util.List.copyOf(deviceGroupIds);
         privateRanges = privateRanges == null ? null : java.util.List.copyOf(privateRanges);
         destinationTls = destinationTls == null ? null : java.util.Map.copyOf(destinationTls);
+        effectPolicies = effectPolicies == null ? null : java.util.List.copyOf(effectPolicies);
     }
+    /** Construct legacy metadata without generic effect authority. */
+    public PackageDeploymentRequest(String packageDigest, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> globals, java.util.List<String> hostIds, java.util.List<String> deviceGroupIds, java.util.List<PrivateRangeApproval> privateRanges, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> destinationTls) { this(packageDigest, globals, hostIds, deviceGroupIds, privateRanges, destinationTls, null); }
 }

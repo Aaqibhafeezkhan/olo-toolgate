@@ -3202,5 +3202,72 @@
       "case": "unsupported retry policy",
       "value": "RETRY_ALWAYS"
     }
+  ],
+  "EffectClassification": [
+    {
+      "case": "unreviewed classification",
+      "value": "SAFE"
+    }
+  ],
+  "EffectBodyMode": [
+    {
+      "case": "unprovable dynamic body",
+      "value": "DYNAMIC"
+    }
+  ],
+  "EffectGrant": [
+    {
+      "case": "window exceeds two seconds",
+      "value": {
+        "grant": {
+          "jws": "a.b.c"
+        },
+        "validForMs": 2001
+      }
+    },
+    {
+      "case": "expired window",
+      "value": {
+        "grant": {
+          "jws": "a.b.c"
+        },
+        "validForMs": 0
+      }
+    }
+  ],
+  "EffectGrantDispatchAllowed": [
+    {
+      "case": "ambiguous allowed value",
+      "value": {
+        "authorized": "true"
+      }
+    }
+  ],
+  "RouteEffectPolicy": [
+    {
+      "case": "publisher cannot stamp review",
+      "value": {
+        "routeId": "send",
+        "classification": "FINANCIAL",
+        "consentRequired": false,
+        "acknowledgedUnfencedRisk": true,
+        "intent": {
+          "path": "/send",
+          "query": {},
+          "headers": {},
+          "contentType": "application/json",
+          "bodyMode": "CANONICAL_JSON",
+          "body": {
+            "recipient": {
+              "$arg": "/recipient"
+            },
+            "amount": {
+              "$arg": "/amount"
+            }
+          }
+        },
+        "reviewedBy": "publisher"
+      }
+    }
   ]
 }

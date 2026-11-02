@@ -9,6 +9,10 @@ public interface EffectStore {
     record Generation(Binding binding,long generation,String state,long revision,String consumer,String claimToken) {}
     /** False on replay: observing a previous authorization is not permission to dispatch it again. */
     record Authorization(Generation generation,boolean newAuthority) {}
+    /** Exact reconstructed request, retained without raw admitted arguments. */
+    record Intent(String effectId,String requestDigest,String argumentsDigest,String profileDigest,String classification,String document,long recordedAt) {}
+    default void recordIntent(Intent intent){throw Failure.unavailable();}
+    default Intent intent(String effectId){throw Failure.unavailable();}
     Generation byNonce(String nonce);
     default Generation current(String effectId){throw Failure.unavailable();}
     Authorization authorize(Binding binding,long now);

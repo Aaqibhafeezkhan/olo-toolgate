@@ -11,6 +11,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param destinations canonical destinations value
  * @param routes canonical routes value
  * @param privateRanges canonical privateRanges value
+ * @param effectReviews canonical effectReviews value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServiceProfile(
@@ -19,7 +20,8 @@ public record ServiceProfile(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "packageId", required = true) String packageId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "destinations", required = true) java.util.List<ServiceDestination> destinations,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "routes", required = true) java.util.List<RouteDeclaration> routes,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "privateRanges", required = true) java.util.List<PrivateRangeApproval> privateRanges
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "privateRanges", required = true) java.util.List<PrivateRangeApproval> privateRanges,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectReviews", required = false) java.util.List<RouteEffectReview> effectReviews
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +31,7 @@ public record ServiceProfile(
      * @param destinations canonical destinations value
      * @param routes canonical routes value
      * @param privateRanges canonical privateRanges value
+     * @param effectReviews canonical effectReviews value
      */
     public ServiceProfile {
         java.util.Objects.requireNonNull(profileId, "profileId");
@@ -40,5 +43,8 @@ public record ServiceProfile(
         routes = routes == null ? null : java.util.List.copyOf(routes);
         java.util.Objects.requireNonNull(privateRanges, "privateRanges");
         privateRanges = privateRanges == null ? null : java.util.List.copyOf(privateRanges);
+        effectReviews = effectReviews == null ? null : java.util.List.copyOf(effectReviews);
     }
+    /** Construct legacy metadata without generic effect authority. */
+    public ServiceProfile(String profileId, Long revision, String packageId, java.util.List<ServiceDestination> destinations, java.util.List<RouteDeclaration> routes, java.util.List<PrivateRangeApproval> privateRanges) { this(profileId, revision, packageId, destinations, routes, privateRanges, null); }
 }

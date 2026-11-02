@@ -13,6 +13,19 @@ final class JdbcEffectStore implements EffectStore {
     private PreparedStatement query(String sql,Object... values)throws SQLException{
         var s=connection.prepareStatement(sql);s.setString(1,tenant);for(int n=0;n<values.length;n++)s.setObject(n+2,values[n]);return s;
     }
+    public Intent intent(String effectId){
+        try(var s=query("SELECT request_digest,arguments_digest,profile_digest,classification,document,recorded_at FROM control_effect_intents WHERE tenant_id=? AND effect_id=?",effectId);var rows=s.executeQuery()){
+            return rows.next()?new Intent(effectId,rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getLong(6)):null;
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public void recordIntent(Intent intent){
+        text(intent.effectId());digest(intent.requestDigest());digest(intent.argumentsDigest());digest(intent.profileDigest());
+        var existing=intent(intent.effectId());
+        if(existing!=null){if(!existing.equals(intent))throw Failure.conflict();return;}
+        try(var s=query("INSERT INTO control_effect_intents(tenant_id,effect_id,request_digest,arguments_digest,profile_digest,classification,document,recorded_at) VALUES(?,?,?,?,?,?,?,?)",
+                intent.effectId(),intent.requestDigest(),intent.argumentsDigest(),intent.profileDigest(),intent.classification(),intent.document(),intent.recordedAt())){s.executeUpdate();}
+        catch(SQLException failure){throw Failure.unavailable();}
+    }
     public Generation byNonce(String nonce){
         try(var s=query("SELECT e.effect_id,e.operation_id,g.attempt_id,e.route_id,e.request_digest,g.device_id,g.broker_id,g.handler_id,g.auth_nonce,g.expires_at,g.outcome_deadline,g.generation,g.state,g.revision,g.consumer,g.claim_token FROM control_effect_generations g JOIN control_effects e ON e.tenant_id=g.tenant_id AND e.effect_id=g.effect_id WHERE g.tenant_id=? AND g.auth_nonce=?",nonce);var rows=s.executeQuery()){
             if(!rows.next())return null;

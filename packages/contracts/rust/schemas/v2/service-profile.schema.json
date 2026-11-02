@@ -155,6 +155,13 @@
             "$ref": "service-profile.schema.json#/$defs/PrivateRangeApproval"
           },
           "maxItems": 64
+        },
+        "effectReviews": {
+          "type": "array",
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/RouteEffectReview"
+          },
+          "maxItems": 256
         }
       },
       "required": [

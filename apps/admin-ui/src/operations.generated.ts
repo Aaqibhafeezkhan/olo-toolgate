@@ -184,6 +184,8 @@ export const operations = {
   getToolHostDispatchStatus: { method: 'GET', path: '/api/control/v1/access/dispatches/{id}' },
   getDeviceEnterpriseOutcome: { method: 'GET', path: '/api/control/v1/access/invocations/{id}/device-outcome' },
   renewExecutionLease: { method: 'POST', path: '/api/control/v1/access/invocations/{id}/heartbeat' },
+  issueEffectGrant: { method: 'POST', path: '/api/control/v1/access/effects/authorize' },
+  beginEffectGrantDispatch: { method: 'POST', path: '/api/control/v1/access/effects/sending' },
   reportEnterpriseEffect: { method: 'POST', path: '/api/control/v1/access/effects/report' },
   listConfigurationChanges: { method: 'GET', path: '/api/control/v1/configuration-changes' },
   getConfigurationChange: { method: 'GET', path: '/api/control/v1/configuration-changes/{id}' },

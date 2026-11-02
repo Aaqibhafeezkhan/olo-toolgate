@@ -112,7 +112,7 @@ pub struct AddressPolicy {
 }
 
 impl AddressPolicy {
-    fn checked_addresses(
+    pub(crate) fn checked_addresses(
         &self,
         addresses: Vec<SocketAddr>,
     ) -> Result<Vec<SocketAddr>, AddressRefused> {
@@ -189,6 +189,25 @@ pub fn client_with_identity(
     policy: AddressPolicy,
     identity: Option<reqwest::Identity>,
 ) -> Result<reqwest::Client, String> {
+    build_client(destination, policy, identity, None)
+}
+
+/// TLS still verifies the real URL host; this socket supplies only the private fixed-destination byte transport.
+#[cfg(unix)]
+pub(crate) fn client_with_socket(
+    destination: &ServiceDestination,
+    policy: AddressPolicy,
+    socket: &std::path::Path,
+) -> Result<reqwest::Client, String> {
+    build_client(destination, policy, None, Some(socket))
+}
+
+fn build_client(
+    destination: &ServiceDestination,
+    policy: AddressPolicy,
+    identity: Option<reqwest::Identity>,
+    socket: Option<&std::path::Path>,
+) -> Result<reqwest::Client, String> {
     if !destination.host.eq_ignore_ascii_case(&policy.host)
         || destination.port != u64::from(policy.port)
     {
@@ -217,6 +236,14 @@ pub fn client_with_identity(
         // Disable HTTP/1 connection reuse so this path always uses a fresh connection.
         .pool_max_idle_per_host(0)
         .dns_resolver(Arc::new(CheckedResolver(policy)));
+    #[cfg(unix)]
+    if let Some(socket) = socket {
+        builder = builder.unix_socket(socket);
+    }
+    #[cfg(not(unix))]
+    if socket.is_some() {
+        return Err("bounded effect transport requires Unix sockets".into());
+    }
     if let Some(identity) = identity {
         builder = builder.identity(identity);
     }

@@ -3041,5 +3041,135 @@
       "olo://{tenant}/conversation/{conversationId}"
     ]
   },
-  "ToolReconciliation": "STATUS_LOOKUP"
+  "ToolReconciliation": "STATUS_LOOKUP",
+  "EffectClassification": "READ",
+  "EffectBodyMode": "NONE",
+  "EffectIntentBlueprint": {
+    "path": "/send",
+    "query": {},
+    "headers": {},
+    "contentType": "",
+    "bodyMode": "NONE",
+    "body": null
+  },
+  "RouteEffectPolicy": {
+    "routeId": "send",
+    "classification": "FINANCIAL",
+    "consentRequired": false,
+    "acknowledgedUnfencedRisk": true,
+    "intent": {
+      "path": "/send",
+      "query": {},
+      "headers": {},
+      "contentType": "application/json",
+      "bodyMode": "CANONICAL_JSON",
+      "body": {
+        "recipient": {
+          "$arg": "/recipient"
+        },
+        "amount": {
+          "$arg": "/amount"
+        }
+      }
+    }
+  },
+  "RouteEffectReview": {
+    "policy": {
+      "routeId": "send",
+      "classification": "FINANCIAL",
+      "consentRequired": false,
+      "acknowledgedUnfencedRisk": true,
+      "intent": {
+        "path": "/send",
+        "query": {},
+        "headers": {},
+        "contentType": "application/json",
+        "bodyMode": "CANONICAL_JSON",
+        "body": {
+          "recipient": {
+            "$arg": "/recipient"
+          },
+          "amount": {
+            "$arg": "/amount"
+          }
+        }
+      }
+    },
+    "reviewedBy": "admin",
+    "reviewedAtUnixMs": 1000
+  },
+  "EffectGrantIssue": {
+    "invocationId": "inv-example",
+    "fencingToken": "fence-example",
+    "invocationPermit": {
+      "jws": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+    },
+    "brokerInstanceId": "broker-example",
+    "handlerId": "handler-example",
+    "arguments": {
+      "recipient": "alice",
+      "amount": 1234
+    },
+    "httpRequestDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "httpRequestManifest": {
+      "version": "toolgate-http-request-v1",
+      "profileId": "sp-example",
+      "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "routeId": "send",
+      "scheme": "https",
+      "host": "api.example.test",
+      "port": 443,
+      "method": "POST",
+      "path": "/send",
+      "query": "",
+      "headers": {
+        "accept": [
+          "*/*"
+        ]
+      },
+      "contentType": "application/json",
+      "bodyDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "authDeclarationId": null,
+      "credentialHeaders": []
+    }
+  },
+  "EffectGrantClaims": {
+    "iss": "control",
+    "aud": "device",
+    "iat": 1000,
+    "nbf": 1000,
+    "exp": 3000,
+    "tenantId": "tenant-example",
+    "invocationId": "inv-example",
+    "fencingToken": "fence-example",
+    "authorizationEpoch": 1,
+    "effectId": "eff-example",
+    "generation": 1,
+    "authNonce": "auth-example",
+    "brokerInstanceId": "broker-example",
+    "handlerId": "handler-example",
+    "httpRequestDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "routeId": "send",
+    "classification": "FINANCIAL"
+  },
+  "SignedEffectGrant": {
+    "jws": "eyJhbGciOiJSUzI1NiJ9.eyJleGFtcGxlIjp0cnVlfQ.c2lnbmF0dXJl"
+  },
+  "EffectGrant": {
+    "grant": {
+      "jws": "eyJhbGciOiJSUzI1NiJ9.eyJleGFtcGxlIjp0cnVlfQ.c2lnbmF0dXJl"
+    },
+    "validForMs": 2000
+  },
+  "EffectGrantDispatch": {
+    "grant": {
+      "jws": "eyJhbGciOiJSUzI1NiJ9.eyJleGFtcGxlIjp0cnVlfQ.c2lnbmF0dXJl"
+    },
+    "brokerInstanceId": "broker-example",
+    "handlerId": "handler-example"
+  },
+  "EffectGrantDispatchAllowed": {
+    "authorized": true
+  }
 }

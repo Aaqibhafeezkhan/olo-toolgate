@@ -90,3 +90,31 @@ it('hides deployment profiles without package.read',async()=>{
  expect(screen.queryByText('Deployment profiles')).toBeNull();
  expect(fetcher.mock.calls.some(([url])=>url.endsWith('/packages/provisioning'))).toBe(false);
 });
+
+it('requires explicit intent and critical-risk review and submits no client review stamp',async()=>{
+ const route={id:'send',destination:'payments',method:'POST',path:'/send',query:[],headers:[],
+  requestContentTypes:['application/json'],maxRequestBytes:1024,maxResponseBytes:1024,streaming:'NONE',timeoutMs:1000};
+ const reviewedVersion={...version,manifest:{tools:[{descriptor:{...tool.descriptor,routes:[route]}}]}};
+ const fetcher=vi.fn(async(url:string,init?:RequestInit)=>{
+  if(init?.method==='POST')return json({packageId:'acme.orders',version:'0.1.0',revision:2});
+  return json({items:url.endsWith('/deployments')?[]:[reviewedVersion]});
+ });
+ vi.stubGlobal('fetch',profiled(fetcher));render(<ServerPackages client={new ControlClient('token',vi.fn())}/>);
+ await screen.findByText('acme.orders/greet');
+ fireEvent.change(screen.getByLabelText('Version'),{target:{value:digest}});
+ const form=screen.getByRole('button',{name:'Deploy'}).closest('form')!;
+ fireEvent.submit(form);
+ await screen.findByText('Review the effect classification for send.');
+ expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false);
+ fireEvent.change(screen.getByLabelText('Effect classification for send'),{target:{value:'FINANCIAL'}});
+ const intent={path:'/send',query:{},headers:{},contentType:'application/json',bodyMode:'CANONICAL_JSON',
+  body:{recipient:{$arg:'/recipient'},amount:{$arg:'/amount'}}};
+ fireEvent.change(screen.getByLabelText('Request intent for send (JSON)'),{target:{value:JSON.stringify(intent)}});
+ fireEvent.submit(form);await screen.findByText('Acknowledge the unfenced target risk for send.');
+ fireEvent.click(screen.getByLabelText(/I acknowledge that send/));
+ fireEvent.submit(form);
+ await waitFor(()=>expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
+ const body=JSON.parse(String(fetcher.mock.calls.find(([,init])=>init?.method==='POST')![1]?.body));
+ expect(body.effectPolicies).toEqual([{routeId:'send',classification:'FINANCIAL',consentRequired:false,acknowledgedUnfencedRisk:true,intent}]);
+ expect(body.effectPolicies[0]).not.toHaveProperty('reviewedBy');
+});

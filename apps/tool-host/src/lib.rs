@@ -22,6 +22,8 @@ pub mod permit;
 mod request_binding;
 pub mod runner;
 pub mod sandbox;
+#[cfg(unix)]
+mod send_window;
 pub mod server;
 pub mod store;
 pub mod stream;

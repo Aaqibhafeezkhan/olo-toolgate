@@ -114,6 +114,7 @@ struct Seen {
     events: Vec<Value>,
     order: Vec<&'static str>,
     reports: Vec<Value>,
+    effect_owners: std::collections::HashMap<String, (String, bool)>,
     consumed: Vec<Value>,
     upstream: Vec<Value>,
     /// Pull mode: dispatches Control holds for the host, and what the host answered.
@@ -134,6 +135,60 @@ async fn serve(router: Router) -> u16 {
 }
 
 async fn control(seen: Shared) -> u16 {
+    async fn authorize_effect(
+        State(seen): State<Shared>,
+        Json(body): Json<Value>,
+    ) -> axum::response::Response {
+        let mut seen = seen.lock().unwrap();
+        if seen.revoke || seen.partition {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        assert_eq!(body["fencingToken"], FENCE);
+        let parts: Vec<_> = body["invocationPermit"]["jws"]
+            .as_str()
+            .unwrap()
+            .split('.')
+            .collect();
+        let proof: Value =
+            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(parts[1]).unwrap()).unwrap();
+        assert_eq!(
+            proof["argumentsDigest"],
+            tool_host::digest::jcs(&body["arguments"]).unwrap()
+        );
+        assert_eq!(
+            body["httpRequestDigest"],
+            tool_host::digest::jcs(&body["httpRequestManifest"]).unwrap()
+        );
+        let handler = body["handlerId"].as_str().unwrap().to_owned();
+        assert!(seen
+            .effect_owners
+            .insert(
+                handler.clone(),
+                (body["brokerInstanceId"].as_str().unwrap().into(), false)
+            )
+            .is_none());
+        Json(json!({"grant":{"jws":handler},"validForMs":2000})).into_response()
+    }
+    async fn sending_effect(
+        State(seen): State<Shared>,
+        Json(body): Json<Value>,
+    ) -> axum::response::Response {
+        let mut seen = seen.lock().unwrap();
+        if seen.revoke || seen.partition {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        let handler = body["handlerId"].as_str().unwrap();
+        assert_eq!(body["grant"]["jws"], handler);
+        let owner = seen
+            .effect_owners
+            .get_mut(handler)
+            .expect("grant before send");
+        assert_eq!(body["brokerInstanceId"], owner.0);
+        assert!(!owner.1);
+        owner.1 = true;
+        Json(json!({"authorized":true})).into_response()
+    }
+
     async fn heartbeat(
         State(seen): State<Shared>,
         Json(body): Json<Value>,
@@ -231,6 +286,14 @@ async fn control(seen: Shared) -> u16 {
                 post(heartbeat),
             )
             .route("/api/control/v1/access/effects/report", post(report))
+            .route(
+                "/api/control/v1/access/effects/authorize",
+                post(authorize_effect),
+            )
+            .route(
+                "/api/control/v1/access/effects/sending",
+                post(sending_effect),
+            )
             .route(
                 "/api/control/v1/access/invocations/{id}/events",
                 post(events),

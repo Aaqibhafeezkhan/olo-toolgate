@@ -29,12 +29,13 @@ class UiContractTest(unittest.TestCase):
         self.assertEqual(3,len(module.merge(merged,ui)['components']))
 
     def test_checked_in_operations_match_canonical_openapi(self):
-        self.assertEqual(generator.TARGET.read_text(encoding='utf-8'),generator.output())
-        self.assertIn("from '@olo-labs/toolgate-contracts'",generator.output())
+        generated=generator.output()
+        self.assertEqual(generator.TARGET.read_text(encoding='utf-8'),generated)
+        self.assertIn("from '@olo-labs/toolgate-contracts'",generated)
         api=yaml.safe_load((ROOT/'packages/contracts/openapi/control-v1.yaml').read_text())
         operations=[operation['operationId'] for methods in api['paths'].values() for method,operation in methods.items() if method in ('get','post','put','patch','delete')]
-        self.assertEqual(generator.output().count('method:'),len(operations))
-        for operation in operations:self.assertEqual(generator.output().count(operation+': {'),1)
+        self.assertEqual(generated.count('method:'),len(operations))
+        for operation in operations:self.assertEqual(generated.count(operation+': {'),1)
 
     def test_drift_gate_rejects_stale_generated_client(self):
         with tempfile.TemporaryDirectory() as folder:

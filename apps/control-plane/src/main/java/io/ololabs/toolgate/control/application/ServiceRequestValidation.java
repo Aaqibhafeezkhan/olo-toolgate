@@ -25,7 +25,15 @@ public final class ServiceRequestValidation {
         }
         if(manifest==null||request.invocationPermit()==null||request.brokerInstanceId()==null||request.handlerId()==null||lease==null||lease.expiresAt()<=now
             ||!lease.deviceId().equals(device)||!lease.fencingToken().equals(invocation.reservedNonce()))throw ManagementAccess.denied();
-        var claims=signer.verifyInvocation(request.invocationPermit());
+        var profile=admission(tx,codec,signer,issuer,invocation,device,request.invocationPermit(),manifest,now);
+        validateManifest(profile,manifest,request.audience(),invocation.evaluation().action(),"sha256:"+invocation.evaluation().argumentsDigest());
+        if(!Canonical.arguments(tree(codec.json(manifest))).equals(request.httpRequestDigest()))throw ManagementAccess.denied();
+    }
+
+    /** Shared signed admission/profile verification. The caller must check current authority and the live lease. */
+    public static ServiceProfile admission(Store.Session tx,Codec codec,EffectSigner signer,String issuer,EnterpriseInvocation invocation,
+            String device,io.ololabs.toolgate.contracts.v2.SignedInvocationPermit proof,PreparedHttpRequestManifest manifest,long now){
+        var claims=signer.verifyInvocation(proof);
         var e=invocation.evaluation();var c=e.context();var identity=claims.identity();var target=claims.target();
         if(!issuer.equals(claims.iss())||!device.equals(claims.aud())||!invocation.id().equals(claims.invocationId())
             ||!invocation.reservedNonce().equals(claims.nonce())||claims.iat()>now||claims.nbf()>now
@@ -45,8 +53,7 @@ public final class ServiceRequestValidation {
         if(!profile.profileId().equals(manifest.profileId())||!target.serviceProfileDigest().equals(manifest.profileDigest())
             ||!profile.revision().equals(target.serviceProfileRevision())||!target.routes().contains(manifest.routeId()))
             throw ManagementAccess.denied();
-        validateManifest(profile,manifest,request.audience(),e.action(),"sha256:"+e.argumentsDigest());
-        if(!Canonical.arguments(tree(codec.json(manifest))).equals(request.httpRequestDigest()))throw ManagementAccess.denied();
+        return profile;
     }
 
     /** profile must already have been loaded by a verified signed digest. */
@@ -89,7 +96,7 @@ public final class ServiceRequestValidation {
         if(!m.headers().containsKey("accept"))throw ManagementAccess.denied();
     }
 
-    private static boolean pathMatches(String template,String actual){
+    static boolean pathMatches(String template,String actual){
         String[] expected=template.split("/",-1),given=actual.split("/",-1);
         if(expected.length!=given.length)return false;
         for(int n=0;n<expected.length;n++){

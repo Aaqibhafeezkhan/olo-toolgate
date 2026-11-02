@@ -297,6 +297,64 @@ export interface EffectApproval {
   readonly missingKeyPolicy: MissingKeyPolicy;
   readonly approvalId: string;
 }
+export type EffectBodyMode = "NONE" | "CANONICAL_JSON";
+export type EffectClassification = "READ" | "WRITE" | "DESTRUCTIVE" | "FINANCIAL";
+/** Issued authority and conservative monotonic send budget, measured from before the issuance request. */
+export interface EffectGrant {
+  readonly grant: SignedEffectGrant;
+  readonly validForMs: number;
+}
+/** Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline. */
+export interface EffectGrantClaims {
+  readonly iss: string;
+  readonly aud: string;
+  readonly iat: number;
+  readonly nbf: number;
+  readonly exp: number;
+  readonly tenantId: string;
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly authorizationEpoch: number;
+  readonly effectId: string;
+  readonly generation: number;
+  readonly authNonce: string;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+  readonly httpRequestDigest: string;
+  readonly profileDigest: string;
+  readonly routeId: string;
+  readonly classification: EffectClassification;
+}
+/** One owner may claim the SENDING transition once. */
+export interface EffectGrantDispatch {
+  readonly grant: SignedEffectGrant;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+}
+/** Only explicit true permits the single transport send. */
+export interface EffectGrantDispatchAllowed {
+  readonly authorized: boolean;
+}
+/** Request for fresh owner-bound authority. Control independently verifies the signed argument preimage and reconstructs the reviewed request. */
+export interface EffectGrantIssue {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly invocationPermit: SignedInvocationPermit;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+  readonly arguments: Record<string, unknown>;
+  readonly httpRequestDigest: string;
+  readonly httpRequestManifest: V1.PreparedHttpRequestManifest;
+}
+/** Reviewed request blueprint. Values are constants or closed $arg JSON-pointer references; resolved argument data is never interpreted as a template. */
+export interface EffectIntentBlueprint {
+  readonly path: unknown;
+  readonly query: Record<string, unknown>;
+  readonly headers: Record<string, unknown>;
+  readonly contentType: string;
+  readonly bodyMode: EffectBodyMode;
+  readonly body: unknown;
+}
 export type EffectSafety = "READ_ONLY" | "IDEMPOTENT" | "NON_IDEMPOTENT" | "UNKNOWN";
 /** GET /api/control/v1/deployments/{bindingId}/effective. */
 export interface EffectiveDeployment {
@@ -989,6 +1047,7 @@ export interface PackageDeploymentRequest {
   readonly deviceGroupIds?: ReadonlyArray<string>;
   readonly privateRanges?: ReadonlyArray<PrivateRangeApproval>;
   readonly destinationTls?: Record<string, unknown>;
+  readonly effectPolicies?: ReadonlyArray<RouteEffectPolicy>;
 }
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {
@@ -1279,6 +1338,20 @@ export interface RouteDeclaration {
   readonly timeoutMs: number;
   readonly auth?: string;
 }
+/** Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented. */
+export interface RouteEffectPolicy {
+  readonly routeId: string;
+  readonly classification: EffectClassification;
+  readonly consentRequired: boolean;
+  readonly acknowledgedUnfencedRisk: boolean;
+  readonly intent: EffectIntentBlueprint;
+}
+/** Review stamp created by Control, never accepted from package or worker input. */
+export interface RouteEffectReview {
+  readonly policy: RouteEffectPolicy;
+  readonly reviewedBy: string;
+  readonly reviewedAtUnixMs: number;
+}
 /** One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only. */
 export interface RunEvent {
   readonly cursor: number;
@@ -1402,9 +1475,14 @@ export interface ServiceProfile {
   readonly destinations: ReadonlyArray<ServiceDestination>;
   readonly routes: ReadonlyArray<RouteDeclaration>;
   readonly privateRanges: ReadonlyArray<PrivateRangeApproval>;
+  readonly effectReviews?: ReadonlyArray<RouteEffectReview>;
 }
 export type ServiceRoute = RouteDeclaration;
 export type Sha256 = string;
+/** JWS with the fixed toolgate-effect-grant-v1 type; not interchangeable with admission or service permits. */
+export interface SignedEffectGrant {
+  readonly jws: string;
+}
 /** Compact JWS over InvocationPermitClaims. */
 export interface SignedInvocationPermit {
   readonly jws: string;

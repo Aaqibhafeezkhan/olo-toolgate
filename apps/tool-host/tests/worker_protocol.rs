@@ -74,6 +74,38 @@ fn invocation(input: &ToolInput) -> Invocation {
     invocation.require_isolated_broker().unwrap();
     invocation
 }
+async fn effect_control() -> (Arc<Control>, tokio::task::JoinHandle<()>) {
+    async fn issue(axum::Json(body): axum::Json<Value>) -> axum::Json<Value> {
+        assert_eq!(body["invocationId"], "protocol-test");
+        assert_eq!(body["fencingToken"], "fence");
+        assert_eq!(body["invocationPermit"]["jws"], "protocol-fixture-only");
+        assert_eq!(
+            body["httpRequestDigest"],
+            tool_host::digest::jcs(&body["httpRequestManifest"]).unwrap()
+        );
+        axum::Json(json!({"grant":{"jws":"protocol-grant"},"validForMs":2000}))
+    }
+    async fn sending(axum::Json(body): axum::Json<Value>) -> axum::Json<Value> {
+        assert_eq!(body["grant"]["jws"], "protocol-grant");
+        axum::Json(json!({"authorized":true}))
+    }
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new()
+        .route(
+            "/api/control/v1/access/effects/authorize",
+            axum::routing::post(issue),
+        )
+        .route(
+            "/api/control/v1/access/effects/sending",
+            axum::routing::post(sending),
+        );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let config = serde_json::from_value(json!({"tenantId":"10000000-0000-4000-8000-000000000001",
+        "url":format!("http://{address}"),"developmentLoopbackHttp":true}))
+    .unwrap();
+    (Arc::new(Control::new(&config).unwrap()), server)
+}
 async fn execute(
     area: &Area,
     artifact: &Path,
@@ -186,7 +218,7 @@ async fn a_result_printed_during_an_outstanding_broker_call_cannot_finish_the_ru
     let input = input();
     let routes = vec![serde_json::from_value(json!({"id":"pending","destination":"api","method":"GET","path":"/pending","query":[],"headers":[],"requestContentTypes":[],"maxRequestBytes":0,"maxResponseBytes":4096,"streaming":"NONE","timeoutMs":10000})).unwrap()];
     let destinations = vec![serde_json::from_value(json!({"id":"api","host":"127.0.0.1","port":address.port(),"tls":{"spkiPins":[]},"scheme":"https","mode":"BROKERED"})).unwrap()];
-    let config = serde_json::from_value(json!({"tenantId":"10000000-0000-4000-8000-000000000001","url":"http://127.0.0.1:1","developmentLoopbackHttp":true})).unwrap();
+    let (control, authority_server) = effect_control().await;
     let mut owned = Invocation::new(
         "protocol-test".into(),
         "fence".into(),
@@ -200,11 +232,14 @@ async fn a_result_printed_during_an_outstanding_broker_call_cannot_finish_the_ru
         vec![],
         Default::default(),
         true,
-        Arc::new(Control::new(&config).unwrap()),
+        control,
     );
     owned.invocation_permit = Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
         jws: "protocol-fixture-only".into(),
     });
+    owned
+        .bind_effect_arguments(input.arguments.clone())
+        .unwrap();
     let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_olo-toolgate-tool-host"))
         .arg("--invocation-broker")
         .env_clear()
@@ -243,6 +278,7 @@ async fn a_result_printed_during_an_outstanding_broker_call_cannot_finish_the_ru
     connection.finish().await;
     assert!(child.wait().await.unwrap().success());
     target.abort();
+    authority_server.abort();
 }
 
 #[tokio::test]
@@ -289,7 +325,7 @@ async fn exercise_pending_call(stderr_flood: bool) {
     let input = input();
     let routes=vec![serde_json::from_value(json!({"id":"pending","destination":"api","method":"GET","path":"/pending","query":[],"headers":[],"requestContentTypes":[],"maxRequestBytes":0,"maxResponseBytes":4096,"streaming":"NONE","timeoutMs":10000})).unwrap()];
     let destinations=vec![serde_json::from_value(json!({"id":"api","host":"127.0.0.1","port":address.port(),"tls":{"spkiPins":[]},"scheme":"https","mode":"BROKERED"})).unwrap()];
-    let config=serde_json::from_value(json!({"tenantId":"10000000-0000-4000-8000-000000000001","url":"http://127.0.0.1:1","developmentLoopbackHttp":true})).unwrap();
+    let (control, authority_server) = effect_control().await;
     let mut owned = Invocation::new(
         "protocol-test".into(),
         "fence".into(),
@@ -303,11 +339,14 @@ async fn exercise_pending_call(stderr_flood: bool) {
         vec![],
         Default::default(),
         true,
-        Arc::new(Control::new(&config).unwrap()),
+        control,
     );
     owned.invocation_permit = Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
         jws: "protocol-fixture-only".into(),
     });
+    owned
+        .bind_effect_arguments(input.arguments.clone())
+        .unwrap();
     let mut child = tokio::process::Command::new(env!("CARGO_BIN_EXE_olo-toolgate-tool-host"))
         .arg("--invocation-broker")
         .env_clear()
@@ -344,6 +383,7 @@ async fn exercise_pending_call(stderr_flood: bool) {
     }
     connection.finish().await;
     target.await.unwrap();
+    authority_server.abort();
     tokio::time::timeout(Duration::from_secs(3), child.wait())
         .await
         .expect("broker did not stop after cancellation")

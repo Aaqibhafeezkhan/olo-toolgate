@@ -560,6 +560,94 @@ pub struct EffectApproval {
     pub missing_key_policy: MissingKeyPolicy,
     pub approval_id: String,
 }
+/// Canonical EffectBodyMode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EffectBodyMode {
+    #[serde(rename = "NONE")]
+    None,
+    #[serde(rename = "CANONICAL_JSON")]
+    CanonicalJson,
+}
+/// Canonical EffectClassification wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EffectClassification {
+    #[serde(rename = "READ")]
+    Read,
+    #[serde(rename = "WRITE")]
+    Write,
+    #[serde(rename = "DESTRUCTIVE")]
+    Destructive,
+    #[serde(rename = "FINANCIAL")]
+    Financial,
+}
+/// Issued authority and conservative monotonic send budget, measured from before the issuance request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectGrant {
+    pub grant: SignedEffectGrant,
+    pub valid_for_ms: u64,
+}
+/// Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectGrantClaims {
+    pub iss: String,
+    pub aud: String,
+    pub iat: u64,
+    pub nbf: u64,
+    pub exp: u64,
+    pub tenant_id: String,
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub authorization_epoch: u64,
+    pub effect_id: String,
+    pub generation: u64,
+    pub auth_nonce: String,
+    pub broker_instance_id: String,
+    pub handler_id: String,
+    pub http_request_digest: String,
+    pub profile_digest: String,
+    pub route_id: String,
+    pub classification: EffectClassification,
+}
+/// One owner may claim the SENDING transition once.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectGrantDispatch {
+    pub grant: SignedEffectGrant,
+    pub broker_instance_id: String,
+    pub handler_id: String,
+}
+/// Only explicit true permits the single transport send.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectGrantDispatchAllowed {
+    pub authorized: bool,
+}
+/// Request for fresh owner-bound authority. Control independently verifies the signed argument preimage and reconstructs the reviewed request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectGrantIssue {
+    pub invocation_id: String,
+    pub fencing_token: String,
+    pub invocation_permit: SignedInvocationPermit,
+    pub broker_instance_id: String,
+    pub handler_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    pub http_request_digest: String,
+    pub http_request_manifest: crate::PreparedHttpRequestManifest,
+}
+/// Reviewed request blueprint. Values are constants or closed $arg JSON-pointer references; resolved argument data is never interpreted as a template.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectIntentBlueprint {
+    pub path: serde_json::Value,
+    pub query: std::collections::BTreeMap<String, serde_json::Value>,
+    pub headers: std::collections::BTreeMap<String, serde_json::Value>,
+    pub content_type: String,
+    pub body_mode: EffectBodyMode,
+    pub body: serde_json::Value,
+}
 /// Canonical EffectSafety wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EffectSafety {
@@ -1873,6 +1961,8 @@ pub struct PackageDeploymentRequest {
     pub private_ranges: Option<Vec<PrivateRangeApproval>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub destination_tls: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_policies: Option<Vec<RouteEffectPolicy>>,
 }
 /// Enable exactly the reviewed digest with this binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2443,6 +2533,24 @@ pub struct RouteDeclaration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<String>,
 }
+/// Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteEffectPolicy {
+    pub route_id: String,
+    pub classification: EffectClassification,
+    pub consent_required: bool,
+    pub acknowledged_unfenced_risk: bool,
+    pub intent: EffectIntentBlueprint,
+}
+/// Review stamp created by Control, never accepted from package or worker input.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteEffectReview {
+    pub policy: RouteEffectPolicy,
+    pub reviewed_by: String,
+    pub reviewed_at_unix_ms: u64,
+}
 /// One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2687,9 +2795,17 @@ pub struct ServiceProfile {
     pub destinations: Vec<ServiceDestination>,
     pub routes: Vec<RouteDeclaration>,
     pub private_ranges: Vec<PrivateRangeApproval>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_reviews: Option<Vec<RouteEffectReview>>,
 }
 /// Same shape as the declared route.
 pub type ServiceRoute = RouteDeclaration;
+/// JWS with the fixed toolgate-effect-grant-v1 type; not interchangeable with admission or service permits.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SignedEffectGrant {
+    pub jws: String,
+}
 /// Compact JWS over InvocationPermitClaims.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3139,6 +3255,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
         include_str!("../schemas/v2/discovery.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/effect-authorization.schema.json",
+        include_str!("../schemas/v2/effect-authorization.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",

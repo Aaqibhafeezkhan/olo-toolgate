@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add reviewed generic HTTP request intents, durable owner-bound effect grants
+  and a two-second guarded send window. Apply V8 and coordinate contract readers;
+  generic routes without reviewed intent now fail closed. Preserve required JSON
+  nulls in PHP bindings and scan worker output linearly. This is an S18 delivery
+  increment: native MCP, legacy-write migration and full stage qualification
+  remain outstanding.
+
 - Require the exact delegated systemd control-group SIGKILL boundary before OCI
   readiness. Update the service unit before adopting the host. Engine timeouts or
   indeterminate I/O now retain lifecycle journals and identity reservations until

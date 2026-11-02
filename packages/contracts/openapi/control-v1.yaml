@@ -7662,6 +7662,52 @@ paths:
           description: Wrong device or fencing token
         '503':
           description: Authority unavailable; existing expiry remains binding
+  /api/control/v1/access/effects/authorize:
+    post:
+      operationId: issueEffectGrant
+      description: Fresh current authority, reviewed intent reconstructed from signed admission arguments, durable intent and unique owner. No implicit resend.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Explicit authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrant
+        '403':
+          description: Authentication, review, scope or current authority refused
+        '409':
+          description: Existing or already dispatched effect; no replay authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrantIssue
+  /api/control/v1/access/effects/sending:
+    post:
+      operationId: beginEffectGrantDispatch
+      description: One owner-bound AUTHORIZED-to-SENDING CAS. Lost replies never authorize a retry.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Explicit authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrantDispatchAllowed
+        '403':
+          description: Authentication, review, scope or current authority refused
+        '409':
+          description: Existing or already dispatched effect; no replay authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrantDispatch
   /api/control/v1/access/effects/report:
     post:
       operationId: reportEnterpriseEffect

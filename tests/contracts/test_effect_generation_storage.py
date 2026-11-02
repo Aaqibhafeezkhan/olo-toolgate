@@ -45,4 +45,30 @@ class EffectGenerationStorageTest(unittest.TestCase):
         self.assertFalse(db.run('DELETE FROM control_effect_evidence'))
 
 
+    def test_intent_requires_the_exact_fresh_generation_and_is_immutable_and_capacity_accounted(self):
+        db=self.fixture()
+        before=db.db.execute("SELECT stored_rows,stored_bytes FROM control_tenant_capacity WHERE tenant_id=?",(TENANT,)).fetchone()
+        statement=(f"INSERT INTO control_effect_intents VALUES('{TENANT}','effect','sha256:{'a'*64}',"
+                   f"'sha256:{'b'*64}','sha256:{'c'*64}','WRITE','{{}}',1000)")
+        self.assertFalse(db.run(statement.replace("sha256:"+'a'*64,"sha256:"+'d'*64,1)))
+        self.assertFalse(db.run(statement.replace(",1000)",",1001)")))
+        self.assertTrue(db.run(statement))
+        self.assertFalse(db.run(statement))
+        self.assertFalse(db.run("UPDATE control_effect_intents SET classification='READ'"))
+        self.assertFalse(db.run("DELETE FROM control_effect_intents"))
+        after=db.db.execute("SELECT stored_rows,stored_bytes FROM control_tenant_capacity WHERE tenant_id=?",(TENANT,)).fetchone()
+        self.assertEqual((before[0]+1,before[1]+2),after)
+        self.assertEqual('WRITE',db.db.execute("SELECT classification FROM control_effect_intents").fetchone()[0])
+
+    def test_rolled_back_intent_does_not_leave_capacity_or_evidence(self):
+        db=self.fixture()
+        before=db.db.execute("SELECT stored_rows,stored_bytes FROM control_tenant_capacity WHERE tenant_id=?",(TENANT,)).fetchone()
+        db.db.execute("BEGIN")
+        self.assertTrue(db.run(f"INSERT INTO control_effect_intents VALUES('{TENANT}','effect','sha256:{'a'*64}',"
+                               f"'sha256:{'b'*64}','sha256:{'c'*64}','READ','{{}}',1000)"))
+        db.db.rollback()
+        self.assertEqual(0,db.db.execute("SELECT count(*) FROM control_effect_intents").fetchone()[0])
+        self.assertEqual(before,db.db.execute("SELECT stored_rows,stored_bytes FROM control_tenant_capacity WHERE tenant_id=?",(TENANT,)).fetchone())
+
+
 if __name__=='__main__':unittest.main()

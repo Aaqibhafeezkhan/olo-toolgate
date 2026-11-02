@@ -94,3 +94,5 @@ Use `000-template.md`.
 - [051 — Verified leaf SPKI pins](051-verified-leaf-spki-pins.md)
 
 - [052 — Managed containment crash qualification](052-managed-containment-crash-qualification.md)
+
+- [053 — General effect intents and send grants](053-general-effect-intents-and-send-grants.md)

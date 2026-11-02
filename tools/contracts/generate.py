@@ -236,6 +236,13 @@ def render_version(ver, version, outputs):
                     arguments = ', '.join(java_ident(key) if key != 'businessKeyHash' else 'null' for key in props)
                     java += ['    /** Construct a request without an explicit business key. */',
                              f'    public {name}({signature}) {{ this({arguments}); }}']
+                if v2 and name in ('ServiceProfile', 'PackageDeploymentRequest'):
+                    added = 'effectReviews' if name == 'ServiceProfile' else 'effectPolicies'
+                    previous = [key for key in props if key != added]
+                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
+                    arguments = ', '.join(java_ident(key) if key != added else 'null' for key in props)
+                    java += ['    /** Construct legacy metadata without generic effect authority. */',
+                             f'    public {name}({signature}) {{ this({arguments}); }}']
                 if v2 and name == 'InvocationResultReport':
                     previous = [key for key in props if key != 'executionTier']
                     signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
@@ -281,7 +288,14 @@ def render_version(ver, version, outputs):
                 if v2 and 'const' in prop:
                     php += [f"        if ($data['{key}'] !== {const_literal(prop['const'], 'php')}) {{", f"            throw new \\InvalidArgumentException('{key} must be {prop['const']}');", '        }']
             php += ['        return new self(']
-            php += [',\n'.join('            ' + (php_value(props[k], f"$data['{k}']", defs) if k in required else f"array_key_exists('{k}', $data) ? " + php_value(props[k], f"$data['{k}']", defs) + ' : null') for k in ordered), '        );', '    }', '', '    public function jsonSerialize(): object {', '        return (object) array_filter(get_object_vars($this), static fn ($v) => $v !== null);', '    }', '}']
+            # Required arbitrary JSON values may explicitly be null (e.g. a credential-free
+            # manifest auth declaration). Only absent optional properties may be omitted.
+            nullable_required = [key for key in props if key in required and field_type(props[key], 'php', defs) == 'mixed']
+            php_serialization = '        return (object) array_filter(get_object_vars($this), static fn ($v) => $v !== null);'
+            if nullable_required:
+                keys = '[' + ', '.join("'" + key + "'" for key in nullable_required) + ']'
+                php_serialization = '        return (object) array_filter(get_object_vars($this), static fn ($v, $k) => $v !== null || in_array($k, ' + keys + ', true), ARRAY_FILTER_USE_BOTH);'
+            php += [',\n'.join('            ' + (php_value(props[k], f"$data['{k}']", defs) if k in required else f"array_key_exists('{k}', $data) ? " + php_value(props[k], f"$data['{k}']", defs) + ' : null') for k in ordered), '        );', '    }', '', '    public function jsonSerialize(): object {', php_serialization, '    }', '}']
             if name == 'ContractSet' and not v2:
                 php[-1:-1] = ["    public const NAME = 'olo-toolgate-contracts';", f"    public const VERSION = '{version}';", '    /** Current canonical contract-set identity. */', '    public static function current(): self { return new self(self::NAME, self::VERSION); }']
             rust += ['}']

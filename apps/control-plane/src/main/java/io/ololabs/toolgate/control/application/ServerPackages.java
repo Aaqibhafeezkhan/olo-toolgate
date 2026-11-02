@@ -198,6 +198,16 @@ public final class ServerPackages {
             var profile = JSON.objectNode().put("profileId", "sp-" + packageId).put("revision", revision).put("packageId", packageId);
             profile.set("destinations", profileDestinations);
             var profileRoutes = profile.putArray("routes"); routes.values().forEach(profileRoutes::add);
+            if(request.effectPolicies()!=null){
+                var reviews=profile.putArray("effectReviews");var reviewedRoutes=new HashSet<String>();
+                for(var policy:request.effectPolicies()){
+                    var declaredRoute=routes.get(policy.routeId());
+                    if(declaredRoute==null||!reviewedRoutes.add(policy.routeId()))throw Failure.validation();
+                    var route=codec.model(codec.json(declaredRoute),io.ololabs.toolgate.contracts.v2.RouteDeclaration.class);
+                    EffectIntentValidation.review(policy,route);
+                    reviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.RouteEffectReview(policy,actor,clock.millis()))));
+                }
+            }
             var ranges = profile.putArray("privateRanges");
             for (var range : request.privateRanges() == null ? List.<io.ololabs.toolgate.contracts.v2.PrivateRangeApproval>of() : request.privateRanges()) {
                 var ports = java.util.stream.StreamSupport.stream(profileDestinations.spliterator(),false)

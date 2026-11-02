@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { PackageDeployment, PackageVersion } from '@olo-labs/toolgate-contracts/v2';
 import { ControlClient } from './api';
 import { Failure } from './Failure';
+import {EffectPolicyReview, reviewedEffects, type EffectDrafts} from './EffectPolicyReview';
 import { Marketplace } from './Marketplace';
 import { Provisioning } from './Provisioning';
 import { Table } from './Table';
@@ -28,6 +29,8 @@ export function runsOn(deployment: PackageDeployment): string {
  * reviewed enable, a Tool Group, a binding that allows the package and a grant. */
 export function ServerPackages({ client }: { client: ControlClient }) {
   const {can}=usePermissions(client),canImport=can('package.import'),canDeploy=can('package.deploy');
+  const [validation, setValidation] = useState('');
+  const [effects, setEffects] = useState<EffectDrafts>({});
   const [versions, setVersions] = useState<readonly PackageVersion[]>(), [deployments, setDeployments] = useState<readonly PackageDeployment[]>([]);
   const [error, setError] = useState<unknown>(), [busy, setBusy] = useState(false), [attempt, setAttempt] = useState(0);
   const [file, setFile] = useState<File>(), [selected, setSelected] = useState(''), [globals, setGlobals] = useState('{}'), [notice, setNotice] = useState(''), [hosts, setHosts] = useState('');
@@ -43,7 +46,7 @@ export function ServerPackages({ client }: { client: ControlClient }) {
     try { setNotice(await action()); setAttempt(a => a + 1); } catch (e) { setError(e); } finally { setBusy(false); }
   }
   function choose(digest: string) {
-    setSelected(digest);
+    setSelected(digest); setEffects({}); setValidation('');
     const version = versions?.find(v => v.packageDigest === digest);
     setGlobals(JSON.stringify(version ? declaredValues(version) : {}, null, 2));
     setHosts((deployments.find(d => d.packageId === version?.packageId)?.hostIds ?? []).join(', '));
@@ -55,14 +58,22 @@ export function ServerPackages({ client }: { client: ControlClient }) {
   function deploy(event: FormEvent) {
     event.preventDefault();
     if (!canDeploy) return;
+    setValidation('');
     let values: Record<string, unknown>;
-    try { values = JSON.parse(globals) as Record<string, unknown>; } catch { setError(new Error('Values must be a JSON object.')); return; }
+    try { values = JSON.parse(globals) as Record<string, unknown>; } catch { setValidation('Values must be a JSON object.'); return; }
+    if (!values || typeof values !== 'object' || Array.isArray(values)) { setValidation('Values must be a JSON object.'); return; }
+    let effectPolicies;
+    try { effectPolicies = reviewedEffects(effectRoutes, effects); } catch (failure) { setValidation(failure instanceof Error ? failure.message : 'Review each route effect.'); return; }
     const hostIds = hosts.split(',').map(h => h.trim()).filter(Boolean);
-    void mutate(async () => { const d = await client.deployServerPackage({ packageDigest: selected, globals: values, ...(hostIds.length ? { hostIds } : {}) }); return `Deployed ${d.packageId} ${d.version} as revision ${d.revision} on ${runsOn(d)}. Enable its tools with a reviewed change.`; });
+    void mutate(async () => { const d = await client.deployServerPackage({ packageDigest: selected, globals: values, ...(effectPolicies.length ? {effectPolicies} : {}), ...(hostIds.length ? { hostIds } : {}) }); return `Deployed ${d.packageId} ${d.version} as revision ${d.revision} on ${runsOn(d)}. Enable its tools with a reviewed change.`; });
   }
+  const chosen = versions?.find(v => v.packageDigest === selected);
+  const effectRoutes = [...new Map((chosen?.manifest?.tools ?? []).flatMap(tool => tool.descriptor.routes ?? [])
+    .filter(route => !['olo-memory', 'olo-rag'].includes(route.destination)).map(route => [route.id, route])).values()];
   const running = new Map(deployments.map(d => [d.packageDigest, d]));
   return <><p className="eyebrow">Tool Hosts</p><h1>Server packages</h1>
     <p className="intro">Upload a package built with <code>toolgate pack</code>, then deploy it to Tool Hosts. Name the hosts to run it on, a server or a laptop alike, and deploy again with another host to move it. New tools start disabled; enable each one with a reviewed change, add it to a Tool Group and grant it.</p>
+    {validation && <p className="notice error" role="alert">{validation}</p>}
     {Boolean(error) && <Failure error={error} retry={() => setAttempt(a => a + 1)} />}
     {notice && <p role="status">{notice}</p>}
     {!versions ? <p role="status">Loading packages…</p> : versions.length === 0 ? <p>No packages uploaded yet.</p> :
@@ -79,6 +90,7 @@ export function ServerPackages({ client }: { client: ControlClient }) {
       <input id="server-package-hosts" value={hosts} readOnly={!canDeploy} maxLength={2048} onChange={e => setHosts(e.target.value)} />
       <label htmlFor="server-package-globals">Global and host setting values (JSON)</label>
       <textarea id="server-package-globals" required readOnly={!canDeploy} maxLength={65536} value={globals} onChange={e => setGlobals(e.target.value)} />
+      <EffectPolicyReview routes={effectRoutes} values={effects} disabled={busy || !canDeploy} onChange={setEffects} />
       <button disabled={busy || !selected || !canDeploy}>Deploy</button></form></section>
     {can('package.read') && <Provisioning client={client} refresh={attempt} />}
     <Marketplace client={client} onImported={() => setAttempt(a => a + 1)} />

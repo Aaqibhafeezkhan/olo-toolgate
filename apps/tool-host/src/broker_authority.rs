@@ -17,6 +17,13 @@ pub(crate) enum Transport {
     Buffered(Box<crate::broker_process::BufferedRequest>),
 }
 pub(crate) trait BrokerControl: Send + Sync {
+    fn bind_effect_admission(
+        &self,
+        _proof: olo_toolgate_contracts::v2::SignedInvocationPermit,
+        _arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    ) -> Result<(), &'static str> {
+        Err("effect admission cannot be replaced")
+    }
     fn prepare_transport(
         &self,
         prepared: crate::request_binding::PreparedRequest,
@@ -67,6 +74,10 @@ pub(crate) struct Scope {
     pub private_ranges: Vec<olo_toolgate_contracts::v2::PrivateRangeApproval>,
     pub auths: Vec<HttpAuthDeclaration>,
     pub development_loopback_http: bool,
+    pub admission: std::sync::OnceLock<(
+        olo_toolgate_contracts::v2::SignedInvocationPermit,
+        std::collections::BTreeMap<String, serde_json::Value>,
+    )>,
 }
 pub(crate) fn secret_names(
     routes: &[RouteDeclaration],
@@ -125,7 +136,9 @@ impl Scope {
         let service = matches!(destination.id.as_str(), "olo-memory" | "olo-rag");
         let plain = self.development_loopback_http
             && crate::broker::is_loopback_host(&destination.host)
-            && !service;
+            && !service
+            && destination.tls.ca_bundle.is_none()
+            && destination.tls.spki_pins.is_empty();
         if manifest.version != "toolgate-http-request-v1"
             || manifest.profile_id != self.profile
             || manifest.profile_digest != self.profile_digest
@@ -330,6 +343,12 @@ impl Grants {
     }
 }
 
+struct BoundedTransport {
+    client: reqwest::Client,
+    #[cfg(unix)]
+    _window: crate::send_window::SendWindow,
+}
+
 pub(crate) struct Local {
     control: Arc<Control>,
     scope: Scope,
@@ -350,6 +369,90 @@ impl Local {
         };
         crate::egress::client_with_identity(destination, policy, identity)
     }
+    async fn generic_transport(
+        &self,
+        manifest: &olo_toolgate_contracts::PreparedHttpRequestManifest,
+        digest: &str,
+        handler: &str,
+        destination: &ServiceDestination,
+    ) -> Result<BoundedTransport, serde_json::Value> {
+        let refused = || serde_json::json!({"refused":"fresh effect authority or bounded transport unavailable"});
+        #[cfg(not(unix))]
+        {
+            let _ = (manifest, digest, handler, destination);
+            Err(refused())
+        }
+        #[cfg(unix)]
+        {
+            let (proof, arguments) = self.scope.admission.get().ok_or_else(refused)?;
+            if !self.scope.live() || !identifier(handler) {
+                return Err(refused());
+            }
+            // Reserve/burn before awaiting authority; a lost reply never reuses this handler.
+            self.grants
+                .generic(handler, digest)
+                .map_err(|_| refused())?;
+            let started = tokio::time::Instant::now();
+            let response_until = started
+                + std::time::Duration::from_millis(
+                    self.scope.deadline.saturating_sub(crate::now_ms()),
+                );
+            let grant = self
+                .control
+                .effect_grant(&olo_toolgate_contracts::v2::EffectGrantIssue {
+                    invocation_id: self.scope.invocation.clone(),
+                    fencing_token: self.scope.fence.clone(),
+                    invocation_permit: proof.clone(),
+                    broker_instance_id: self.scope.broker.clone(),
+                    handler_id: handler.into(),
+                    arguments: arguments.clone(),
+                    http_request_digest: digest.into(),
+                    http_request_manifest: manifest.clone(),
+                })
+                .await
+                .map_err(|_| refused())?;
+            if grant.valid_for_ms == 0 || grant.valid_for_ms > 2000 {
+                return Err(refused());
+            }
+            let send_until = (started + std::time::Duration::from_millis(grant.valid_for_ms))
+                .min(response_until);
+            if !self.scope.live() || tokio::time::Instant::now() >= send_until {
+                return Err(refused());
+            }
+            let allowed = self
+                .control
+                .effect_sending(&olo_toolgate_contracts::v2::EffectGrantDispatch {
+                    grant: grant.grant,
+                    broker_instance_id: self.scope.broker.clone(),
+                    handler_id: handler.into(),
+                })
+                .await
+                .map_err(|_| refused())?;
+            if !allowed.authorized
+                || !self.scope.live()
+                || tokio::time::Instant::now() >= send_until
+            {
+                return Err(refused());
+            }
+            // A broker observation cannot settle this unfenced effect. Mark even an unknown transport result conservatively.
+            self.scope.effect_started.store(true, Ordering::SeqCst);
+            let policy = crate::egress::AddressPolicy {
+                host: destination.host.clone(),
+                port: u16::try_from(destination.port).map_err(|_| refused())?,
+                private_ranges: self.scope.private_ranges.clone(),
+                allow_loopback: self.scope.development_loopback_http,
+            };
+            let window =
+                crate::send_window::SendWindow::open(policy.clone(), send_until, response_until)
+                    .map_err(|_| refused())?;
+            let client = crate::egress::client_with_socket(destination, policy, window.socket())
+                .map_err(|_| refused())?;
+            Ok(BoundedTransport {
+                client,
+                _window: window,
+            })
+        }
+    }
     pub fn new(control: Arc<Control>, scope: Scope) -> Self {
         Self {
             control,
@@ -359,6 +462,16 @@ impl Local {
     }
 }
 impl BrokerControl for Local {
+    fn bind_effect_admission(
+        &self,
+        proof: olo_toolgate_contracts::v2::SignedInvocationPermit,
+        arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    ) -> Result<(), &'static str> {
+        self.scope
+            .admission
+            .set((proof, arguments))
+            .map_err(|_| "effect admission cannot be replaced")
+    }
     fn live(&self) -> bool {
         self.scope.live()
     }
@@ -392,7 +505,23 @@ impl BrokerControl for Local {
             } else {
                 None
             };
-            let client = self.client(destination).map_err(|_| refused())?;
+            let bounded = if service {
+                None
+            } else {
+                Some(
+                    self.generic_transport(
+                        &wire.manifest,
+                        &wire.digest,
+                        &wire.handler_id,
+                        destination,
+                    )
+                    .await?,
+                )
+            };
+            let client = match &bounded {
+                Some(transport) => transport.client.clone(),
+                None => self.client(destination).map_err(|_| refused())?,
+            };
             let timeout = std::time::Duration::from_millis(route.timeout_ms.clamp(
                 1,
                 self.scope.deadline.saturating_sub(crate::now_ms()).max(1),
@@ -407,10 +536,6 @@ impl BrokerControl for Local {
                 self.grants
                     .take(&wire.handler_id, &wire.digest, write)
                     .map_err(|_| refused())?;
-            } else {
-                self.grants
-                    .generic(&wire.handler_id, &wire.digest)
-                    .map_err(|_| refused())?;
             }
             if !self.scope.live() {
                 return Err(refused());
@@ -424,6 +549,7 @@ impl BrokerControl for Local {
                     .map_err(|_| serde_json::json!({"failure":"invalid transport response"}))?;
             crate::broker_process::check_response_headers(&response.headers)
                 .map_err(|_| serde_json::json!({"failure":"transport response headers too large or invalid"}))?;
+            drop(bounded);
             Ok(response)
         })
     }
@@ -448,9 +574,20 @@ impl BrokerControl for Local {
             let service = matches!(destination.id.as_str(), "olo-memory" | "olo-rag");
             let write =
                 service && !matches!(manifest.path.as_str(), "/v1/memory.read" | "/v1/rag.query");
-            let client = self
-                .client(destination)
-                .map_err(|_| serde_json::json!({"refused":"trusted transport unavailable"}))?;
+            let bounded = if service {
+                None
+            } else {
+                Some(
+                    self.generic_transport(&manifest, prepared.digest(), handler, destination)
+                        .await?,
+                )
+            };
+            let client = match &bounded {
+                Some(transport) => transport.client.clone(),
+                None => self
+                    .client(destination)
+                    .map_err(|_| serde_json::json!({"refused":"trusted transport unavailable"}))?,
+            };
             if service {
                 let permit = self
                     .grants
@@ -461,10 +598,6 @@ impl BrokerControl for Local {
                 if !prepared.service_permit_is(&permit) {
                     return Err(serde_json::json!({"refused":"transport grant was substituted"}));
                 }
-            } else {
-                self.grants
-                    .generic(handler, prepared.digest())
-                    .map_err(|_| serde_json::json!({"refused":"transport was already used"}))?;
             }
             if !self.scope.live() {
                 return Err(serde_json::json!({"refused":"invocation has ended"}));
@@ -474,13 +607,15 @@ impl BrokerControl for Local {
                 .send()
                 .await
                 .map_err(crate::broker::failure)?;
-            crate::broker::collect_response(
+            let result = crate::broker::collect_response(
                 response,
                 usize::try_from(route.max_response_bytes)
                     .unwrap_or(usize::MAX)
                     .saturating_add(1),
             )
-            .await
+            .await;
+            drop(bounded);
+            result
         })
     }
     fn secret<'a>(
@@ -581,6 +716,7 @@ mod tests {
             private_ranges: Vec::new(),
             auths: Vec::new(),
             development_loopback_http: false,
+            admission: std::sync::OnceLock::new(),
         }
     }
     fn issue(scope: &Scope) -> ServicePermitIssue {
@@ -914,9 +1050,11 @@ mod tests {
             crate::digest::jcs(&serde_json::to_value(&foreign.manifest).unwrap()).unwrap();
         assert!(port.transport_buffered(&foreign).await.is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 0);
-        assert_eq!(port.transport_buffered(&wire).await.unwrap().status, 200);
+        // A syntactically valid generic transport still has no authority without original admission.
+        // Allowed direct/private-child TLS sends are witnessed by tests/generic_dispatch.rs.
         assert!(port.transport_buffered(&wire).await.is_err());
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(port.transport_buffered(&wire).await.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
         server.abort();
         foreign_server.abort();
     }

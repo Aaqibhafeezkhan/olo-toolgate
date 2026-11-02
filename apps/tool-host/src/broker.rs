@@ -193,6 +193,18 @@ impl Invocation {
             remote: Mutex::new(None),
         })
     }
+    /// Parent-only immutable original admission; private broker messages cannot replace its argument preimage.
+    pub fn bind_effect_arguments(
+        &self,
+        arguments: std::collections::BTreeMap<String, Value>,
+    ) -> Result<(), &'static str> {
+        self.authority.bind_effect_admission(
+            self.invocation_permit
+                .clone()
+                .ok_or("signed effect admission required")?,
+            arguments,
+        )
+    }
     pub(crate) fn authority_port(&self) -> Arc<dyn crate::broker_authority::BrokerControl> {
         self.authority.clone()
     }
@@ -230,6 +242,7 @@ impl Invocation {
             private_ranges: private_ranges.clone(),
             auths: auths.clone(),
             development_loopback_http,
+            admission: std::sync::OnceLock::new(),
         };
         Invocation {
             invocation_id,
@@ -533,7 +546,13 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         outgoing.insert(name, value);
     }
 
-    let request_body = request_body(body).map_err(refused)?;
+    let request_body = if !matches!(destination.id.as_str(), "olo-memory" | "olo-rag")
+        && body.get("body").is_some()
+    {
+        Some(crate::digest::jcs_bytes(&body["body"]).map_err(refused)?)
+    } else {
+        request_body(body).map_err(refused)?
+    };
     if let Some(bytes) = &request_body {
         if bytes.len() as u64 > route.max_request_bytes {
             return Err(refused(format!(
@@ -568,7 +587,9 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     let service_destination = matches!(destination.id.as_str(), "olo-memory" | "olo-rag");
     let plain = invocation.development_loopback_http
         && is_loopback_host(&destination.host)
-        && !service_destination;
+        && !service_destination
+        && destination.tls.ca_bundle.is_none()
+        && destination.tls.spki_pins.is_empty();
     let policy = AddressPolicy {
         host: destination.host.clone(),
         port: u16::try_from(destination.port)

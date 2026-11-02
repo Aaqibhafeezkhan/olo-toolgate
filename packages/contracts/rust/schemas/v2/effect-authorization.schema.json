@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/effect-authorization.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "General effect authorization",
+  "$ref": "#/$defs/EffectGrantIssue",
+  "$defs": {
+    "EffectClassification": {
+      "type": "string",
+      "enum": [
+        "READ",
+        "WRITE",
+        "DESTRUCTIVE",
+        "FINANCIAL"
+      ]
+    },
+    "EffectBodyMode": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "CANONICAL_JSON"
+      ]
+    },
+    "EffectIntentBlueprint": {
+      "type": "object",
+      "description": "Reviewed request blueprint. Values are constants or closed $arg JSON-pointer references; resolved argument data is never interpreted as a template.",
+      "additionalProperties": false,
+      "properties": {
+        "path": {},
+        "query": {
+          "type": "object",
+          "maxProperties": 64
+        },
+        "headers": {
+          "type": "object",
+          "maxProperties": 64
+        },
+        "contentType": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "bodyMode": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectBodyMode"
+        },
+        "body": {}
+      },
+      "required": [
+        "path",
+        "query",
+        "headers",
+        "contentType",
+        "bodyMode",
+        "body"
+      ]
+    },
+    "RouteEffectPolicy": {
+      "type": "object",
+      "description": "Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented.",
+      "additionalProperties": false,
+      "properties": {
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "classification": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        },
+        "consentRequired": {
+          "type": "boolean"
+        },
+        "acknowledgedUnfencedRisk": {
+          "type": "boolean"
+        },
+        "intent": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectIntentBlueprint"
+        }
+      },
+      "required": [
+        "routeId",
+        "classification",
+        "consentRequired",
+        "acknowledgedUnfencedRisk",
+        "intent"
+      ]
+    },
+    "RouteEffectReview": {
+      "type": "object",
+      "description": "Review stamp created by Control, never accepted from package or worker input.",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "$ref": "effect-authorization.schema.json#/$defs/RouteEffectPolicy"
+        },
+        "reviewedBy": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "reviewedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "policy",
+        "reviewedBy",
+        "reviewedAtUnixMs"
+      ]
+    },
+    "EffectGrantIssue": {
+      "type": "object",
+      "description": "Request for fresh owner-bound authority. Control independently verifies the signed argument preimage and reconstructs the reviewed request.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "invocationPermit": {
+          "$ref": "permit.schema.json#/$defs/SignedInvocationPermit"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "arguments": {
+          "type": "object",
+          "maxProperties": 1024
+        },
+        "httpRequestDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "httpRequestManifest": {
+          "$ref": "../v1/enterprise.schema.json#/$defs/PreparedHttpRequestManifest"
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "invocationPermit",
+        "brokerInstanceId",
+        "handlerId",
+        "arguments",
+        "httpRequestDigest",
+        "httpRequestManifest"
+      ]
+    },
+    "EffectGrantClaims": {
+      "type": "object",
+      "description": "Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.",
+      "additionalProperties": false,
+      "properties": {
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "aud": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "iat": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "nbf": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "exp": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "authNonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "httpRequestDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "classification": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        }
+      },
+      "required": [
+        "iss",
+        "aud",
+        "iat",
+        "nbf",
+        "exp",
+        "tenantId",
+        "invocationId",
+        "fencingToken",
+        "authorizationEpoch",
+        "effectId",
+        "generation",
+        "authNonce",
+        "brokerInstanceId",
+        "handlerId",
+        "httpRequestDigest",
+        "profileDigest",
+        "routeId",
+        "classification"
+      ]
+    },
+    "SignedEffectGrant": {
+      "type": "object",
+      "description": "JWS with the fixed toolgate-effect-grant-v1 type; not interchangeable with admission or service permits.",
+      "additionalProperties": false,
+      "properties": {
+        "jws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        }
+      },
+      "required": [
+        "jws"
+      ]
+    },
+    "EffectGrant": {
+      "type": "object",
+      "description": "Issued authority and conservative monotonic send budget, measured from before the issuance request.",
+      "additionalProperties": false,
+      "properties": {
+        "grant": {
+          "$ref": "effect-authorization.schema.json#/$defs/SignedEffectGrant"
+        },
+        "validForMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        }
+      },
+      "required": [
+        "grant",
+        "validForMs"
+      ]
+    },
+    "EffectGrantDispatch": {
+      "type": "object",
+      "description": "One owner may claim the SENDING transition once.",
+      "additionalProperties": false,
+      "properties": {
+        "grant": {
+          "$ref": "effect-authorization.schema.json#/$defs/SignedEffectGrant"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "grant",
+        "brokerInstanceId",
+        "handlerId"
+      ]
+    },
+    "EffectGrantDispatchAllowed": {
+      "type": "object",
+      "description": "Only explicit true permits the single transport send.",
+      "additionalProperties": false,
+      "properties": {
+        "authorized": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "authorized"
+      ]
+    }
+  }
+}

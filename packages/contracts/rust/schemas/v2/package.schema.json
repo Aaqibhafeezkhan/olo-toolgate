@@ -701,6 +701,14 @@
           "additionalProperties": {
             "$ref": "service-profile.schema.json#/$defs/TlsSettings"
           }
+        },
+        "effectPolicies": {
+          "type": "array",
+          "description": "Explicit operator review for generic routes. Package declarations cannot confer effect authority.",
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/RouteEffectPolicy"
+          },
+          "maxItems": 256
         }
       },
       "required": [

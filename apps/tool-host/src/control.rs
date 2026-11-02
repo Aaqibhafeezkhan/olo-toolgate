@@ -154,6 +154,18 @@ impl Control {
         reqwest::Identity::from_pem(pem.as_deref().ok_or("executor mTLS identity required")?)
             .map_err(|_| "invalid executor identity".into())
     }
+    pub async fn effect_grant(
+        &self,
+        request: &olo_toolgate_contracts::v2::EffectGrantIssue,
+    ) -> Result<olo_toolgate_contracts::v2::EffectGrant, ControlError> {
+        self.post("/effects/authorize", request, None).await
+    }
+    pub async fn effect_sending(
+        &self,
+        request: &olo_toolgate_contracts::v2::EffectGrantDispatch,
+    ) -> Result<olo_toolgate_contracts::v2::EffectGrantDispatchAllowed, ControlError> {
+        self.post("/effects/sending", request, None).await
+    }
     pub async fn service_permit(
         &self,
         request: &olo_toolgate_contracts::ServicePermitIssue,

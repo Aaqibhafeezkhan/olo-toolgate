@@ -231,6 +231,8 @@ async fn converse<R: AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
         .then(|| crate::worker_protocol::Protocol::new(output_limit));
     let mut out = Vec::new();
     let mut scanned = 0;
+    // Bytes already searched for a newline, including an unfinished frame.
+    let mut searched = 0;
     let mut calls = 0;
     let mut chunk = [0u8; 16 * 1024];
     loop {
@@ -255,8 +257,9 @@ async fn converse<R: AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
                     };
                 }
                 out.extend_from_slice(&chunk[..n]);
-                while let Some(end) = out[scanned..].iter().position(|b| *b == b'\n') {
-                    let raw = &out[scanned..scanned + end];
+                while let Some(relative) = out[searched..].iter().position(|b| *b == b'\n') {
+                    let end = searched + relative;
+                    let raw = &out[scanned..end];
                     let frame = if let Some(protocol) = &mut protocol {
                         match protocol.accept(raw) {
                             Ok(frame) => frame,
@@ -271,7 +274,8 @@ async fn converse<R: AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
                         serde_json::from_slice(raw).ok()
                     };
                     let line = String::from_utf8_lossy(raw).into_owned();
-                    scanned += end + 1;
+                    scanned = end + 1;
+                    searched = scanned;
                     let brokered = frame.as_ref().is_some_and(|f| {
                         f.get("kind").and_then(|k| k.as_str()) == Some("BROKER_REQUEST")
                     });
@@ -292,6 +296,7 @@ async fn converse<R: AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
                         sink.offer(&line);
                     }
                 }
+                searched = out.len();
             }
         }
     }

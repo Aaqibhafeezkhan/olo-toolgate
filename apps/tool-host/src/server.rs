@@ -546,6 +546,25 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         host.control.clone(),
     );
     invocation.invocation_permit = Some(dispatch.permit.clone());
+    // The arguments were already checked against the signed admission above.
+    if invocation
+        .bind_effect_arguments(dispatch.arguments.clone())
+        .is_err()
+    {
+        return finish(
+            &host,
+            id,
+            fencing_token,
+            InvocationOutcome::Failed,
+            error_frame(
+                "TOOL_HOST_UNAVAILABLE",
+                "Effect admission unavailable",
+                false,
+            ),
+            Some(RefusalReason::StoreUnavailable),
+        )
+        .await;
+    }
     let invocation = Arc::new(invocation);
 
     let (outcome, result, not_started) = match std::fs::create_dir_all(&sandbox) {
