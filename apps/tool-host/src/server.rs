@@ -339,10 +339,17 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
         }
     };
     let supported = match &host.sandbox {
-        Some(pool) => pool.accepts(
-            &prepared.runtime.runtime_id,
-            prepared.runtime.base_image_digest.as_deref(),
-        ),
+        Some(pool) => {
+            pool.accepts(
+                &prepared.runtime.runtime_id,
+                prepared.runtime.base_image_digest.as_deref(),
+            ) && prepared.routes.len() <= 256
+                && prepared.routes.iter().all(|route| {
+                    route.max_request_bytes <= crate::broker_process::MAX_BODY as u64
+                        && route.max_response_bytes <= crate::broker_process::MAX_BODY as u64
+                        && route.streaming == olo_toolgate_contracts::v2::Streaming::None
+                })
+        }
         None => prepared.runtime.base_image_digest.is_none(),
     };
     if !supported {

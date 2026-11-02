@@ -23,7 +23,7 @@ use olo_toolgate_contracts::v2::{
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Request headers a tool may never set, whatever the route allows (ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.8.5).
@@ -52,8 +52,6 @@ const STRIPPED: [&str; 5] = [
     "proxy-authenticate",
 ];
 
-static BROKER_INSTANCE_ID: OnceLock<String> = OnceLock::new();
-
 /// Everything the broker enforces for one invocation, fixed at admission.
 pub struct Invocation {
     pub invocation_id: String,
@@ -72,18 +70,21 @@ pub struct Invocation {
     /// Handle ÃÆ’Æ’¢ÃÆ’¢ââ€Å¡¬ ÃÆ’¢ââ€Å¡¬ââ€Å¾¢ secret name, for secrets delivered into the sandbox.
     pub secret_handles: HashMap<String, String>,
     pub development_loopback_http: bool,
-    pub control: Arc<Control>,
+    authority: Arc<dyn crate::broker_authority::BrokerControl>,
     /// Set when the invocation ends; the broker refuses everything afterwards.
-    pub closed: AtomicBool,
+    pub closed: Arc<AtomicBool>,
     /// A single-use downstream write capability was dispatched; a lost/error reply needs reconciliation.
-    pub service_effect_started: AtomicBool,
+    pub service_effect_started: Arc<AtomicBool>,
     /// Route calls, for DETAILED Insights spans (ADR 031 §9): route ID, timing and status only, never the URL.
     pub egress: Mutex<Vec<Egress>>,
     clients: Mutex<HashMap<String, reqwest::Client>>,
+    requires_isolated: AtomicBool,
+    remote: Mutex<Option<Arc<dyn crate::broker_process::Connection>>>,
 }
 
 /// One brokered route call as an Insights span records it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Egress {
     pub route_id: String,
     pub started_unix_ms: u64,
@@ -95,6 +96,103 @@ pub struct Egress {
 const MAX_EGRESS: usize = 256;
 
 impl Invocation {
+    pub fn require_isolated_broker(&self) -> Result<(), &'static str> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err("broker invocation has ended");
+        }
+        self.requires_isolated.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+    pub async fn attach_broker<
+        R: tokio::io::AsyncBufRead + Unpin + Send + 'static,
+        W: tokio::io::AsyncWrite + Unpin + Send + 'static,
+    >(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<Arc<dyn crate::broker_process::Connection>, &'static str> {
+        self.require_isolated_broker()?;
+        if self
+            .remote
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
+        {
+            self.closed.store(true, Ordering::SeqCst);
+            return Err("broker connection cannot be replaced");
+        }
+        let connection = crate::broker_process::connect(self, reader, writer).await?;
+        if self.closed.load(Ordering::SeqCst) {
+            connection.finish().await;
+            return Err("broker invocation ended during setup");
+        }
+        let mut remote = self.remote.lock().unwrap_or_else(|e| e.into_inner());
+        if remote.is_some() {
+            self.closed.store(true, Ordering::SeqCst);
+            return Err("broker connection cannot be replaced");
+        }
+        *remote = Some(connection.clone());
+        Ok(connection)
+    }
+    pub fn broker_policy(&self) -> Result<crate::broker_process::Policy, &'static str> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err("broker invocation has ended");
+        }
+        let policy = crate::broker_process::Policy {
+            invocation_id: self.invocation_id.clone(),
+            fencing_token: self.fencing_token.clone(),
+            deadline_unix_ms: self.deadline_unix_ms,
+            profile_id: self.profile_id.clone(),
+            profile_digest: self.profile_digest.clone(),
+            broker_instance_id: self.broker_instance_id.clone(),
+            invocation_permit: self
+                .invocation_permit
+                .clone()
+                .ok_or("signed broker admission required")?,
+            routes: self.routes.clone(),
+            destinations: self.destinations.clone(),
+            private_ranges: self.private_ranges.clone(),
+            auths: self.auths.clone(),
+            secrets: self.secrets.clone(),
+            secret_handles: self.secret_handles.clone().into_iter().collect(),
+            development_loopback_http: self.development_loopback_http,
+        };
+        policy.validate(crate::now_ms())?;
+        Ok(policy)
+    }
+    pub(crate) fn from_broker_policy(
+        policy: &crate::broker_process::Policy,
+        authority: Arc<dyn crate::broker_authority::BrokerControl>,
+        closed: Arc<AtomicBool>,
+    ) -> Result<Self, &'static str> {
+        policy.validate(crate::now_ms())?;
+        Ok(Self {
+            invocation_id: policy.invocation_id.clone(),
+            fencing_token: policy.fencing_token.clone(),
+            deadline_unix_ms: policy.deadline_unix_ms,
+            profile_id: policy.profile_id.clone(),
+            profile_digest: policy.profile_digest.clone(),
+            invocation_permit: Some(policy.invocation_permit.clone()),
+            broker_instance_id: policy.broker_instance_id.clone(),
+            routes: policy.routes.clone(),
+            destinations: policy.destinations.clone(),
+            private_ranges: policy.private_ranges.clone(),
+            auths: policy.auths.clone(),
+            secrets: policy.secrets.clone(),
+            secret_handles: policy.secret_handles.clone().into_iter().collect(),
+            development_loopback_http: policy.development_loopback_http,
+            authority,
+            closed,
+            service_effect_started: Arc::new(AtomicBool::new(false)),
+            egress: Mutex::new(Vec::new()),
+            clients: Mutex::new(HashMap::new()),
+            requires_isolated: AtomicBool::new(false),
+            remote: Mutex::new(None),
+        })
+    }
+    pub(crate) fn authority_port(&self) -> Arc<dyn crate::broker_authority::BrokerControl> {
+        self.authority.clone()
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         invocation_id: String,
@@ -111,6 +209,25 @@ impl Invocation {
         development_loopback_http: bool,
         control: Arc<Control>,
     ) -> Invocation {
+        let broker_instance_id = crate::random_hex(16);
+        let closed = Arc::new(AtomicBool::new(false));
+        let service_effect_started = Arc::new(AtomicBool::new(false));
+        let scope = crate::broker_authority::Scope {
+            invocation: invocation_id.clone(),
+            fence: fencing_token.clone(),
+            deadline: deadline_unix_ms,
+            profile: profile_id.clone(),
+            profile_digest: profile_digest.clone(),
+            broker: broker_instance_id.clone(),
+            routes: routes.clone(),
+            destinations: destinations.clone(),
+            secret_names: crate::broker_authority::secret_names(&routes, &auths, &secrets),
+            closed: closed.clone(),
+            effect_started: service_effect_started.clone(),
+            private_ranges: private_ranges.clone(),
+            auths: auths.clone(),
+            development_loopback_http,
+        };
         Invocation {
             invocation_id,
             fencing_token,
@@ -118,9 +235,7 @@ impl Invocation {
             profile_id,
             profile_digest,
             invocation_permit: None,
-            broker_instance_id: BROKER_INSTANCE_ID
-                .get_or_init(|| crate::random_hex(16))
-                .clone(),
+            broker_instance_id,
             routes,
             destinations,
             private_ranges,
@@ -128,11 +243,13 @@ impl Invocation {
             secrets,
             secret_handles,
             development_loopback_http,
-            control,
-            closed: AtomicBool::new(false),
-            service_effect_started: AtomicBool::new(false),
+            authority: Arc::new(crate::broker_authority::Local::new(control, scope)),
+            closed,
+            service_effect_started,
             egress: Mutex::new(Vec::new()),
             clients: Mutex::new(HashMap::new()),
+            requires_isolated: AtomicBool::new(false),
+            remote: Mutex::new(None),
         }
     }
 }
@@ -148,6 +265,34 @@ pub async fn answer(invocation: &Invocation, frame: &Value) -> Value {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
+    if invocation.requires_isolated.load(Ordering::SeqCst) {
+        let remote = invocation
+            .remote
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if !invocation.closed.load(Ordering::SeqCst)
+            && crate::now_ms() < invocation.deadline_unix_ms
+        {
+            if let (Some(remote), Ok(request)) = (
+                remote.as_ref(),
+                serde_json::from_value::<olo_toolgate_contracts::v2::BrokerRequestFrame>(
+                    frame.clone(),
+                ),
+            ) {
+                if let Ok(reply) = remote.call(request).await {
+                    *invocation.egress.lock().unwrap_or_else(|e| e.into_inner()) = reply.egress;
+                    return serde_json::to_value(reply.response).unwrap_or_default();
+                }
+            }
+        }
+        if let Some(remote) = remote {
+            remote.abort();
+        }
+        invocation.closed.store(true, Ordering::SeqCst);
+        return json!({"kind":"BROKER_RESPONSE","requestId":id,
+            "error":{"code":"BROKER_REFUSED","message":"the isolated broker is unavailable","retryable":false}});
+    }
     let empty = json!({});
     let request = frame.get("request").unwrap_or(&empty);
     let operation = frame
@@ -185,7 +330,7 @@ async fn secret(invocation: &Invocation, body: &Value) -> Result<Value, String> 
         return Err("the secret handle is not valid for this invocation".into());
     };
     match invocation
-        .control
+        .authority
         .secret(&invocation.invocation_id, &invocation.fencing_token, name)
         .await
     {
@@ -272,11 +417,11 @@ async fn call(invocation: &Invocation, body: &Value) -> Value {
     reply
 }
 
-struct Sent {
-    reply: Value,
-    status: u16,
-    bytes: usize,
-    upstream_id: Option<String>,
+pub(crate) struct Sent {
+    pub reply: Value,
+    pub status: u16,
+    pub bytes: usize,
+    pub upstream_id: Option<String>,
 }
 
 pub fn method_name(method: &HttpMethod) -> &'static str {
@@ -441,21 +586,16 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
             "service permits require mTLS HTTPS without package credentials",
         ));
     }
-    let client = if service_audience.is_some() {
-        egress::client_with_identity(
-            destination,
-            policy.clone(),
-            Some(invocation.control.service_identity().map_err(refused)?),
-        )
-        .map_err(refused)?
-    } else {
+    // Preparation has no workload identity and performs no target I/O.
+    // Only the supervisor authority port owns the actual client identity.
+    let client = {
         let mut clients = invocation.clients.lock().unwrap();
         match clients.get(&destination.id) {
-            Some(c) => c.clone(),
+            Some(client) => client.clone(),
             None => {
-                let c = egress::client(destination, policy.clone()).map_err(refused)?;
-                clients.insert(destination.id.clone(), c.clone());
-                c
+                let client = egress::client(destination, policy.clone()).map_err(refused)?;
+                clients.insert(destination.id.clone(), client.clone());
+                client
             }
         }
     };
@@ -544,7 +684,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     let permit = if let Some(audience) = service_audience {
         Some(
             invocation
-                .control
+                .authority
                 .service_permit(&olo_toolgate_contracts::ServicePermitIssue {
                     invocation_id: invocation.invocation_id.clone(),
                     fencing_token: invocation.fencing_token.clone(),
@@ -579,16 +719,19 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
         return Err(refused("the invocation has ended"));
     }
+    let prepared = invocation
+        .authority
+        .prepare_transport(prepared, &handler_id)?;
     if service_write {
         let permit = permit
             .as_ref()
             .ok_or_else(|| refused("service permit required"))?;
         invocation
-            .control
+            .authority
             .service_sending(&olo_toolgate_contracts::ServicePermitDispatch {
                 permit: permit.clone(),
                 broker_instance_id: invocation.broker_instance_id.clone(),
-                handler_id,
+                handler_id: handler_id.clone(),
             })
             .await
             .map_err(|_| refused("downstream dispatch authorization refused"))?;
@@ -601,7 +744,13 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
             .service_effect_started
             .store(true, Ordering::SeqCst);
     }
-    let response = prepared.send().await.map_err(failure)?;
+    invocation.authority.transport(prepared, &handler_id).await
+}
+
+pub(crate) async fn collect_response(
+    mut response: reqwest::Response,
+    cap: usize,
+) -> Result<Sent, Value> {
     let status = response.status().as_u16();
     let mut reply_headers = Map::new();
     for (name, value) in response.headers() {
@@ -623,11 +772,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
             .map(str::to_string)
     });
     // At most one byte past the route's cap, so the SDK reports the response as too large.
-    let cap = usize::try_from(route.max_response_bytes)
-        .unwrap_or(usize::MAX)
-        .saturating_add(1);
     let mut bytes = Vec::new();
-    let mut response = response;
     while let Some(chunk) = response.chunk().await.map_err(failure)? {
         let room = cap - bytes.len();
         bytes.extend_from_slice(&chunk[..chunk.len().min(room)]);
@@ -644,7 +789,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
 }
 
 /// How a call that was attempted failed. A refused address is a refusal: nothing was sent.
-fn failure(error: reqwest::Error) -> Value {
+pub(crate) fn failure(error: reqwest::Error) -> Value {
     let mut source: Option<&dyn std::error::Error> = Some(&error);
     while let Some(e) = source {
         if let Some(refusal) = e.downcast_ref::<AddressRefused>() {
@@ -662,7 +807,7 @@ fn failure(error: reqwest::Error) -> Value {
     json!({ "failure": kind })
 }
 
-fn is_loopback_host(host: &str) -> bool {
+pub(crate) fn is_loopback_host(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost")
         || host
             .trim_matches(['[', ']'])
@@ -716,7 +861,7 @@ async fn credential(invocation: &Invocation, auth: &HttpAuthDeclaration) -> Resu
 
 async fn fetch(invocation: &Invocation, name: &str) -> Result<String, String> {
     invocation
-        .control
+        .authority
         .secret(&invocation.invocation_id, &invocation.fencing_token, name)
         .await
         .map_err(|e| format!("Control did not deliver secret {name}: {e:?}"))

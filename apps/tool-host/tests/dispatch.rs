@@ -355,7 +355,7 @@ from toolgate import *
 tool_package(id="acme.orders", name="Orders", publisher="Acme")
 destination(id="acme-api", host_setting="AcmeApiHost")
 http_auth(id="acme-key", type="API_KEY", header="X-Api-Key", secret="ApiKey")
-http_route(id="orders.get", destination="acme-api", method="GET", path="/orders/{orderId:[0-9]{6,12}}", headers=["X-On-Behalf-Of"], auth="acme-key")
+http_route(id="orders.get", destination="acme-api", method="GET", path="/orders/{orderId:[0-9]{6,12}}", max_response_bytes=2_097_152, headers=["X-On-Behalf-Of"], auth="acme-key")
 @server_tool(name="orders.lookup", title="Lookup", description="Lookup", effect=EffectSafety.READ_ONLY, routes=["orders.get"])
 @Secret(name="ApiKey")
 @Global(name="TimeoutSeconds", type=ValueType.INT, default_value="10")
@@ -398,6 +398,11 @@ async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id"
     .unwrap();
 
     let mut profile = fixture("ServiceProfile");
+    if oci {
+        for route in profile["routes"].as_array_mut().unwrap() {
+            route["maxResponseBytes"] = json!(2_097_152);
+        }
+    }
     profile["destinations"][0]["host"] = json!("127.0.0.1");
     profile["destinations"][0]["port"] = json!(upstream_port);
     let profile_digest = put(&store, "profiles", &profile);
@@ -433,7 +438,7 @@ async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id"
         "developmentLoopbackHttp": true
     });
     if oci {
-        config_value["sandbox"] = json!({"podmanPath":"/usr/bin/podman","pythonImage":std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap(),"cgroupParent":std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT").unwrap(),"ioDevice":std::env::var("TOOLGATE_SANDBOX_IO_DEVICE").unwrap(),"ioBytesPerSecond":67108864,"scratchBytes":8388608});
+        config_value["sandbox"] = json!({"brokerImage":std::env::var("TOOLGATE_SANDBOX_BROKER_IMAGE").unwrap(),"podmanPath":"/usr/bin/podman","pythonImage":std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap(),"cgroupParent":std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT").unwrap(),"ioDevice":std::env::var("TOOLGATE_SANDBOX_IO_DEVICE").unwrap(),"ioBytesPerSecond":67108864,"scratchBytes":8388608});
     }
     let config: Config = serde_json::from_value(config_value).unwrap();
     let host = tool_host::server::Host::new(config).unwrap();
@@ -588,7 +593,7 @@ async fn a_pinned_sdk_package_runs_in_oci_and_lease_revocation_tears_it_down() {
     let arguments = json!({"orderId":"123456"});
     let (jws, _) = permit(&rig, &arguments, |_| {});
     let lines = dispatch(&rig, &jws, &arguments).await;
-    assert_eq!(lines[0]["kind"], "ADMITTED");
+    assert_eq!(lines[0]["kind"], "ADMITTED", "{lines:?}");
     assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
     assert_eq!(lines[1]["result"]["structuredContent"]["orderId"], "123456");
     assert_eq!(
@@ -811,7 +816,7 @@ async fn revoked_authority_never_starts_a_worker_or_contacts_the_target() {
     let arguments = json!({"orderId":"123456"});
     let (jws, _) = permit(&rig, &arguments, |_| {});
     let lines = dispatch(&rig, &jws, &arguments).await;
-    assert_eq!(lines[0]["kind"], "ADMITTED");
+    assert_eq!(lines[0]["kind"], "ADMITTED", "{lines:?}");
     assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
     let seen = rig.seen.lock().unwrap();
     assert!(seen.upstream.is_empty());

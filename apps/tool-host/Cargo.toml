@@ -23,7 +23,7 @@ toolgate-cli = { path = "../../tool-sdk/cli" }
 serde.workspace = true
 serde_json.workspace = true
 axum.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-std"] }
 sha2.workspace = true
 subtle.workspace = true
 tracing.workspace = true

@@ -14,8 +14,9 @@ before the host becomes ready or registers its tier.
 ## Prepare the service
 
 Provision a dedicated unprivileged `toolgate` account with at least 65,536
-subordinate UIDs and GIDs. Up to 64 concurrent slots each use a disjoint range of
-1,024 subordinate identities; the service user's host identity is never mapped
+subordinate UIDs and GIDs. Up to 32 concurrent slots each use two disjoint ranges of
+1,024 subordinate identities (one per worker and broker); larger pools require
+at least maxConcurrent × 2,048 subordinate UIDs and GIDs; the service user's host identity is never mapped
 into a worker. Install Podman, crun and the distribution's rootless UID-mapping
 helpers. The supervisor needs those helpers; do not set `NoNewPrivileges` on
 the service itself. Worker processes always have `no_new_privs` enabled.
@@ -59,6 +60,7 @@ Add a `sandbox` object to the existing Tool Host configuration:
     "podmanPath": "/usr/bin/podman",
     "cgroupParent": "/system.slice/olo-toolgate-tool-host.service",
     "pythonImage": "docker.io/library/python@sha256:<the same manifest digest>",
+    "brokerImage": "localhost/olo-toolgate-invocation-broker@sha256:<reviewed broker manifest digest>",
     "ioDevice": "8:0",
     "ioBytesPerSecond": 67108864,
     "scratchBytes": 8388608
@@ -87,12 +89,15 @@ now has an optional, executor-reported `executionTier` field.
 ## Teardown and recovery
 
 Deadline, lease loss, cancellation, output exhaustion and normal completion all
-force removal of the exact owned container. The lifecycle task outlives a dropped
+force removal of both exact owned containers. Broker exit or private-channel
+failure also stops the worker; neither role is restarted within an invocation. The lifecycle task outlives a dropped
 invocation future and confirms absence before releasing its identity slot.
 Engine commands have five-second timeouts; failed or unconfirmed teardown fences
 the entire pool. Do not describe that failure as successful worker termination.
 
-`workDir/sandbox-spool` records the container name before creation. A restart
+`workDir/sandbox-spool` records both container names before either is created. Older
+single-container records are reconciled as legacy worker cleanup; they do not
+supply separated-broker qualification. A restart
 reconciles those names before registration. Corrupt or foreign records refuse
 startup. Preserve the directory alongside the admission spool and result outbox;
 deleting a record is not evidence that a worker or effect was absent. Result
@@ -105,7 +110,9 @@ From a prepared Linux host, as an administrator launching the dedicated test use
 
 ```sh
 python tools/security/sandbox.py --service-user <test-user> \
-  --cargo /absolute/path/to/cargo --image <prepared-name@sha256:digest>
+  --cargo /absolute/path/to/cargo --image <prepared-name@sha256:digest> \
+  --broker-image <prepared-broker-name@sha256:digest> \
+  --broker-image-evidence /absolute/path/to/image.json
 ```
 
 An ordinary user can omit `--service-user` if their user manager delegates all
@@ -118,8 +125,54 @@ mandatory gate.
 
 This tier shares the host kernel and trusts the supervisor/broker and container
 runtime. The broker's existing destination checks remain the egress boundary;
-separating the trusted broker into another OS identity/network namespace remains
-future hardening. Other languages, VM-backed isolation, per-effect authorization,
+a dedicated per-invocation broker runs in a disjoint subordinate identity and
+private network namespace. Its only egress is the private supervisor transport
+proxy, which retains the workload TLS identity and enforces the approved target.
+The broker cannot select a general Control URL or export that identity. Other languages, VM-backed isolation, per-effect authorization,
 exact effect consent and target fencing are separate roadmap work. See
 [ADR 033](../adr/033-rootless-tool-host-containment.md) and the
 [claim inventory](../security/zero-trust-execution-status.md).
+
+
+## Prepare the trusted broker image
+
+The current builder qualifies Linux x86_64. Build as the same unprivileged service
+user, with a prepared Rust musl target,
+musl-gcc, readelf and local rootless Podman available:
+
+~~~sh
+rustup target add x86_64-unknown-linux-musl
+python tools/security/broker_image.py
+~~~
+
+The builder owns the locked static build, checks that source stayed unchanged,
+and creates a scratch image without a shell, operator configuration, workload
+identity or mounted runtime socket. It emits the immutable reference and report
+under build/security/broker-image/. Review that artifact and configure brokerImage
+with its exact digest. A tag, missing image or missing pin refuses startup;
+existing OCI configurations must add brokerImage during this upgrade. Native
+hosts retain their explicit separate tier.
+
+Qualification holds trusted worker and broker probes alive simultaneously and
+compares their UID/GID maps and network/user namespace identities with each other
+and the supervisor. Both roles have the same syscall, read-only filesystem and
+cgroup restrictions; the broker has a fixed 128 MiB memory cap and two runtime
+threads. The worker can only use its own ordinary v2 stdio channel. The broker's
+private authority channel has no worker-accessible socket or shared mount.
+
+The private protocol refuses separated-tier policies above 2 MiB per declared
+request/response, non-NONE streaming and oversized route collections; route-body
+limits are checked before admission consumption. Each frame is at most 4 MiB,
+request/response headers at most 64 KiB (8 KiB per value), with 4,096 frames and
+64 MiB per direction per invocation. Unsupported policies are refused rather than
+silently truncated. Existing native transport ceilings remain unchanged.
+
+The eight-case OCI runner requires the builder's report to match the current
+source digest, known revision, binary digest and image reference. Build the image
+after source is frozen, then execute conformance without edits between them.
+It covers approved target contact, denied worker authority, broker crash,
+cancellation, lease revocation, deadline, flooding, private identities and paired
+restart cleanup. These are component containment checks, not a production
+connectivity SLO, a generalized effect grant or a compromised-kernel guarantee.
+See [ADR 049](../adr/049-isolated-invocation-brokers.md) and the
+[live status](../security/zero-trust-execution-status.md) for stage acceptance.

@@ -85,4 +85,7 @@ Use `000-template.md`.
 - [046: Control-owned business-key policy and retention](046-business-key-policy-retention.md)
 
 - [047: Positive-proof operation rebinding](047-proof-bound-operation-rebinding.md)
-\n- [048 — Derived operation finalization and caller history](048-derived-operation-finalization.md)\n
+
+- [048 — Derived operation finalization and caller history](048-derived-operation-finalization.md)
+
+- [049: Isolated per-invocation brokers](049-isolated-invocation-brokers.md)

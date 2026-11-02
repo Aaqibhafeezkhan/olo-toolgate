@@ -27,6 +27,8 @@ pub struct Config {
     pub cgroup_parent: String,
     /// Already prepared, fully qualified name@sha256:digest, never a tag.
     pub python_image: String,
+    /// Trusted broker image, independently pinned and prepared locally.
+    pub broker_image: String,
     pub io_device: String,
     pub io_bytes_per_second: u64,
     pub scratch_bytes: u64,
@@ -46,19 +48,23 @@ impl Config {
         {
             return Err("a delegated service cgroupParent is required".into());
         }
-        let (name, digest) = self
-            .python_image
-            .split_once('@')
-            .ok_or("immutable pythonImage required")?;
-        if name.is_empty()
-            || !name.contains('/')
-            || name.starts_with('-')
-            || !name
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"./_-:".contains(&b))
-            || !sha256(digest)
-        {
-            return Err("immutable pythonImage required".into());
+        for (field, image) in [
+            ("pythonImage", &self.python_image),
+            ("brokerImage", &self.broker_image),
+        ] {
+            let (name, digest) = image
+                .split_once('@')
+                .ok_or_else(|| format!("immutable {field} required"))?;
+            if name.is_empty()
+                || !name.contains('/')
+                || name.starts_with('-')
+                || !name
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"./_-:".contains(&b))
+                || !sha256(digest)
+            {
+                return Err(format!("immutable {field} required"));
+            }
         }
         let parts: Vec<_> = self.io_device.split(':').collect();
         if parts.len() != 2
@@ -102,6 +108,13 @@ struct Record {
         skip_serializing_if = "Option::is_none"
     )]
     invocation_id: Option<String>,
+    // Absent only for recovery of journals written before paired brokers.
+    #[serde(
+        default,
+        rename = "brokerName",
+        skip_serializing_if = "Option::is_none"
+    )]
+    broker_name: Option<String>,
 }
 pub struct Sandbox {
     config: Config,
@@ -213,7 +226,7 @@ impl Sandbox {
         file.sync_all().map_err(|e| e.to_string())?;
         sync(&self.directory)
     }
-    async fn cleanup(&self, name: &str) -> Result<(), String> {
+    async fn remove_container(&self, name: &str) -> Result<(), String> {
         // An absent container is fine (including a crash before create). Engine
         // errors must not be confused with absence: exists uses exit code 1 only.
         let _ = self
@@ -228,7 +241,19 @@ impl Sandbox {
         if status.code() != Some(1) {
             return Err("sandbox absence could not be established".into());
         }
-        let path = self.directory.join(format!("{name}.json"));
+        Ok(())
+    }
+    async fn cleanup(&self, record: &Record) -> Result<(), String> {
+        // Always attempt both removals; retain the durable pair until both
+        // absences are proven. An engine error never releases the identity slot.
+        let worker = self.remove_container(&record.name).await;
+        let broker = match &record.broker_name {
+            Some(name) => self.remove_container(name).await,
+            None => Ok(()),
+        };
+        worker?;
+        broker?;
+        let path = self.directory.join(format!("{}.json", record.name));
         match std::fs::remove_file(path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -292,7 +317,7 @@ impl Sandbox {
                 v["container_id"] == 1
                     && v["size"]
                         .as_u64()
-                        .is_some_and(|n| n >= ((self.capacity * IDS_PER_WORKER) as u64))
+                        .is_some_and(|n| n >= ((self.capacity * 2 * IDS_PER_WORKER) as u64))
             }) {
                 return Err("insufficient subordinate identities for sandbox capacity".into());
             }
@@ -305,7 +330,12 @@ impl Sandbox {
             let record: Record =
                 serde_json::from_slice(&std::fs::read(&path).map_err(|e| e.to_string())?)
                     .map_err(|_| "corrupt sandbox journal")?;
-            if !record.name.starts_with(&self.prefix)
+            if record
+                .broker_name
+                .as_ref()
+                .is_some_and(|n| n != &format!("{}-broker", record.name))
+                || record.slot >= self.capacity
+                || !record.name.starts_with(&self.prefix)
                 || record.name.len() != self.prefix.len() + 32
                 || !record.name[self.prefix.len()..]
                     .bytes()
@@ -315,7 +345,7 @@ impl Sandbox {
             {
                 return Err("foreign or corrupt sandbox journal".into());
             }
-            self.cleanup(&record.name).await?;
+            self.cleanup(&record).await?;
         }
         let image: Value = serde_json::from_slice(
             &self
@@ -329,26 +359,78 @@ impl Sandbox {
         }) {
             return Err("prepared image digest missing".into());
         }
+        let broker_image: Value = serde_json::from_slice(
+            &self
+                .cli(&strings(&["image", "inspect", &self.config.broker_image]))
+                .await?,
+        )
+        .map_err(|_| "broker image metadata invalid")?;
+        let expected = self
+            .config
+            .broker_image
+            .split_once('@')
+            .expect("validated")
+            .1;
+        if broker_image[0]["Digest"].as_str() != Some(expected)
+            && !broker_image[0]["RepoDigests"].as_array().is_some_and(|ds| {
+                ds.iter()
+                    .any(|d| d.as_str() == Some(&self.config.broker_image))
+            })
+        {
+            return Err("prepared broker image digest missing".into());
+        }
         let name = format!("{}{}", self.prefix, crate::random_hex(16));
-        self.journal(&Record {
+        let broker_name = format!("{name}-broker");
+        let record = Record {
             name: name.clone(),
             slot: 0,
             invocation_id: None,
-        })?;
-        let mut args = self.create_args(&name, 0, 128 * 1024 * 1024, 30_000);
-        args.extend(strings(&["-I", "-c", PROBE]));
+            broker_name: Some(broker_name.clone()),
+        };
+        self.journal(&record)?;
         let result = async {
+            let mut args = self.create_args(&name, 0, 128 * 1024 * 1024, 30_000);
+            args.extend(strings(&["-I", "-c", PROBE]));
             self.cli(&args).await?;
-            let out = self.cli(&strings(&["start", "--attach", &name])).await?;
-            let observed: Value =
-                serde_json::from_slice(&out).map_err(|_| "sandbox qualification output invalid")?;
-            validate_probe(&observed, &self.config)
+            let (_worker_process, worker) = self.live_probe(&name).await?;
+            validate_probe(&worker, &self.config)?;
+            let mut args = self.broker_args(&broker_name, 0, 30_000);
+            *args.last_mut().expect("broker mode") = "--isolation-probe".into();
+            self.cli(&args).await?;
+            let (_broker_process, broker) = self.live_probe(&broker_name).await?;
+            validate_probe(&broker, &self.config)?;
+            validate_pair(&worker, &broker, &isolation_probe()?)?;
+            Ok::<(), String>(())
         }
         .await;
-        self.cleanup(&name).await?;
+        self.cleanup(&record).await?;
         result?;
         self.ready.store(true, Ordering::SeqCst);
         Ok(())
+    }
+    async fn live_probe(&self, name: &str) -> Result<(tokio::process::Child, Value), String> {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+        let mut command = self.command();
+        command
+            .args(["start", "--attach", "--interactive", name])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        let mut child = command.spawn().map_err(|_| "probe process unavailable")?;
+        let output = child.stdout.take().ok_or("probe output unavailable")?;
+        let mut reader = tokio::io::BufReader::new(output).take(64 * 1024);
+        let mut frame = Vec::new();
+        tokio::time::timeout(Duration::from_secs(5), reader.read_until(b'\n', &mut frame))
+            .await
+            .map_err(|_| "probe output timeout")?
+            .map_err(|_| "probe output unavailable")?;
+        if frame.last() != Some(&b'\n') {
+            return Err("probe frame missing or oversized".into());
+        }
+        let value = serde_json::from_slice(&frame).map_err(|_| "probe frame invalid")?;
+        // stdin stays owned by the child, keeping both probes alive while
+        // namespace identities are compared. Drop/cleanup closes both.
+        Ok((child, value))
     }
     fn create_args(&self, name: &str, slot: usize, memory: u64, remaining_ms: u64) -> Vec<String> {
         let mapping = format!("0:{}:{IDS_PER_WORKER}", 1 + slot * IDS_PER_WORKER);
@@ -413,6 +495,18 @@ impl Sandbox {
         args.push(self.config.python_image.clone());
         args
     }
+    fn broker_args(&self, name: &str, slot: usize, remaining_ms: u64) -> Vec<String> {
+        let mut args =
+            self.create_args(name, self.capacity + slot, 128 * 1024 * 1024, remaining_ms);
+        for arg in &mut args {
+            if arg == "--entrypoint=/usr/local/bin/python3" {
+                *arg = "--entrypoint=/usr/local/bin/olo-toolgate-invocation-broker".into();
+            }
+        }
+        *args.last_mut().expect("image") = self.config.broker_image.clone();
+        args.push("--invocation-broker".into());
+        args
+    }
     #[allow(clippy::too_many_arguments)]
     pub async fn run(
         self: &Arc<Self>,
@@ -429,6 +523,9 @@ impl Sandbox {
         }
         if !self.available() {
             return Ran::Crashed("sandbox pool unavailable".into());
+        }
+        if broker.require_isolated_broker().is_err() || broker.broker_policy().is_err() {
+            return Ran::Crashed("isolated broker admission refused".into());
         }
         let slot = {
             let mut slots = self.slots.lock().unwrap_or_else(|e| e.into_inner());
@@ -463,42 +560,114 @@ impl Sandbox {
         tokio::spawn(async move {
             let name = format!("{}{}", pool.prefix, crate::random_hex(16));
             let mut ran = Ran::Crashed("sandbox setup refused".into());
-            if pool
-                .journal(&Record {
-                    name: name.clone(),
-                    slot,
-                    invocation_id: Some(id.clone()),
-                })
-                .is_ok()
-            {
-                let mut args = pool.create_args(
-                    &name,
-                    slot,
-                    memory,
-                    input.deadline_unix_ms.saturating_sub(crate::now_ms()),
-                );
-                args.extend(strings(&["-I", "/opt/toolgate.pyz"]));
-                if pool.cli(&args).await.is_ok()
-                    && !*cancelled.borrow()
-                    && pool
-                        .cli(&strings(&[
-                            "cp",
-                            &artifact.to_string_lossy(),
-                            &format!("{name}:/opt/toolgate.pyz"),
-                        ]))
-                        .await
-                        .is_ok()
-                    && !*cancelled.borrow()
-                {
+            let broker_name = format!("{name}-broker");
+            let record = Record {
+                name: name.clone(),
+                slot,
+                invocation_id: Some(id.clone()),
+                broker_name: Some(broker_name.clone()),
+            };
+            if pool.journal(&record).is_ok() {
+                // Neither executable receives authority until the entire pair
+                // has a durable journal. Broker readiness precedes worker start.
+                let remaining = input.deadline_unix_ms.saturating_sub(crate::now_ms());
+                let mut child = None;
+                let mut connection = None;
+                let mut diagnostic = None;
+                let setup = async {
+                    pool.cli(&pool.broker_args(&broker_name, slot, remaining))
+                        .await?;
+                    let mut command = pool.command();
+                    command
+                        .args(["start", "--attach", "--interactive", &broker_name])
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::piped())
+                        .stderr(std::process::Stdio::piped());
+                    let mut process = command.spawn().map_err(|_| "broker process unavailable")?;
+                    let reader = tokio::io::BufReader::new(
+                        process.stdout.take().ok_or("broker stdout unavailable")?,
+                    );
+                    let writer = process.stdin.take().ok_or("broker stdin unavailable")?;
+                    let mut errors = process
+                        .stderr
+                        .take()
+                        .ok_or("broker diagnostics unavailable")?;
+                    // Never log broker data; bound drain work and kill the pair
+                    // if diagnostics exceed the fixed budget.
+                    diagnostic = Some(tokio::spawn(async move {
+                        use tokio::io::AsyncReadExt;
+                        let mut bytes = [0u8; 4096];
+                        let mut total = 0;
+                        loop {
+                            match errors.read(&mut bytes).await {
+                                Ok(0) => return false,
+                                Ok(n) => {
+                                    total += n;
+                                    if total > 64 * 1024 {
+                                        return true;
+                                    }
+                                }
+                                Err(_) => return true,
+                            }
+                        }
+                    }));
+                    child = Some(process);
+                    connection = Some(
+                        broker
+                            .attach_broker(reader, writer)
+                            .await
+                            .map_err(str::to_string)?,
+                    );
+                    if *cancelled.borrow() {
+                        return Err("invocation cancelled".into());
+                    }
+                    let mut args = pool.create_args(&name, slot, memory, remaining);
+                    args.extend(strings(&["-I", "/opt/toolgate.pyz"]));
+                    pool.cli(&args).await?;
+                    pool.cli(&strings(&[
+                        "cp",
+                        &artifact.to_string_lossy(),
+                        &format!("{name}:/opt/toolgate.pyz"),
+                    ]))
+                    .await?;
+                    Ok::<(), String>(())
+                }
+                .await;
+                if setup.is_ok() && !*cancelled.borrow() {
+                    let connection = connection.as_ref().expect("broker readiness");
+                    let mut failed = connection.failed();
                     let mut command = pool.command();
                     command.args(["start", "--attach", "--interactive", &name]);
-                    ran = tokio::select! {biased;_=cancelled.changed()=>Ran::TimedOut,result=crate::runner::exchange(command,&input,input.deadline_unix_ms,output,Some(&frames),&broker)=>result};
+                    if !*failed.borrow() && !broker.closed.load(Ordering::SeqCst) {
+                        ran = tokio::select! {
+                            biased;
+                            _ = cancelled.changed() => Ran::TimedOut,
+                            _ = failed.changed() => Ran::Crashed("isolated broker channel failed".into()),
+                            _ = child.as_mut().expect("broker process").wait() => Ran::Crashed("isolated broker exited".into()),
+                            _ = diagnostic.as_mut().expect("broker diagnostic drain") => Ran::Crashed("isolated broker diagnostics ended".into()),
+                            result = crate::runner::exchange(command, &input, input.deadline_unix_ms, output, Some(&frames), &broker) => result,
+                        };
+                    }
                 }
-                if pool.cleanup(&name).await.is_err() {
+                broker.closed.store(true, Ordering::SeqCst);
+                if let Some(connection) = connection {
+                    // Drop the worker future before waiting for the channel
+                    // mutex. Engine removal remains mandatory after timeout.
+                    let _ =
+                        tokio::time::timeout(Duration::from_millis(250), connection.finish()).await;
+                }
+                if pool.cleanup(&record).await.is_err() {
                     pool.poisoned.store(true, Ordering::SeqCst);
-                    ran = Ran::Crashed("sandbox teardown unconfirmed; pool fenced".into());
+                    ran = Ran::Crashed("sandbox pair teardown unconfirmed; pool fenced".into());
                 } else {
                     pool.slots.lock().unwrap_or_else(|e| e.into_inner())[slot] = false;
+                }
+                if let Some(mut process) = child {
+                    let _ = process.kill().await;
+                    let _ = tokio::time::timeout(Duration::from_secs(1), process.wait()).await;
+                }
+                if let Some(diagnostic) = diagnostic {
+                    diagnostic.abort();
                 }
             } else {
                 pool.poisoned.store(true, Ordering::SeqCst);
@@ -567,8 +736,68 @@ status=rd('/proc/self/status')
 denied=False
 try: socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 except PermissionError: denied=True
-print(json.dumps(dict(uid=os.getuid(),pid=os.getpid(),status=status,networkDenied=denied,memory=rd('/sys/fs/cgroup/memory.max'),swap=rd('/sys/fs/cgroup/memory.swap.max'),pids=rd('/sys/fs/cgroup/pids.max'),cpu=rd('/sys/fs/cgroup/cpu.max'),io=rd('/sys/fs/cgroup/io.max'))))
+print(json.dumps(dict(uid=os.getuid(),gid=os.getgid(),pid=os.getpid(),uidMap=rd("/proc/self/uid_map"),gidMap=rd("/proc/self/gid_map"),netns=os.readlink("/proc/self/ns/net"),userns=os.readlink("/proc/self/ns/user"),status=status,networkDenied=denied,memory=rd('/sys/fs/cgroup/memory.max'),swap=rd('/sys/fs/cgroup/memory.swap.max'),pids=rd('/sys/fs/cgroup/pids.max'),cpu=rd('/sys/fs/cgroup/cpu.max'),io=rd('/sys/fs/cgroup/io.max'))),flush=True)
+input()
 "#;
+/// Trusted image qualification only; no policy, credential or Control endpoint.
+pub fn isolation_probe() -> Result<Value, String> {
+    fn rd(path: &str) -> Result<String, String> {
+        std::fs::read_to_string(path)
+            .map(|s| s.trim().to_string())
+            .map_err(|_| "isolation probe file unavailable".into())
+    }
+    let status = rd("/proc/self/status")?;
+    let number = |key: &str| -> Result<u64, String> {
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix(key))
+            .and_then(|v| v.split_whitespace().next())
+            .and_then(|v| v.parse().ok())
+            .ok_or("isolation probe identity unavailable".into())
+    };
+    let namespace = |name: &str| {
+        std::fs::read_link(format!("/proc/self/ns/{name}"))
+            .map(|p| p.to_string_lossy().into_owned())
+            .map_err(|_| "isolation namespace unavailable".to_string())
+    };
+    // The broker never needs a socket syscall. This probe checks the exact
+    // deployed syscall filter rather than opening any network connection.
+    let network_denied =
+        std::net::TcpListener::bind("127.0.0.1:0").is_err_and(|e| e.raw_os_error() == Some(1));
+    Ok(json!({
+        "uid": number("Uid:")?, "gid": number("Gid:")?, "pid": std::process::id(),
+        "uidMap": rd("/proc/self/uid_map")?, "gidMap": rd("/proc/self/gid_map")?,
+        "netns": namespace("net")?, "userns": namespace("user")?, "status": status,
+        "networkDenied": network_denied,
+        "memory": rd("/sys/fs/cgroup/memory.max")?, "swap": rd("/sys/fs/cgroup/memory.swap.max")?,
+        "pids": rd("/sys/fs/cgroup/pids.max")?, "cpu": rd("/sys/fs/cgroup/cpu.max")?, "io": rd("/sys/fs/cgroup/io.max")?
+    }))
+}
+fn validate_pair(worker: &Value, broker: &Value, supervisor: &Value) -> Result<(), String> {
+    for key in ["uidMap", "gidMap", "netns", "userns"] {
+        let w = worker[key]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or("worker identity missing")?;
+        let b = broker[key]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or("broker identity missing")?;
+        let s = supervisor[key]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .ok_or("supervisor identity missing")?;
+        if w == b || w == s || b == s {
+            return Err(format!(
+                "broker/worker/supervisor {key} isolation boundary missing"
+            ));
+        }
+    }
+    if broker["gid"] != 100 || worker["gid"] != 100 {
+        return Err("unprivileged sandbox group required".into());
+    }
+    Ok(())
+}
 fn validate_probe(v: &Value, c: &Config) -> Result<(), String> {
     let status = v["status"].as_str().unwrap_or("");
     if v["uid"] != 100
@@ -599,6 +828,7 @@ mod tests {
             podman_path: "/usr/bin/podman".into(),
             cgroup_parent: "/system.slice/toolgate.service".into(),
             python_image: format!("docker.io/library/python@sha256:{}", "a".repeat(64)),
+            broker_image: format!("localhost/toolgate-broker@sha256:{}", "b".repeat(64)),
             io_device: "8:0".into(),
             io_bytes_per_second: 64 * 1024 * 1024,
             scratch_bytes: 8 * 1024 * 1024,
@@ -609,6 +839,9 @@ mod tests {
         let mut c = config();
         assert!(c.validate().is_ok());
         c.python_image = "python:latest".into();
+        assert!(c.validate().is_err());
+        c = config();
+        c.broker_image = "localhost/broker:latest".into();
         assert!(c.validate().is_err());
         c = config();
         c.cgroup_parent = "/system.slice/../toolgate.service".into();
@@ -641,6 +874,19 @@ mod tests {
         }
         assert!(first.iter().any(|v| v == "--uidmap=0:1:1024"));
         assert!(second.iter().any(|v| v == "--uidmap=0:1025:1024"));
+        let broker = pool.broker_args("owned-broker", 0, 1200);
+        let other_broker = pool.broker_args("other-broker", 1, 1200);
+        assert!(broker.iter().any(|v| v == "--uidmap=0:2049:1024"));
+        assert!(other_broker.iter().any(|v| v == "--uidmap=0:3073:1024"));
+        assert!(broker.iter().any(|v| v == "--network=none"));
+        assert!(broker
+            .iter()
+            .any(|v| v == "--entrypoint=/usr/local/bin/olo-toolgate-invocation-broker"));
+        assert_eq!(broker.last().unwrap(), "--invocation-broker");
+        assert!(!broker
+            .iter()
+            .any(|v| v.starts_with("--volume") || v.starts_with("--mount")));
+
         assert!(!first
             .iter()
             .any(|v| v.starts_with("--volume") || v.starts_with("--mount") || v == "--privileged"));
@@ -658,11 +904,31 @@ mod tests {
             .contains(&v.as_str().unwrap())));
         std::fs::remove_dir_all(root).unwrap();
     }
+    #[test]
+    fn paired_probe_requires_three_distinct_identity_and_network_boundaries() {
+        let worker = json!({"uidMap":"worker-uid","gidMap":"worker-gid","netns":"worker-net","userns":"worker-user","gid":100});
+        let broker = json!({"uidMap":"broker-uid","gidMap":"broker-gid","netns":"broker-net","userns":"broker-user","gid":100});
+        let supervisor = json!({"uidMap":"host-uid","gidMap":"host-gid","netns":"host-net","userns":"host-user"});
+        assert!(validate_pair(&worker, &broker, &supervisor).is_ok());
+        for key in ["uidMap", "gidMap", "netns", "userns"] {
+            let mut same_worker = broker.clone();
+            same_worker[key] = worker[key].clone();
+            assert!(validate_pair(&worker, &same_worker, &supervisor).is_err());
+            let mut same_supervisor = broker.clone();
+            same_supervisor[key] = supervisor[key].clone();
+            assert!(validate_pair(&worker, &same_supervisor, &supervisor).is_err());
+            let mut missing = broker.clone();
+            missing.as_object_mut().unwrap().remove(key);
+            assert!(validate_pair(&worker, &missing, &supervisor).is_err());
+        }
+    }
     #[tokio::test]
     #[ignore = "requires the delegated OCI conformance service"]
     async fn restart_reconciles_an_owned_running_container_before_reopening_the_pool() {
         let config = Config {
             python_image: std::env::var("TOOLGATE_SANDBOX_IMAGE").expect("pinned image required"),
+            broker_image: std::env::var("TOOLGATE_SANDBOX_BROKER_IMAGE")
+                .expect("pinned broker image required"),
             cgroup_parent: std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT")
                 .expect("service required"),
             io_device: std::env::var("TOOLGATE_SANDBOX_IO_DEVICE").expect("I/O device required"),
@@ -678,12 +944,19 @@ mod tests {
                 name: name.clone(),
                 slot: 0,
                 invocation_id: Some("recovery-test".into()),
+                broker_name: Some(format!("{name}-broker")),
             })
             .unwrap();
         let mut args = first.create_args(&name, 0, 128 * 1024 * 1024, 60_000);
         args.extend(strings(&["-I", "-c", "import time; time.sleep(60)"]));
         first.cli(&args).await.unwrap();
         first.cli(&strings(&["start", &name])).await.unwrap();
+        let broker_name = format!("{name}-broker");
+        first
+            .cli(&first.broker_args(&broker_name, 0, 60_000))
+            .await
+            .unwrap();
+        // Created-but-not-started broker is still an owned lifecycle artifact.
         drop(first);
         let restarted = Sandbox::open(config, &root, "recovery", 1).unwrap();
         assert!(!restarted.available());
@@ -693,6 +966,16 @@ mod tests {
         assert_eq!(
             exists
                 .args(["container", "exists", &name])
+                .status()
+                .await
+                .unwrap()
+                .code(),
+            Some(1)
+        );
+        let mut exists = restarted.command();
+        assert_eq!(
+            exists
+                .args(["container", "exists", &broker_name])
                 .status()
                 .await
                 .unwrap()

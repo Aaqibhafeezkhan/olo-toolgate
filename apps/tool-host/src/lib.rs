@@ -5,6 +5,8 @@
 //! profile and globals the permit pins, with every route call going through its broker.
 
 pub mod broker;
+mod broker_authority;
+pub mod broker_process;
 pub mod config;
 pub mod control;
 pub mod device;

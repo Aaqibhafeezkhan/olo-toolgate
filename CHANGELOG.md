@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Run each qualified Python OCI invocation with a separate trusted broker
+  identity and network namespace. Bind private authority/transport IPC to one
+  admission, require a positive send gate and tear down/recover the worker and
+  broker together. OCI hosts must prepare a pinned static broker image, configure
+  brokerImage, and allow two subordinate identity ranges per slot. The separated
+  tier supports declared request/response ceilings up to 2 MiB; unsupported
+  policies are refused. Native and other runtime tiers require separate qualification.
+
 - Derive separate operation outcomes and bounded history across every attempt
   and effect generation. Seal attempt manifests, retain qualified late evidence,
   fence conflicting work and support independent revision-bound scope review.

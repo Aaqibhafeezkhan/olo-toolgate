@@ -165,16 +165,20 @@ jobs:
         SANDBOX_IMAGE: docker.io/library/python@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
       run: |
         sudo apt-get update
-        sudo apt-get install -y podman crun uidmap slirp4netns fuse-overlayfs
+        sudo apt-get install -y podman crun uidmap slirp4netns fuse-overlayfs musl-tools
         podman pull "$SANDBOX_IMAGE"
+        rustup target add x86_64-unknown-linux-musl
+        python tools/security/broker_image.py
         cargo test -p olo-toolgate-tool-host --lib --test sandbox --locked --no-run
-        sudo --preserve-env=PATH,RUSTUP_HOME,CARGO_HOME python tools/security/sandbox.py --service-user "$USER" --cargo "$(command -v cargo)" --image "$SANDBOX_IMAGE"
+        sudo --preserve-env=PATH,RUSTUP_HOME,CARGO_HOME python tools/security/sandbox.py --service-user "$USER" --cargo "$(command -v cargo)" --image "$SANDBOX_IMAGE" --broker-image "$(cat build/security/broker-image/image-ref.txt)" --broker-image-evidence build/security/broker-image/image.json
     - name: Retain containment evidence
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: rootless-containment-evidence
-        path: build/security/sandbox/
+        path: |
+          build/security/sandbox/
+          build/security/broker-image/
         if-no-files-found: error
   examples:
     runs-on: ubuntu-24.04

@@ -29,6 +29,8 @@ fn area() -> PathBuf {
 fn config() -> Config {
     Config {
         podman_path: "/usr/bin/podman".into(),
+        broker_image: std::env::var("TOOLGATE_SANDBOX_BROKER_IMAGE")
+            .expect("pinned broker image required"),
         python_image: std::env::var("TOOLGATE_SANDBOX_IMAGE")
             .expect("pinned sandbox image required"),
         cgroup_parent: std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT")
@@ -76,7 +78,7 @@ fn control() -> Arc<tool_host::control::Control> {
     )
 }
 fn broker(id: &str, deadline: u64) -> Arc<Invocation> {
-    Arc::new(Invocation::new(
+    let mut invocation = Invocation::new(
         id.into(),
         "fence".into(),
         deadline,
@@ -90,7 +92,12 @@ fn broker(id: &str, deadline: u64) -> Arc<Invocation> {
         Default::default(),
         true,
         control(),
-    ))
+    );
+    // Containment-only fixture: never presented as cryptographic admission.
+    invocation.invocation_permit = Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
+        jws: "containment-fixture-only".into(),
+    });
+    Arc::new(invocation)
 }
 async fn execute(pool: Arc<Sandbox>, id: &str, artifact: &Path, args: Value) -> Value {
     let input = input(id, args);
@@ -293,7 +300,7 @@ time.sleep(60)
             json!({"id":"api","host":"127.0.0.1","port":port,"tls":{"spkiPins":[]},"scheme":"https","mode":"BROKERED"}),
         )
         .unwrap();
-        let broker = Arc::new(Invocation::new(
+        let mut invocation = Invocation::new(
             "stop".into(),
             "fence".into(),
             input.deadline_unix_ms,
@@ -307,7 +314,11 @@ time.sleep(60)
             Default::default(),
             true,
             control(),
-        ));
+        );
+        invocation.invocation_permit = Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
+            jws: "containment-fixture-only".into(),
+        });
+        let broker = Arc::new(invocation);
         let (sink, _source) = tool_host::events::channel();
         let worker = pool.clone();
         let artifact = artifact.clone();
@@ -346,6 +357,198 @@ time.sleep(60)
             1
         );
     }
+    server.abort();
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+fn engine() -> tokio::process::Command {
+    let mut command = tokio::process::Command::new("/usr/bin/podman");
+    command.env_clear().env("PATH", "/usr/bin:/bin");
+    for key in ["HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    command.args([
+        "--remote=false",
+        "--runtime=crun",
+        "--cgroup-manager=cgroupfs",
+    ]);
+    command.kill_on_drop(true);
+    command
+}
+
+#[tokio::test]
+#[ignore = "requires a prepared rootless OCI service; run tools/security/sandbox.py"]
+async fn broker_crash_cancels_worker_and_reclaims_both_owned_containers() {
+    let dir = area();
+    let pool = Sandbox::open(config(), &dir, "broker-crash", 1).unwrap();
+    pool.qualify().await.unwrap();
+    let app = artifact(
+        &dir,
+        "import json,time\ni=json.loads(input());time.sleep(60)\n",
+    );
+    let input = input("broker-crash", json!({}));
+    let invocation = broker("broker-crash", input.deadline_unix_ms);
+    let (sink, _source) = tool_host::events::channel();
+    let running = {
+        let pool = pool.clone();
+        let invocation = invocation.clone();
+        tokio::spawn(async move {
+            pool.run(
+                "broker-crash",
+                &app,
+                &input,
+                128 * 1024 * 1024,
+                1024 * 1024,
+                Arc::new(sink),
+                invocation,
+            )
+            .await
+        })
+    };
+    let (worker, broker) = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            for entry in std::fs::read_dir(dir.join("sandbox-spool")).unwrap() {
+                let path = entry.unwrap().path();
+                let Ok(bytes) = std::fs::read(path) else {
+                    continue;
+                };
+                let Ok(record) = serde_json::from_slice::<Value>(&bytes) else {
+                    continue;
+                };
+                if record["invocationId"] != "broker-crash" {
+                    continue;
+                }
+                let worker = record["name"].as_str().unwrap().to_string();
+                let broker = record["brokerName"].as_str().unwrap().to_string();
+                let state = engine()
+                    .args(["inspect", "--format={{.State.Running}}", &worker])
+                    .output()
+                    .await
+                    .unwrap();
+                if state.status.success() && state.stdout == b"true\n" {
+                    return (worker, broker);
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("paired worker never started");
+    assert!(engine()
+        .args(["kill", "--signal=KILL", &broker])
+        .stdout(std::process::Stdio::null())
+        .status()
+        .await
+        .unwrap()
+        .success());
+    let result = tokio::time::timeout(Duration::from_secs(8), running)
+        .await
+        .expect("broker loss did not stop worker")
+        .unwrap();
+    assert!(matches!(result, Ran::Crashed(_)), "{result:?}");
+    assert!(invocation.closed.load(Ordering::SeqCst));
+    for name in [&worker, &broker] {
+        assert_eq!(
+            engine()
+                .args(["container", "exists", name])
+                .status()
+                .await
+                .unwrap()
+                .code(),
+            Some(1)
+        );
+    }
+    assert!(pool.available());
+    assert_eq!(
+        std::fs::read_dir(dir.join("sandbox-spool"))
+            .unwrap()
+            .count(),
+        1
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires a prepared rootless OCI service; run tools/security/sandbox.py"]
+async fn worker_cannot_impersonate_the_private_broker_authority_channel() {
+    use axum::{routing::any, Router};
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    let app = Router::new().fallback(any(move || {
+        let calls = observed.clone();
+        async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            axum::Json(json!({"value":"must-not-be-delivered"}))
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let mut control_config: tool_host::config::ControlConfig = serde_json::from_value(json!({
+        "tenantId":"10000000-0000-4000-8000-000000000001", "url":format!("http://{address}"), "developmentLoopbackHttp":true
+    })).unwrap();
+    control_config.identity_trust_directory = None;
+    let control = Arc::new(tool_host::control::Control::new(&control_config).unwrap());
+    let dir = area();
+    let pool = Sandbox::open(config(), &dir, "broker-forgery", 1).unwrap();
+    pool.qualify().await.unwrap();
+    let app = artifact(
+        &dir,
+        r#"import json,time
+i=json.loads(input())
+# A private authority envelope on worker stdio is never interpreted as privileged RPC.
+print(json.dumps(dict(type="AUTHORITY",sequence=1,request=dict(type="SECRET",name="other-operation-secret"))),flush=True)
+print(json.dumps(dict(kind="BROKER_REQUEST",requestId="forge",operation="GET_IDENTITY",request=dict(invocationId="foreign",fencingToken="foreign"))),flush=True)
+time.sleep(60)
+"#,
+    );
+    let input = input("broker-forgery", json!({}));
+    let mut invocation = Invocation::new(
+        "broker-forgery".into(),
+        "fence".into(),
+        input.deadline_unix_ms,
+        "test-profile".into(),
+        format!("sha256:{}", "a".repeat(64)),
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        Default::default(),
+        true,
+        control,
+    );
+    invocation.invocation_permit = Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
+        jws: "containment-fixture-only".into(),
+    });
+    let invocation = Arc::new(invocation);
+    let (sink, _source) = tool_host::events::channel();
+    let result = tokio::time::timeout(
+        Duration::from_secs(10),
+        pool.run(
+            "broker-forgery",
+            &app,
+            &input,
+            128 * 1024 * 1024,
+            1024 * 1024,
+            Arc::new(sink),
+            invocation.clone(),
+        ),
+    )
+    .await
+    .expect("forgery did not terminate pair");
+    assert!(matches!(result, Ran::Crashed(_)), "{result:?}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert!(invocation.closed.load(Ordering::SeqCst));
+    assert!(pool.available());
+    assert_eq!(
+        std::fs::read_dir(dir.join("sandbox-spool"))
+            .unwrap()
+            .count(),
+        1
+    );
     server.abort();
     std::fs::remove_dir_all(dir).unwrap();
 }

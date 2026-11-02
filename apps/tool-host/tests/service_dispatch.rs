@@ -23,6 +23,7 @@ use tool_host::{
 #[derive(Clone)]
 struct Script {
     allow: bool,
+    false_success: bool,
     issue: Arc<Mutex<Option<Value>>>,
     sending: Arc<AtomicUsize>,
     gate: Arc<AtomicBool>,
@@ -48,6 +49,8 @@ async fn sending(State(s): State<Script>, Json(body): Json<Value>) -> axum::resp
     if s.allow {
         s.gate.store(true, Ordering::SeqCst);
         Json(json!({"authorized":true})).into_response()
+    } else if s.false_success {
+        Json(json!({"authorized":false})).into_response()
     } else {
         (StatusCode::FORBIDDEN, Json(json!({"error":"refused"}))).into_response()
     }
@@ -56,7 +59,14 @@ async fn sending(State(s): State<Script>, Json(body): Json<Value>) -> axum::resp
 #[tokio::test]
 async fn a_refused_send_gate_contacts_no_target_and_an_allowed_gate_sends_once_over_mtls() {
     let _ = rustls::crypto::ring::default_provider().install_default();
-    for allow in [false, true] {
+    for (allow, false_success, isolated) in [
+        (false, false, false),
+        (false, true, false),
+        (true, false, false),
+        (false, false, true),
+        (false, true, true),
+        (true, false, true),
+    ] {
         let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
         let mut roots = rustls::RootCertStore::empty();
         roots.add(certified.cert.der().clone()).unwrap();
@@ -77,6 +87,7 @@ async fn a_refused_send_gate_contacts_no_target_and_an_allowed_gate_sends_once_o
         let port = target.local_addr().unwrap().port();
         let script = Script {
             allow,
+            false_success,
             issue: Arc::new(Mutex::new(None)),
             sending: Arc::new(AtomicUsize::new(0)),
             gate: Arc::new(AtomicBool::new(false)),
@@ -189,7 +200,32 @@ async fn a_refused_send_gate_contacts_no_target_and_an_allowed_gate_sends_once_o
         invocation.invocation_permit = Some(SignedInvocationPermit {
             jws: "fixture-admission".into(),
         });
-        let response=answer(&invocation,&json!({"requestId":"call","operation":"ROUTE_CALL","request":{"route":"append","method":"POST","body":{"x":1}}})).await;
+        let process = if isolated {
+            let mut child =
+                tokio::process::Command::new(env!("CARGO_BIN_EXE_olo-toolgate-tool-host"))
+                    .arg("--invocation-broker")
+                    .env_clear()
+                    .env(
+                        "TOOLGATE_TOOL_HOST_CONFIG",
+                        "/configuration-must-not-be-read-by-a-broker",
+                    )
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .kill_on_drop(true)
+                    .spawn()
+                    .unwrap();
+            let input = child.stdin.take().unwrap();
+            let output = child.stdout.take().unwrap();
+            let connection = invocation
+                .attach_broker(tokio::io::BufReader::new(output), input)
+                .await
+                .unwrap();
+            Some((child, connection))
+        } else {
+            None
+        };
+        let response=answer(&invocation,&json!({"kind":"BROKER_REQUEST","requestId":"call","operation":"ROUTE_CALL","request":{"route":"append","method":"POST","body":{"x":1}}})).await;
         assert_eq!(script.sending.load(Ordering::SeqCst), 1);
         assert_eq!(
             invocation.service_effect_started.load(Ordering::SeqCst),
@@ -200,6 +236,19 @@ async fn a_refused_send_gate_contacts_no_target_and_an_allowed_gate_sends_once_o
             assert_eq!(invocation.egress.lock().unwrap()[0].status, Some(200));
         } else {
             assert!(response["result"]["refused"].is_string());
+        }
+        if let Some((child, connection)) = process {
+            connection.finish().await;
+            let output = tokio::time::timeout(Duration::from_secs(3), child.wait_with_output())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(!String::from_utf8_lossy(&output.stderr).contains("BEGIN PRIVATE KEY"));
         }
         server.abort();
     }

@@ -198,6 +198,35 @@ impl PreparedRequest {
             .insert("toolgate-service-permit", value);
         Ok(self)
     }
+    pub(crate) fn into_buffered(
+        self,
+        handler: &str,
+    ) -> Result<crate::broker_process::BufferedRequest, &'static str> {
+        let manifest =
+            serde_json::from_value(self.manifest).map_err(|_| "invalid prepared manifest")?;
+        crate::broker_process::freeze_request(&self.client, self.request, &manifest, handler)
+    }
+    pub(crate) fn body_len(&self) -> usize {
+        self.request
+            .body()
+            .and_then(|body| body.as_bytes())
+            .map_or(0, <[u8]>::len)
+    }
+    pub(crate) fn using_client(mut self, client: Client) -> Self {
+        self.client = client;
+        self
+    }
+    pub(crate) fn service_permit_is(&self, permit: &olo_toolgate_contracts::ServicePermit) -> bool {
+        let mut values = self
+            .request
+            .headers()
+            .get_all("toolgate-service-permit")
+            .iter();
+        values
+            .next()
+            .is_some_and(|value| value.as_bytes() == permit.jws.as_bytes())
+            && values.next().is_none()
+    }
     pub(crate) async fn send(self) -> Result<Response, reqwest::Error> {
         self.client.execute(self.request).await
     }
