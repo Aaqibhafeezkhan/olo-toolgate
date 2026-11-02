@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Require the exact delegated systemd control-group SIGKILL boundary before OCI
+  readiness. Update the service unit before adopting the host. Engine timeouts or
+  indeterminate I/O now retain lifecycle journals and identity reservations until
+  managed restart. Add source-bound owned supervisor-crash/automatic-restart drills
+  with local timing evidence; production connectivity SLO acceptance stays separate.
+
 - Reject malformed, duplicate, oversized or out-of-order qualified-worker frames
   before authority/event handling. Check complete DNS answers and literal IPs,
   preserve no-redirect HTTP/1.1 transport and qualify the declared-tier interface

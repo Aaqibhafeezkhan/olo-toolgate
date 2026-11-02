@@ -35,7 +35,7 @@ python tools/security/broker_image.py
 
 Then execute the actual delegated rootless gate using that exact image/report,
 as documented in the [operator guide](../operations/rootless-tool-host.md).
-The gate must execute all twelve named cases exactly once and retain the source,
+The gate must execute all thirteen named cases exactly once and retain the source,
 known parent revision, images, broker binary digest and architecture.
 
 Finally, as the development/service user:
@@ -51,3 +51,11 @@ build/security/containment/. Its report explicitly says securityAccepted=false
 and originalCatalogsAccepted=false: a declared-tier stage delivery is not a full
 C1-C8 assurance or original-roadmap acceptance. The foundation job runs both gates
 and retains their separate evidence.
+
+
+Managed deployment evidence is a separate source-bound gate:
+tools/security/deployment.py records two weak-unit refusals and three supervisor
+crash/automatic-restart cycles, with actual kernel memberships and monotonic local
+timings. The shared OCI gate also requires the completed-but-unacknowledged engine
+case to retain its journal and fence the pool. These observations do not accept
+production SLOs or the original complete roadmap catalogs.

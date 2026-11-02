@@ -12,11 +12,11 @@ Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-tool
 
 **Overall: partially implemented.** Scoped deliveries now include:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, verified target-claim orchestration with memory/RAG transaction integration, source-bound actual Control/Gateway/target outcome qualification, adoption of the complete A1–A9/C1–C8 security model, a fail-closed diagnostic scorecard/CI harness, and reviewed business-key policy with immutable window history and retention maintenance, and proof-bound whole-invocation recovery with immutable predecessor archives and stale-receipt fencing; plus S10 all-attempt finalization, immutable closure/settlement and current-authority caller history under the explicit stage scope amendment below; S12 per-invocation broker identity/network separation with scoped private authority/transport IPC and paired teardown/recovery; and S13 strict worker framing and declared-tier containment/interface/egress qualification with verified-leaf TLS pins. Executed validation for the current
+explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, verified target-claim orchestration with memory/RAG transaction integration, source-bound actual Control/Gateway/target outcome qualification, adoption of the complete A1–A9/C1–C8 security model, a fail-closed diagnostic scorecard/CI harness, and reviewed business-key policy with immutable window history and retention maintenance, and proof-bound whole-invocation recovery with immutable predecessor archives and stale-receipt fencing; plus S10 all-attempt finalization, immutable closure/settlement and current-authority caller history under the explicit stage scope amendment below; S12 per-invocation broker identity/network separation with scoped private authority/transport IPC and paired teardown/recovery; and S13 strict worker framing and declared-tier containment/interface/egress qualification with verified-leaf TLS pins; plus S14 managed-unit crash/automatic-restart qualification, engine-uncertainty fencing and measured local teardown/recovery. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–3 have
 partial delivery; phases 4–6 have not started as generalized implementations.
-**Weighted delivery progress: 42.7% complete; 57.3% pending.** This planning metric credits only completed delivery stages, not partially completed stages. It is separate from full-phase security acceptance (still 0 of 7). See the baseline below.
+**Weighted delivery progress: 47.2% complete; 52.8% pending.** This planning metric credits only completed delivery stages, not partially completed stages. It is separate from full-phase security acceptance (still 0 of 7). See the baseline below.
 
 The roadmap defines **7 major phases**, not a fixed number of incremental
 deliveries. Its original per-phase estimates sum to approximately **35–44
@@ -28,7 +28,7 @@ completion forecast. The midpoint of each original phase estimate supplies the f
 |---|---|---|---|
 | 0 — Boundary and harness | Partial | Weighted delivery baseline and one-commit stage workflow; source-bound actual stack gate; adopted A1–A9/C1–C8 threat model across security docs; diagnostic scorecard/CI harness inventories all 220 current security/integration cases (209 original plus 11 S10 component vectors) with explicit missing coverage; preserved revision-10 plan, claim inventory and executable OCI conformance gate with revision/source/image evidence. | Execute the full C1–C8 case/target matrix and integrate a strict release scorecard; obtain hosted CI/release evidence. Four delivery-stage checkmarks do not satisfy these full-phase exit criteria. |
 | 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries; reviewed required/argument keys, verified namespaces, bounded optional dedupe windows, immutable generation history and retention tombstones, tested on SQLite/PostgreSQL and Gateway/human paths; S09 whole-operation recovery with fresh current authority, retained attempts/leases/dispatches and late-receipt fencing. S10 complete all-attempt/effect derivation for the declared qualified OLO path, immutable manifests/settlement/finality, independent scope review, PARTIAL business keys, bounded current-authority history and Gateway/MCP/native/console presentation; qualified component vectors and affected regression/OCI/target gates pass. | Complete original distributed transitions/audit-spool/duplicate-execution suites remain required, including task/input, kill, host-spool lifecycle and crash/redispatch assertions. S10 is Done under the explicit bounded scope amendment; this does not accept the original full suites or phase. Live consent/equivalence/generalized target-guarantee sources retain their S19/S20 requirements. S09 delivers public proof-bound recovery, immutable predecessor archives, original deadlines, qualified released-generation replacement and SQLite/PostgreSQL/OCI evidence; it does not accept the entire phase. |
-| 2 — Containment | Partial; declared-tier runtime/interface slices delivered | Rootless Python workers and per-invocation brokers with disjoint identities/namespaces, pinned images, scoped private authority/transport and paired cleanup. S13 adds strict canonical worker frames, bounded state/output, checked DNS/literal addresses, verified-leaf TLS pins, current-source matrix, sequential state/descriptor isolation and unsupported-profile refusal before consumption. Final matrix passes 100 native/component and 12 actual OCI tests. | S14 deployment lifecycle/crash/cleanup and measured bounds. Full historical optional-transport/generalized-kill, production/Kubernetes and release acceptance remain outside this declared-tier delivery. Other runtime/OS/VM tiers remain unqualified. |
+| 2 — Containment | Partial; declared runtime/interface/deployment slices delivered | Qualified worker/broker isolation and strict interface/egress matrix, plus exact managed-unit hard-kill readiness and retained engine-uncertainty journals. Final current-source matrix passes 101 native/component and 13 OCI cases; owned local deployment passes weak-mode/signal refusals and three real supervisor-crash/automatic-restart cycles with actual process/cgroup/namespace witnesses and measured bounds. | Full original optional-transport/generalized-kill, Kubernetes/production connectivity and release criteria remain unaccepted in their owning stages/S33. Four bounded delivery stages do not accept those original full-phase exit criteria. Other runtime/OS/VM tiers remain unqualified; local measurements are not production SLOs. |
 | 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. The owned actual Control/Gateway fixture now verifies committed memory/RAG outcome settlement against Control records. | Generalize the independently validated OLO path to broker enforcement for all route classes, effect keys/manifests, generalized owner protocol, consent slots, generalized target fencing/deduplication, reconciliation and operation finalization. |
 | 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
 | 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
@@ -44,13 +44,13 @@ items below retain their existing implementation status. S08 adds admission/wind
 | Acceptance item | Status | Evidence / outstanding work |
 |---|---|---|
 | Exact consent rejects recipient changes and additional effects | Not implemented | OLO fingerprints are independently route/profile-checked by Control and signed/target-checked, including actual memory/RAG component TLS tests; independent exact consent slots and additional-effect rejection remain unimplemented. |
-| Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down both a real OCI SDK worker and its isolated broker; broker loss and worker private-channel forgery also terminate the pair, with zero Control contact on forgery; S13 raw socket witnesses additionally prove pending-call cancellation and diagnostic failure close the target socket. Generalized sensitive-effect authorization/signed kill and measured deployment bounds remain outstanding. |
+| Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down both a real OCI SDK worker and its isolated broker; broker loss and worker private-channel forgery also terminate the pair, with zero Control contact on forgery; S13 raw socket witnesses additionally prove pending-call cancellation and diagnostic failure close the target socket. S14 additionally measures actual managed-unit supervisor-crash/automatic-restart cleanup, including a TERM-ignoring worker. Generalized sensitive-effect authorization/signed kill and production connectivity-class SLOs remain outstanding. |
 | Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; S09 focused SQLite/PostgreSQL checks cover atomic rollback, competing public replay, fresh permits, original deadlines and stale receipt fencing; S08 adds two-Control-instance window races, immutable history/retention and refusal to rotate ambiguous work on SQLite/PostgreSQL; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; actual target tests now exercise paused-owner abandonment, two JVMs, writer loss after business commit and lost outcome acknowledgement; complete Control/Gateway crash scenarios remain outstanding. |
 | Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claims and actual memory/RAG JVM replicas now exercise one mutation, paused-owner fencing, writer loss and outcome redelivery; actual Control/Gateway normal-path settlement now passes; complete partition/crash qualification remains outstanding. |
 | Operation finalization includes all attempts/effects and late evidence | Partial; bounded S10 delivered | Control derives the union of every bounded attempt/effect generation, closes immutable manifests and settles only with positive automatic/human scope evidence. Qualified late reports contribute without rewriting current dispatch; conflicts fence authority and final outcomes latch reconciliation. Current-authority caller/history, business-key projections and console presentation pass component regression checks; 143 renewed Control cases (including 17 policy cases and required PostgreSQL scenarios), six actual OCI tests and 32 current target cases pass. S10 is Done only under the recorded scope amendment. Full original distributed suites and later independent consent/equivalence/deduplication sources remain required for full acceptance. |
-| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | S13 final OCI/matrix reports match known parent f7b65600, source 1baf7f3de125c66d7b8d2921e795e6a2560a8d9c4817fc6e6a6642f202f1f009, both image pins, static broker binary and x86_64 architecture. They pass 12 actual OCI plus 100 native/component witnesses in all eight declared-scope matrix groups. Stale source evidence is refused; securityAccepted=false and originalCatalogsAccepted=false remain explicit. Deployment SLOs, full historical catalogs and complete C1–C8 acceptance remain outstanding. |
+| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | S14 final OCI/matrix/deployment reports match known parent ee61e550 and source e1b046f79e5e10ba5b9e5a483bb6c22315efe792af13087bbeeb412c3c37de7b, both image pins, broker binary and measured platform/service properties. They pass 13 OCI plus 101 native/component witnesses and five owned deployment observations. Stale image/source evidence is refused; securityAccepted=false, originalCatalogsAccepted=false and productionSloAccepted=false remain explicit. Full original catalogs and C1–C8 release/phase acceptance remain outstanding. |
 
-**Next implementation stage:** S14, containment deployment qualification.
+**Next implementation stage:** S18, generalized effect grants and owner protocol (S15–S17 are already delivered).
 S03, the clarified S04 diagnostic harness, S09 proof-bound rebinding and the explicitly amended S10 finalization stage are complete. Continue in stage order;
 dependencies may be implemented inside a stage but cannot earn duplicate credit.
 S17 development-stack qualification is complete; generalized grants, exact consent,
@@ -67,9 +67,9 @@ A stage earns its entire weight only when its stated scope and executed validati
 are complete; Partial and Pending earn zero. Existing work is credited only for
 the bounded Done stages below, not for the complete parent phase.
 
-**Completed weight = 2 + 7 + 5.25 + 2.625 = 16.875.**
-**Completion = 100 × 16.875 / 39.5 = 42.7% (rounded).**
-Pending weight is 22.625, or 57.3% (rounded). Sixteen of 33 delivery stages are Done;
+**Completed weight = 2 + 7 + 7 + 2.625 = 18.625.**
+**Completion = 100 × 18.625 / 39.5 = 47.2% (rounded).**
+Pending weight is 20.875, or 52.8% (rounded). Seventeen of 33 delivery stages are Done;
 S10 credit uses the explicit scope amendment below, not full distributed-suite acceptance;
 stage count is not the percentage formula. No phase receives full acceptance
 until all its original exit criteria have executed evidence.
@@ -78,7 +78,7 @@ until all its original exit criteria have executed evidence.
 |---|---:|---:|---:|---:|
 | 0 | 2 | 4 / 4 | 2 | 5.06% |
 | 1 | 7 | 6 / 6 | 7 | 17.72% |
-| 2 | 7 | 3 / 4 | 5.25 | 13.29% |
+| 2 | 7 | 4 / 4 | 7 | 17.72% |
 | 3 | 7 | 3 / 8 | 2.625 | 6.65% |
 | 4 | 3.5 | 0 / 4 | 0 | 0.00% |
 | 5 | 6 | 0 / 3 | 0 | 0.00% |
@@ -103,7 +103,7 @@ Future percentages use this formula and the evidence-backed stage statuses.
 | S11 | 2 | Qualified Python worker containment | Done | Rootless OCI namespaces, filesystem, resources, no fallback and teardown/recovery tests. |
 | S12 | 2 | Trusted broker OS/network separation | Done | Scoped private authority/transport IPC, pinned broker image, disjoint subordinate identities and user/network namespaces, no in-process fallback, paired teardown/recovery; eight final source/image-bound actual OCI cases, focused native/transport/authority tests, workspace checks and CI contracts pass (details below). |
 | S13 | 2 | Complete containment/interface conformance | Done | Complete declared Linux x86_64 Python OCI matrix: strict schemas/frames, state/descriptor/kernel/network isolation, no fallback, pending-call ordering/cancellation, checked addresses/redirects/TLS pins and shared MCP TLS compatibility. Final source-bound report passes 100 native/component and 12 actual OCI tests; disabled transports/other tiers and full original-catalog limitations are explicit. |
-| S14 | 2 | Containment deployment qualification | Partial | Deployment lifecycle, cleanup, restart and measured deployment bounds for qualified pools. |
+| S14 | 2 | Containment deployment qualification | Done | Exact delegated managed-unit/SIGKILL readiness; engine uncertainty retains journal and identity slot; source-bound owned deployment passes two weak-unit refusals and three actual supervisor-crash/automatic-restart cycles with measured local bounds. Full workspace, 13 OCI and 101 native/component matrix cases pass. Production SLO/full original-catalog acceptance remains separate. |
 | S15 | 3 | Durable effect-generation ledger | Done | Immutable effects, generation/owner transitions, conflict and timeout tests. |
 | S16 | 3 | Immutable prepared HTTP transport | Done | Canonical request fingerprints, HTTP/1.1 no-retry transport and TLS refusal tests. |
 | S17 | 3 | Fenced OLO memory/RAG integration | Done | Independent manifests, owner dispatch, shared SQL claims, authenticated outcomes, actual JVM crash/replica tests and real Control/Gateway development-stack settlement. |
@@ -202,9 +202,9 @@ carry this requirement into future work.
 | C3b, current per-effect authorization | Partial; OLO write path only | Existing OLO current-authority checks now reserve/consume durable effect generations atomically. OLO permits also sign prepared HTTP fingerprints and the target verifier checks accepted-request facts. Control now independently verifies pinned OLO profile/route manifests and original signed admission scope; v2 leases cannot downgrade to unbound issuance. Actual memory/RAG listeners supply HTTP facts from accepted requests with trusted deployment bindings. Bound write dispatch now rechecks current authority and recorded ownership at a single SENDING transition; bound target consumption refuses unsent generations. A shared SQL claim-store foundation is tested independently. Control now exposes claim-token consumption/status and late authenticated outcomes; actual memory/RAG integration now uses verified facts, durable claims and a target outcome outbox. Component crash cases use scripted Control; the additional owned development fixture now joins actual Control outcome records to committed target claims. S12's working-tree supervisor port now requires authorized=true at the send gate; HTTP 403 and HTTP 200/false both contact no actual mTLS target, while a positive gate sends once. S12's private supervisor delegate additionally fixes invocation/fence/profile/owner scope and one-use transport, with native helper and eight actual OCI cases, including zero-Control-contact worker impersonation. S13 strict framing precedes authority handling; diagnostic failure drops an outstanding authority/transport future and its target socket. Verified TLS/leaf pins do not replace Control authorization. Production deployment evidence remains outstanding. Generalized enforcement, exact consent and complete stack/deployment conformance remain required. |
 | C3c, bounded unmediated execution | Partial | Native direct-worker supervision and OCI teardown on cancellation/deadline are tested. Enforced service cgroups contain worker processes; measured deployment revocation SLOs remain required. |
 | C4, bound admission intent | Implemented existing boundary | Tool Host admission binds signature, audience, arguments and content digests; dispatch integration tests. |
-| C5, contained execution | Available for qualified Linux x86_64 Python OCI pools | S12/S13 source/image-bound actual isolation and paired lifecycle evidence is extended by a complete declared-tier matrix: 12 OCI and 100 native/component tests, including strict framing/floods, fresh state/FDs, resource/syscall/network probes, zero-authority forgery, TLS chain/leaf pins, address/redirect policy and pending-call cancellation. Shared native MCP TLS tests earn no native containment credit. Supervisor/broker/engine/kernel stay trusted. Full original optional-transport/kill catalogs, other tiers, deployment SLOs and complete security acceptance remain outstanding. |
+| C5, contained execution | Available for qualified Linux x86_64 Python OCI pools | Final S14 reports pass 13 actual OCI and 101 native/component witnesses. Readiness checks the actual delegated service, exact cgroup and control-group SIGKILL; uncertain engine completion fences the pool and retains its journal/identity reservation. Five owned deployment observations verify weak-unit refusal and three actual supervisor-crash/automatic-restart cycles with disjoint PIDs/UIDs/namespaces and cleanup without replay. Local observed kill/recovery maxima are 34.797/2697.509 ms at 25 ms polling, not production SLOs. Supervisor/broker/engine/kernel remain trusted. Native/other tiers and full original catalogs/security acceptance remain unqualified. |
 | C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence, independent immutable attempt snapshots, immutable recovery archives and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. S10 derived-outcome/scope-review records and audit share writer transactions; rollback and replay checks pass. Eleven source-bound component vectors passed without promoting original distributed suites. Hash chains and external anchors remain required. |
-| C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required. |
+| C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required.  S14 adds source-bound local managed-unit crash/restart measurements; it does not accept production connectivity-class revocation SLOs or an A4 bound. |
 | C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; unqualified or potentially sent consumed work remains fenced. S09 implements immutable proof-bound whole-operation recovery, with default-off admission-time device/pool/image qualification and all predecessor generations released; full-stage verification passes. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, and actual memory/RAG transactions now adopt them with restricted SQL state/binding guards and durable outcome delivery. Reviewed required/argument keys, verified namespaces, proof-bound windows and retention tombstones are implemented and tested across Control, Gateway and human admission. S10 all-attempt derivation, immutable finality, automatic/human scope settlement, late evidence, current-context caller history and console/business-key projections pass the amended stage gates. Full original distributed conformance remains required, alongside other route classes, consent slots and independently approved generalized target deduplication/equivalence sources. |
 
 The adopted [A1–A9 matrix and C1–C8 definitions](zero-trust-boundaries.md)
@@ -2003,3 +2003,78 @@ their requirements. No full roadmap phase or complete C1–C8 guarantee is accep
 S13 earns its fixed **1.75** baseline weight: **16.875 / 39.5 = 42.7% complete;
 57.3% pending**, with **16 / 33 stages Done** and **0 / 7 full phases accepted**.
 Next: S14 owned deployment crash/lifecycle, cleanup/restart and measured bounds.
+
+
+### S14 complete — managed deployment crash qualification (2026-11-02)
+
+S14 is delivered for the declared local Linux x86_64 rootless Python deployment
+profile. The original plan and fixed stage weights are unchanged. Its actual
+owned fixture executes the production Sandbox lifecycle without Control
+credentials or live effects; it is not a production rollout or complete
+Control/Gateway enrollment/kill qualification.
+
+Before advertising OCI readiness, the supervisor now reads the actual systemd
+manager and requires the exact configured ControlGroup, delegated controllers,
+KillMode=control-group, KillSignal=SIGKILL and SendSIGKILL=yes. The shipped unit
+and transient conformance service have immediate group kill. A weak, unreadable
+or ambiguous deployment refuses readiness. If an engine command times out or
+its I/O outcome is indeterminate, both removal attempts still run but the pool
+stays fenced and retains its journal/identity reservation. A later absence query
+cannot erase that uncertainty; managed service restart kills old descendant
+commands before recovery.
+
+The deployment controller creates only absent generated unit names and checks
+its unique description before cleanup. Units stop before their freshly owned
+temporary directory is removed; uncertain cleanup retains the directory. It
+compiles and runs one explicitly ignored fixture under the unprivileged
+image-owning account. The observer independently checks actual main/worker/broker
+PIDs, start times, subordinate UIDs, user/net/PID/mount namespaces and cgroup
+membership. It verifies the worker ignores TERM, kills the real supervisor,
+observes both old roles terminate, and verifies automatic restart under a fresh
+systemd invocation reconciles both containers/journals without a new tool run.
+
+Executed final evidence:
+
+- **Five owned deployment observations passed**: separate weak-mode and
+  weak-signal refusals, plus **three actual supervisor-crash/automatic-restart
+  cycles**. All owned units were stopped and temporary state cleaned.
+- Observed local startup times: **3261.053, 1964.840, 2577.736 ms**.
+  Pair termination after the controller's kill request:
+  **34.797, 30.830, 31.414 ms**.
+  Automatic restart/reconciliation from that same point:
+  **2606.747, 2682.624, 2697.509 ms**.
+  Polling is **25 ms**; local assertion ceilings are **5000/25000 ms**, including
+  command latency. These three samples are not a percentile or production SLO.
+- Tested platform: **systemd 255 (255.4-1ubuntu8.18)**,
+  **6.18.54.1-microsoft-standard-WSL2**, x86_64.
+- All **13 named actual OCI cases passed exactly once**, including a real
+  completed-but-unacknowledged create that retains its journal and fences
+  qualification despite both container names subsequently being absent.
+- The current-source eight-group matrix passed **101 native/component tests**
+  and all **13 OCI witnesses**. Full Rust workspace tests and workspace
+  all-target Clippy passed. CI **380 tests passed with 17 explicit environment
+  skips**; all **20 foundation contract tests passed**. Python syntax and
+  whitespace checks passed. Stale image/source evidence was refused before any
+  deployment unit was created. Hosted CI is not claimed.
+- Known tested parent: **ee61e5500bcaae107cd122648515b12e97c4c0f8**.
+- Tested source SHA-256:
+  **e1b046f79e5e10ba5b9e5a483bb6c22315efe792af13087bbeeb412c3c37de7b**.
+- Static broker binary SHA-256:
+  **6d10f46f73acc15c4ff4a170d15431cb89f60e05c4bb8db82512d6d8b31906b6**.
+- Broker image:
+  **localhost/olo-toolgate-invocation-broker@sha256:141de683f7d664e0787ba1da48dafc993d6a0a2c21bf709f2d9a642aeb0c3860**.
+- Worker image remains
+  **docker.io/library/python@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159**.
+
+Final acceptance documentation follows that frozen tested source; the digest is
+not the invented SHA of this commit. Reports explicitly retain
+securityAccepted=false, originalCatalogsAccepted=false and
+productionSloAccepted=false. Full original optional-transport/Kubernetes/
+generalized signed-kill, production connectivity-class and release evidence
+remain in their owning stages/S33. No A4, other-tier or full C1–C8/roadmap-phase
+guarantee is accepted. No Java/database/target implementation changed in S14.
+
+S14 earns **1.75** fixed baseline weight: **18.625 / 39.5 = 47.2% complete;
+52.8% pending**, with **17 / 33 stages Done** and **0 / 7 full phases accepted**.
+Next: **S18 generalized effect grants and owner protocol**; S15–S17 are already
+delivered and retain their recorded scope and evidence.

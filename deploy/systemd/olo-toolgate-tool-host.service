@@ -1,5 +1,5 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
-# Provision toolgate's subordinate IDs and pinned runtime image before enabling.
+# Provision toolgate's subordinate IDs and pinned worker/broker images before enabling.
 [Unit]
 Description=ToolGate rootless OCI Tool Host
 After=network-online.target
@@ -20,6 +20,8 @@ ExecStart=/usr/local/bin/olo-toolgate-tool-host
 Delegate=yes
 DelegateSubgroup=supervisor
 KillMode=control-group
+# Forced group teardown also stops workers that ignore TERM after a supervisor crash.
+KillSignal=SIGKILL
 TimeoutStopSec=15
 SendSIGKILL=yes
 Restart=on-failure

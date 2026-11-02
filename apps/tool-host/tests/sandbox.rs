@@ -711,3 +711,89 @@ print(json.dumps(dict(kind='RESULT',resultType='complete',isError=False,content=
     );
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[tokio::test]
+#[ignore = "requires a prepared rootless OCI service; run tools/security/sandbox.py"]
+async fn uncertain_engine_completion_fences_the_pool_and_retains_the_owned_journal() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = area();
+    let fault = dir.join("enable-engine-delay");
+    let created = dir.join("engine-create-completed");
+    let wrapper = dir.join("delayed-podman");
+    let script = format!(
+        r#"#!/usr/bin/python3
+import os,sys,subprocess,time
+from pathlib import Path
+fault={fault}
+created={created}
+command=['/usr/bin/podman',*sys.argv[1:]]
+if Path(fault).exists() and 'create' in sys.argv[1:]:
+ result=subprocess.run(command,check=False)
+ if result.returncode==0: Path(created).write_text('created')
+ time.sleep(30)
+ sys.exit(result.returncode)
+os.execv(command[0],command)
+"#,
+        fault = serde_json::to_string(&fault.to_string_lossy()).unwrap(),
+        created = serde_json::to_string(&created.to_string_lossy()).unwrap()
+    );
+    std::fs::write(&wrapper, script).unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut configuration = config();
+    configuration.podman_path = wrapper;
+    let pool = Sandbox::open(configuration, &dir, "uncertain-engine", 1).unwrap();
+    pool.qualify().await.unwrap();
+    std::fs::write(&fault, "delay-next-create").unwrap();
+    let app=artifact(&dir,"import json\ni=json.loads(input())\nprint(json.dumps(dict(kind='RESULT',resultType='complete',isError=False,content=[])))\n");
+    let input = input("uncertain-engine", json!({}));
+    let (sink, _source) = tool_host::events::channel();
+    let result = pool
+        .run(
+            "uncertain-engine",
+            &app,
+            &input,
+            128 * 1024 * 1024,
+            1024 * 1024,
+            Arc::new(sink),
+            broker("uncertain-engine", input.deadline_unix_ms),
+        )
+        .await;
+    assert!(
+        created.exists(),
+        "real rootless create must precede the lost completion"
+    );
+    assert!(matches!(result, Ran::Crashed(_)), "{result:?}");
+    assert!(!pool.available());
+    assert!(pool.qualify().await.unwrap_err().contains("restart"));
+    let records: Vec<Value> = std::fs::read_dir(dir.join("sandbox-spool"))
+        .unwrap()
+        .filter_map(|entry| {
+            let bytes = std::fs::read(entry.unwrap().path()).unwrap();
+            serde_json::from_slice::<Value>(&bytes)
+                .ok()
+                .filter(|v| v["invocationId"] == "uncertain-engine")
+        })
+        .collect();
+    assert_eq!(
+        records.len(),
+        1,
+        "uncertainty must retain its durable identity reservation"
+    );
+    for name in [
+        records[0]["name"].as_str().unwrap(),
+        records[0]["brokerName"].as_str().unwrap(),
+    ] {
+        assert_eq!(
+            engine()
+                .args(["container", "exists", name])
+                .status()
+                .await
+                .unwrap()
+                .code(),
+            Some(1)
+        );
+    }
+    // This synthetic test owns the complete area and proved both names absent.
+    // Production uncertainty is recovered by a fresh managed service.
+    std::fs::remove_dir_all(dir).unwrap();
+}

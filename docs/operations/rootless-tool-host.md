@@ -26,7 +26,7 @@ its state/runtime directories. Recovery names are scoped to the tenant and host;
 foreign or corrupt journals refuse startup.
 
 Use the [service unit](../../deploy/systemd/olo-toolgate-tool-host.service).
-`Delegate=yes`, `DelegateSubgroup=supervisor` and `KillMode=control-group` are
+`Delegate=yes`, `DelegateSubgroup=supervisor`, `KillMode=control-group`, `KillSignal=SIGKILL` and `SendSIGKILL=yes` are
 required. Workers live beneath that service's delegated cgroup, so systemd also
 kills them if the supervisor crashes. The CPU, memory, PID **and I/O** controllers
 must be available to the unit. A user-manager service may need administrator
@@ -167,7 +167,7 @@ request/response headers at most 64 KiB (8 KiB per value), with 4,096 frames and
 64 MiB per direction per invocation. Unsupported policies are refused rather than
 silently truncated. Existing native transport ceilings remain unchanged.
 
-The twelve-case OCI runner requires the builder's report to match the current
+The thirteen-case OCI runner requires the builder's report to match the current
 source digest, known revision, binary digest and image reference. Build the image
 after source is frozen, then execute conformance without edits between them.
 It covers approved target contact, denied worker authority, broker crash,
@@ -209,3 +209,47 @@ per-upstream CA field, install the reviewed private CA in the dedicated host's
 trust store or configure its trusted SSL_CERT_FILE/SSL_CERT_DIR environment.
 Pins remain leaf-only and cannot substitute for certificate trust. Worker OCI
 environments do not inherit those supervisor environment variables.
+
+
+## Managed deployment qualification
+
+Before OCI readiness the supervisor now reads the actual service manager's
+properties and requires its exact delegated cgroup, control-group SIGKILL and
+SendSIGKILL=yes. Adopt the updated service unit before upgrading the host.
+Immediate group kill also stops workers that deliberately ignore TERM.
+Unavailable, ambiguous or weaker service properties refuse the pool.
+
+An engine timeout or indeterminate command I/O fences the pool. Both removal
+attempts still run, but an absence query after uncertainty cannot release the
+identity reservation or erase its journal. Restart the managed service to kill
+old descendant commands before recovery; deleting a journal is not that proof.
+
+The owned deployment drill passes the declared local profile. It starts only temporary test
+units under the unprivileged image-owning account, verifies actual process/cgroup
+and namespace membership, kills the supervisor while the worker ignores TERM,
+and observes automatic restart plus journal reconciliation without a new worker.
+It requires current-source broker image evidence and at least three cycles.
+Local monotonic timing observations are not production connectivity-class SLOs.
+See ADR 052 and the authoritative status for executed evidence.
+
+
+After freezing source and preparing the current broker image, an administrator
+can run the owned deployment qualification:
+
+~~~sh
+python tools/security/deployment.py --service-user <test-user> \
+  --cargo /absolute/path/to/cargo --image <prepared-worker@sha256:digest> \
+  --broker-image <prepared-broker@sha256:digest> \
+  --broker-image-evidence /absolute/path/to/image.json
+~~~
+
+The default three cycles include automatic service restart; two additional
+negative units prove weak mode/signal refusal. Every touched unit has a generated
+name, an absence check before creation and a controller-specific description
+checked before cleanup. Unit processes stop before temporary state is removed;
+uncertain cleanup retains the owned test directory. Reports under
+build/security/deployment/ include platform/service properties, process
+membership, source/images, 25 ms polling and monotonic observed times. Local
+assertion ceilings are 5 s for pair termination and 25 s for restart recovery,
+including controller command latency. They do not accept production SLOs or
+broader original security catalogs.

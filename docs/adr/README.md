@@ -92,3 +92,5 @@ Use `000-template.md`.
 - [050 — Strict qualified-worker protocol boundary](050-qualified-worker-protocol-boundary.md)
 
 - [051 — Verified leaf SPKI pins](051-verified-leaf-spki-pins.md)
+
+- [052 — Managed containment crash qualification](052-managed-containment-crash-qualification.md)

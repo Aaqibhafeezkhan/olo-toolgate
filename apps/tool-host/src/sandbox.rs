@@ -190,10 +190,19 @@ impl Sandbox {
     async fn cli(&self, args: &[String]) -> Result<Vec<u8>, String> {
         let mut c = self.command();
         c.args(args);
-        let output = tokio::time::timeout(Duration::from_secs(5), c.output())
-            .await
-            .map_err(|_| "sandbox engine timeout")?
-            .map_err(|e| e.to_string())?;
+        let output = match tokio::time::timeout(Duration::from_secs(5), c.output()).await {
+            Ok(Ok(output)) => output,
+            Ok(Err(_)) => {
+                self.poisoned.store(true, Ordering::SeqCst);
+                return Err(
+                    "sandbox engine I/O uncertain; managed service restart required".into(),
+                );
+            }
+            Err(_) => {
+                self.poisoned.store(true, Ordering::SeqCst);
+                return Err("sandbox engine timeout; managed service restart required".into());
+            }
+        };
         if output.stdout.len() > 1024 * 1024 || output.stderr.len() > 64 * 1024 {
             return Err("sandbox engine output limit".into());
         }
@@ -253,6 +262,11 @@ impl Sandbox {
         };
         worker?;
         broker?;
+        if self.poisoned.load(Ordering::SeqCst) {
+            return Err(
+                "sandbox engine uncertainty retains its journal until managed restart".into(),
+            );
+        }
         let path = self.directory.join(format!("{}.json", record.name));
         match std::fs::remove_file(path) {
             Ok(()) => {}
@@ -261,11 +275,48 @@ impl Sandbox {
         }
         sync(&self.directory)
     }
+    async fn qualify_service(&self) -> Result<(), String> {
+        let unit = self
+            .config
+            .cgroup_parent
+            .rsplit('/')
+            .next()
+            .ok_or("service name missing")?;
+        let mut command = tokio::process::Command::new("/usr/bin/systemctl");
+        command
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .kill_on_drop(true);
+        for key in ["HOME", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"] {
+            if let Some(value) = std::env::var_os(key) {
+                command.env(key, value);
+            }
+        }
+        command.arg(if self.config.cgroup_parent.starts_with("/user.slice/") {
+            "--user"
+        } else {
+            "--system"
+        });
+        command.args([
+            "show",
+            unit,
+            "--property=ControlGroup,Delegate,KillMode,KillSignal,SendSIGKILL",
+        ]);
+        let output = tokio::time::timeout(Duration::from_secs(5), command.output())
+            .await
+            .map_err(|_| "service property lookup timed out")?
+            .map_err(|_| "service manager unavailable")?;
+        if !output.status.success() || output.stdout.len() > 16384 || output.stderr.len() > 4096 {
+            return Err("managed service properties unavailable".into());
+        }
+        validate_service_properties(&output.stdout, &self.config.cgroup_parent)
+    }
     pub async fn qualify(self: &Arc<Self>) -> Result<(), String> {
         self.ready.store(false, Ordering::SeqCst);
         if self.poisoned.load(Ordering::SeqCst) {
             return Err("sandbox pool requires restart recovery".into());
         }
+        self.qualify_service().await?;
         let own = std::fs::read_to_string("/proc/self/cgroup")
             .map_err(|_| "service cgroup unavailable")?;
         if !own.lines().any(|line| {
@@ -712,6 +763,37 @@ impl Sandbox {
         !self.poisoned.load(Ordering::SeqCst)
     }
 }
+fn validate_service_properties(bytes: &[u8], parent: &str) -> Result<(), String> {
+    let text = std::str::from_utf8(bytes).map_err(|_| "invalid service properties")?;
+    let mut properties = std::collections::BTreeMap::new();
+    for line in text.lines() {
+        let (key, value) = line.split_once('=').ok_or("invalid service property")?;
+        if ![
+            "ControlGroup",
+            "Delegate",
+            "KillMode",
+            "KillSignal",
+            "SendSIGKILL",
+        ]
+        .contains(&key)
+            || properties.insert(key, value).is_some()
+        {
+            return Err("ambiguous service properties".into());
+        }
+    }
+    if properties.get("ControlGroup") != Some(&parent)
+        || properties.get("Delegate") != Some(&"yes")
+        || properties.get("KillMode") != Some(&"control-group")
+        || properties.get("KillSignal") != Some(&"9")
+        || properties.get("SendSIGKILL") != Some(&"yes")
+    {
+        return Err(
+            "OCI pool requires its exact delegated service with immediate control-group SIGKILL"
+                .into(),
+        );
+    }
+    Ok(())
+}
 struct CancelOnDrop(watch::Sender<bool>);
 impl Drop for CancelOnDrop {
     fn drop(&mut self) {
@@ -832,6 +914,31 @@ mod tests {
             io_device: "8:0".into(),
             io_bytes_per_second: 64 * 1024 * 1024,
             scratch_bytes: 8 * 1024 * 1024,
+        }
+    }
+    #[test]
+    fn weak_foreign_missing_or_ambiguous_service_properties_refuse_readiness() {
+        let valid = "ControlGroup=/system.slice/toolgate.service\\nDelegate=yes\\nKillMode=control-group\\nKillSignal=9\\nSendSIGKILL=yes\\n".replace("\\n","\n");
+        assert!(
+            validate_service_properties(valid.as_bytes(), "/system.slice/toolgate.service").is_ok()
+        );
+        for altered in [
+            valid.replace("KillMode=control-group", "KillMode=process"),
+            valid.replace("KillSignal=9", "KillSignal=15"),
+            valid.replace("SendSIGKILL=yes", "SendSIGKILL=no"),
+            valid.replace("Delegate=yes", "Delegate=no"),
+            valid.replace(
+                "ControlGroup=/system.slice/toolgate.service",
+                "ControlGroup=/system.slice/foreign.service",
+            ),
+            valid.replace("KillSignal=9\n", ""),
+            format!("{valid}KillSignal=9\n"),
+        ] {
+            assert!(validate_service_properties(
+                altered.as_bytes(),
+                "/system.slice/toolgate.service"
+            )
+            .is_err());
         }
     }
     #[test]

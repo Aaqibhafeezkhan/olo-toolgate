@@ -59,7 +59,8 @@ def main():
     unit = 'toolgate-sandbox-test-' + uuid.uuid4().hex[:12]
     command = ['systemd-run', '--collect', '--wait', '--pipe', '--unit=' + unit,
                '--property=Delegate=yes', '--property=DelegateSubgroup=supervisor',
-               '--property=KillMode=control-group', '--working-directory=' + str(ROOT)]
+               '--property=KillMode=control-group', '--property=KillSignal=SIGKILL',
+               '--property=SendSIGKILL=yes', '--working-directory=' + str(ROOT)]
     if args.service_user:
         command += ['--uid=' + account.pw_name, '--gid=' + str(account.pw_gid)]
         parent = '/system.slice/' + unit + '.service'
@@ -106,6 +107,7 @@ def main():
         'isolated_pool_refuses_unsupported_profiles_before_consuming_authority',
         'sequential_invocations_reuse_no_scratch_environment_or_broker_authority',
         'worker_inherits_no_supervisor_file_descriptor_or_platform_credentials',
+        'uncertain_engine_completion_fences_the_pool_and_retains_the_owned_journal',
     }
     success = (result.returncode == 0 and required.issubset(passed)
                and len(passed) == len(set(passed)) and before == source_digest())
