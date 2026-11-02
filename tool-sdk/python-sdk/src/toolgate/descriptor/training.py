@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Training hints: ``training`` and ``TrainingValues`` become one tool's entry of ``training/annotations.json``.
 
+``model_validation`` prompts go to the same entry under ``modelValidation``: test prompts, never trained on.
+
 The format is the one ``toolgate pack`` folds into the tool schema (spec/authoring/training.md), the same the Java
 processor writes. Every hint is checked against the tool's inputs, so a renamed input or a changed type fails the
 build instead of leaving stale training data behind.
@@ -13,7 +15,7 @@ import enum
 import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from ..declarations import TrainingValues, training
+from ..declarations import TrainingValues, model_validation, training
 from .problems import Problem, Site
 
 #: Where the staging directory, and the folder holding the ``.tgpkg``, carry the hints.
@@ -130,9 +132,56 @@ def _texts(tool: str, key: str, values: Sequence[str], properties: Optional[Mapp
     return seen
 
 
+def _validation(tool: str, v: model_validation, t: Optional[training], properties: Mapping[str, Any],
+                required: Sequence[str]) -> Dict[str, Any]:
+    """The ``modelValidation`` entry: complete, valid calls that repeat no training hint."""
+    vsite = Site.of(v)
+    if not v.prompts and not v.negatives:
+        raise Problem(vsite, "model_validation of tool %s needs prompts or negatives" % tool)
+    trained = set()
+    if t is not None:
+        trained.update(t.phrasings, t.default_phrasings, t.negatives, (p.prompt for p in t.prompts))
+    entry: Dict[str, Any] = {}
+    if v.prompts:
+        if len(v.prompts) > MAX_ITEMS:
+            raise Problem(vsite, "tool %s has more than %d validation prompts" % (tool, MAX_ITEMS))
+        prompts: List[Dict[str, Any]] = []
+        for p in v.prompts:
+            what = 'validation prompt "%s" of tool %s' % (p.prompt, tool)
+            _text(p.prompt, "a validation prompt of tool " + tool, vsite)
+            if any(x["prompt"] == p.prompt for x in prompts):
+                raise Problem(vsite, what + " is listed twice")
+            if p.prompt in trained:
+                raise Problem(vsite, what + " is also a training hint; a validation prompt must be new to the model")
+            arguments = _plain(p.arguments)
+            for key, value in arguments.items():
+                schema = properties.get(key)
+                if not isinstance(schema, dict):
+                    raise Problem(vsite, "%s passes %s, which is not an input of tool %s" % (what, key, tool))
+                if not fits(value, schema):
+                    raise Problem(vsite, "%s passes %s = %r, which does not suit the input (%s)"
+                                  % (what, key, value, schema.get("type")))
+            for name in required:
+                if name not in arguments:
+                    raise Problem(vsite, "%s leaves out %s, which a call must pass" % (what, name))
+            prompts.append({"prompt": p.prompt, "arguments": arguments})
+        entry["prompts"] = prompts
+    if v.negatives:
+        entry["negatives"] = _texts(tool, "negatives", v.negatives, None, vsite)
+        for negative in v.negatives:
+            if negative in trained:
+                raise Problem(vsite, 'validation negative "%s" of tool %s is also a training hint; it must be new '
+                              "to the model" % (negative, tool))
+    return entry
+
+
 def hints(tool: str, attached: Sequence[Any], properties: Mapping[str, Any],
-          parameter_values: Mapping[str, Tuple[TrainingValues, Site]], site: Site) -> Optional[Dict[str, Any]]:
-    """The annotations entry of one tool, or None when it declares no hints."""
+          parameter_values: Mapping[str, Tuple[TrainingValues, Site]], site: Site,
+          required: Sequence[str] = ()) -> Optional[Dict[str, Any]]:
+    """The annotations entry of one tool, or None when it declares no hints and no validation prompts."""
+    validations = [x for x in attached if isinstance(x, model_validation)]
+    if len(validations) > 1:
+        raise Problem(Site.of(validations[1]), "tool %s has more than one model_validation declaration" % tool)
     declared = [x for x in attached if isinstance(x, training)]
     if len(declared) > 1:
         raise Problem(Site.of(declared[1]), "tool %s has more than one training declaration" % tool)
@@ -146,7 +195,7 @@ def hints(tool: str, attached: Sequence[Any], properties: Mapping[str, Any],
             if name in parameters:
                 raise Problem(tsite, "training values for input %s are declared twice" % name)
             parameters[name] = _values(tool, name, values, properties, tsite)
-    if t is None and not parameters:
+    if t is None and not parameters and not validations:
         return None
     entry: Dict[str, Any] = {}
     if t is not None:
@@ -168,4 +217,6 @@ def hints(tool: str, attached: Sequence[Any], properties: Mapping[str, Any],
                                   % (p.prompt, key, tool))
             prompts.append({"prompt": p.prompt, "arguments": _plain(p.arguments)})
         entry["examples"] = prompts
+    if validations:
+        entry["modelValidation"] = _validation(tool, validations[0], t, properties, required)
     return entry

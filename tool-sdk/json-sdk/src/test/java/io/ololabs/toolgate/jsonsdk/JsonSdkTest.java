@@ -180,4 +180,31 @@ class JsonSdkTest {
         ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("tools").get(0)).set("training", JsonProject.JSON.readTree("{\"unknown\":[]}"));
         assertThrows(IllegalArgumentException.class, () -> JsonProject.parse(JsonProject.JSON.writeValueAsBytes(root)));
     }
+
+    private byte[] withValidation(String validation) throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) JsonProject.JSON.readTree(withTraining("Greet {text} from the server"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("tools").get(1)).set("modelValidation", JsonProject.JSON.readTree(validation));
+        return JsonProject.JSON.writeValueAsBytes(root);
+    }
+
+    @Test void modelValidationBlocksGoBesideTheTrainingHints() throws Exception {
+        var build = JsonSdk.stage(withValidation("{\"prompts\":[{\"prompt\":\"Have the server welcome Ada\",\"arguments\":{\"text\":\"Ada\"}}],"
+                + "\"negatives\":[\"Who wrote the first hello world program?\"]}"), directory.resolve("validation"));
+        var notes = JsonProject.JSON.readTree(Files.readAllBytes(build.staging().resolve("training/annotations.json")));
+        var validation = notes.path("tools").path("server_greet").path("modelValidation");
+        assertEquals("Have the server welcome Ada", validation.path("prompts").get(0).path("prompt").asText());
+        assertEquals("Ada", validation.path("prompts").get(0).path("arguments").path("text").asText());
+        assertEquals("Who wrote the first hello world program?", validation.path("negatives").get(0).asText());
+        assertEquals("Greet {text} from the server", notes.path("tools").path("server_greet").path("phrasings").get(0).asText());
+    }
+
+    @Test void modelValidationPromptsMustBeNewValidCalls() throws Exception {
+        var repeated = assertThrows(IllegalArgumentException.class, () -> JsonSdk.stage(withValidation(
+                "{\"prompts\":[{\"prompt\":\"Say hi to Lin\",\"arguments\":{\"text\":\"Lin\"}}]}"), directory.resolve("repeated")));
+        assertTrue(repeated.getMessage().contains("is also a training hint"), repeated.getMessage());
+        var unknown = assertThrows(IllegalArgumentException.class, () -> JsonSdk.stage(withValidation(
+                "{\"prompts\":[{\"prompt\":\"Welcome Ada\",\"arguments\":{\"name\":\"Ada\"}}]}"), directory.resolve("unknown")));
+        assertTrue(unknown.getMessage().contains("passes name, which is not an input"), unknown.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> JsonProject.parse(withValidation("{\"examples\":[]}")));
+    }
 }

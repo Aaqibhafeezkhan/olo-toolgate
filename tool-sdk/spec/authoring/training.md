@@ -60,7 +60,40 @@ def query(self, file: Annotated[str, Param(description="CSV file"), TrainingValu
               "examples": [{"prompt": "Say hi to Lin", "arguments": {"text": "Lin"}}]}}
 ```
 
-## 3. Build-time checks
+## 3. Model-validation prompts
+
+Training hints are what a model learns from. **Model-validation prompts** are what it is tested on: requests written the way real users write them, kept apart so the test measures how the trained model copes with wording it never saw. A dataset builder writes them to its validation set and never into the training data.
+
+| Field | Meaning |
+|---|---|
+| `prompts` | Requests that must call the tool, each with the exact arguments the call must carry: `{"prompt": "...", "arguments": {...}}`. The arguments are the expected answer, so they must be a complete, valid call: every required input, values of the right type and enum. |
+| `negatives` | Requests that must not call the tool and are answered in plain text. No placeholders. |
+
+**Java**: `@ModelValidation` on the handler, beside `@Training`, reusing `@TrainingPrompt`:
+
+```java
+@ServerTool(name = "get_forecast", title = "Forecast", description = "...")
+@Training(phrasings = "Weather in {city}")
+@ModelValidation(
+        prompts = {@TrainingPrompt(prompt = "yo whats it like in Oslo tmrw", arguments = "{\"city\":\"Oslo\"}"),
+                   @TrainingPrompt(prompt = "A week of weather for Rome", arguments = "{\"city\":\"Rome\",\"days\":7}")},
+        negatives = "Why is the sky blue?")
+public Forecast forecast(@Param(description = "City") String city, @Param(description = "Days", required = false) Integer days) { ... }
+```
+
+**Python**: the `model_validation` decorator: `@model_validation(prompts=[TrainingPrompt("yo whats it like in Oslo tmrw", {"city": "Oslo"})], negatives=["Why is the sky blue?"])`.
+
+**JSON** (`toolgate.json`): a `"modelValidation"` block on the tool: `{"prompts": [{"prompt": "...", "arguments": {...}}], "negatives": ["..."]}`.
+
+They are written to the same `training/annotations.json` entry under `modelValidation` (and so reach the tool schema's `annotations`):
+
+```json
+{"tools": {"get_forecast": {"phrasings": ["Weather in {city}"],
+  "modelValidation": {"prompts": [{"prompt": "yo whats it like in Oslo tmrw", "arguments": {"city": "Oslo"}}],
+                      "negatives": ["Why is the sky blue?"]}}}}
+```
+
+## 4. Build-time checks
 
 The build fails when a hint does not fit the tool, so a renamed input or a changed type cannot leave stale training data:
 
@@ -71,7 +104,13 @@ The build fails when a hint does not fit the tool, so a renamed input or a chang
 - a list repeats an entry, an entry is blank or longer than 1024 characters, or a list has more than 200 entries;
 - `@Training` / `training` is on something that is not a tool handler.
 
-## 4. The generated file
+For model-validation prompts, also:
+
+- a prompt's arguments name an input the tool does not have, leave out a required input, or have a value that does not suit its input;
+- a prompt or negative is also one of the tool's training hints (a phrasing, default phrasing, negative or training prompt), so it would test what the model was trained on;
+- the block declares neither prompts nor negatives, or `@ModelValidation` / `model_validation` is on something that is not a tool handler.
+
+## 5. The generated file
 
 The SDK build writes the staging directory's `training/annotations.json`, marked as generated:
 

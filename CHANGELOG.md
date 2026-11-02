@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Model-validation prompts: `@ModelValidation` in Java, `model_validation(...)` in Python and a `"modelValidation"`
+  block on a tool in `toolgate.json` declare test requests with their expected calls (`prompts`) and requests that
+  must call nothing (`negatives`). They go to each tool's `modelValidation` in `training/annotations.json` and the
+  tool schema, apart from the training hints: a dataset builder tests a trained model on them and never trains on
+  them. The build requires each prompt to be a complete, valid call and refuses one that repeats a training hint.
+  `core-mcp/hello-world` declares some. See `tool-sdk/spec/authoring/training.md`.
+
 - Training hints are declared on the tools and `training/annotations.json` is generated from them: `@Training`,
   `@TrainingValues`, `@TrainingPrompt` and `@ValuePhrasing` in Java, `training(...)`, `TrainingValues` and
   `TrainingPrompt` in Python, and `"training"` blocks on tools and inputs in `toolgate.json`. The build checks every

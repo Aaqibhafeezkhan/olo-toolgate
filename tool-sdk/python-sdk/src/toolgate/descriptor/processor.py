@@ -703,7 +703,7 @@ class _Builder:
                 entry["exchanges"] = e.exchanges
             entries.append(entry)
         self.examples[name] = entries
-        hints = T.hints(name, attached, properties, self.training_values.get(name, {}), site)
+        hints = T.hints(name, attached, properties, self.training_values.get(name, {}), site, required)
         if hints is not None:
             self.result.training[name] = hints
         self.parameters[name] = parameters

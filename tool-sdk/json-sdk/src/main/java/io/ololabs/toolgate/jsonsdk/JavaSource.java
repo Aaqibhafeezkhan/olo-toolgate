@@ -16,13 +16,23 @@ public final class JavaSource {
     static String training(JsonProject.Training t) throws IOException {
         var out = new StringBuilder("@Training(phrasings=").append(array(t.phrasings()))
                 .append(",defaultPhrasings=").append(array(t.defaultPhrasings()))
-                .append(",negatives=").append(array(t.negatives())).append(",prompts={");
-        for (int n = 0; n < t.prompts().size(); n++) {
+                .append(",negatives=").append(array(t.negatives())).append(",prompts=");
+        return out.append(prompts(t.prompts())).append(')').toString();
+    }
+
+    /** Model-validation prompts become {@code @ModelValidation}, checked by the same processor. */
+    static String validation(JsonProject.Validation v) throws IOException {
+        return "@ModelValidation(prompts=" + prompts(v.prompts()) + ",negatives=" + array(v.negatives()) + ")";
+    }
+
+    private static String prompts(java.util.List<JsonProject.Prompt> prompts) throws IOException {
+        var out = new StringBuilder("{");
+        for (int n = 0; n < prompts.size(); n++) {
             if (n > 0) out.append(',');
-            out.append("@TrainingPrompt(prompt=").append(quote(t.prompts().get(n).prompt()))
-                    .append(",arguments=").append(quote(t.prompts().get(n).arguments())).append(')');
+            out.append("@TrainingPrompt(prompt=").append(quote(prompts.get(n).prompt()))
+                    .append(",arguments=").append(quote(prompts.get(n).arguments())).append(')');
         }
-        return out.append("})").toString();
+        return out.append('}').toString();
     }
 
     static String values(JsonProject.Values v) throws IOException {
@@ -65,6 +75,7 @@ public final class JavaSource {
                     .append(",description=").append(quote(tool.description()))
                     .append(",effect=EffectSafety.READ_ONLY,stateless=true)\n");
             if (tool.training() != null) source.append(training(tool.training())).append('\n');
+            if (tool.modelValidation() != null) source.append(validation(tool.modelValidation())).append('\n');
             Map<String, String> defaults = new LinkedHashMap<>();
             boolean complete = true;
             for (var input : tool.inputs()) {

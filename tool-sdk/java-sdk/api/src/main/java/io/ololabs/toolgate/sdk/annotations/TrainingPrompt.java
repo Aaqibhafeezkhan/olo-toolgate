@@ -8,7 +8,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** One complete training request and the call it makes, inside {@link Training#prompts()}. */
+/** One complete request and the call it makes, inside {@link Training#prompts()} or {@link ModelValidation#prompts()}. */
 @Documented
 @Retention(RetentionPolicy.SOURCE)
 @Target({})

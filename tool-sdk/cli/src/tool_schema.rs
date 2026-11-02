@@ -3,7 +3,8 @@
 //! The tool schema (`<name>-<version>.tool-schema.json`): everything a model needs to learn to
 //! call a package's tools, for generating tool-calling training data. It is derived from the
 //! semantic descriptors (name, description, parameters with types, defaults, enums and bounds)
-//! plus the training annotations (example prompts, phrasing hints, example values). Annotations are
+//! plus the training annotations (example prompts, phrasing hints, example values, and the
+//! `modelValidation` test prompts a dataset builder keeps out of training). Annotations are
 //! declared on the tools themselves (`@Training`, `training(...)`, a `"training"` block) and the SDK
 //! build generates `training/annotations.json` from them; a hand-written file is refused, so the
 //! hints cannot drift from the tools. It is written beside the `.tgpkg`, never inside it, so

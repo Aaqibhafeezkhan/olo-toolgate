@@ -22,7 +22,7 @@ __all__ = [
     "tool_package", "server_tool", "client_tool", "Param", "tool_variables", "Variable", "Global", "Secret",
     "JwtClaim", "destination", "http_auth", "http_route", "tcp_destination", "idempotency", "reconcile", "example",
     "ErrorDecl", "REGISTRY_ATTRIBUTE", "ATTACHED_ATTRIBUTE", "device_file_access", "authorization",
-    "training", "TrainingValues", "TrainingPrompt",
+    "training", "TrainingValues", "TrainingPrompt", "model_validation",
 ]
 
 #: The module-level list every declaration registers in.
@@ -434,6 +434,26 @@ class training(Declaration):
         self.parameters = dict(parameters or {})
         self.prompts = tuple(p if isinstance(p, TrainingPrompt) else TrainingPrompt(p.get("prompt", ""), p.get("arguments"))
                              for p in prompts or ())
+
+
+class model_validation(Declaration):
+    """Prompts that test a model trained for the tool; the dataset builder never trains on them.
+
+    ``prompts`` are requests with the exact arguments the call must carry (a complete, valid call of the tool);
+    ``negatives`` are requests that must not call it. The build checks them against the tool's inputs, refuses one
+    that repeats a training hint, and writes them under the tool's ``modelValidation`` in
+    ``training/annotations.json`` (spec/authoring/training.md).
+    """
+
+    kind = "model_validation"
+    on_class = False
+
+    def __init__(self, *, prompts: Iterable[Union[TrainingPrompt, Mapping[str, Any]]] = (),
+                 negatives: Union[str, Iterable[str]] = ()) -> None:
+        super().__init__()
+        self.prompts = tuple(p if isinstance(p, TrainingPrompt) else TrainingPrompt(p.get("prompt", ""), p.get("arguments"))
+                             for p in prompts or ())
+        self.negatives = _strings(negatives)
 
 
 class ToolDeclaration(Declaration):

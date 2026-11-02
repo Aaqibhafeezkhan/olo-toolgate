@@ -96,6 +96,39 @@ class TrainingTest(unittest.TestCase):
                 return None
             '''), "training is on a function that is not a server_tool")
 
+    def test_validation_prompts_go_beside_the_hints(self):
+        r = self.ok(tools("", '''
+            @training(phrasings="Weather in {city}")
+            @model_validation(prompts=[TrainingPrompt("yo whats it like in Oslo tmrw", {"city": "Oslo"}),
+                                       {"prompt": "A week of weather for Rome", "arguments": {"city": "Rome", "days": 7}}],
+                              negatives="Why is the sky blue?")
+            @server_tool(name="forecast", title="T", description="D")
+            def run(self, city: Annotated[str, Param(description="City")],
+                    days: Annotated[int, Param(description="Days")] = 3) -> Out:
+                return None
+            '''))
+        self.assertEqual({"forecast": {
+            "phrasings": ["Weather in {city}"],
+            "modelValidation": {
+                "prompts": [{"prompt": "yo whats it like in Oslo tmrw", "arguments": {"city": "Oslo"}},
+                            {"prompt": "A week of weather for Rome", "arguments": {"city": "Rome", "days": 7}}],
+                "negatives": ["Why is the sky blue?"]},
+        }}, r.build.training)
+        self.assertNotIn(b"Oslo", r.build.bytes["forecast"])
+
+    def test_validation_prompts_must_be_new_valid_calls(self):
+        for decl, fragment in (
+                ('@model_validation(prompts=[{"prompt": "Go", "arguments": {}}])', "leaves out id, which a call must pass"),
+                ('@model_validation(prompts=[{"prompt": "Go", "arguments": {"id": 5}}])', "which does not suit the input"),
+                ('@model_validation(prompts=[{"prompt": "Go", "arguments": {"id": "a", "x": 1}}])', "passes x, which is not an input"),
+                ('@training(negatives="What is an id?")\n@model_validation(negatives="What is an id?")', "is also a training hint"),
+                ("@model_validation()", "needs prompts or negatives")):
+            self.fails(tools("", "\n" + "\n".join(" " * 12 + line for line in decl.split("\n")) + '''
+            @server_tool(name="t", title="T", description="D")
+            def run(self, id: Annotated[str, Param(description="Id")]) -> Out:
+                return None
+            '''), fragment)
+
 
 if __name__ == "__main__":
     unittest.main()

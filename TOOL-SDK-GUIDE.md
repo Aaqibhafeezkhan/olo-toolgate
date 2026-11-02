@@ -379,6 +379,13 @@ Optional files under `marketplace/` (`listing.json`, `README.md`, `CHANGELOG.md`
 public Greeting greet(@Param(description = "Who to greet") @TrainingValues(examples = {"Ada", "the team"}) String name) { ... }
 ```
 
+**Model-validation prompts** test the trained model on requests it never saw: `@ModelValidation` (Java), `model_validation(...)` (Python), a `"modelValidation"` block (`toolgate.json`), each with `prompts` (request plus the exact expected arguments, a complete valid call) and `negatives` (requests that must call nothing). They are written under the tool's `modelValidation`, and the dataset builder keeps them out of the training data:
+
+```java
+@ModelValidation(prompts = @TrainingPrompt(prompt = "wave hi to Tomasz pls", arguments = "{\"name\":\"Tomasz\"}"),
+        negatives = "How do I write hello world in Rust?")
+```
+
 There is no hand-written annotations file: `pack` refuses one. See [tool-sdk/spec/authoring/training.md](tool-sdk/spec/authoring/training.md). The schema is not part of the package and does not change any digest. `toolgate schema <file.tgpkg>` writes it for any package you already have.
 
 Bump `version` in your build for every release you hand to an administrator. The same version with different contents is a different digest and will be treated as a new package.

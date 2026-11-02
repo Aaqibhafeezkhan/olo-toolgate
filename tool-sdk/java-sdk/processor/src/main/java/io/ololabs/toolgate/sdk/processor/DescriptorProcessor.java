@@ -166,6 +166,11 @@ public final class DescriptorProcessor extends AbstractProcessor {
                     if (toolName((ExecutableElement) e) == null) throw new Problem(e, "@Training belongs on a @ServerTool or @ClientTool handler");
                 });
             }
+            for (Element e : round.getElementsAnnotatedWith(io.ololabs.toolgate.sdk.annotations.ModelValidation.class)) {
+                guard(() -> {
+                    if (toolName((ExecutableElement) e) == null) throw new Problem(e, "@ModelValidation belongs on a @ServerTool or @ClientTool handler");
+                });
+            }
             if (failed) return;
             Map<String, Object> descriptors = new TreeMap<>();
             Map<String, ExecutableElement> handlers = new TreeMap<>();
@@ -619,7 +624,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 exampleEntries.add(entry);
             }
             examplesByTool.put(name, exampleEntries);
-            Map<String, Object> hints = TrainingHints.of(name, method, properties);
+            Map<String, Object> hints = TrainingHints.of(name, method, properties, required);
             if (hints != null) trainingByTool.put(name, hints);
             parametersByTool.put(name, parameters);
             Map<String, String> inputTypes = new TreeMap<>();

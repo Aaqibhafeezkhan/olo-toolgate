@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.sdk.processor;
 
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.Training;
 import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
@@ -24,6 +25,7 @@ import javax.lang.model.element.VariableElement;
  * Turns {@link Training} and {@link TrainingValues} into one tool's entry of {@code training/annotations.json}, the
  * format {@code toolgate pack} folds into the tool schema (tool-sdk/spec/authoring/training.md). Every hint is checked
  * against the tool's inputs, so a renamed input or a changed type fails the build instead of producing stale data.
+ * {@link ModelValidation} prompts go to the same entry under {@code modelValidation}: test prompts, never trained on.
  */
 final class TrainingHints {
     /** The resource the processor writes, beside the descriptors; the package build moves it out of the jar. */
@@ -35,12 +37,14 @@ final class TrainingHints {
     private TrainingHints() {}
 
     /**
-     * The entry for one tool, or {@code null} when it declares no hints.
+     * The entry for one tool, or {@code null} when it declares no hints and no validation prompts.
      *
      * @param properties the tool's input schemas by input name
+     * @param required the inputs a call must pass
      */
-    static Map<String, Object> of(String tool, ExecutableElement method, Map<String, Object> properties) {
+    static Map<String, Object> of(String tool, ExecutableElement method, Map<String, Object> properties, List<String> required) {
         Training training = method.getAnnotation(Training.class);
+        ModelValidation validation = method.getAnnotation(ModelValidation.class);
         Map<String, Object> parameters = new LinkedHashMap<>();
         for (VariableElement p : method.getParameters()) {
             TrainingValues values = p.getAnnotation(TrainingValues.class);
@@ -59,7 +63,7 @@ final class TrainingHints {
                 put(parameters, tool, values.name(), values, properties, method);
             }
         }
-        if (training == null && parameters.isEmpty()) return null;
+        if (training == null && parameters.isEmpty() && validation == null) return null;
 
         Map<String, Object> entry = new LinkedHashMap<>();
         if (training != null) {
@@ -83,6 +87,65 @@ final class TrainingHints {
                 prompts.add(prompt);
             }
             entry.put("examples", prompts);
+        }
+        if (validation != null) entry.put("modelValidation", validation(tool, method, validation, training, properties, required));
+        return entry;
+    }
+
+    /**
+     * The {@code modelValidation} entry: each prompt's arguments must be a complete, valid call (they are the expected
+     * answer), and no prompt may repeat a training phrasing or prompt, or it would test what the model was trained on.
+     */
+    private static Map<String, Object> validation(String tool, ExecutableElement method, ModelValidation validation,
+            Training training, Map<String, Object> properties, List<String> required) {
+        if (validation.prompts().length == 0 && validation.negatives().length == 0) {
+            throw new Problem(method, "@ModelValidation of tool " + tool + " needs prompts or negatives");
+        }
+        Set<String> trained = new LinkedHashSet<>();
+        if (training != null) {
+            trained.addAll(Arrays.asList(training.phrasings()));
+            trained.addAll(Arrays.asList(training.defaultPhrasings()));
+            trained.addAll(Arrays.asList(training.negatives()));
+            for (TrainingPrompt p : training.prompts()) trained.add(p.prompt());
+        }
+        Map<String, Object> entry = new LinkedHashMap<>();
+        if (validation.prompts().length > 0) {
+            if (validation.prompts().length > MAX_ITEMS) throw new Problem(method, "tool " + tool + " has more than " + MAX_ITEMS + " validation prompts");
+            List<Object> prompts = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            for (TrainingPrompt p : validation.prompts()) {
+                String what = "validation prompt \"" + p.prompt() + "\" of tool " + tool;
+                text(p.prompt(), "a validation prompt of tool " + tool, method);
+                if (!seen.add(p.prompt())) throw new Problem(method, what + " is listed twice");
+                if (trained.contains(p.prompt())) throw new Problem(method, what + " is also a training hint; a validation prompt must be new to the model");
+                Object arguments = json(p.arguments(), "the arguments of " + what, method);
+                if (!(arguments instanceof Map<?, ?> map)) throw new Problem(method, "the arguments of " + what + " must be a JSON object");
+                for (Map.Entry<?, ?> a : map.entrySet()) {
+                    if (!(properties.get(a.getKey()) instanceof Map<?, ?> schema)) {
+                        throw new Problem(method, what + " passes " + a.getKey() + ", which is not an input of tool " + tool);
+                    }
+                    if (!fits(a.getValue(), schema)) {
+                        throw new Problem(method, what + " passes " + a.getKey() + " = " + a.getValue() + ", which does not suit the input ("
+                                + DescriptorProcessor.valueType(schema) + ")");
+                    }
+                }
+                for (String input : required) {
+                    if (!map.containsKey(input)) throw new Problem(method, what + " leaves out " + input + ", which a call must pass");
+                }
+                Map<String, Object> prompt = new LinkedHashMap<>();
+                prompt.put("prompt", p.prompt());
+                prompt.put("arguments", arguments);
+                prompts.add(prompt);
+            }
+            entry.put("prompts", prompts);
+        }
+        if (validation.negatives().length > 0) {
+            texts(entry, "negatives", validation.negatives(), tool, null, method);
+            for (String negative : validation.negatives()) {
+                if (trained.contains(negative)) {
+                    throw new Problem(method, "validation negative \"" + negative + "\" of tool " + tool + " is also a training hint; it must be new to the model");
+                }
+            }
         }
         return entry;
     }
