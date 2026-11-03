@@ -652,6 +652,12 @@ pub enum ControlErrorDetailCode {
     RateLimited,
     #[serde(rename = "BOUND_SERVICE_EFFECT_REQUIRED")]
     BoundServiceEffectRequired,
+    #[serde(rename = "EFFECT_CONSENT_REQUIRED")]
+    EffectConsentRequired,
+    #[serde(rename = "EFFECT_CONSENT_MISMATCH")]
+    EffectConsentMismatch,
+    #[serde(rename = "EFFECT_CONSENT_EXHAUSTED")]
+    EffectConsentExhausted,
 }
 /// Explicit Tool Group to Device Group binding; one binding is selected per invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

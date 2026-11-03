@@ -22,11 +22,14 @@ public final class EffectGrants {
             ||!lease.fencingToken().equals(fence)||lease.expiresAt()<=now)throw ManagementAccess.denied();
         operations.requireFresh(tenant,tx,invocation);
     }
+    private record Refused(EnterpriseInvocation invocation,String device){}
     public Store.Reply issue(Ids.TenantId tenant,Function<Store.Session,String> certificate,String document){
-        var request=codec.model(document,EffectGrantIssue.class);
-        return store.transaction(tenant,true,tx->{
+        var request=codec.model(document,EffectGrantIssue.class);var refused=new Refused[1];
+        try{return store.transaction(tenant,true,tx->{
             String device=certificate.apply(tx);long now=operations.clock(tx);
             var invocation=operations.invocationIn(tx,request.invocationId());
+            if(device.equals(invocation.evaluation().context().deviceId())&&Objects.equals(invocation.reservedNonce(),request.fencingToken()))
+                refused[0]=new Refused(invocation,device);
             live(tenant,tx,invocation,device,request.fencingToken(),now);
             var manifest=request.httpRequestManifest();
             var claims=operations.signer().verifyInvocation(request.invocationPermit());
@@ -37,16 +40,17 @@ public final class EffectGrants {
             var profile=nativeMcp?
                 ServiceRequestValidation.admissionProfile(tx,codec,operations.signer(),operations.issuer(),invocation,device,request.invocationPermit(),manifest,now):
                 ServiceRequestValidation.admission(tx,codec,operations.signer(),operations.issuer(),invocation,device,request.invocationPermit(),manifest,now);
+            boolean consentBound=EffectConsents.needsConsent(profile,claims.target().toolId(),manifest.routeId(),nativeMcp);
             var arguments=tree(request.arguments());
             if(!Canonical.arguments(arguments).equals(claims.argumentsDigest())
-                ||!Canonical.arguments(tree(manifest)).equals(request.httpRequestDigest()))throw ManagementAccess.denied();
+                ||!Canonical.arguments(tree(manifest)).equals(request.httpRequestDigest()))throw consentBound?EffectConsents.mismatch():ManagementAccess.denied();
             currentProfile(tx,profile.packageId(),manifest.profileDigest(),claims.target().packageDigest());
             var descriptors=new ArrayList<JsonNode>();
             for(var tool:packageDoc.path("manifest").path("tools"))
                 if(tool.path("descriptor").path("toolId").asText().equals(invocation.evaluation().toolId()))descriptors.add(tool.path("descriptor"));
             if(descriptors.size()!=1)throw ManagementAccess.denied();
             var descriptor=descriptors.getFirst();
-            EffectClassification classification;
+            EffectClassification classification;boolean consentRequired;EffectConsentMappedRequest consentRequest;
             if(nativeMcp){
                 if(!claims.target().routes().isEmpty())throw ManagementAccess.denied();
                 var doc=ServerPackages.proxyDocument(tx,version,codec);
@@ -55,10 +59,18 @@ public final class EffectGrants {
                 for(var artifact:artifacts)if(ServerPackages.MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())
                     &&claims.target().artifactDigest().equals(artifact.path("artifactDigest").asText()))pinned=true;
                 if(!pinned)throw ManagementAccess.denied();
-                classification=McpEffectValidation.validate(profile,codec.model(codec.json(doc),McpProxyDocument.class),
-                    claims.target().toolId(),manifest,arguments,request.handlerId()).classification();
+                var proxy=codec.model(codec.json(doc),McpProxyDocument.class);
+                McpEffectPolicy policy;
+                try{policy=McpEffectValidation.match(profile,proxy,claims.target().toolId(),manifest,arguments,request.handlerId());}
+                catch(Failure invalid){if(consentBound&&invalid.status()==403)throw EffectConsents.mismatch();throw invalid;}
+                classification=policy.classification();consentRequired=EffectIntentValidation.requiresConsent(classification,policy.consentRequired());
+                consentRequest=McpEffectValidation.preview(profile,proxy,claims.target().toolId(),arguments);
             }else{
-                classification=EffectIntentValidation.validate(profile,manifest,arguments).classification();
+                RouteEffectPolicy policy;
+                try{policy=EffectIntentValidation.match(profile,manifest,arguments);}
+                catch(Failure invalid){if(consentBound&&invalid.status()==403)throw EffectConsents.mismatch();throw invalid;}
+                classification=policy.classification();consentRequired=EffectIntentValidation.requiresConsent(classification,policy.consentRequired());
+                consentRequest=EffectIntentValidation.preview(profile,manifest.routeId(),arguments);
                 credentialHeaders(descriptor,profile,manifest);
             }
             if(classification!=EffectClassification.READ&&descriptor.path("effect").path("safety").asText().equals("READ_ONLY"))
@@ -68,13 +80,14 @@ public final class EffectGrants {
             if(invocation.evaluation().context().mode()!=RequestMode.SERVICE&&credentialDeadline==null)throw ManagementAccess.denied();
             if(credentialDeadline!=null)expiry=Math.min(expiry,credentialDeadline);
             if(expiry<=now)throw ManagementAccess.denied();
-            // S19 adds intentional effect slots. S20 adds qualified safe resend; neither is inferred here.
+            // S19 reserves an exact consent use in this transaction. S20 retains qualified safe resend.
             String effectId="eff-"+DirectoryService.digest(codec.json(List.of("toolgate-generic-effect-v1",tenant.value(),invocation.id(),manifest.routeId())));
             if(tx.effects().current(effectId)!=null)throw Failure.conflict();
             String nonce="auth-"+UUID.randomUUID();
             var authorized=tx.effects().authorize(new EffectStore.Binding(effectId,invocation.id(),request.fencingToken(),manifest.routeId(),
                 request.httpRequestDigest(),device,request.brokerInstanceId(),request.handlerId(),nonce,expiry,expiry+60000),now);
             if(!authorized.newAuthority())throw Failure.conflict();
+            if(consentRequired)EffectConsents.reserve(tx,codec,invocation,consentRequest,effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),now);
             tx.effects().recordIntent(new EffectStore.Intent(effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),
                 classification.name(),codec.json(manifest),now));
             var grant=operations.signer().signEffect(new EffectGrantClaims(operations.issuer(),device,now,now,expiry,tenant.value(),
@@ -83,7 +96,16 @@ public final class EffectGrants {
             tx.audit(DirectoryService.digest(device),"EFFECT_GRANT_ISSUE","effect:"+effectId,authorized.generation().revision(),
                 invocation.evaluation().context().requestId(),request.httpRequestDigest().substring(7));
             return new Store.Reply(200,codec.json(new EffectGrant(grant,expiry-now)),invocation.revision());
-        });
+        });}catch(Failure failure){
+            if(refused[0]!=null&&(failure.status()==403||failure.status()==409)){
+                // The authority/slot transaction has rolled back. Retain only authenticated refusal facts in a new commit.
+                var context=refused[0];var i=context.invocation();
+                String operation=failure.detail()==null?"EFFECT_GRANT_REFUSED":failure.detail().name();
+                store.transaction(tenant,true,tx->{tx.audit(DirectoryService.digest(context.device()),operation,"invocation:"+i.id(),
+                    i.revision(),i.evaluation().context().requestId(),i.requestDigest());return null;});
+            }
+            throw failure;
+        }
     }
     private void currentProfile(Store.Session tx,String packageId,String profileDigest,String packageDigest){
         var raw=tx.packages().deployment(packageId);

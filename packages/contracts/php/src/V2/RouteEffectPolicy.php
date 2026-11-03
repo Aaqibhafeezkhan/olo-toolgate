@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented. */
+/** Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority. */
 final readonly class RouteEffectPolicy implements \JsonSerializable {
     public function __construct(
         public string $routeId,

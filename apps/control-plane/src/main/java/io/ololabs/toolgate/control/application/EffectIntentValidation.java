@@ -18,6 +18,10 @@ public final class EffectIntentValidation {
         "forwarded","content-length","transfer-encoding","connection","te","upgrade","user-agent",
         "traceparent","tracestate","content-type","toolgate-service-permit");
     public static boolean reserved(String destination){return Set.of("olo-memory","olo-rag").contains(destination);}
+    /** High-risk classes cannot opt out of explicit user/effect consent through a deployment flag. */
+    public static boolean requiresConsent(EffectClassification classification,boolean declared){
+        return declared||classification==EffectClassification.FINANCIAL||classification==EffectClassification.DESTRUCTIVE;
+    }
 
     /** Reject invalid review documents before making them immutable profile authority. */
     public static void review(RouteEffectPolicy policy,RouteDeclaration route) {
@@ -41,51 +45,74 @@ public final class EffectIntentValidation {
             ||!intent.contentType().equals("application/json"))throw Failure.validation();
     }
 
-    /** Profile and admitted argument preimage must already have been independently authenticated. */
-    public static RouteEffectPolicy validate(ServiceProfile profile,PreparedHttpRequestManifest manifest,JsonNode arguments) {
-        if(arguments==null||!arguments.isObject())throw ManagementAccess.denied();
-        var routes=profile.routes().stream().filter(r->r.id().equals(manifest.routeId())).toList();
+    private static RouteEffectReview reviewed(ServiceProfile profile,String routeId){
+        var routes=profile.routes().stream().filter(r->r.id().equals(routeId)).toList();
         if(routes.size()!=1||profile.effectReviews()==null)throw ManagementAccess.denied();
-        var route=routes.getFirst();
-        var reviews=profile.effectReviews().stream().filter(r->r.policy().routeId().equals(route.id())).toList();
-        if(reviews.size()!=1)throw ManagementAccess.denied();
-        var reviewed=reviews.getFirst();var policy=reviewed.policy();
-        // Consent authority is deliberately not inferred from invocation approval.
-        if(policy.consentRequired()||reviewed.reviewedBy().isBlank())throw ManagementAccess.denied();
-        try{review(policy,route);}catch(Failure invalid){throw ManagementAccess.denied();}
+        var reviews=profile.effectReviews().stream().filter(r->r.policy().routeId().equals(routeId)).toList();
+        if(reviews.size()!=1||reviews.getFirst().reviewedBy().isBlank())throw ManagementAccess.denied();
+        try{review(reviews.getFirst().policy(),routes.getFirst());}catch(Failure invalid){throw ManagementAccess.denied();}
+        return reviews.getFirst();
+    }
+    /** Preview construction grants no execution authority, including for high-risk policies. */
+    public static EffectConsentMappedRequest preview(ServiceProfile profile,String routeId,JsonNode arguments){
+        boundedArguments(arguments);
+        var policy=reviewed(profile,routeId).policy();
+        var route=profile.routes().stream().filter(r->r.id().equals(routeId)).findFirst().orElseThrow(ManagementAccess::denied);
         var destinations=profile.destinations().stream().filter(d->d.id().equals(route.destination())).toList();
         if(destinations.size()!=1)throw ManagementAccess.denied();
         var destination=destinations.getFirst();var intent=policy.intent();
+        if(destination.scheme()!=DestinationScheme.https||destination.mode()!=EgressMode.BROKERED)throw ManagementAccess.denied();
         var budget=new int[]{0};
         var path=resolve(intent.path(),arguments,0,budget);
-        if(!path.isTextual()||!ServiceRequestValidation.pathMatches(route.path(),path.textValue()))throw ManagementAccess.denied();
-        var query=new TreeMap<String,String>();
+        if(!path.isTextual()||path.textValue().length()>4096||!ServiceRequestValidation.pathMatches(route.path(),path.textValue()))throw ManagementAccess.denied();
+        var query=new TreeMap<String,String>();int queryBytes=0;
         for(var entry:intent.query().entrySet()){
             var value=resolve(entry.getValue(),arguments,0,budget);
             if(!value.isTextual())throw ManagementAccess.denied();
-            query.put(encode(entry.getKey()),encode(value.textValue()));
+            String key=encode(entry.getKey()),encoded=encode(value.textValue());
+            queryBytes+=key.length()+1+encoded.length()+(query.isEmpty()?0:1);
+            if(queryBytes>8192)throw ManagementAccess.denied();
+            query.put(key,encoded);
         }
         var queryString=new StringJoiner("&");query.forEach((k,v)->queryString.add(k+"="+v));
-        var headers=new TreeMap<String,JsonNode>();
+        var headers=new TreeMap<String,JsonNode>();var headerBudget=new long[]{MAX_BYTES};
         intent.headers().forEach((name,template)->{
             var value=resolve(template,arguments,0,budget);
-            if(!value.isTextual()||value.textValue().chars().anyMatch(c->c!=9&&(c<32||c>126)))throw ManagementAccess.denied();
+            if(!value.isTextual()||value.textValue().length()>8192||value.textValue().chars().anyMatch(c->c!=9&&(c<32||c>126)))throw ManagementAccess.denied();
+            spend(headerBudget,(long)name.length()+value.textValue().length()+8);
             headers.put(name,JSON.arrayNode().add(value.textValue()));
         });
         headers.putIfAbsent("accept",JSON.arrayNode().add("*/*"));
-        byte[] body=intent.bodyMode()==EffectBodyMode.NONE?new byte[0]:Canonical.jcs(resolve(intent.body(),arguments,0,budget));
+        JsonNode bodyValue=intent.bodyMode()==EffectBodyMode.NONE?JSON.nullNode():resolve(intent.body(),arguments,0,budget);
+        if(intent.bodyMode()!=EffectBodyMode.NONE)jsonBytes(bodyValue,new long[]{Math.min(MAX_BYTES,route.maxRequestBytes())});
+        byte[] body=intent.bodyMode()==EffectBodyMode.NONE?new byte[0]:Canonical.jcs(bodyValue);
         if(body.length>MAX_BYTES||body.length>route.maxRequestBytes())throw ManagementAccess.denied();
         String host=destination.host().toLowerCase(Locale.ROOT);
         if(host.startsWith("[")&&host.endsWith("]"))host=host.substring(1,host.length()-1);
+        return new EffectConsentMappedRequest(EffectConsentMappingKind.MAPPED_HTTP,routeId,policy.classification(),
+            "https",host,destination.port(),route.method().name(),path.textValue(),queryString.toString(),
+            headers,intent.contentType(),intent.bodyMode(),bodyValue);
+    }
+    /** Profile and admitted argument preimage must already have been independently authenticated. */
+    public static RouteEffectPolicy validate(ServiceProfile profile,PreparedHttpRequestManifest manifest,JsonNode arguments) {
+        var policy=match(profile,manifest,arguments);
+        if(requiresConsent(policy.classification(),policy.consentRequired()))throw ManagementAccess.denied();
+        return policy;
+    }
+    /** Internal effect issuer must additionally reserve exact consent for a required policy in the same transaction. */
+    static RouteEffectPolicy match(ServiceProfile profile,PreparedHttpRequestManifest manifest,JsonNode arguments){
+        var policy=reviewed(profile,manifest.routeId()).policy();
+        var expected=preview(profile,manifest.routeId(),arguments);
+        byte[] body=expected.bodyMode()==EffectBodyMode.NONE?new byte[0]:Canonical.jcs(expected.body());
         if(!manifest.version().equals("toolgate-http-request-v1")
             ||!manifest.profileId().equals(profile.profileId())||!manifest.profileDigest().equals(Canonical.digest(profileNode(profile)))
-            ||destination.scheme()!=DestinationScheme.https||destination.mode()!=EgressMode.BROKERED
-            ||!manifest.scheme().equals("https")||!manifest.host().equals(host)||!manifest.port().equals(destination.port())
-            ||!manifest.method().equals(route.method().name())||!manifest.path().equals(path.textValue())
-            ||!manifest.query().equals(queryString.toString())||!manifest.headers().equals(headers)
-            ||!manifest.contentType().equals(intent.contentType())||!manifest.bodyDigest().equals(Canonical.sha256(body)))
+            ||!manifest.scheme().equals(expected.scheme())||!manifest.host().equals(expected.host())||!manifest.port().equals(expected.port())
+            ||!manifest.method().equals(expected.method())||!manifest.path().equals(expected.path())
+            ||!manifest.query().equals(expected.query())||!manifest.headers().equals(expected.headers())
+            ||!manifest.contentType().equals(expected.contentType())||!manifest.bodyDigest().equals(Canonical.sha256(body)))
             throw ManagementAccess.denied();
         // Credential header names are checked against the package-owned auth declaration by the issuer.
+        var route=profile.routes().stream().filter(r->r.id().equals(manifest.routeId())).findFirst().orElseThrow(ManagementAccess::denied);
         var auth=manifest.authDeclarationId();
         if(route.auth()==null? !auth.isNull()||!manifest.credentialHeaders().isEmpty():
             !auth.isTextual()||!route.auth().equals(auth.textValue()))throw ManagementAccess.denied();
@@ -134,17 +161,38 @@ public final class EffectIntentValidation {
         }
         return node.deepCopy();
     }
+    static void boundedArguments(JsonNode arguments){
+        if(arguments==null||!arguments.isObject())throw ManagementAccess.denied();
+        checkData(arguments,0,new int[]{0});
+        if(Canonical.jcs(arguments).length>MAX_BYTES)throw ManagementAccess.denied();
+    }
     private static void checkData(JsonNode node,int depth,int[] budget){
         if(depth>MAX_DEPTH||++budget[0]>MAX_NODES)throw ManagementAccess.denied();
         if(node.isContainerNode())for(var child:node)checkData(child,depth+1,budget);
     }
     private static boolean header(String value){return value.matches("[!#$%&'*+.^_"+(char)96+"|~0-9a-z-]+");}
+    private static void spend(long[] budget,long bytes){budget[0]-=bytes;if(budget[0]<0)throw ManagementAccess.denied();}
+    /** Bound expansion before serializing a container; repeated references cannot create an oversized intermediate string. */
+    private static void jsonBytes(JsonNode value,long[] budget){
+        if(value.isObject()){
+            spend(budget,2);boolean first=true;
+            for(var entry:value.properties()){
+                if(!first)spend(budget,1);first=false;
+                spend(budget,Canonical.jcs(JSON.textNode(entry.getKey())).length+1L);
+                jsonBytes(entry.getValue(),budget);
+            }
+        }else if(value.isArray()){
+            spend(budget,2);boolean first=true;
+            for(var child:value){if(!first)spend(budget,1);first=false;jsonBytes(child,budget);}
+        }else spend(budget,Canonical.jcs(value).length);
+    }
     private static String encode(String value){
         var out=new StringBuilder();
         for(byte b:value.getBytes(StandardCharsets.UTF_8)){
             int c=b&255;
             if(c>='a'&&c<='z'||c>='A'&&c<='Z'||c>='0'&&c<='9'||"-._~".indexOf(c)>=0)out.append((char)c);
             else out.append('%').append("0123456789ABCDEF".charAt(c>>4)).append("0123456789ABCDEF".charAt(c&15));
+            if(out.length()>8192)throw ManagementAccess.denied();
         }
         return out.toString();
     }

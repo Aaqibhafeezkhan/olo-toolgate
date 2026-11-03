@@ -245,6 +245,9 @@ export class ControlClient {
   deleteUser(user: ControlUser, key: string): Promise<void> {
     return this.send(operations.deleteControlUser, { id: user.id, revision: user.revision, key });
   }
+  effectConsent(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').EffectConsentView>{return this.send(operations.getEffectConsent,{id,signal});}
+  approveEffectConsent(id:string,body:import('@olo-labs/toolgate-contracts/v2').EffectConsentApprovalRequest):Promise<import('@olo-labs/toolgate-contracts/v2').EffectConsentView>{return this.send(operations.approveEffectConsent,{id,body});}
+  revokeEffectConsent(id:string,body:import('@olo-labs/toolgate-contracts/v2').EffectConsentApprovalRequest):Promise<import('@olo-labs/toolgate-contracts/v2').EffectConsentView>{return this.send(operations.revokeEffectConsent,{id,body});}
   invocation(id:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseInvocation>{return this.send(operations.getEnterpriseInvocation,{id,signal});}
   operationHistory(id:string,cursor?:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseOperationHistoryPage>{const query=new URLSearchParams({limit:'50'});if(cursor)query.set('cursor',cursor);return this.send(operations.getEnterpriseOperationHistory,{id,query,signal});}
   cancelInvocation(id:string,revision:number):Promise<import("@olo-labs/toolgate-contracts").EnterpriseInvocation>{return this.send(operations.cancelEnterpriseInvocation,{id,revision});}

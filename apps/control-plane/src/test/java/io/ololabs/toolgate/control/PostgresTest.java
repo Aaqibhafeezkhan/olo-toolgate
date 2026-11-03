@@ -42,7 +42,7 @@ final class PostgresTest {
             connection.commit();
         }
         var latest = Flyway.configure().dataSource(url, "control_migrator", password).cleanDisabled(true).load();
-        assertEquals(7, latest.migrate().migrationsExecuted); latest.validate();
+        assertEquals(8, latest.migrate().migrationsExecuted); latest.validate();
         assertEquals(0, latest.migrate().migrationsExecuted);
         var source = new PGSimpleDataSource(); source.setURL(url); source.setUser("control_app"); source.setPassword(password);
         var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); var service = new DirectoryService(store, codec, 512, 1048576);

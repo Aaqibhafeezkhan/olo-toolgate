@@ -8,6 +8,7 @@ import io.ololabs.toolgate.contracts.PreparedHttpRequestManifest;
 import io.ololabs.toolgate.contracts.v2.*;
 import java.nio.file.*;
 import java.util.function.Consumer;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -88,4 +89,32 @@ class McpEffectValidationTest {
         q.put("classification","FINANCIAL");((ObjectNode)risk.document.path("tools").get(0)).set("effectPolicy",q.deepCopy());
         risk.manifest.put("profileDigest",Canonical.digest(risk.profile));assertThrows(Failure.class,()->validate(risk));
     }
+    @Test void criticalMcpClassesStillRequireConsentWhenLegacyReviewOptedOut()throws Exception{
+        for(String classification:List.of("FINANCIAL","DESTRUCTIVE")){
+            var f=fixture();var p=(ObjectNode)f.profile.path("nativeMcpEffects").get(0).path("policy");
+            p.put("classification",classification).put("consentRequired",false).put("acknowledgedUnfencedRisk",true);
+            ((ObjectNode)f.document.path("tools").get(0)).set("effectPolicy",p.deepCopy());
+            f.manifest.put("profileDigest",Canonical.digest(f.profile));
+            assertThrows(Failure.class,()->validate(f),classification);
+        }
+    }
+
+    @Test void nativeConsentPreviewBindsFixedTargetAndCompleteBusinessArguments()throws Exception{
+        var f=fixture();var policy=(ObjectNode)f.profile.path("nativeMcpEffects").get(0).path("policy");
+        policy.put("classification","FINANCIAL").put("consentRequired",true).put("acknowledgedUnfencedRisk",true);
+        ((ObjectNode)f.document.path("tools").get(0)).set("effectPolicy",policy.deepCopy());
+        f.manifest.put("profileDigest",Canonical.digest(f.profile));
+        var preview=McpEffectValidation.preview(JSON.treeToValue(f.profile,ServiceProfile.class),
+            JSON.treeToValue(f.document,McpProxyDocument.class),f.tool,f.arguments);
+        assertEquals(EffectConsentMappingKind.NATIVE_MCP,preview.kind());
+        assertEquals("mcp.example.test",preview.host());assertEquals("a=1&a=2&z=3",preview.query());
+        assertEquals("tools/call",preview.body().path("method").asText());
+        assertFalse(preview.body().has("id"));
+        assertFalse(preview.headers().containsKey("mcp-session-id"));
+        assertEquals(f.arguments,preview.body().path("params").path("arguments"));
+        assertThrows(Failure.class,()->validate(f));
+        ((ObjectNode)f.arguments).put("recipient","mallory");
+        assertEquals("alice",preview.body().path("params").path("arguments").path("recipient").asText());
+    }
+
 }

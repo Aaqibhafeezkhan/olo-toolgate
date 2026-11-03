@@ -7400,6 +7400,93 @@ paths:
         required: true
         schema:
           $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+  /api/control/v1/access/invocations/{id}/effect-consent:
+    get:
+      operationId: getEffectConsent
+      description: Read the scoped immutable exact-effect preview.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Current immutable preview and review state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentView
+        '403':
+          description: Current authority or original consent validity refused
+        '404':
+          description: Unknown operation or no exact consent preview
+        '409':
+          description: Stale revision or changed preview digest
+  /api/control/v1/access/invocations/{id}/effect-consent/approve:
+    post:
+      operationId: approveEffectConsent
+      description: Approve the exact preview digest and revision using authenticated human authority. Policy ASK obligations remain separate.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentApprovalRequest
+      responses:
+        '200':
+          description: Current immutable preview and review state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentView
+        '403':
+          description: Current authority or original consent validity refused
+        '404':
+          description: Unknown operation or no exact consent preview
+        '409':
+          description: Stale revision or changed preview digest
+  /api/control/v1/access/invocations/{id}/effect-consent/revoke:
+    post:
+      operationId: revokeEffectConsent
+      description: Revoke exact consent without freeing consumed slots or extending validity.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentApprovalRequest
+      responses:
+        '200':
+          description: Current immutable preview and review state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentView
+        '403':
+          description: Current authority or original consent validity refused
+        '404':
+          description: Unknown operation or no exact consent preview
+        '409':
+          description: Stale revision or changed preview digest
   /api/control/v1/access/invocations/{id}/status:
     post:
       operationId: readCallerOperation

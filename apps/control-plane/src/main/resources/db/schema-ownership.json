@@ -2583,6 +2583,210 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_effect_consent_approvals",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "consent_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_effect_consents",
+          "columns": [
+            "tenant_id",
+            "consent_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "consent_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_effect_consent_revocations",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "consent_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_effect_consents",
+          "columns": [
+            "tenant_id",
+            "consent_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "consent_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_effect_consent_slots",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "consent_id",
+        "slot_index"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_effect_consents",
+          "columns": [
+            "tenant_id",
+            "consent_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "consent_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_effect_consent_uses",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "effect_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_effects",
+          "columns": [
+            "tenant_id",
+            "effect_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "effect_id"
+          ]
+        },
+        {
+          "table": "control_effect_consent_slots",
+          "columns": [
+            "tenant_id",
+            "consent_id",
+            "slot_index"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "consent_id",
+            "slot_index"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_effect_consents",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "consent_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_enterprise_invocations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "invocation_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

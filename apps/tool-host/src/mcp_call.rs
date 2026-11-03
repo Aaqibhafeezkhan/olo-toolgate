@@ -310,7 +310,15 @@ pub(crate) async fn run(
         .iter()
         .find(|tool| tool.tool_id == claims.target.tool_id)
         .and_then(|tool| tool.effect_policy.as_ref())
-        .filter(|policy| !policy.consent_required)
+        .filter(|policy| {
+            claims.effect_consent.is_some()
+                || (!policy.consent_required
+                    && !matches!(
+                        policy.classification,
+                        olo_toolgate_contracts::v2::EffectClassification::Financial
+                            | olo_toolgate_contracts::v2::EffectClassification::Destructive
+                    ))
+        })
         .is_some_and(|policy| {
             prepared
                 .profile

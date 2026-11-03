@@ -73,3 +73,29 @@ Consent-required policies remain blocked until exact-effect consent is
 implemented. A received upstream reply is broker evidence, not proof of an
 atomic target commit or a deduplication guarantee. Ambiguous sends cannot be
 retried with another native MCP grant for the same effect.
+
+
+Financial and destructive tools always require exact effect consent, including
+older policies whose consent flag was false. Acknowledging unfenced execution
+risk does not authorize an individual payment or deletion. Such calls wait for exact-effect review in the Approvals page before dispatch.
+Review the mapped outbound values and effect count, then approve the immutable
+preview. Any policy ASK obligations also need their independent approvals.
+Internal resolved previews and an unfenced-risk acknowledgement alone do not
+grant execution authority. Revocation and original expiry are checked again
+before the business request is sent.
+
+Mapped numeric preview values must stay within the browser's safe integer range
+(absolute value at most 9007199254740991). Larger identifiers need a reviewed
+string representation supported by the tool and target; an unrepresentable
+numeric preview is refused. Complete previews are capped at 1 MiB, including
+the aggregate across all routes.
+
+Exact review follows operation-review independence: the requester and agent
+owners need an independent scoped reviewer. The existing verified Super Admin
+exception remains. This workflow does not accept unsigned caller self-consent
+as a substitute for an application-signed user intent.
+
+Resolved previews contain outbound business values. The requester and eligible
+scoped reviewers can read them; operation metadata-read access alone does not
+grant access to full preview payloads. Audit refusals retain digests and reason
+codes rather than those values.

@@ -236,9 +236,11 @@ def render_version(ver, version, outputs):
                     arguments = ', '.join(java_ident(key) if key != 'businessKeyHash' else 'null' for key in props)
                     java += ['    /** Construct a request without an explicit business key. */',
                              f'    public {name}({signature}) {{ this({arguments}); }}']
-                if v2 and name in ('ServiceProfile', 'PackageDeploymentRequest', 'McpToolApproval', 'McpApprovedTool'):
+                if v2 and name in ('ServiceProfile', 'PackageDeploymentRequest', 'McpToolApproval', 'McpApprovedTool', 'InvocationPermitClaims'):
                     if name == 'ServiceProfile':
                         variants = [('effectReviews', 'nativeMcpEffects'), ('nativeMcpEffects',)]
+                    elif name == 'InvocationPermitClaims':
+                        variants = [('effectConsent',)]
                     else:
                         variants = [('effectPolicies' if name == 'PackageDeploymentRequest' else 'effectPolicy',)]
                     for added in variants:

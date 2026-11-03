@@ -17,7 +17,7 @@ class EffectGrantTest {
     static final ObjectMapper JSON=new ObjectMapper();
     @TempDir Path temp;
     ServicePermitBridgeTest base;EffectGrants grants;EnterpriseInvocation invocation;EffectGrantIssue issue;
-    ObjectNode profile;String packageDigest;
+    ObjectNode profile;String packageDigest;String classification="WRITE";
     @BeforeAll static void key()throws Exception{ServicePermitBridgeTest.key();}
     @BeforeEach void setup()throws Exception{
         base=new ServicePermitBridgeTest();base.temp=temp;base.setup();prepare();
@@ -31,10 +31,11 @@ class EffectGrantTest {
             try{return (ObjectNode)JSON.readTree(tx.packages().document(facts.manifest().profileDigest()));}
             catch(java.io.IOException failure){throw new IllegalStateException(failure);}
         });
+        profile.put("packageId",invocation.evaluation().toolId().split("/")[0]);
         var destination=(ObjectNode)profile.path("destinations").get(0);destination.put("id","external").put("host","external.example.test");
         var route=(ObjectNode)profile.path("routes").get(0);route.put("destination","external").put("path","/send").put("streaming","NONE");
-        var policy=JSON.createObjectNode().put("routeId","write").put("classification","WRITE")
-            .put("consentRequired",false).put("acknowledgedUnfencedRisk",false);
+        var policy=JSON.createObjectNode().put("routeId","write").put("classification",classification)
+            .put("consentRequired",false).put("acknowledgedUnfencedRisk",!classification.equals("WRITE"));
         var intent=policy.putObject("intent").put("path","/send").put("contentType","application/json").put("bodyMode","CANONICAL_JSON");
         intent.putObject("query");intent.putObject("headers");intent.putObject("body").putObject("path").put("$arg","/path");
         profile.putArray("effectReviews").addObject().put("reviewedBy","admin").put("reviewedAtUnixMs",EnterpriseConformanceTest.NOW).set("policy",policy);
@@ -46,7 +47,7 @@ class EffectGrantTest {
         var args=JSON.createObjectNode().put("path","olo://"+base.rig.gateway.tenant().value()+"/conversation/c1");
         manifest.put("bodyDigest",Canonical.arguments(args));
         var packageDoc=JSON.createObjectNode();var descriptor=packageDoc.putObject("manifest").putArray("tools").addObject().putObject("descriptor");
-        descriptor.put("toolId",invocation.evaluation().toolId()).putArray("httpAuth");descriptor.putObject("effect").put("safety","NON_IDEMPOTENT");
+        descriptor.put("toolId",invocation.evaluation().toolId()).putArray("httpAuth");descriptor.putArray("routes").addObject().put("id","write");descriptor.putObject("effect").put("safety","NON_IDEMPOTENT");
         base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->{
             tx.packages().saveDocument(profileDigest,profile.toString());
             tx.packages().saveVersion(new PackageStore.Version(packageDigest,profile.path("packageId").asText(),"1.0.0",EnterpriseConformanceTest.NOW,packageDoc.toString()),new byte[0]);

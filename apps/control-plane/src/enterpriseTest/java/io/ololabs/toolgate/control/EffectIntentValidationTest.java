@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.*;
 import io.ololabs.toolgate.control.application.*;
 import io.ololabs.toolgate.contracts.PreparedHttpRequestManifest;
 import io.ololabs.toolgate.contracts.v2.*;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import java.nio.file.*;
 import java.util.function.Consumer;
@@ -27,7 +28,7 @@ class EffectIntentValidationTest {
         var destination=(ObjectNode)profile.path("destinations").get(0);
         destination.put("id","external").put("scheme","https").put("mode","BROKERED").put("host","api.example.test").put("port",443);
         var policy=(ObjectNode)node("""
-            {"routeId":"send","classification":"FINANCIAL","consentRequired":false,"acknowledgedUnfencedRisk":true,
+            {"routeId":"send","classification":"WRITE","consentRequired":false,"acknowledgedUnfencedRisk":true,
              "intent":{"path":"/send","query":{"account":{"$arg":"/account"}},"headers":{"x-recipient":{"$arg":"/recipient"}},
               "contentType":"application/json","bodyMode":"CANONICAL_JSON",
               "body":{"recipient":{"$arg":"/recipient"},"amount":{"$arg":"/amount"},"note":{"$arg":"/note"}}}}
@@ -59,7 +60,14 @@ class EffectIntentValidationTest {
         var f=fixture();mutate.accept(f.manifest);assertThrows(Failure.class,()->validate(f));
     }
     @Test void reconstructsApprovedRecipientPayloadAndCanonicalQuery()throws Exception{
-        assertEquals(EffectClassification.FINANCIAL,validate(fixture()).classification());
+        assertEquals(EffectClassification.WRITE,validate(fixture()).classification());
+    }
+    @Test void criticalClassesCannotOptOutOfConsentWithAnUnfencedRiskAcknowledgement()throws Exception{
+        for(String classification:List.of("FINANCIAL","DESTRUCTIVE")){
+            var f=fixture();policy(f).put("classification",classification).put("consentRequired",false)
+                .put("acknowledgedUnfencedRisk",true);repin(f);
+            assertThrows(Failure.class,()->validate(f),classification);
+        }
     }
     @Test void independentlyRejectsEveryAttackerChosenRequestField()throws Exception{
         refused(m->m.put("host","other.example.test"));refused(m->m.put("port",8443));
@@ -81,7 +89,7 @@ class EffectIntentValidationTest {
         assertThrows(Failure.class,()->validate(duplicate));
         var reserved=fixture();((ObjectNode)reserved.profile.path("routes").get(0)).put("destination","olo-memory");repin(reserved);
         assertThrows(Failure.class,()->validate(reserved));
-        var risk=fixture();policy(risk).put("acknowledgedUnfencedRisk",false);repin(risk);
+        var risk=fixture();policy(risk).put("classification","FINANCIAL").put("acknowledgedUnfencedRisk",false);repin(risk);
         assertThrows(Failure.class,()->validate(risk));
     }
     @Test void argumentValuesRemainDataAndDoNotNormalizeOrReinterpretReferences()throws Exception{
@@ -122,6 +130,51 @@ class EffectIntentValidationTest {
         repin(f);assertEquals(EffectClassification.READ,validate(f).classification());
         f.manifest.put("bodyDigest",Canonical.arguments(JSON.createObjectNode()));
         assertThrows(Failure.class,()->validate(f));
+    }
+
+    @Test void highRiskPreviewShowsResolvedOutboundValuesWithoutAuthorizingTheEffect()throws Exception{
+        var f=fixture();policy(f).put("classification","FINANCIAL").put("consentRequired",true);repin(f);
+        var profile=JSON.treeToValue(f.profile,ServiceProfile.class);
+        var preview=EffectIntentValidation.preview(profile,"send",f.args);
+        assertEquals(EffectClassification.FINANCIAL,preview.classification());
+        assertEquals("account=a%20b%2F%26",preview.query());
+        assertEquals("alice",preview.headers().get("x-recipient").get(0).asText());
+        assertEquals("alice",preview.body().path("recipient").asText());
+        assertEquals(1234,preview.body().path("amount").asInt());
+        assertThrows(Failure.class,()->validate(f));
+        ((ObjectNode)f.args).put("recipient","mallory");
+        assertEquals("alice",preview.body().path("recipient").asText());
+        assertNotEquals(preview,EffectIntentValidation.preview(profile,"send",f.args));
+    }
+    @Test void previewRefusesMissingMappingsAndInvalidTargetsBeforeItCanBeApproved()throws Exception{
+        var missing=fixture();((ObjectNode)missing.args).remove("amount");
+        assertThrows(Failure.class,()->EffectIntentValidation.preview(JSON.treeToValue(missing.profile,ServiceProfile.class),"send",missing.args));
+        for(String scheme:List.of("tcp","https")){
+            var f=fixture();var target=(ObjectNode)f.profile.path("destinations").get(0);
+            target.put("scheme",scheme);if(scheme.equals("https"))target.put("mode","TUNNEL");
+            assertThrows(Failure.class,()->EffectIntentValidation.preview(JSON.treeToValue(f.profile,ServiceProfile.class),"send",f.args));
+        }
+    }
+
+    @Test void previewEnforcesActualProtocolHeaderAndEncodedQueryLimits()throws Exception{
+        var headers=fixture();((ObjectNode)headers.args).put("recipient","x".repeat(8192));
+        assertEquals(8192,EffectIntentValidation.preview(JSON.treeToValue(headers.profile,ServiceProfile.class),"send",headers.args)
+            .headers().get("x-recipient").get(0).asText().length());
+        ((ObjectNode)headers.args).put("recipient","x".repeat(8193));
+        assertThrows(Failure.class,()->EffectIntentValidation.preview(JSON.treeToValue(headers.profile,ServiceProfile.class),"send",headers.args));
+        var query=fixture();((ObjectNode)query.args).put("account","=".repeat(2728));
+        assertEquals(8192,EffectIntentValidation.preview(JSON.treeToValue(query.profile,ServiceProfile.class),"send",query.args).query().length());
+        ((ObjectNode)query.args).put("account","=".repeat(2729));
+        assertThrows(Failure.class,()->EffectIntentValidation.preview(JSON.treeToValue(query.profile,ServiceProfile.class),"send",query.args));
+    }
+    @Test void repeatedMappedValuesCannotExpandBeyondTheBodyAllowance()throws Exception{
+        var f=fixture();((ObjectNode)f.args).put("note","x".repeat(160000));
+        var body=JSON.createObjectNode();var copies=body.putArray("copies");
+        for(int i=0;i<16;i++)copies.addObject().put("$arg","/note");
+        ((ObjectNode)policy(f).path("intent")).set("body",body);
+        assertThrows(Failure.class,()->EffectIntentValidation.preview(JSON.treeToValue(f.profile,ServiceProfile.class),"send",f.args));
+        copies.removeAll();for(int i=0;i<8;i++)copies.addObject().put("$arg","/note");
+        assertEquals(8,EffectIntentValidation.preview(JSON.treeToValue(f.profile,ServiceProfile.class),"send",f.args).body().path("copies").size());
     }
 
 }

@@ -111,6 +111,7 @@ public final class EnterpriseOperations {
             // Reviewer privilege and membership remain live obligations, including bounded/JIT roles.
             for(var review:approval.reviews())if(review.decision()==EnterpriseReviewDecision.APPROVE)reviewer(tx,review.reviewerUserId(),i,review.obligationId(),now);
         }
+        EffectConsents.require(tx,codec,i,now);
     }
     public Store.Reply submit(DirectoryService.Actor actor,String document){gateway(actor);var request=codec.model(document,EnterpriseInvocationRequest.class);if(request.context().mode()==RequestMode.HUMAN&&!gatewayUser(request.context())||request.context().mode()==RequestMode.DELEGATED&&onBehalfOf(actor.tenant(),request.context())&&!gatewayDelegated(request.context())||request.context().mode()==RequestMode.DELEGATED&&laundered(request.context()))throw ManagementAccess.denied();return submitVerified(actor,request,null);}
     /** A Gateway HUMAN context exists only for a verified user credential: JWT kind, the configured issuer, a credential digest,
@@ -253,12 +254,14 @@ public final class EnterpriseOperations {
         if(tx.enterprise().invocationsSince(Math.max(0,time-lifetime))>=capacity)throw Failure.conflict();
         var budgets=new java.util.TreeSet<String>();var decision=decide(actor.tenant(),tx,e,time,false,budgets);
         long epoch=tx.enterprise().authorizationEpoch();
-        var state=decision.decision()==Decision.ASK?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
+        var consentPlan=EffectConsents.plan(tx,codec,e);
+        var state=decision.decision()==Decision.ASK||consentPlan!=null?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
         var i=new EnterpriseInvocation(context.requestId(),digest,e,state,1L,epoch,null,
                 time+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),
                 request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()));
         for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),time);
         tx.enterprise().saveInvocation(i,time,0);
+        if(consentPlan!=null)consentPlan.save(tx,codec,i,(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(request.request().arguments())),credentialExpiry,time);
         var owners=new TreeSet<String>();if(context.userId()!=null)owners.add(context.userId());
         var agents=new ArrayList<String>();if(context.agentId()!=null)agents.add(context.agentId());context.chain().forEach(h->agents.add(h.agentId()));
         for(String agent:agents){
@@ -275,7 +278,7 @@ public final class EnterpriseOperations {
             else throw Failure.unavailable();
         }
         tx.enterprise().insightsContext(i.id(),request.executionContext());
-        if(state==EnterpriseInvocationState.PENDING_APPROVAL)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),
+        if(decision.decision()==Decision.ASK)tx.enterprise().saveApproval(new EnterpriseApproval(approvalId(i.id()),
                 EnterpriseApprovalType.OPERATION,i.id(),digest,epoch,tx.load().revision(),decision.obligations(),List.of(),
                 EnterpriseApprovalState.PENDING,1L,i.expiresAtUnixMs()),0);
         audit(tx,actor,"INVOCATION_SUBMIT",i);return reply(projected(tx,i,time),i.revision());
@@ -458,9 +461,9 @@ public final class EnterpriseOperations {
             var state=request.decision()==EnterpriseReviewDecision.REVOKE?EnterpriseApprovalState.REVOKED:request.decision()==EnterpriseReviewDecision.DENY?EnterpriseApprovalState.DENIED:
                 a.obligationIds().stream().allMatch(ob->reviews.stream().anyMatch(r->r.obligationId().equals(ob)&&r.decision()==EnterpriseReviewDecision.APPROVE))?EnterpriseApprovalState.APPROVED:EnterpriseApprovalState.PENDING;
             var next=new EnterpriseApproval(a.id(),a.approvalType(),a.invocationId(),a.requestDigest(),a.authorizationEpoch(),a.directoryRevision(),a.obligationIds(),reviews,state,a.revision()+1,a.expiresAtUnixMs());tx.enterprise().saveApproval(next,a.revision());
-            if(state==EnterpriseApprovalState.APPROVED){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
+            if(state==EnterpriseApprovalState.APPROVED&&EffectConsents.approved(tx,codec,i,now)){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
                 // The approved operation resumes (M5.5) with a fresh dispatch window, however long the review took.
-                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),now+lifetime,approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation());tx.enterprise().saveInvocation(queued,now,i.revision());}
+                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),consentDeadline(tx,i,now+lifetime),approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation());tx.enterprise().saveInvocation(queued,now,i.revision());}
             else if((state==EnterpriseApprovalState.DENIED||state==EnterpriseApprovalState.REVOKED)&&Set.of(EnterpriseInvocationState.PENDING_APPROVAL,EnterpriseInvocationState.QUEUED,EnterpriseInvocationState.RESERVED,EnterpriseInvocationState.DISPATCHED,EnterpriseInvocationState.EXECUTING).contains(i.state())){
                 // End the original wait atomically with the review. Once dispatch may have started, cancellation
                 // cannot prove the effect did not happen: retain uncertainty for reconciliation instead.
@@ -606,6 +609,45 @@ public final class EnterpriseOperations {
         var context=codec.model(document,io.ololabs.toolgate.contracts.v2.RequestContext.class);
         return store.transaction(actor.tenant(),true,tx->{long time=now(tx);var i=gatewayRead(tx,actor.tenant(),id,context,time);
             return historyIn(tx,i,cursor,limit,time);});
+    }
+    private long consentDeadline(Store.Session tx,EnterpriseInvocation i,long requested){
+        var p=tx.effectConsents().forOperation(i.id());return p==null?requested:Math.min(requested,p.expiresAt());
+    }
+    public Store.Reply effectConsent(DirectoryService.Actor actor,String id){
+        if(actor.userId()==null)throw ManagementAccess.denied();
+        return store.transaction(actor.tenant(),true,tx->{long time=now(tx);var i=invocation(tx,id);requireRead(tx,actor,i,time);
+            if(!actor.userId().equals(i.evaluation().context().userId()))EffectConsents.reviewer(tx,codec,actor.userId(),i,time);
+            var p=tx.effectConsents().forOperation(i.id());if(p==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Effect consent not found");
+            var view=EffectConsents.view(tx,codec,p);return reply(view,view.revision());});
+    }
+    public Store.Reply decideEffectConsent(DirectoryService.Actor actor,String id,String document,boolean revoke){
+        if(actor.userId()==null)throw ManagementAccess.denied();
+        var request=codec.model(document,io.ololabs.toolgate.contracts.v2.EffectConsentApprovalRequest.class);
+        return store.transaction(actor.tenant(),true,tx->{long time=now(tx);var i=invocation(tx,id);
+            EffectConsents.reviewer(tx,codec,actor.userId(),i,time);
+            decide(actor.tenant(),tx,i.evaluation(),time,true);
+            if(i.authorizationEpoch()!=tx.enterprise().authorizationEpoch())throw ManagementAccess.denied();
+            var p=tx.effectConsents().forOperation(i.id());if(p==null)throw EffectConsents.required();
+            var view=EffectConsents.view(tx,codec,p);
+            if(!view.revision().equals(request.expectedRevision())||!p.digest().equals(request.previewDigest()))throw Failure.conflict();
+            if(revoke)tx.effectConsents().revoke(p.consentId(),actor.userId(),time);
+            else{
+                if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL||view.state()!=io.ololabs.toolgate.contracts.v2.EffectConsentState.PENDING)throw Failure.conflict();
+                var credential=tx.enterprise().userCredentialDeadline(i.id());
+                if(i.expiresAtUnixMs()<=time||credential!=null&&credential<=time)throw ManagementAccess.denied();
+                tx.effectConsents().approve(p.consentId(),p.digest(),actor.userId(),i.authorizationEpoch(),time);
+                var decision=decide(actor.tenant(),tx,i.evaluation(),time,true);var policy=tx.enterprise().approval(approvalId(i.id()));
+                if(decision.decision()!=Decision.ASK||policy!=null&&policy.state()==EnterpriseApprovalState.APPROVED){
+                    fresh(actor.tenant(),tx,i,time);
+                    var queued=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.QUEUED,i.revision()+1,
+                        i.authorizationEpoch(),null,consentDeadline(tx,i,time+lifetime),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
+                    tx.enterprise().saveInvocation(queued,time,i.revision());
+                }
+            }
+            var next=EffectConsents.view(tx,codec,p);
+            tx.audit(actor.id(),revoke?"EFFECT_CONSENT_REVOKE":"EFFECT_CONSENT_APPROVE","invocation:"+i.id(),next.revision(),i.evaluation().context().requestId(),p.digest().substring(7));
+            return reply(next,next.revision());
+        });
     }
     public Store.Reply get(DirectoryService.Actor actor,String id){return store.transaction(actor.tenant(),true,tx->{long now=now(tx);var i=invocation(tx,id);requireRead(tx,actor,i,now);return reply(projected(tx,i,now),i.revision());});}
     /** The owner's current authorization is re-evaluated on every read, so revocation ends access to a running stream;

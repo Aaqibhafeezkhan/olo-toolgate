@@ -383,7 +383,7 @@ export interface ControlErrorDetail {
   readonly ids?: ReadonlyArray<string>;
   readonly requestId?: string;
 }
-export type ControlErrorDetailCode = "UNRESOLVED_IDENTITIES" | "REPLACE_CONFLICTS" | "ONE_DEVICE_PER_ACCOUNT" | "REQUIRED_REVIEWS_CHANGE" | "RATE_LIMITED" | "BOUND_SERVICE_EFFECT_REQUIRED";
+export type ControlErrorDetailCode = "UNRESOLVED_IDENTITIES" | "REPLACE_CONFLICTS" | "ONE_DEVICE_PER_ACCOUNT" | "REQUIRED_REVIEWS_CHANGE" | "RATE_LIMITED" | "BOUND_SERVICE_EFFECT_REQUIRED" | "EFFECT_CONSENT_REQUIRED" | "EFFECT_CONSENT_MISMATCH" | "EFFECT_CONSENT_EXHAUSTED";
 /** Explicit Tool Group to Device Group binding; one binding is selected per invocation. */
 export interface ControlExecutionBinding {
   readonly id: string;

@@ -580,6 +580,95 @@ pub enum EffectClassification {
     #[serde(rename = "FINANCIAL")]
     Financial,
 }
+/// Authenticated explicit approval of one immutable preview and revision. No worker-provided replacement intent or validity window is accepted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectConsentApprovalRequest {
+    pub preview_digest: String,
+    pub expected_revision: u64,
+}
+/// Signed admission reference to exact approved consent; never substitutes for current Control authority at the effect boundary.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectConsentBinding {
+    pub consent_id: String,
+    pub preview_digest: String,
+}
+/// Control-reconstructed outbound business request. Contains resolved mapped values, never credentials. Native MCP excludes handler ID and opaque session/protocol headers; these remain bound by the execution grant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectConsentMappedRequest {
+    pub kind: EffectConsentMappingKind,
+    pub route_id: String,
+    pub classification: EffectClassification,
+    #[serde(deserialize_with = "const_effect_consent_mapped_request_scheme")]
+    pub scheme: String,
+    pub host: String,
+    pub port: u64,
+    pub method: String,
+    pub path: String,
+    pub query: String,
+    pub headers: std::collections::BTreeMap<String, serde_json::Value>,
+    pub content_type: String,
+    pub body_mode: EffectBodyMode,
+    pub body: serde_json::Value,
+}
+/// Canonical EffectConsentMappingKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EffectConsentMappingKind {
+    #[serde(rename = "MAPPED_HTTP")]
+    MappedHttp,
+    #[serde(rename = "NATIVE_MCP")]
+    NativeMcp,
+}
+/// Immutable exact-effect preview created by Control from authenticated original arguments and pinned reviewed mappings. Its canonical digest must be explicitly approved; ordinary invocation approval is not exact consent. Validity never exceeds original operation and credential deadlines.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectConsentPreview {
+    pub consent_id: String,
+    pub tenant_id: String,
+    pub operation_id: String,
+    pub run_id: String,
+    pub tool_id: String,
+    pub action: String,
+    pub arguments_digest: String,
+    pub resources: Vec<crate::ResourceDescriptor>,
+    pub profile_digest: String,
+    pub not_before_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    pub slots: Vec<EffectConsentSlot>,
+}
+/// Explicit bounded route allowance. Each distinct effect identity reserves one use atomically with its authorization; another generation of the same identity reuses that use.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectConsentSlot {
+    pub slot_index: u64,
+    pub request: EffectConsentMappedRequest,
+    pub permitted_count: u64,
+}
+/// Canonical EffectConsentState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EffectConsentState {
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "APPROVED")]
+    Approved,
+    #[serde(rename = "REVOKED")]
+    Revoked,
+}
+/// Scoped exact-effect review presentation, with a revision that changes on approval or revocation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EffectConsentView {
+    pub preview: EffectConsentPreview,
+    pub preview_digest: String,
+    pub state: EffectConsentState,
+    pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approved_at_unix_ms: Option<u64>,
+}
 /// Issued authority and conservative monotonic send budget, measured from before the issuance request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1286,6 +1375,8 @@ pub struct InvocationPermitClaims {
     pub deadline_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_verification: Option<McpPermitVerification>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_consent: Option<EffectConsentBinding>,
 }
 /// Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2554,7 +2645,7 @@ pub struct RouteDeclaration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<String>,
 }
-/// Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented.
+/// Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RouteEffectPolicy {
@@ -3240,6 +3331,7 @@ const_field!(const_discovery_public_key_kty, String, "RSA");
 const_field!(const_discovery_public_key_use, String, "sig");
 const_field!(const_discovery_public_key_alg, String, "RS256");
 const_field!(const_discovery_public_key_e, String, "AQAB");
+const_field!(const_effect_consent_mapped_request_scheme, String, "https");
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
 const_field!(const_log_frame_kind, String, "LOG");
 const_field!(const_mcp_proxy_document_format_version, u64, 1);

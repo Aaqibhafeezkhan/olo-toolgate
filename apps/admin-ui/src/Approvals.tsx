@@ -5,11 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { EnterpriseApproval, EnterpriseApprovalPage, EnterpriseInvocation, EnterpriseReviewDecision } from '@olo-labs/toolgate-contracts';
 import { ApiError, ControlClient } from './api';
 import { Failure } from './Failure';
+import {EffectConsents} from './EffectConsents';
 
 const labels = { PENDING: 'Pending review', APPROVED: 'Approved', DENIED: 'Denied', CANCELLED: 'Cancelled', EXPIRED: 'Expired', REVOKED: 'Revoked' };
 const timestamp = (value: number) => new Date(value).toLocaleString();
 
 export function Approvals({ client }: { client: ControlClient }) {
+  const [consentOpen, setConsentOpen] = useState(false);
   const [page, setPage] = useState<EnterpriseApprovalPage>(); const [error, setError] = useState<unknown>();
   const [cursor, setCursor] = useState<string>(); const [history, setHistory] = useState<(string | undefined)[]>([]);
   const [attempt, setAttempt] = useState(0); const [selected, setSelected] = useState<string>();
@@ -31,6 +33,8 @@ export function Approvals({ client }: { client: ControlClient }) {
       {page.items.map(a => <tr key={a.id}><th scope="row"><button className="record-link" onClick={() => setSelected(a.id)} aria-label={`Review approval ${a.id}`}>{a.id}</button></th><td>{a.approvalType}</td><td><code>{a.invocationId}</code></td><td>{a.reviews.filter(r => r.decision === 'APPROVE').length} / {a.obligationIds.length}</td><td>{labels[a.state]}</td><td data-sort-value={a.expiresAtUnixMs}>{timestamp(a.expiresAtUnixMs)}</td></tr>)}
     </tbody></Table></div>{page.items.length === 0 && <p>No approvals in your current scope.</p>}
       <div className="pagination"><button disabled={!history.length} onClick={() => { setCursor(history.at(-1)); setHistory(history.slice(0, -1)); }}>Previous approvals page</button><button disabled={!page.nextCursor} onClick={() => { setHistory([...history, cursor]); setCursor(page.nextCursor); }}>Next approvals page</button></div></>}
+    <button onClick={() => setConsentOpen(value => !value)}>{consentOpen ? "Close exact effect consent" : "Review exact effect consent"}</button>
+    {consentOpen && <EffectConsents client={client}/>}
     {selected && <ApprovalDetails key={selected} client={client} id={selected} close={() => setSelected(undefined)} changed={refresh} />}
   </>;
 }

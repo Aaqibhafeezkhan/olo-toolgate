@@ -84,6 +84,12 @@ public class EnterpriseOperationResource {
             @QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.history(reader(),id,cursor,limit));}
     @GET @Path("invocations/{id}") @io.quarkus.security.Authenticated
     public Response invocation(@PathParam("id")String id){return reply(operations.get(reader(),id));}
+    @GET @Path("invocations/{id}/effect-consent") @io.quarkus.security.Authenticated
+    public Response effectConsent(@PathParam("id")String id){return reply(operations.effectConsent(actors.human(),id));}
+    @POST @Path("invocations/{id}/effect-consent/approve") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response approveEffectConsent(@PathParam("id")String id,String document){return reply(operations.decideEffectConsent(actors.human(),id,body(document),false));}
+    @POST @Path("invocations/{id}/effect-consent/revoke") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response revokeEffectConsent(@PathParam("id")String id,String document){return reply(operations.decideEffectConsent(actors.human(),id,body(document),true));}
     @POST @Path("invocations/{id}/cancel") @io.quarkus.security.Authenticated
     public Response cancel(@PathParam("id")String id,@HeaderParam("If-Match")String etag){if(etag==null||!etag.matches("\"[1-9][0-9]{0,15}\""))throw Failure.validation();long revision=Long.parseLong(etag.substring(1,etag.length()-1));if(revision>9007199254740991L)throw Failure.validation();return reply(operations.cancel(actors.human(),id,revision));}
     @POST @Path("permits/consume") @Consumes("application/json") @PermitAll

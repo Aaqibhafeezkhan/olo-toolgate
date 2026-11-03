@@ -98,3 +98,5 @@ Use `000-template.md`.
 - [053 — General effect intents and send grants](053-general-effect-intents-and-send-grants.md)
 
 - [054 — Native MCP effect authority](054-native-mcp-effect-authority.md)
+
+- [055 — Exact effect consent and atomic slots](055-exact-effect-consent-slots.md)

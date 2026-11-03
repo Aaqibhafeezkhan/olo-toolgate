@@ -17,8 +17,9 @@ public final class McpEffectValidation {
         if((policy.classification()==EffectClassification.DESTRUCTIVE||policy.classification()==EffectClassification.FINANCIAL)
             &&!policy.acknowledgedUnfencedRisk())throw Failure.validation();
     }
-    public static McpEffectPolicy validate(ServiceProfile profile,McpProxyDocument document,String toolId,
-            PreparedHttpRequestManifest manifest,JsonNode arguments,String handlerId){
+    /** Reviewed native business intent, without transport-selected RPC/session values. No authority is issued here. */
+    public static EffectConsentMappedRequest preview(ServiceProfile profile,McpProxyDocument document,String toolId,JsonNode arguments){
+        EffectIntentValidation.boundedArguments(arguments);
         if(profile.nativeMcpEffects()==null||arguments==null||!arguments.isObject()
             ||!profile.packageId().equals("mcp."+document.server().slug())
             ||!toolId.startsWith(profile.packageId()+"/"))throw ManagementAccess.denied();
@@ -26,7 +27,7 @@ public final class McpEffectValidation {
         var tools=document.tools().stream().filter(t->t.toolId().equals(toolId)).toList();
         if(reviews.size()!=1||tools.size()!=1)throw ManagementAccess.denied();
         var reviewed=reviews.getFirst();var tool=tools.getFirst();var policy=reviewed.policy();
-        if(reviewed.reviewedBy().isBlank()||policy.consentRequired()||!policy.equals(tool.effectPolicy()))throw ManagementAccess.denied();
+        if(reviewed.reviewedBy().isBlank()||!policy.equals(tool.effectPolicy()))throw ManagementAccess.denied();
         try{review(policy);}catch(Failure invalid){throw ManagementAccess.denied();}
         URI url;
         try{url=new URI(new URI(document.server().url()).toASCIIString()).normalize();}
@@ -41,6 +42,27 @@ public final class McpEffectValidation {
         query.sort(Comparator.comparing(pair->pair.split("=",2)[0]));
         var headers=new TreeMap<String,JsonNode>();
         headers.put("accept",JSON.arrayNode().add("application/json, text/event-stream"));
+        var body=JSON.objectNode().put("jsonrpc","2.0").put("method","tools/call");
+        body.putObject("params").put("name",tool.upstreamName()).set("arguments",arguments.deepCopy());
+        byte[] encoded=Canonical.jcs(body);
+        if(encoded.length>2*1024*1024)throw ManagementAccess.denied();
+        return new EffectConsentMappedRequest(EffectConsentMappingKind.NATIVE_MCP,route(toolId),policy.classification(),
+            "https",host,(long)(url.getPort()<0?443:url.getPort()),"POST",path,String.join("&",query),
+            headers,"application/json",EffectBodyMode.CANONICAL_JSON,body);
+    }
+    public static McpEffectPolicy validate(ServiceProfile profile,McpProxyDocument document,String toolId,
+            PreparedHttpRequestManifest manifest,JsonNode arguments,String handlerId){
+        var policy=match(profile,document,toolId,manifest,arguments,handlerId);
+        if(EffectIntentValidation.requiresConsent(policy.classification(),policy.consentRequired()))throw ManagementAccess.denied();
+        return policy;
+    }
+    /** Internal issuer checks exact consent in its atomic effect transaction. */
+    static McpEffectPolicy match(ServiceProfile profile,McpProxyDocument document,String toolId,
+            PreparedHttpRequestManifest manifest,JsonNode arguments,String handlerId){
+        var expected=preview(profile,document,toolId,arguments);
+        var tool=document.tools().stream().filter(t->t.toolId().equals(toolId)).findFirst().orElseThrow(ManagementAccess::denied);
+        var policy=tool.effectPolicy();
+        var headers=new TreeMap<String,JsonNode>(expected.headers());
         var protocol=manifest.headers().get("mcp-protocol-version");
         if(!one(protocol,32)||!protocol.get(0).asText().matches("[0-9]{4}-[0-9]{2}-[0-9]{2}"))throw ManagementAccess.denied();
         headers.put("mcp-protocol-version",protocol);
@@ -55,9 +77,9 @@ public final class McpEffectValidation {
         if(headers.containsKey(credential))throw ManagementAccess.denied();
         if(!manifest.version().equals("toolgate-http-request-v1")||!manifest.profileId().equals(profile.profileId())
             ||!manifest.profileDigest().equals(Canonical.digest(new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(profile)))
-            ||!manifest.routeId().equals(route(toolId))||!manifest.scheme().equals("https")||!manifest.host().equals(host)
-            ||manifest.port()!=(url.getPort()<0?443:url.getPort())||!manifest.method().equals("POST")
-            ||!manifest.path().equals(path)||!manifest.query().equals(String.join("&",query))
+            ||!manifest.routeId().equals(expected.routeId())||!manifest.scheme().equals(expected.scheme())||!manifest.host().equals(expected.host())
+            ||!manifest.port().equals(expected.port())||!manifest.method().equals("POST")
+            ||!manifest.path().equals(expected.path())||!manifest.query().equals(expected.query())
             ||!manifest.contentType().equals("application/json")||!manifest.headers().equals(headers)
             ||!manifest.bodyDigest().equals(Canonical.arguments(body))
             ||!manifest.credentialHeaders().equals(List.of(credential))

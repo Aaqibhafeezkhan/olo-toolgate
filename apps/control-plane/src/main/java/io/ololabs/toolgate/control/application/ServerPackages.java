@@ -501,6 +501,8 @@ public final class ServerPackages {
             claims.set("identity", identity); claims.set("target", target);
             claims.put("catalogRevision", Canonical.sha256(Long.toString(tx.load().revision()).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .put("argumentsDigest", Canonical.arguments(arguments)).put("action", e.action());
+            var exactConsent=EffectConsents.require(tx,codec,i,lease.issuedAt());
+            if(exactConsent!=null)claims.set("effectConsent",node(codec.json(exactConsent)));
             claims.set("resources", node(codec.json(e.resources())));
             claims.put("effectSafety", safety).put("requiresExecutionLedger", !safety.equals("READ_ONLY") && !safety.equals("IDEMPOTENT"));
             var approvals = claims.putArray("approvalIds"); lease.approvalIds().forEach(approvals::add);

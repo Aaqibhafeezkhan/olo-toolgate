@@ -16,5 +16,11 @@ public enum ControlErrorDetailCode {
     /** Canonical RATE_LIMITED value. */
     RATE_LIMITED,
     /** Canonical BOUND_SERVICE_EFFECT_REQUIRED value. */
-    BOUND_SERVICE_EFFECT_REQUIRED
+    BOUND_SERVICE_EFFECT_REQUIRED,
+    /** Canonical EFFECT_CONSENT_REQUIRED value. */
+    EFFECT_CONSENT_REQUIRED,
+    /** Canonical EFFECT_CONSENT_MISMATCH value. */
+    EFFECT_CONSENT_MISMATCH,
+    /** Canonical EFFECT_CONSENT_EXHAUSTED value. */
+    EFFECT_CONSENT_EXHAUSTED
 }

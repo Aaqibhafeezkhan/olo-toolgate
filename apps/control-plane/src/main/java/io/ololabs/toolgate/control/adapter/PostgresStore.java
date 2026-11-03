@@ -171,6 +171,7 @@ public class PostgresStore implements Store {
             catch(SQLException failure){throw Failure.unavailable();}
         }
         public io.ololabs.toolgate.control.application.EffectStore effects(){return new JdbcEffectStore(connection,tenant);}
+        public io.ololabs.toolgate.control.application.EffectConsentStore effectConsents(){return new JdbcEffectConsentStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec,insights);}
         public io.ololabs.toolgate.control.application.InsightsStore insights() {return new JdbcInsightsStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }

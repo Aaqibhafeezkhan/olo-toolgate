@@ -25,8 +25,8 @@ class InitialSchemaTest {
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.createStatement();
             var rows=s.executeQuery("SELECT version FROM flyway_schema_history ORDER BY installed_rank")){
-            assertTrue(rows.next());assertEquals("1",rows.getString(1));
-            assertTrue(rows.next());assertEquals("2",rows.getString(1));assertTrue(rows.next());assertEquals("3",rows.getString(1));assertTrue(rows.next());assertEquals("4",rows.getString(1));assertTrue(rows.next());assertEquals("5",rows.getString(1));assertTrue(rows.next());assertEquals("6",rows.getString(1));assertTrue(rows.next());assertEquals("7",rows.getString(1));assertTrue(rows.next());assertEquals("8",rows.getString(1));assertFalse(rows.next());
+            for(int version=1;version<=9;version++){assertTrue(rows.next());assertEquals(Integer.toString(version),rows.getString(1));}
+            assertFalse(rows.next());
         }
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);

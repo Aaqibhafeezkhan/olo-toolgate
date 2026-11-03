@@ -462,13 +462,20 @@ final class McpServersTest {
     @Test void postgresNativeMcpUsesActualAdmissionArtifactAndDurableSingleSend()throws Exception{
         nativeMcpGrant(fixture(true));
     }
-    private void nativeMcpGrant(Fixture f)throws Exception{
+    @Test void sqliteNativeMcpHighRiskConsentBindsActualAdmissionAndSingleSend()throws Exception{
+        for(String classification:List.of("FINANCIAL","DESTRUCTIVE"))nativeMcpGrant(fixture(false),classification);
+    }
+    @Test void postgresNativeMcpHighRiskConsentBindsActualAdmissionAndSingleSend()throws Exception{
+        for(String classification:List.of("FINANCIAL","DESTRUCTIVE"))nativeMcpGrant(fixture(true),classification);
+    }
+    private void nativeMcpGrant(Fixture f)throws Exception{nativeMcpGrant(f,"WRITE");}
+    private void nativeMcpGrant(Fixture f,String classification)throws Exception{
         var actor=tenant(f,"tenant-a","host-a");
         f.servers.register(actor,registration("orders","orders/mcp-token"),"grant-register","r");
         long revision=snapshot(f,actor,"orders","grant-scan",tool("send","Send an order."));
         var approvalRequest=(com.fasterxml.jackson.databind.node.ObjectNode)node(approval(revision,"send","send"));
         ((com.fasterxml.jackson.databind.node.ObjectNode)approvalRequest.path("tools").get(0)).putObject("effectPolicy")
-            .put("classification","WRITE").put("consentRequired",false).put("acknowledgedUnfencedRisk",false);
+            .put("classification",classification).put("consentRequired",false).put("acknowledgedUnfencedRisk",!classification.equals("WRITE"));
         var approved=node(f.servers.approve(actor,"orders",approvalRequest.toString(),"grant-approve","r").body());
         enable(f,actor.tenant(),"mcp.orders/send");
         f.store.transaction(actor.tenant(),true,tx->{
@@ -510,9 +517,22 @@ final class McpServersTest {
             new AuthorizationRequest("mcp.orders/send","invoke",args),toolDigest,approved.path("packageDigest").asText().substring(7),null,null),
             "host-a").body(),EnterpriseInvocation.class);
         var gateway=new DirectoryService.Actor(actor.tenant(),"b".repeat(64),false);
+        long reservationRevision=invocation.revision();
+        if(!classification.equals("WRITE")){
+            assertEquals(EnterpriseInvocationState.PENDING_APPROVAL,invocation.state());
+            var blocked=codec.json(new io.ololabs.toolgate.contracts.v2.PermitReservationRequest(invocation.id(),"host-a",invocation.revision(),args));
+            assertEquals(403,status(()->packages.permit(gateway,blocked,"native-unapproved")));
+            var consent=codec.model(operations.effectConsent(actor,invocation.id()).body(),io.ololabs.toolgate.contracts.v2.EffectConsentView.class);
+            assertEquals("order-1",consent.preview().slots().getFirst().request().body().path("params").path("arguments").path("id").asText());
+            assertEquals(classification,consent.preview().slots().getFirst().request().classification().name());
+            operations.decideEffectConsent(actor,invocation.id(),codec.json(new io.ololabs.toolgate.contracts.v2.EffectConsentApprovalRequest(
+                consent.previewDigest(),consent.revision())),false);
+            reservationRevision=codec.model(operations.get(actor,invocation.id()).body(),EnterpriseInvocation.class).revision();
+        }
         var proof=codec.model(packages.permit(gateway,codec.json(new io.ololabs.toolgate.contracts.v2.PermitReservationRequest(
-            invocation.id(),"host-a",1L,args)),"native-permit").body(),io.ololabs.toolgate.contracts.v2.SignedInvocationPermit.class);
+            invocation.id(),"host-a",reservationRevision,args)),"native-permit").body(),io.ololabs.toolgate.contracts.v2.SignedInvocationPermit.class);
         var claims=f.signer.verifyInvocation(proof);
+        assertEquals(!classification.equals("WRITE"),claims.effectConsent()!=null);
         operations.consumeInvocation(actor.tenant(),tx->"host-a",codec.json(new io.ololabs.toolgate.contracts.v2.PermitConsumption(
             invocation.id(),proof,claims.argumentsDigest(),claims.target().toolDescriptorDigest(),claims.target().packageDigest(),claims.target().artifactDigest())));
         var body=JSON.createObjectNode().put("jsonrpc","2.0").put("id","native-handler").put("method","tools/call");
@@ -531,10 +551,12 @@ final class McpServersTest {
         var changed=(com.fasterxml.jackson.databind.node.ObjectNode)node(codec.json(issue));
         ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("httpRequestManifest")).put("bodyDigest","sha256:"+"a".repeat(64));
         changed.put("httpRequestDigest",Canonical.arguments(changed.path("httpRequestManifest")));
-        assertEquals(403,status(()->grants.issue(actor.tenant(),tx->"host-a",changed.toString())));
+        var mismatch=assertThrows(Failure.class,()->grants.issue(actor.tenant(),tx->"host-a",changed.toString()));
+        assertEquals(403,mismatch.status());
+        if(!classification.equals("WRITE"))assertEquals(ControlErrorDetailCode.EFFECT_CONSENT_MISMATCH,mismatch.detail());
         var granted=codec.model(grants.issue(actor.tenant(),tx->"host-a",codec.json(issue)).body(),io.ololabs.toolgate.contracts.v2.EffectGrant.class);
         var grantClaims=f.signer.verifyEffect(granted.grant());
-        assertEquals(io.ololabs.toolgate.contracts.v2.EffectClassification.WRITE,grantClaims.classification());
+        assertEquals(io.ololabs.toolgate.contracts.v2.EffectClassification.valueOf(classification),grantClaims.classification());
         var retained=f.store.transaction(actor.tenant(),false,tx->tx.effects().intent(grantClaims.effectId()));
         assertNotNull(retained);assertEquals(issue.httpRequestDigest(),retained.requestDigest());
         assertEquals(403,status(()->grants.sending(actor.tenant(),tx->"host-a",codec.json(

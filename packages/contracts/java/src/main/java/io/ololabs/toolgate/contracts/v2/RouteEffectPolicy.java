@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented.
+/** Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority.
  *
  * @param routeId canonical routeId value
  * @param classification canonical classification value

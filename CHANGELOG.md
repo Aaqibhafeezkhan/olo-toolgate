@@ -6,13 +6,19 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add immutable exact-effect previews, authenticated review and atomic consent
+  slots for financial/destructive generic HTTP and native MCP calls. Preserve
+  original expiry, keep policy approvals separate and refuse changed intent,
+  exhausted slots and revoked consent.
+
+
 - Refuse unbound OLO service writes, including historical permit consumption,
   with BOUND_SERVICE_EFFECT_REQUIRED. Upgrade executor and target adapters
   together; legacy reads remain compatible.
 
 - Require explicit native MCP effect review and fresh owner-bound authority for
   tools/call, independently binding the approved target and admitted arguments.
-  Reapprove legacy MCP tools; consent-required calls remain blocked. Unix hosts
+  Reapprove legacy MCP tools; consent-required calls wait for exact-effect approval. Unix hosts
   use the bounded send transport through JSON/SSE replies; unsupported hosts
   refuse dispatch. S18 declared delivery is complete; full roadmap phase
   qualification remains pending.

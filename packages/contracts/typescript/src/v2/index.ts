@@ -299,6 +299,64 @@ export interface EffectApproval {
 }
 export type EffectBodyMode = "NONE" | "CANONICAL_JSON";
 export type EffectClassification = "READ" | "WRITE" | "DESTRUCTIVE" | "FINANCIAL";
+/** Authenticated explicit approval of one immutable preview and revision. No worker-provided replacement intent or validity window is accepted. */
+export interface EffectConsentApprovalRequest {
+  readonly previewDigest: string;
+  readonly expectedRevision: number;
+}
+/** Signed admission reference to exact approved consent; never substitutes for current Control authority at the effect boundary. */
+export interface EffectConsentBinding {
+  readonly consentId: string;
+  readonly previewDigest: string;
+}
+/** Control-reconstructed outbound business request. Contains resolved mapped values, never credentials. Native MCP excludes handler ID and opaque session/protocol headers; these remain bound by the execution grant. */
+export interface EffectConsentMappedRequest {
+  readonly kind: EffectConsentMappingKind;
+  readonly routeId: string;
+  readonly classification: EffectClassification;
+  readonly scheme: "https";
+  readonly host: string;
+  readonly port: number;
+  readonly method: string;
+  readonly path: string;
+  readonly query: string;
+  readonly headers: Record<string, unknown>;
+  readonly contentType: string;
+  readonly bodyMode: EffectBodyMode;
+  readonly body: unknown;
+}
+export type EffectConsentMappingKind = "MAPPED_HTTP" | "NATIVE_MCP";
+/** Immutable exact-effect preview created by Control from authenticated original arguments and pinned reviewed mappings. Its canonical digest must be explicitly approved; ordinary invocation approval is not exact consent. Validity never exceeds original operation and credential deadlines. */
+export interface EffectConsentPreview {
+  readonly consentId: string;
+  readonly tenantId: string;
+  readonly operationId: string;
+  readonly runId: string;
+  readonly toolId: string;
+  readonly action: string;
+  readonly argumentsDigest: string;
+  readonly resources: ReadonlyArray<V1.ResourceDescriptor>;
+  readonly profileDigest: string;
+  readonly notBeforeUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly slots: ReadonlyArray<EffectConsentSlot>;
+}
+/** Explicit bounded route allowance. Each distinct effect identity reserves one use atomically with its authorization; another generation of the same identity reuses that use. */
+export interface EffectConsentSlot {
+  readonly slotIndex: number;
+  readonly request: EffectConsentMappedRequest;
+  readonly permittedCount: number;
+}
+export type EffectConsentState = "PENDING" | "APPROVED" | "REVOKED";
+/** Scoped exact-effect review presentation, with a revision that changes on approval or revocation. */
+export interface EffectConsentView {
+  readonly preview: EffectConsentPreview;
+  readonly previewDigest: string;
+  readonly state: EffectConsentState;
+  readonly revision: number;
+  readonly reviewedBy?: string;
+  readonly approvedAtUnixMs?: number;
+}
 /** Issued authority and conservative monotonic send budget, measured from before the issuance request. */
 export interface EffectGrant {
   readonly grant: SignedEffectGrant;
@@ -677,6 +735,7 @@ export interface InvocationPermitClaims {
   readonly approvalIds: ReadonlyArray<string>;
   readonly deadlineUnixMs: number;
   readonly mcpVerification?: McpPermitVerification;
+  readonly effectConsent?: EffectConsentBinding;
 }
 /** Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10). */
 export interface InvocationResultReport {
@@ -1353,7 +1412,7 @@ export interface RouteDeclaration {
   readonly timeoutMs: number;
   readonly auth?: string;
 }
-/** Operator-reviewed generic route intent. Consent-required routes remain refused until exact consent authority is implemented. */
+/** Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority. */
 export interface RouteEffectPolicy {
   readonly routeId: string;
   readonly classification: EffectClassification;

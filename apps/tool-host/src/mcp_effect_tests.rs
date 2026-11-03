@@ -376,6 +376,8 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
         "mismatch",
         "duplicate",
         "consent",
+        "financial",
+        "destructive",
     ] {
         let mut document = base.clone();
         document.tools.truncate(1);
@@ -399,6 +401,15 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
                 .as_mut()
                 .unwrap()
                 .consent_required = true;
+        }
+        if matches!(case, "financial" | "destructive") {
+            review.policy.classification = if case == "financial" {
+                olo_toolgate_contracts::v2::EffectClassification::Financial
+            } else {
+                olo_toolgate_contracts::v2::EffectClassification::Destructive
+            };
+            review.policy.acknowledged_unfenced_risk = true;
+            document.tools[0].effect_policy = Some(review.policy.clone());
         }
         profile.native_mcp_effects = match case {
             "missing-review" => None,

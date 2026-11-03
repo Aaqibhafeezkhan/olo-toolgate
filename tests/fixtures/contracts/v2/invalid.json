@@ -3269,5 +3269,149 @@
         "reviewedBy": "publisher"
       }
     }
+  ],
+  "EffectConsentSlot": [
+    {
+      "case": "zero allowance",
+      "value": {
+        "slotIndex": 0,
+        "request": {
+          "kind": "MAPPED_HTTP",
+          "routeId": "payment",
+          "classification": "FINANCIAL",
+          "scheme": "https",
+          "host": "api.example.test",
+          "port": 443,
+          "method": "POST",
+          "path": "/pay",
+          "query": "",
+          "headers": {
+            "accept": [
+              "application/json"
+            ]
+          },
+          "contentType": "application/json",
+          "bodyMode": "CANONICAL_JSON",
+          "body": {
+            "recipient": "alice",
+            "amount": 5000,
+            "currency": "USD"
+          }
+        },
+        "permittedCount": 0
+      }
+    },
+    {
+      "case": "unbounded allowance",
+      "value": {
+        "slotIndex": 0,
+        "request": {
+          "kind": "MAPPED_HTTP",
+          "routeId": "payment",
+          "classification": "FINANCIAL",
+          "scheme": "https",
+          "host": "api.example.test",
+          "port": 443,
+          "method": "POST",
+          "path": "/pay",
+          "query": "",
+          "headers": {
+            "accept": [
+              "application/json"
+            ]
+          },
+          "contentType": "application/json",
+          "bodyMode": "CANONICAL_JSON",
+          "body": {
+            "recipient": "alice",
+            "amount": 5000,
+            "currency": "USD"
+          }
+        },
+        "permittedCount": 65
+      }
+    }
+  ],
+  "EffectConsentMappedRequest": [
+    {
+      "case": "insecure target",
+      "value": {
+        "kind": "MAPPED_HTTP",
+        "routeId": "payment",
+        "classification": "FINANCIAL",
+        "scheme": "http",
+        "host": "api.example.test",
+        "port": 443,
+        "method": "POST",
+        "path": "/pay",
+        "query": "",
+        "headers": {
+          "accept": [
+            "application/json"
+          ]
+        },
+        "contentType": "application/json",
+        "bodyMode": "CANONICAL_JSON",
+        "body": {
+          "recipient": "alice",
+          "amount": 5000,
+          "currency": "USD"
+        }
+      }
+    },
+    {
+      "case": "invalid target port",
+      "value": {
+        "kind": "MAPPED_HTTP",
+        "routeId": "payment",
+        "classification": "FINANCIAL",
+        "scheme": "https",
+        "host": "api.example.test",
+        "port": 0,
+        "method": "POST",
+        "path": "/pay",
+        "query": "",
+        "headers": {
+          "accept": [
+            "application/json"
+          ]
+        },
+        "contentType": "application/json",
+        "bodyMode": "CANONICAL_JSON",
+        "body": {
+          "recipient": "alice",
+          "amount": 5000,
+          "currency": "USD"
+        }
+      }
+    }
+  ],
+  "EffectConsentPreview": [
+    {
+      "case": "empty effect scope",
+      "value": {
+        "consentId": "consent-1",
+        "tenantId": "tenant-1",
+        "operationId": "operation-1",
+        "runId": "run-1",
+        "toolId": "example.payments/pay",
+        "action": "pay",
+        "argumentsDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "resources": [],
+        "profileDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "notBeforeUnixMs": 1000,
+        "expiresAtUnixMs": 2000,
+        "slots": []
+      }
+    }
+  ],
+  "EffectConsentApprovalRequest": [
+    {
+      "case": "missing revision authority",
+      "value": {
+        "previewDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "expectedRevision": 0
+      }
+    }
   ]
 }

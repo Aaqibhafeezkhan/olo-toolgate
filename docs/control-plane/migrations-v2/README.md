@@ -4,10 +4,10 @@ Invocation/task storage is included in the PostgreSQL and SQLite V1 schemas unde
 `apps/control-plane/src/main/resources/db/`. Its constraints are verified directly
 against those initial schemas.
 
-The remaining `flyway/V9__kill_switch.sql` and `quickstart/V9.sql` specify the
+The remaining `flyway/V10__kill_switch.sql` and `quickstart/V10.sql` specify the
 unimplemented [kill switch](../kill-switch.md). Nothing loads them from this
 directory at runtime. When implemented, copy them into the product trees and
-raise the Quickstart runner cap to the shipped version (currently 6). If another migration ships first, assign
+raise the Quickstart runner cap to the shipped version (currently 9). If another migration ships first, assign
 the next version to both specifications before shipping.
 
 `tests/contracts/test_migration_specs_v2.py` applies the current migration trees
