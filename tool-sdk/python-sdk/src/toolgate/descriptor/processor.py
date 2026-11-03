@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 from .. import accessors
 from ..context import ToolContext, ToolResult
+from ..declarations import TrainingValues
 from ..declarations import (ATTACHED_ATTRIBUTE, REGISTRY_ATTRIBUTE, Declaration, ErrorDecl, Global, JwtClaim, Param,
                             Secret, ToolDeclaration, ToolPackageDeclaration, client_tool, destination, example,
                             http_auth, http_route, idempotency, reconcile, server_tool, tcp_destination,
@@ -26,6 +27,7 @@ from ..declarations import (ATTACHED_ATTRIBUTE, REGISTRY_ATTRIBUTE, Declaration,
 from ..enums import AuthType, Reconciliation, BusinessKey, EffectSafety, OpenWorld, SecretScope, ValueType
 from ..jcs import canonical, sha256, sorted_utf16, utf16_key, utf16_length
 from . import schemas as S
+from . import training as T
 from .problems import BuildFailed, Problem, Site
 
 GENERATION = 1
@@ -91,6 +93,8 @@ class Build:
         self.index: Dict[str, Any] = {}
         self.index_bytes = b""
         self.notes: List[str] = []
+        #: Training hints by tool, the ``tools`` of training/annotations.json; never part of a descriptor.
+        self.training: Dict[str, Dict[str, Any]] = {}
 
     def digest(self, tool: str) -> str:
         return sha256(self.bytes[tool])
@@ -269,6 +273,7 @@ class _Builder:
         self.parameters: Dict[str, List[str]] = {}
         self.examples: Dict[str, List[Dict[str, Any]]] = {}
         self.data_schemas: Dict[str, Dict[str, str]] = {}
+        self.training_values: Dict[str, Dict[str, Any]] = {}
         self.result = Build()
 
     # -- driver ---------------------------------------------------------------------------------------------
@@ -698,6 +703,9 @@ class _Builder:
                 entry["exchanges"] = e.exchanges
             entries.append(entry)
         self.examples[name] = entries
+        hints = T.hints(name, attached, properties, self.training_values.get(name, {}), site, required)
+        if hints is not None:
+            self.result.training[name] = hints
         self.parameters[name] = parameters
         input_types = {k: S.value_type_of(v) for k, v in properties.items() if isinstance(v, dict)}
         self.result.facts[name] = Facts(
@@ -754,6 +762,11 @@ class _Builder:
             if param is None:
                 raise Problem(psite, "parameter " + p.name + " needs Param: Annotated[T, Param(description=...)]")
             name = param.name or p.name
+            values = [m for m in metadata if isinstance(m, TrainingValues)]
+            if len(values) > 1:
+                raise Problem(psite, p.name + " has more than one TrainingValues")
+            if values:
+                self.training_values.setdefault(h.declaration.name, {})[name] = (values[0], psite)
             spec = S.Spec(param, name)
             if p.default is not p.empty and p.default is not None:
                 text = _python_default(p.default)

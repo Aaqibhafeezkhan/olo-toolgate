@@ -139,6 +139,13 @@ def stage(root=None, output=None):
                 "composition": [], "limits": {"maxTools": 64, "maxDescriptorBytes": 1048576}}
     # Match the source contract version at SDK build time, never a moving repository at execution time.
     (out / "toolgate-package.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+    # Training hints sit beside the manifest, never in the package, so a changed phrasing does not change a digest.
+    hints = out / "training" / "annotations.json"
+    if result.training:
+        hints.parent.mkdir(exist_ok=True)
+        hints.write_text(json.dumps({"generatedBy": "toolgate-sdk-python", "tools": result.training}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    elif hints.exists():
+        hints.unlink()
     return out
 
 

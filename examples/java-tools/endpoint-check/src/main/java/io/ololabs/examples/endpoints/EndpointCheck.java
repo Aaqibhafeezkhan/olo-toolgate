@@ -10,6 +10,10 @@ import io.ololabs.toolgate.sdk.annotations.HttpRoute;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.RouteCall;
 import io.ololabs.toolgate.sdk.context.ToolContext;
@@ -60,6 +64,82 @@ public class EndpointCheck {
             effect = EffectSafety.READ_ONLY, routes = {"health.one", "health.two"})
     @Example(arguments = "{\"path\":\"actuator/health\",\"expectStatus\":\"UP\"}", exchanges = "exchanges/actuator-up.json")
     @Example(arguments = "{\"path\":\"../admin\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Is the service up?",
+                "Check the health endpoint",
+                "Ping the service's {path} endpoint",
+                "Is the API healthy? Check {path}",
+                "Health check on {path}, it should report {expectStatus}",
+                "Is the service up and reporting {expectStatus}?",
+                "Check {path} with a {timeoutMs} ms timeout",
+                "How long does the health check take?",
+                "Is the backend responding?",
+                "Call {path} and tell me the status",
+                "Is {path} up?",
+                "Check the {path} endpoint",
+                "Is the app healthy and reporting {expectStatus}?"
+            },
+            defaultPhrasings = {
+                "Is the service healthy?",
+                "Run the health check",
+                "Is the service up?",
+                "Health check please",
+                "Is the API alive?",
+                "Check the service health",
+                "Is the backend up?",
+                "Ping the health endpoint",
+                "service status?",
+                "Is the app responding?",
+                "Run the endpoint check",
+                "Is the service OK?",
+                "Is the service reachable?",
+                "Health check the service"
+            },
+            negatives = {
+                "What should a health endpoint return?",
+                "How do I add actuator/health to Spring Boot?",
+                "What's a good timeout for HTTP calls?"
+            },
+            parameters = {
+                @TrainingValues(name = "path",
+                    examples = {
+                        "healthz",
+                        "actuator/health",
+                        "status",
+                        "api/health",
+                        "ready"
+                    }),
+                @TrainingValues(name = "expectStatus",
+                    examples = {
+                        "UP",
+                        "OK",
+                        "healthy",
+                        "READY"
+                    }),
+                @TrainingValues(name = "timeoutMs",
+                    examples = {
+                        "1000",
+                        "2000",
+                        "3000",
+                        "8000",
+                        "10000"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Call status and tell me the status", arguments = "{\"path\":\"status\"}"),
+                @TrainingPrompt(prompt = "Call ready and tell me the status", arguments = "{\"path\":\"ready\"}"),
+                @TrainingPrompt(prompt = "Is the backend responding?", arguments = "{}"),
+                @TrainingPrompt(prompt = "Is the app healthy and reporting OK?", arguments = "{\"expectStatus\":\"OK\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "ping the health endpoint", arguments = "{}"),
+                @TrainingPrompt(prompt = "check /ready on the service", arguments = "{\"path\":\"/ready\"}")
+            },
+            negatives = {
+                "What HTTP status code means not found?"
+            })
     public Health check(
             @Param(description = "Health path, one or two segments, such as health, healthz or actuator/health",
                     defaultValue = "health", maxLength = 129) String path,

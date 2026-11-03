@@ -9,6 +9,11 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import java.math.BigDecimal;
@@ -75,6 +80,35 @@ public class BankLoan {
             + "\"employmentType\":\"SALARIED\",\"employer\":\"Northwind Analytics\",\"yearsEmployed\":6.0,\"monthlyIncome\":9500.0,"
             + "\"monthlyDebt\":1200.0,\"currency\":\"USD\"}")
     @Example(arguments = "{\"applicantId\":\"A-9999\"}", expectedError = "APPLICANT_NOT_FOUND")
+    @Training(
+            phrasings = {
+                "Show me applicant {applicantId}'s profile",
+                "What does {applicantId} earn?",
+                "Pull up loan applicant {applicantId}",
+                "Employment and income for {applicantId}?",
+                "What existing debt payments does {applicantId} have?",
+                "Who is applicant {applicantId}?",
+                "Look up {applicantId}"
+            },
+            negatives = {
+                "What documents do I need to apply for a loan?",
+                "How is debt-to-income ratio calculated?"
+            },
+            parameters = @TrainingValues(name = "applicantId",
+                    examples = {
+                        "A-1001",
+                        "A-1002",
+                        "A-1003",
+                        "A-1017",
+                        "A-1024"
+                    }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "income and employer of applicant A-1003?", arguments = "{\"applicantId\":\"A-1003\"}")
+            },
+            negatives = {
+                "What documents does a loan applicant need?"
+            })
     public Applicant applicant(@Param(description = "Applicant id, such as A-1001", maxLength = 20) String applicantId,
             ToolContext context) {
         return find(Data.APPLICANTS, applicantId);
@@ -86,6 +120,39 @@ public class BankLoan {
             errors = @ErrorDecl(code = "APPLICANT_NOT_FOUND", description = "No applicant has that id."))
     @Example(arguments = "{\"applicantId\":\"A-1003\"}", expectedOutput = "{\"applicantId\":\"A-1003\",\"score\":541,\"band\":\"POOR\","
             + "\"openAccounts\":3,\"utilizationPercent\":91,\"recentInquiries\":2,\"latePayments\":5,\"recentDefault\":true}")
+    @Training(
+            phrasings = {
+                "What's the credit score of {applicantId}?",
+                "Get the credit report for {applicantId}",
+                "Any late payments or defaults for {applicantId}?",
+                "Credit bureau summary for applicant {applicantId}",
+                "How much of their credit does {applicantId} use?",
+                "Check {applicantId}'s credit",
+                "Credit score of {applicantId}?",
+                "Credit report for {applicantId}"
+            },
+            negatives = {
+                "How can I improve my credit score?",
+                "What is a good credit utilisation?"
+            },
+            parameters = @TrainingValues(name = "applicantId",
+                    examples = {
+                        "A-1001",
+                        "A-1002",
+                        "A-1003",
+                        "A-1017",
+                        "A-1024"
+                    }),
+            prompts = {
+                @TrainingPrompt(prompt = "Any late payments or defaults for A-1024?", arguments = "{\"applicantId\":\"A-1024\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what's A-1006's credit band?", arguments = "{\"applicantId\":\"A-1006\"}")
+            },
+            negatives = {
+                "Do credit checks lower your score?"
+            })
     public CreditReport creditReport(@Param(description = "Applicant id, such as A-1001", maxLength = 20) String applicantId,
             ToolContext context) {
         return find(Data.REPORTS, applicantId);
@@ -110,6 +177,89 @@ public class BankLoan {
             expectedOutput = "{\"decision\":\"DECLINE\",\"reasons\":[\"A loan defaulted in the last 3 years.\","
                     + "\"Credit score 541 is below the minimum of 600.\"],\"annualRatePercent\":0.0,\"monthlyInstalment\":0.0,"
                     + "\"debtToIncomePercent\":18.75,\"maxApprovableAmount\":0.0}")
+    @Training(
+            phrasings = {
+                "Can {applicantId} get {amount} over {termMonths} months for {purpose}?",
+                "Underwrite {amount} for {applicantId}, {termMonths} months, {purpose}",
+                "Evaluate a loan of {amount} for {applicantId} over {termMonths} months, for {purpose}",
+                "Should we approve {applicantId} for {amount} ({purpose}, {termMonths} months)?",
+                "Run the loan rules: applicant {applicantId}, {amount}, {termMonths} months, purpose {purpose}",
+                "{applicantId} wants {amount} for {purpose}, paid back over {termMonths} months. Approve, refer or decline?"
+            },
+            negatives = {
+                "What's the difference between a secured and an unsecured loan?",
+                "Is it better to take a 3 or 5 year car loan?"
+            },
+            parameters = {
+                @TrainingValues(name = "applicantId",
+                    examples = {
+                        "A-1001",
+                        "A-1002",
+                        "A-1003",
+                        "A-1017",
+                        "A-1024"
+                    }),
+                @TrainingValues(name = "amount",
+                    examples = {
+                        "5000",
+                        "12000",
+                        "25000",
+                        "40000",
+                        "150000",
+                        "8000"
+                    }),
+                @TrainingValues(name = "termMonths",
+                    examples = {
+                        "12",
+                        "24",
+                        "36",
+                        "48",
+                        "60",
+                        "120",
+                        "240"
+                    }),
+                @TrainingValues(name = "purpose",
+                    phrasings = {
+                        @ValuePhrasing(value = "PERSONAL", phrasings = {
+                            "a personal loan",
+                            "personal use"
+                        }),
+                        @ValuePhrasing(value = "HOME_IMPROVEMENT", phrasings = {
+                            "home improvement",
+                            "a kitchen renovation",
+                            "fixing up the house"
+                        }),
+                        @ValuePhrasing(value = "VEHICLE", phrasings = {
+                            "a car",
+                            "a vehicle",
+                            "buying a new car"
+                        }),
+                        @ValuePhrasing(value = "EDUCATION", phrasings = {
+                            "education",
+                            "tuition",
+                            "a master's degree"
+                        }),
+                        @ValuePhrasing(value = "DEBT_CONSOLIDATION", phrasings = {
+                            "debt consolidation",
+                            "consolidating credit cards"
+                        })
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Evaluate a car loan of 150000 for A-1003 over 60 months", arguments = "{\"amount\":150000,\"applicantId\":\"A-1003\",\"purpose\":\"VEHICLE\",\"termMonths\":60}"),
+                @TrainingPrompt(prompt = "Evaluate a master's degree loan of 40000 for A-1001 over 12 months", arguments = "{\"amount\":40000,\"applicantId\":\"A-1001\",\"purpose\":\"EDUCATION\",\"termMonths\":12}"),
+                @TrainingPrompt(prompt = "Assess a loan of 12000 for A-1001, 60 months, consolidating credit cards", arguments = "{\"amount\":12000,\"applicantId\":\"A-1001\",\"purpose\":\"DEBT_CONSOLIDATION\",\"termMonths\":60}"),
+                @TrainingPrompt(prompt = "Underwrite 8000 for A-1001 for a kitchen renovation over 12 months", arguments = "{\"amount\":8000,\"applicantId\":\"A-1001\",\"purpose\":\"HOME_IMPROVEMENT\",\"termMonths\":12}"),
+                @TrainingPrompt(prompt = "Can A-1002 get a personal loan of 5000 over 24 months?", arguments = "{\"amount\":5000,\"applicantId\":\"A-1002\",\"purpose\":\"PERSONAL\",\"termMonths\":24}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "would A-1004 qualify for 20000 to buy a car, 48 months?", arguments = "{\"amount\":20000,\"applicantId\":\"A-1004\",\"purpose\":\"VEHICLE\",\"termMonths\":48}"),
+                @TrainingPrompt(prompt = "underwrite A-1002: 30000 for a new roof, 120 months", arguments = "{\"amount\":30000,\"applicantId\":\"A-1002\",\"purpose\":\"HOME_IMPROVEMENT\",\"termMonths\":120}")
+            },
+            negatives = {
+                "What credit score do I need for a car loan?"
+            })
     public Decision evaluate(
             @Param(description = "Applicant id", maxLength = 20) String applicantId,
             @Param(description = "Requested amount", min = "1000", max = "1000000") double amount,
@@ -163,6 +313,74 @@ public class BankLoan {
     @Example(arguments = "{\"amount\":100000,\"termMonths\":12,\"annualRatePercent\":10,\"show\":1}",
             expectedOutput = "{\"monthlyInstalment\":8791.59,\"totalInterest\":5499.08,\"totalPayable\":105499.08,"
                     + "\"firstInstalments\":[{\"month\":1,\"interest\":833.33,\"principal\":7958.26,\"balance\":92041.74}]}")
+    @Training(
+            phrasings = {
+                "What's the EMI on {amount} over {termMonths} months at {annualRatePercent}%?",
+                "Monthly payment for {amount} at {annualRatePercent} percent for {termMonths} months",
+                "Calculate the instalment: {amount}, {annualRatePercent}% a year, {termMonths} months",
+                "How much interest on {amount} over {termMonths} months at {annualRatePercent}%? Show the first {show} instalments",
+                "Amortisation for {amount} at {annualRatePercent}% over {termMonths} months, first {show} payments",
+                "If I borrow {amount} for {termMonths} months at {annualRatePercent}%, what do I pay monthly?",
+                "Work out the EMI: {amount}, {termMonths} months, {annualRatePercent}% interest",
+                "Monthly payment on {amount} at {annualRatePercent}% for {termMonths} months?"
+            },
+            defaultPhrasings = "EMI for {amount} over {termMonths} months at {annualRatePercent}%?",
+            negatives = {
+                "What does EMI stand for?",
+                "Are interest rates going to fall next year?"
+            },
+            parameters = {
+                @TrainingValues(name = "amount",
+                    examples = {
+                        "5000",
+                        "10000",
+                        "25000",
+                        "250000",
+                        "1500000",
+                        "75000"
+                    }),
+                @TrainingValues(name = "termMonths",
+                    examples = {
+                        "12",
+                        "24",
+                        "36",
+                        "60",
+                        "84",
+                        "180",
+                        "240",
+                        "360"
+                    }),
+                @TrainingValues(name = "annualRatePercent",
+                    examples = {
+                        "6.5",
+                        "8.9",
+                        "10.25",
+                        "12",
+                        "14.5",
+                        "3.75"
+                    }),
+                @TrainingValues(name = "show",
+                    examples = {
+                        "0",
+                        "1",
+                        "5",
+                        "6",
+                        "12"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "If I borrow 10000 for 60 months at 12%, what do I pay monthly?", arguments = "{\"amount\":10000,\"termMonths\":60,\"annualRatePercent\":12}"),
+                @TrainingPrompt(prompt = "Work out the EMI: 5000, 180 months, 10.25% interest", arguments = "{\"amount\":5000,\"termMonths\":180,\"annualRatePercent\":10.25}"),
+                @TrainingPrompt(prompt = "Offer for 75000 at 10.25% over 24 months, show 6 instalments", arguments = "{\"amount\":75000,\"annualRatePercent\":10.25,\"termMonths\":24,\"show\":6}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "emi on 250000 at 8.5% for 240 months?", arguments = "{\"amount\":250000,\"annualRatePercent\":8.5,\"termMonths\":240}"),
+                @TrainingPrompt(prompt = "monthly instalment for 3000 over 12 months at 0%", arguments = "{\"amount\":3000,\"termMonths\":12,\"annualRatePercent\":0}")
+            },
+            negatives = {
+                "Is a shorter loan term always cheaper?"
+            })
     public Offer offer(
             @Param(description = "Loan amount", min = "1", max = "100000000") double amount,
             @Param(description = "Term in months", min = "1", max = "480") int termMonths,
@@ -199,6 +417,72 @@ public class BankLoan {
     @Example(arguments = "{\"applicantId\":\"A-1001\",\"decision\":\"APPROVE\",\"amount\":25000,\"reference\":\"case-77\"}",
             expectedOutput = "{\"decisionId\":\"LD-f706ae1c\",\"applicantId\":\"A-1001\",\"decision\":\"APPROVE\",\"amount\":25000.0,"
                     + "\"nextStep\":\"Offer letter queued for e-signature.\"}")
+    @Training(
+            phrasings = {
+                "Record {decision} for {applicantId}, {amount}, reference {reference}",
+                "Log the final decision for {applicantId}: {decision} at {amount} (ref {reference})",
+                "We {decision} {applicantId} for {amount}. Record it under {reference}",
+                "Save the decision {decision} on applicant {applicantId}, amount {amount}, case {reference}"
+            },
+            negatives = "How do I tell a customer their loan was declined?",
+            parameters = {
+                @TrainingValues(name = "applicantId",
+                    examples = {
+                        "A-1001",
+                        "A-1002",
+                        "A-1003",
+                        "A-1017",
+                        "A-1024"
+                    }),
+                @TrainingValues(name = "amount",
+                    examples = {
+                        "0",
+                        "5000",
+                        "12000",
+                        "25000",
+                        "40000"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "case-4471",
+                        "req-20261031-01",
+                        "conv-88213",
+                        "ticket-flow-17",
+                        "chat-5520",
+                        "REQ-3307"
+                    }),
+                @TrainingValues(name = "decision",
+                    phrasings = {
+                        @ValuePhrasing(value = "APPROVE", phrasings = {
+                            "APPROVE",
+                            "approved",
+                            "approve"
+                        }),
+                        @ValuePhrasing(value = "REFER", phrasings = {
+                            "REFER",
+                            "referred",
+                            "refer to a human underwriter"
+                        }),
+                        @ValuePhrasing(value = "DECLINE", phrasings = {
+                            "DECLINE",
+                            "declined",
+                            "decline"
+                        })
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Record refer to a human underwriter for A-1017, 25000, reference chat-5520", arguments = "{\"applicantId\":\"A-1017\",\"amount\":25000,\"decision\":\"REFER\",\"reference\":\"chat-5520\"}"),
+                @TrainingPrompt(prompt = "Record the decision for A-1002: referred, 25000, reference REQ-3307", arguments = "{\"applicantId\":\"A-1002\",\"amount\":25000,\"decision\":\"REFER\",\"reference\":\"REQ-3307\"}"),
+                @TrainingPrompt(prompt = "Approve A-1001 for 12000, ref REQ-3308", arguments = "{\"applicantId\":\"A-1001\",\"amount\":12000,\"decision\":\"APPROVE\",\"reference\":\"REQ-3308\"}"),
+                @TrainingPrompt(prompt = "Decline A-1009's 90000 request, reference REQ-3309", arguments = "{\"applicantId\":\"A-1009\",\"amount\":90000,\"decision\":\"DECLINE\",\"reference\":\"REQ-3309\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "log an approval for A-1005, 15000, ref REQ-4001", arguments = "{\"applicantId\":\"A-1005\",\"amount\":15000,\"decision\":\"APPROVE\",\"reference\":\"REQ-4001\"}")
+            },
+            negatives = {
+                "Who makes the final decision on a mortgage?"
+            })
     public Recorded recordDecision(
             @Param(description = "Applicant id", maxLength = 20) String applicantId,
             @Param(description = "The decision", enumValues = {"APPROVE", "REFER", "DECLINE"}) String decision,

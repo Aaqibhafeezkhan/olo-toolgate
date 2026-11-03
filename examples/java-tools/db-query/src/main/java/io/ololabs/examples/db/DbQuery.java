@@ -11,6 +11,10 @@ import io.ololabs.toolgate.sdk.annotations.Secret;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
@@ -84,6 +88,52 @@ public class DbQuery {
             description = "Lists the tables this tool may read, with their columns and types.",
             useWhen = "Use it before writing a query, to learn the table and column names.",
             effect = EffectSafety.READ_ONLY)
+    @Training(
+            phrasings = {
+                "Which database tables can you read?",
+                "List the tables and their columns",
+                "What's in the database schema?",
+                "Show me the tables you have access to",
+                "What columns does the database have?",
+                "Describe the database",
+                "What tables are there?",
+                "Show the database schema",
+                "Which tables and columns can I query?",
+                "list tables",
+                "What's the structure of the database?",
+                "Which columns does the orders table have?",
+                "Before I write SQL, what tables exist?",
+                "What data is in the database?",
+                "Describe the tables and their column types",
+                "Which tables can you read from?",
+                "Show me the DB tables",
+                "What are the column types in the database?",
+                "Is there a customers table? List the tables",
+                "db schema please",
+                "Give me an overview of the database tables",
+                "What can I select from?",
+                "Name the tables you have access to",
+                "tables and columns?",
+                "Which database tables are readable?",
+                "Show table definitions"
+            },
+            negatives = {
+                "What is a database index?",
+                "How do I create a table in PostgreSQL?",
+                "Explain normalisation in databases"
+            },
+            defaultPhrasings = {
+                "What schema does the database have?",
+                "Which tables can you read?"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what tables and columns are in the db?", arguments = "{}"),
+                @TrainingPrompt(prompt = "describe the database", arguments = "{}")
+            },
+            negatives = {
+                "What is database normalisation?"
+            })
     public Tables tables(ToolContext context) {
         Set<String> allowed = allowedTables(context);
         try (Connection c = connect(context);
@@ -119,6 +169,70 @@ public class DbQuery {
             errors = @ErrorDecl(code = "TABLE_NOT_FOUND", description = "No readable table or column has that name."))
     @Example(arguments = "{\"table\":\"orders; DROP TABLE orders\",\"column\":\"id\",\"value\":\"1\"}",
             expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Get the {table} row where {column} is {value}",
+                "Look up {value} in {table} by {column}",
+                "Find {table} with {column} = {value}",
+                "Show the record in {table} whose {column} equals {value}",
+                "Pull up {table} for {column} {value}",
+                "Which {table} have {column} {value}? At most {limit}",
+                "Fetch from {table} where {column} is {value}",
+                "Which {table} have {column} {value}?"
+            },
+            defaultPhrasings = "Find {table} where {column} is {value}",
+            negatives = {
+                "What's the difference between a row and a column?",
+                "How do I write a WHERE clause?"
+            },
+            parameters = {
+                @TrainingValues(name = "table",
+                    examples = {
+                        "orders",
+                        "customers",
+                        "products",
+                        "invoices",
+                        "employees"
+                    }),
+                @TrainingValues(name = "column",
+                    examples = {
+                        "id",
+                        "status",
+                        "email",
+                        "country",
+                        "customer_id",
+                        "sku"
+                    }),
+                @TrainingValues(name = "value",
+                    examples = {
+                        "1042",
+                        "shipped",
+                        "jane@example.com",
+                        "DE",
+                        "C-501",
+                        "SKU-778",
+                        "open"
+                    }),
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "5",
+                        "10",
+                        "20",
+                        "100"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Find customers with status = 1042", arguments = "{\"table\":\"customers\",\"column\":\"status\",\"value\":\"1042\"}"),
+                @TrainingPrompt(prompt = "Look up open in invoices by status", arguments = "{\"table\":\"invoices\",\"column\":\"status\",\"value\":\"open\"}"),
+                @TrainingPrompt(prompt = "Which invoices have country DE? At most 5", arguments = "{\"table\":\"invoices\",\"column\":\"country\",\"value\":\"DE\",\"limit\":5}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "orders where id is 1042", arguments = "{\"table\":\"orders\",\"column\":\"id\",\"value\":\"1042\"}")
+            },
+            negatives = {
+                "Why would a table need two indexes?"
+            })
     public Rows row(
             @Param(description = "Table name, as db.tables lists it", maxLength = 128) String table,
             @Param(description = "Column to match", maxLength = 128) String column,
@@ -155,6 +269,62 @@ public class DbQuery {
             errors = @ErrorDecl(code = "QUERY_FAILED", description = "The database rejected the query; the message says why."))
     @Example(arguments = "{\"sql\":\"DELETE FROM orders\"}", expectedError = "INVALID_ARGUMENT")
     @Example(arguments = "{\"sql\":\"SELECT FILE_READ('/etc/passwd')\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Run this SQL: {sql}",
+                "Execute {sql}",
+                "Query the database: {sql}",
+                "Run {sql} with parameters {parameters}",
+                "SQL please: {sql}, limit {limit}",
+                "Can you run the select {sql}",
+                "Run {sql} and return at most {limit} rows",
+                "Execute this query: {sql}"
+            },
+            defaultPhrasings = "Run {sql}",
+            negatives = {
+                "Explain what this SQL does: SELECT * FROM orders",
+                "Is DELETE FROM orders safe to run?",
+                "How do I join two tables in SQL?"
+            },
+            parameters = {
+                @TrainingValues(name = "sql",
+                    examples = {
+                        "SELECT status, COUNT(*) FROM orders GROUP BY status",
+                        "SELECT * FROM customers WHERE country = ?",
+                        "SELECT id, total FROM orders WHERE total > ? ORDER BY total DESC",
+                        "SELECT COUNT(*) FROM invoices WHERE paid = 0",
+                        "WITH recent AS (SELECT * FROM orders WHERE created_at > ?) SELECT COUNT(*) FROM recent",
+                        "SELECT name, email FROM employees ORDER BY name"
+                    }),
+                @TrainingValues(name = "parameters",
+                    examples = {
+                        "[\"DE\"]",
+                        "[\"500\"]",
+                        "[\"2026-10-01\"]",
+                        "[\"shipped\"]"
+                    }),
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "10",
+                        "25",
+                        "50",
+                        "500"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Run SELECT name, email FROM employees ORDER BY name and return at most 500 rows", arguments = "{\"sql\":\"SELECT name, email FROM employees ORDER BY name\",\"limit\":500}"),
+                @TrainingPrompt(prompt = "SQL please: SELECT name, email FROM employees ORDER BY name, limit 50", arguments = "{\"sql\":\"SELECT name, email FROM employees ORDER BY name\",\"limit\":50}"),
+                @TrainingPrompt(prompt = "Run \"SELECT id, total FROM orders WHERE total > ? ORDER BY total DESC\" with parameter 500", arguments = "{\"sql\":\"SELECT id, total FROM orders WHERE total > ? ORDER BY total DESC\",\"parameters\":[\"500\"]}"),
+                @TrainingPrompt(prompt = "Run \"SELECT status, COUNT(*) FROM orders WHERE created >= ? GROUP BY status\" with parameters 2026-10-01", arguments = "{\"sql\":\"SELECT status, COUNT(*) FROM orders WHERE created >= ? GROUP BY status\",\"parameters\":[\"2026-10-01\"]}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "query: SELECT COUNT(*) FROM customers", arguments = "{\"sql\":\"SELECT COUNT(*) FROM customers\"}"),
+                @TrainingPrompt(prompt = "run SELECT * FROM orders WHERE country = ? for DE, max 20 rows", arguments = "{\"sql\":\"SELECT * FROM orders WHERE country = ?\",\"parameters\":[\"DE\"],\"limit\":20}")
+            },
+            negatives = {
+                "How do I write a LEFT JOIN in SQL?"
+            })
     public Rows query(
             @Param(description = "One SELECT statement, such as SELECT status, COUNT(*) FROM orders GROUP BY status",
                     minLength = 1, maxLength = 8000) String sql,
