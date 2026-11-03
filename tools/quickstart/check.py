@@ -119,6 +119,56 @@ def starter_package():
         return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
 
 
+
+def owned_native_review_candidate(history):
+    outcome=history.get('operation',{})
+    attempts=history.get('attempts',[])
+    return (outcome.get('state')=='OUTCOME_UNKNOWN' and outcome.get('journalComplete') is True
+        and outcome.get('unresolvedEffectCount')==0 and outcome.get('unsettledAttemptCount')==1
+        and not history.get('truncated') and not history.get('next') and len(attempts)==1
+        and attempts[0].get('state')=='SUCCEEDED' and attempts[0].get('consumed') is True
+        and attempts[0].get('scope')=='LEGACY_UNKNOWN' and attempts[0].get('manifestSealed') is True
+        and attempts[0].get('settled') is False)
+
+
+def review_owned_native_attempt(api,ok,tokens,invocation_id,reported,image_id):
+    """Explicit witness for this fixture's fixed Hello World/starter packages; never a runtime shortcut."""
+    if not invocation_id:return None
+    prefix='/api/control/v1/access/'
+    history=ok(api(prefix+'invocations/'+invocation_id+'/history',tokens['admin']))
+    if not owned_native_review_candidate(history):return None
+    invocation=ok(api(prefix+'invocations/'+invocation_id,tokens['admin']))
+    if invocation.get('state')!='SUCCEEDED' or not invocation.get('resultDigest'):return None
+    context=invocation['evaluation']['context']
+    excluded={context.get('userId')}
+    agents=[context.get('agentId'),*[hop.get('agentId') for hop in context.get('chain',[])]]
+    for agent_id in filter(None,agents):
+        agent=ok(api('/api/control/v1/agents/'+agent_id,tokens['admin']))
+        excluded.add(agent.get('ownerUserId'))
+    approval_id='operation-'+hashlib.sha256(invocation_id.encode()).hexdigest()[:40]
+    status,approval=api(prefix+'approvals/'+approval_id,tokens['admin'])
+    if status==200:excluded.update(review.get('reviewerUserId') for review in approval.get('reviews',[]))
+    elif status!=404:return None
+    reviewers=[name for name in ('reviewer-1','reviewer-2') if name not in excluded]
+    if len(reviewers)!=2:return None
+    digest=hashlib.sha256(json.dumps(dict(fixture='owned-fixed-native-examples',image=image_id,
+        invocation=invocation,history=history,reported=reported),sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    proposed=ok(api(prefix+'invocations/'+invocation_id+'/reconciliation',tokens[reviewers[0]],
+        dict(expectedRevision=invocation['revision'],state='SUCCEEDED',
+             completedResources=invocation['evaluation']['resources'],evidenceDigest=digest,
+             resultDigest=invocation['resultDigest'],attemptSettlement=dict(
+                 expectedOutcomeRevision=history['operation']['revision'],
+                 attemptIds=[history['attempts'][0]['attemptId']],noFurtherEffects=True)),'POST'))
+    approved=ok(api(prefix+'reconciliations/'+proposed['id']+'/decision',tokens[reviewers[1]],
+        dict(expectedRevision=proposed['revision'],approve=True),'POST'))
+    assert approved['state']=='APPLIED',approved
+    refreshed=ok(api(prefix+'invocations/'+invocation_id+'/history',tokens['admin']))
+    outcome=refreshed['operation']
+    assert outcome['state']=='SUCCEEDED' and outcome['finalized'] is True and outcome['grade']=='REVIEWER_CONFIRMED',outcome
+    return dict(operationId=invocation_id,reviewId=proposed['id'],reviewers=reviewers,
+                evidenceDigest=digest,grade=outcome['grade'])
+
+
 def smoke(image, browser, database_options=None, gateway_image=None, hello_world_only=False):
     """Fresh group-only installation through real JWT, TLS, device and reviewed HTTP APIs."""
     package=None if hello_world_only else starter_package()
@@ -350,7 +400,19 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
                 'MCP-Method':method,'X-Request-ID':body['id'],'Idempotency-Key':body['id']}
             if method=='tools/call':headers['MCP-Name']=params['name']
             status,raw,_=request(mcp_origin+'/mcp',token or service_token,body,'POST',headers)
-            return status,json.loads(raw)
+            response=json.loads(raw)
+            result=response.get('result',{});meta=result.get('_meta',{})
+            if (method=='tools/call' and status==200 and result.get('isError')
+                    and meta.get('io.ololabs.toolgate/operationOutcome',{}).get('state')=='OUTCOME_UNKNOWN'
+                    and params.get('name') in {*hello_tools,'acme.orders/greet'}):
+                review=review_owned_native_attempt(api,ok,tokens,
+                    meta.get('io.ololabs.toolgate/invocationId'),result,info['Image'])
+                if review is not None:
+                    report.setdefault('nativeAttemptScopeReviews',[]).append(review)
+                    # Read the same logical operation after real independent review.
+                    status,raw,_=request(mcp_origin+'/mcp',token or service_token,body,'POST',headers)
+                    response=json.loads(raw)
+            return status,response
         listed_hello={t['name']:t for t in ok(mcp('tools/list'))['result']['tools']}
         assert set(listed_hello)==hello_tools
         assert len({json.dumps(tool['inputSchema'],sort_keys=True) for tool in listed_hello.values()})==1

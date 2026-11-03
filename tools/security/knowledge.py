@@ -63,7 +63,22 @@ def verify(knowledge, version):
 RUNTIME_PATHS = ["apps", "backend-libs", "packages", "tool-sdk", "config", "Cargo.toml", "Cargo.lock",
                  "rust-toolchain.toml", "gradle", "gradlew", "gradlew.bat", "gradle.properties",
                  "build.gradle.kts", "settings.gradle.kts", "VERSION", "LICENSE", "NOTICE.md",
-                 "tools/ui", "tools/contracts", "tools/gateway", "tools/control", "tools/quickstart"]
+                 "tools/ui", "tools/contracts", "tools/gateway", "tools/control", "tools/quickstart",
+                 "core-mcp", "deploy/profiles", "TOOL-SDK-GUIDE.md"]
+
+def runtime_source_digest():
+    """Content identity for a locally built image before the complete stage commit."""
+    names = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard",
+                                     "-z", "--", *RUNTIME_PATHS], cwd=ROOT)
+    digest = hashlib.sha256()
+    for name in sorted(set(names.split(b"\0")) - {b""}):
+        path = ROOT / os.fsdecode(name)
+        if path.is_symlink() or not path.resolve().is_relative_to(ROOT.resolve()):
+            raise ValueError("Runtime source links are unsupported")
+        if path.is_file():
+            digest.update(name + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
 
 def stack_image(image):
     value = json.loads(subprocess.check_output(["docker", "image", "inspect", image], text=True))[0]
@@ -72,6 +87,11 @@ def stack_image(image):
     if labels.get("io.olo.qualification.owner") != "olo-knowledge" or not re.fullmatch("[a-f0-9]{40}", revision):
         raise ValueError("A source-labelled owned qualification image is required")
     subprocess.run(["git", "cat-file", "-e", revision + "^{commit}"], cwd=ROOT, check=True, capture_output=True)
+    content = labels.get("io.olo.qualification.runtime-source-sha256")
+    if content is not None:
+        if not re.fullmatch("[a-f0-9]{64}", content) or content != runtime_source_digest():
+            raise ValueError("Runtime source differs from the selected image content identity")
+        return value
     changed = subprocess.check_output(["git", "diff", "--name-only", revision, "--", *RUNTIME_PATHS], cwd=ROOT, text=True)
     untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "--", *RUNTIME_PATHS], cwd=ROOT, text=True)
     if changed.strip() or untracked.strip():

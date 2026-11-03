@@ -20,11 +20,11 @@ and [v2 schemas](../../packages/contracts/schemas/v2/mcp-proxy.schema.json) defi
    pin), runs `initialize` and pages through `tools/list` within the limits: 16 pages, 1 MiB per page, 4 MiB, 256
    tools, 64 KiB of schema per tool, depth 32, and a 30 s deadline. Control stores an immutable snapshot with a
    definition digest per tool.
-3. **Approve** at most 64 tools of one snapshot, each with a ToolGate local name. Control generates the package
+3. **Approve** at most 64 tools of one snapshot, each with a ToolGate local name and an explicit effect classification (READ, WRITE, FINANCIAL or DESTRUCTIVE). Financial and destructive effects require acknowledgement of the unfenced upstream risk. Control generates the package
    `mcp.<slug>` version `1.0.<approval sequence>` and deploys it to the pool. New tools start **disabled**; enable,
    group and grant them like any tool. Tools that a new approval omits are retired at once.
 4. **Call.** Agents call the tools through the Gateway as usual. The Tool Host validates the arguments, connects with
-   the approved key pins, and calls the upstream. Results are marked `io.toolgate/untrusted-upstream` in `_meta`.
+   the approved key pins, obtains fresh Control effect authority and calls the upstream through a single-owner send window. Results are marked `io.toolgate/untrusted-upstream` in `_meta`.
 
 ## Freshness and quarantine
 
@@ -51,3 +51,25 @@ and [v2 schemas](../../packages/contracts/schemas/v2/mcp-proxy.schema.json) defi
 
 OAuth and per-user upstream credentials, upstream resources and prompts, upstream tasks and input requests, more
 than 64 tools per approval, and long-lived `list_changed` listeners. See the plan's T9.
+
+
+## Effect review and upgrade
+
+Reapprove existing tools with an explicit effect policy before using native MCP
+business calls. Old approval records remain readable; an absent policy cannot
+authorize tools/call. Upstream annotations do not replace the administrator's
+review. Control records the reviewing actor and time in the immutable deployment
+profile; clients cannot supply those stamps.
+
+Control independently reconstructs the fixed upstream URL, approved tool name
+and original admitted arguments before granting an effect. Dispatch requires a
+second current-authority check and a single recorded owner. The Unix Tool Host
+guards outbound writes with a monotonic window of at most two seconds; response
+streaming may continue under the original invocation deadline. Unsupported
+platforms fail closed. This transport does not establish an OCI containment
+guarantee.
+
+Consent-required policies remain blocked until exact-effect consent is
+implemented. A received upstream reply is broker evidence, not proof of an
+atomic target commit or a deduplication guarantee. Ambiguous sends cannot be
+retried with another native MCP grant for the same effect.

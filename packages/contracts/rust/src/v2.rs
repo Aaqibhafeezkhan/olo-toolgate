@@ -1554,6 +1554,8 @@ pub struct McpApprovedTool {
     pub tool_id: String,
     pub upstream_name: String,
     pub definition_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_policy: Option<McpEffectPolicy>,
 }
 /// Canonical McpAuthScheme wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1586,6 +1588,14 @@ pub enum McpCheckFailure {
     ToolMissing,
     #[serde(rename = "SERVER_CHANGED")]
     ServerChanged,
+}
+/// Explicit operator review for one native MCP business call. Upstream annotations do not confer effect authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpEffectPolicy {
+    pub classification: EffectClassification,
+    pub consent_required: bool,
+    pub acknowledged_unfenced_risk: bool,
 }
 /// Freshness evidence an invocation permit carries for an MCP_PROXY tool.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1851,6 +1861,8 @@ pub enum McpTaskStatus {
 pub struct McpToolApproval {
     pub upstream_name: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_policy: Option<McpEffectPolicy>,
 }
 /// A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1912,6 +1924,15 @@ pub enum MissingKeyPolicy {
     Ask,
     #[serde(rename = "ALLOW_WITH_DEDUPE")]
     AllowWithDedupe,
+}
+/// Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeMcpEffectReview {
+    pub tool_id: String,
+    pub policy: McpEffectPolicy,
+    pub reviewed_by: String,
+    pub reviewed_at_unix_ms: u64,
 }
 /// Version requirements checked at enable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2797,6 +2818,8 @@ pub struct ServiceProfile {
     pub private_ranges: Vec<PrivateRangeApproval>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect_reviews: Option<Vec<RouteEffectReview>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_mcp_effects: Option<Vec<NativeMcpEffectReview>>,
 }
 /// Same shape as the declared route.
 pub type ServiceRoute = RouteDeclaration;

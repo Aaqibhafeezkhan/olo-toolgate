@@ -634,6 +634,9 @@
         },
         "name": {
           "$ref": "identifiers.schema.json#/$defs/ToolLocalName"
+        },
+        "effectPolicy": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpEffectPolicy"
         }
       },
       "required": [
@@ -678,6 +681,9 @@
         },
         "definitionDigest": {
           "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "effectPolicy": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpEffectPolicy"
         }
       },
       "required": [
@@ -893,6 +899,52 @@
       "required": [
         "status",
         "approvalSequence"
+      ]
+    },
+    "McpEffectPolicy": {
+      "type": "object",
+      "description": "Explicit operator review for one native MCP business call. Upstream annotations do not confer effect authority.",
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        },
+        "consentRequired": {
+          "type": "boolean"
+        },
+        "acknowledgedUnfencedRisk": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "classification",
+        "consentRequired",
+        "acknowledgedUnfencedRisk"
+      ]
+    },
+    "NativeMcpEffectReview": {
+      "type": "object",
+      "description": "Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors.",
+      "additionalProperties": false,
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "policy": {
+          "$ref": "mcp-proxy.schema.json#/$defs/McpEffectPolicy"
+        },
+        "reviewedBy": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "reviewedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "toolId",
+        "policy",
+        "reviewedBy",
+        "reviewedAtUnixMs"
       ]
     }
   }

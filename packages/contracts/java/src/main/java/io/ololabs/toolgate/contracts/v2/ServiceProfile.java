@@ -12,6 +12,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param routes canonical routes value
  * @param privateRanges canonical privateRanges value
  * @param effectReviews canonical effectReviews value
+ * @param nativeMcpEffects canonical nativeMcpEffects value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServiceProfile(
@@ -21,7 +22,8 @@ public record ServiceProfile(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "destinations", required = true) java.util.List<ServiceDestination> destinations,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "routes", required = true) java.util.List<RouteDeclaration> routes,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "privateRanges", required = true) java.util.List<PrivateRangeApproval> privateRanges,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectReviews", required = false) java.util.List<RouteEffectReview> effectReviews
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectReviews", required = false) java.util.List<RouteEffectReview> effectReviews,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "nativeMcpEffects", required = false) java.util.List<NativeMcpEffectReview> nativeMcpEffects
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +34,7 @@ public record ServiceProfile(
      * @param routes canonical routes value
      * @param privateRanges canonical privateRanges value
      * @param effectReviews canonical effectReviews value
+     * @param nativeMcpEffects canonical nativeMcpEffects value
      */
     public ServiceProfile {
         java.util.Objects.requireNonNull(profileId, "profileId");
@@ -44,7 +47,10 @@ public record ServiceProfile(
         java.util.Objects.requireNonNull(privateRanges, "privateRanges");
         privateRanges = privateRanges == null ? null : java.util.List.copyOf(privateRanges);
         effectReviews = effectReviews == null ? null : java.util.List.copyOf(effectReviews);
+        nativeMcpEffects = nativeMcpEffects == null ? null : java.util.List.copyOf(nativeMcpEffects);
     }
-    /** Construct legacy metadata without generic effect authority. */
-    public ServiceProfile(String profileId, Long revision, String packageId, java.util.List<ServiceDestination> destinations, java.util.List<RouteDeclaration> routes, java.util.List<PrivateRangeApproval> privateRanges) { this(profileId, revision, packageId, destinations, routes, privateRanges, null); }
+    /** Construct legacy metadata without the new effect authority fields. */
+    public ServiceProfile(String profileId, Long revision, String packageId, java.util.List<ServiceDestination> destinations, java.util.List<RouteDeclaration> routes, java.util.List<PrivateRangeApproval> privateRanges) { this(profileId, revision, packageId, destinations, routes, privateRanges, null, null); }
+    /** Construct legacy metadata without the new effect authority fields. */
+    public ServiceProfile(String profileId, Long revision, String packageId, java.util.List<ServiceDestination> destinations, java.util.List<RouteDeclaration> routes, java.util.List<PrivateRangeApproval> privateRanges, java.util.List<RouteEffectReview> effectReviews) { this(profileId, revision, packageId, destinations, routes, privateRanges, effectReviews, null); }
 }

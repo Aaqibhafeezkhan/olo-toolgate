@@ -96,3 +96,5 @@ Use `000-template.md`.
 - [052 — Managed containment crash qualification](052-managed-containment-crash-qualification.md)
 
 - [053 — General effect intents and send grants](053-general-effect-intents-and-send-grants.md)
+
+- [054 — Native MCP effect authority](054-native-mcp-effect-authority.md)

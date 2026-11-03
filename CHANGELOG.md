@@ -6,12 +6,23 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Refuse unbound OLO service writes, including historical permit consumption,
+  with BOUND_SERVICE_EFFECT_REQUIRED. Upgrade executor and target adapters
+  together; legacy reads remain compatible.
+
+- Require explicit native MCP effect review and fresh owner-bound authority for
+  tools/call, independently binding the approved target and admitted arguments.
+  Reapprove legacy MCP tools; consent-required calls remain blocked. Unix hosts
+  use the bounded send transport through JSON/SSE replies; unsupported hosts
+  refuse dispatch. S18 declared delivery is complete; full roadmap phase
+  qualification remains pending.
+
 - Add reviewed generic HTTP request intents, durable owner-bound effect grants
   and a two-second guarded send window. Apply V8 and coordinate contract readers;
   generic routes without reviewed intent now fail closed. Preserve required JSON
-  nulls in PHP bindings and scan worker output linearly. This is an S18 delivery
-  increment: native MCP, legacy-write migration and full stage qualification
-  remain outstanding.
+  nulls in PHP bindings and scan worker output linearly. Native MCP and
+  legacy-write migration now share the completed S18 delivery;
+  exact consent, generalized resend/fencing and full phase acceptance remain pending.
 
 - Require the exact delegated systemd control-group SIGKILL boundary before OCI
   readiness. Update the service unit before adopting the host. Engine timeouts or

@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { McpApproval, McpServerRegistration, McpSnapshot, McpToolDefinition } from '@olo-labs/toolgate-contracts/v2';
+import type { McpApproval, McpServerRegistration, McpSnapshot, McpToolDefinition, McpEffectPolicy, EffectClassification } from '@olo-labs/toolgate-contracts/v2';
 import { ControlClient } from './api';
 import { Failure } from './Failure';
 import { Table } from './Table';
@@ -103,6 +103,13 @@ interface ReviewProps { client: ControlClient; slug: string; canRegister: boolea
 function McpServerReview({ client, slug, canRegister, busy, mutate, onRemoved }: ReviewProps) {
   const [server, setServer] = useState<McpServerRegistration>(), [snapshot, setSnapshot] = useState<McpSnapshot>(), [approvals, setApprovals] = useState<readonly McpApproval[]>([]);
   const [error, setError] = useState<unknown>(), [names, setNames] = useState<Record<string, string>>({}), [confirm, setConfirm] = useState(false);
+  type PolicyDraft = {classification: EffectClassification | ''; consentRequired: boolean; acknowledgedUnfencedRisk: boolean};
+  const [policies, setPolicies] = useState<Record<string, PolicyDraft>>({});
+  const [policyError, setPolicyError] = useState('');
+  const emptyPolicy = (): PolicyDraft => ({classification: '', consentRequired: false, acknowledgedUnfencedRisk: false});
+  function changePolicy(name: string, update: Partial<PolicyDraft>) {
+    setPolicies(previous => ({...previous, [name]: {...(previous[name] ?? emptyPolicy()), ...update}}));
+  }
   const key = useKeys();
   useEffect(() => {
     const abort = new AbortController();
@@ -111,7 +118,11 @@ function McpServerReview({ client, slug, canRegister, busy, mutate, onRemoved }:
       if (abort.signal.aborted) return;
       setServer(s); setApprovals(a.items); setSnapshot(latest);
       const current = a.items.find(x => x.sequence === s.approvalSequence);
-      setNames(Object.fromEntries((current?.tools ?? []).map(t => [t.upstreamName, t.toolId.slice(t.toolId.indexOf('/') + 1)])));
+      const available = new Map((latest?.tools ?? []).map(t => [t.tool.name, t.definitionDigest]));
+      const selected = (current?.tools ?? []).filter(t => available.has(t.upstreamName));
+      setNames(Object.fromEntries(selected.map(t => [t.upstreamName, t.toolId.slice(t.toolId.indexOf('/') + 1)])));
+      setPolicies(Object.fromEntries(selected.filter(t => t.effectPolicy && available.get(t.upstreamName) === t.definitionDigest)
+        .map(t => [t.upstreamName, {...t.effectPolicy!, acknowledgedUnfencedRisk: false}])));
     }).catch(e => { if (!abort.signal.aborted) setError(e); });
     return () => abort.abort();
   }, [client, slug]);
@@ -126,7 +137,17 @@ function McpServerReview({ client, slug, canRegister, busy, mutate, onRemoved }:
   function toggle(name: string, on: boolean) { setNames(n => { const next = { ...n }; if (on) next[name] = localName(name); else delete next[name]; return next; }); }
   function approve() {
     if (!snapshot || !canRegister || overCap || invalid.length || !chosen.length) return;
-    const body = { snapshotRevision: snapshot.revision, tools: chosen.map(([upstreamName, name]) => ({ upstreamName, name })) };
+    setPolicyError('');
+    const tools: {upstreamName: string; name: string; effectPolicy: McpEffectPolicy}[] = [];
+    for (const [upstreamName, name] of chosen) {
+      const policy = policies[upstreamName] ?? emptyPolicy();
+      if (!policy.classification) { setPolicyError('Review the effect classification for ' + upstreamName + '.'); return; }
+      const critical = policy.classification === 'DESTRUCTIVE' || policy.classification === 'FINANCIAL';
+      if (critical && !policy.acknowledgedUnfencedRisk) { setPolicyError('Acknowledge the unfenced target risk for ' + upstreamName + '.'); return; }
+      tools.push({upstreamName, name, effectPolicy: {...policy, classification: policy.classification,
+        acknowledgedUnfencedRisk: critical && policy.acknowledgedUnfencedRisk}});
+    }
+    const body = { snapshotRevision: snapshot.revision, tools };
     void mutate(async () => { const a = await client.approveMcpServer(slug, body, key(JSON.stringify(body))); return `Approved ${a.tools.length} tools of ${slug} as ${a.packageId} ${a.packageVersion}. New tools start disabled.`; });
   }
   return <section className="guidance" aria-labelledby="mcp-review-heading"><h2 id="mcp-review-heading">{slug}</h2>
@@ -137,12 +158,28 @@ function McpServerReview({ client, slug, canRegister, busy, mutate, onRemoved }:
     <p><button type="button" disabled={busy || !canRegister} onClick={() => void mutate(async () => { const job = await client.scanMcpServer(slug, crypto.randomUUID()); return `Scan ${job.scanId} queued on ${job.hostId ?? 'the pool'}.`; })}>Scan {slug}</button></p>
     {!snapshot ? <p>Not scanned yet.</p> : <>
       <div className="table-wrap"><Table><caption>Snapshot #{snapshot.revision} of {snapshot.serverInfo.name} {snapshot.serverInfo.version}, against approval {current ? `#${current.sequence}` : 'none'}</caption>
-        <thead><tr><th scope="col">Approve</th><th scope="col">Upstream tool</th><th scope="col">Local name</th><th scope="col">Change</th><th scope="col">Description</th></tr></thead>
+        <thead><tr><th scope="col">Approve</th><th scope="col">Upstream tool</th><th scope="col">Local name</th><th scope="col">Change</th><th scope="col">Description</th><th scope="col">Effect review</th></tr></thead>
         <tbody>{rows.map(row => <tr key={row.name}>
           <td><input type="checkbox" aria-label={`Approve ${row.name}`} checked={row.name in names} disabled={!canRegister || row.change === 'removed'} onChange={e => toggle(row.name, e.target.checked)} /></td>
           <th scope="row">{row.name}</th>
           <td>{row.name in names ? <input aria-label={`Local name for ${row.name}`} value={names[row.name]} readOnly={!canRegister} maxLength={195} aria-invalid={invalid.includes(names[row.name])} onChange={e => setNames(n => ({ ...n, [row.name]: e.target.value }))} /> : '—'}</td>
-          <td>{row.change}</td><td>{row.definition?.tool.description ?? ''}</td></tr>)}</tbody></Table></div>
+          <td>{row.change}</td><td>{row.definition?.tool.description ?? ''}</td>
+          <td>{row.name in names && <div>
+            <label>Effect classification for {row.name}<select aria-label={'Effect classification for ' + row.name}
+              disabled={!canRegister} value={policies[row.name]?.classification ?? ''}
+              onChange={e => changePolicy(row.name, {classification: e.target.value as EffectClassification | '', acknowledgedUnfencedRisk: false})}>
+              <option value="">Review classification</option>{(['READ', 'WRITE', 'DESTRUCTIVE', 'FINANCIAL'] as const)
+                .map(kind => <option key={kind} value={kind}>{kind}</option>)}</select></label>
+            <label><input type="checkbox" disabled={!canRegister} checked={policies[row.name]?.consentRequired ?? false}
+              onChange={e => changePolicy(row.name, {consentRequired: e.target.checked})} />Require exact effect consent for {row.name}</label>
+            {policies[row.name]?.consentRequired && <p>Calls stay blocked until exact effect consent is available.</p>}
+            {['DESTRUCTIVE', 'FINANCIAL'].includes(policies[row.name]?.classification ?? '') && <label>
+              <input type="checkbox" disabled={!canRegister} checked={policies[row.name]?.acknowledgedUnfencedRisk ?? false}
+                onChange={e => changePolicy(row.name, {acknowledgedUnfencedRisk: e.target.checked})} />
+              I acknowledge the unfenced target risk for {row.name}</label>}
+          </div>}</td></tr>)}</tbody></Table></div>
+      <p>Review the business effect explicitly. Upstream hints do not grant authority; the complete admitted arguments are bound to each call.</p>
+      {policyError && <p role="alert">{policyError}</p>}
       {overCap && <p role="alert">At most {MAX_APPROVED_TOOLS} tools per approval; {chosen.length} are selected. Register the server again under another name for the rest.</p>}
       {invalid.length > 0 && <p role="alert">Local names must be unique and lowercase ToolGate names: {invalid.join(', ')}.</p>}
       <p><button type="button" disabled={busy || !canRegister || overCap || invalid.length > 0 || chosen.length === 0} onClick={approve}>Approve {chosen.length} tools</button></p></>}

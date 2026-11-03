@@ -43,6 +43,6 @@ public record PackageDeploymentRequest(
         destinationTls = destinationTls == null ? null : java.util.Map.copyOf(destinationTls);
         effectPolicies = effectPolicies == null ? null : java.util.List.copyOf(effectPolicies);
     }
-    /** Construct legacy metadata without generic effect authority. */
+    /** Construct legacy metadata without the new effect authority fields. */
     public PackageDeploymentRequest(String packageDigest, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> globals, java.util.List<String> hostIds, java.util.List<String> deviceGroupIds, java.util.List<PrivateRangeApproval> privateRanges, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> destinationTls) { this(packageDigest, globals, hostIds, deviceGroupIds, privateRanges, destinationTls, null); }
 }

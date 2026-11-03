@@ -29,26 +29,40 @@ public final class EffectGrants {
             var invocation=operations.invocationIn(tx,request.invocationId());
             live(tenant,tx,invocation,device,request.fencingToken(),now);
             var manifest=request.httpRequestManifest();
-            var profile=ServiceRequestValidation.admission(tx,codec,operations.signer(),operations.issuer(),invocation,
-                device,request.invocationPermit(),manifest,now);
             var claims=operations.signer().verifyInvocation(request.invocationPermit());
-            var arguments=tree(request.arguments());
-            if(!Canonical.arguments(arguments).equals(claims.argumentsDigest())
-                ||!Canonical.arguments(tree(manifest)).equals(request.httpRequestDigest()))throw ManagementAccess.denied();
-            var policy=EffectIntentValidation.validate(profile,manifest,arguments);
-            // Reconfiguration cannot leave old profile authority live.
-            currentProfile(tx,profile.packageId(),manifest.profileDigest(),claims.target().packageDigest());
             var version=tx.packages().version(claims.target().packageDigest());
             if(version==null)throw ManagementAccess.denied();
             var packageDoc=(JsonNode)codec.value(version.document());
+            boolean nativeMcp=PackageCompatibility.proxy(packageDoc.path("manifest"));
+            var profile=nativeMcp?
+                ServiceRequestValidation.admissionProfile(tx,codec,operations.signer(),operations.issuer(),invocation,device,request.invocationPermit(),manifest,now):
+                ServiceRequestValidation.admission(tx,codec,operations.signer(),operations.issuer(),invocation,device,request.invocationPermit(),manifest,now);
+            var arguments=tree(request.arguments());
+            if(!Canonical.arguments(arguments).equals(claims.argumentsDigest())
+                ||!Canonical.arguments(tree(manifest)).equals(request.httpRequestDigest()))throw ManagementAccess.denied();
+            currentProfile(tx,profile.packageId(),manifest.profileDigest(),claims.target().packageDigest());
             var descriptors=new ArrayList<JsonNode>();
             for(var tool:packageDoc.path("manifest").path("tools"))
                 if(tool.path("descriptor").path("toolId").asText().equals(invocation.evaluation().toolId()))descriptors.add(tool.path("descriptor"));
             if(descriptors.size()!=1)throw ManagementAccess.denied();
             var descriptor=descriptors.getFirst();
-            if(policy.classification()!=EffectClassification.READ&&descriptor.path("effect").path("safety").asText().equals("READ_ONLY"))
+            EffectClassification classification;
+            if(nativeMcp){
+                if(!claims.target().routes().isEmpty())throw ManagementAccess.denied();
+                var doc=ServerPackages.proxyDocument(tx,version,codec);
+                var artifacts=packageDoc.path("manifest").path("artifacts");
+                boolean pinned=false;
+                for(var artifact:artifacts)if(ServerPackages.MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())
+                    &&claims.target().artifactDigest().equals(artifact.path("artifactDigest").asText()))pinned=true;
+                if(!pinned)throw ManagementAccess.denied();
+                classification=McpEffectValidation.validate(profile,codec.model(codec.json(doc),McpProxyDocument.class),
+                    claims.target().toolId(),manifest,arguments,request.handlerId()).classification();
+            }else{
+                classification=EffectIntentValidation.validate(profile,manifest,arguments).classification();
+                credentialHeaders(descriptor,profile,manifest);
+            }
+            if(classification!=EffectClassification.READ&&descriptor.path("effect").path("safety").asText().equals("READ_ONLY"))
                 throw ManagementAccess.denied();
-            credentialHeaders(descriptor,profile,manifest);
             long expiry=Math.min(now+MAX_LIFETIME_MS,Math.min(invocation.expiresAtUnixMs(),tx.enterprise().executionLease(invocation.id()).expiresAt()));
             var credentialDeadline=tx.enterprise().userCredentialDeadline(invocation.id());
             if(invocation.evaluation().context().mode()!=RequestMode.SERVICE&&credentialDeadline==null)throw ManagementAccess.denied();
@@ -62,10 +76,10 @@ public final class EffectGrants {
                 request.httpRequestDigest(),device,request.brokerInstanceId(),request.handlerId(),nonce,expiry,expiry+60000),now);
             if(!authorized.newAuthority())throw Failure.conflict();
             tx.effects().recordIntent(new EffectStore.Intent(effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),
-                policy.classification().name(),codec.json(manifest),now));
+                classification.name(),codec.json(manifest),now));
             var grant=operations.signer().signEffect(new EffectGrantClaims(operations.issuer(),device,now,now,expiry,tenant.value(),
                 invocation.id(),request.fencingToken(),invocation.authorizationEpoch(),effectId,authorized.generation().generation(),nonce,
-                request.brokerInstanceId(),request.handlerId(),request.httpRequestDigest(),manifest.profileDigest(),manifest.routeId(),policy.classification()));
+                request.brokerInstanceId(),request.handlerId(),request.httpRequestDigest(),manifest.profileDigest(),manifest.routeId(),classification));
             tx.audit(DirectoryService.digest(device),"EFFECT_GRANT_ISSUE","effect:"+effectId,authorized.generation().revision(),
                 invocation.evaluation().context().requestId(),request.httpRequestDigest().substring(7));
             return new Store.Reply(200,codec.json(new EffectGrant(grant,expiry-now)),invocation.revision());

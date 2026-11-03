@@ -208,6 +208,15 @@ public final class ServerPackages {
                     reviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.RouteEffectReview(policy,actor,clock.millis()))));
                 }
             }
+            if(PackageCompatibility.proxy(manifest)){
+                var nativeReviews=profile.putArray("nativeMcpEffects");
+                for(var tool:proxyDocument(tx,version).path("tools"))if(tool.hasNonNull("effectPolicy")){
+                    var policy=codec.model(codec.json(tool.get("effectPolicy")),io.ololabs.toolgate.contracts.v2.McpEffectPolicy.class);
+                    McpEffectValidation.review(policy);
+                    nativeReviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.NativeMcpEffectReview(
+                        tool.path("toolId").asText(),policy,actor,clock.millis()))));
+                }
+            }
             var ranges = profile.putArray("privateRanges");
             for (var range : request.privateRanges() == null ? List.<io.ololabs.toolgate.contracts.v2.PrivateRangeApproval>of() : request.privateRanges()) {
                 var ports = java.util.stream.StreamSupport.stream(profileDestinations.spliterator(),false)
@@ -300,15 +309,22 @@ public final class ServerPackages {
     public static final String MCP_PROXY_MEDIA_TYPE = "application/vnd.ololabs.toolgate.mcp-proxy+json";
     /** The mcp-proxy.json of a stored MCP_PROXY package. */
     JsonNode proxyDocument(Store.Session tx, PackageStore.Version version) {
-        var manifest = node(version.document()).get("manifest"); String path = null;
-        for (var artifact : manifest.path("artifacts")) if (MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())) path = artifact.get("path").asText();
-        var bytes = tx.packages().content(version.digest());
-        if (path == null || bytes == null) throw Failure.conflict();
-        var file = PackageArchive.validate(bytes, this::node).files().get(path);
-        if (file == null) throw Failure.conflict();
-        String json = new String(file, java.nio.charset.StandardCharsets.UTF_8);
-        codec.model(json, io.ololabs.toolgate.contracts.v2.McpProxyDocument.class);
-        return node(json);
+        return proxyDocument(tx,version,codec);
+    }
+    /** The exact verified generated artifact, independent of caller-selected HTTP facts. */
+    static JsonNode proxyDocument(Store.Session tx,PackageStore.Version version,Codec codec){
+        java.util.function.Function<String,JsonNode> parse=text->(JsonNode)codec.value(text);
+        var manifest=parse.apply(version.document()).get("manifest");String path=null;int count=0;
+        for(var artifact:manifest.path("artifacts"))if(MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())){
+            path=artifact.path("path").asText();count++;
+        }
+        var bytes=tx.packages().content(version.digest());
+        if(count!=1||path==null||bytes==null)throw Failure.conflict();
+        var verified=PackageArchive.validate(bytes,parse);
+        if(!verified.packageDigest().equals(version.digest()))throw Failure.conflict();
+        var file=verified.files().get(path);if(file==null)throw Failure.conflict();
+        String json=new String(file,java.nio.charset.StandardCharsets.UTF_8);
+        codec.model(json,io.ololabs.toolgate.contracts.v2.McpProxyDocument.class);return parse.apply(json);
     }
 
     /** A deployment runs on the Tool Hosts it names, on the current members of the Device Groups (pools) it names, or on

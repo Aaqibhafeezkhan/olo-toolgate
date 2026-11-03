@@ -128,7 +128,7 @@ admitted identity, operation, resources, body and current authority; the HTTP
 digest is an authenticated broker assertion, not independent route approval.
 
 Upgrade Control, this Java library and each target integration before the broker.
-Legacy unbound claims retain their existing checks. A new bound permit passed to
+Legacy unbound reads retain their existing checks; unbound writes are refused. A new bound permit passed to
 the four-argument `Request` constructor is refused: use the five-argument
 constructor with `ServicePermitVerifier.Transport`. Generate its profile data
 from trusted routing configuration and its URI/method/headers from the accepted
@@ -165,7 +165,7 @@ have expired after consumption; current execution authority must still be live.
 
 A v2 host cannot omit all binding fields to fall back to legacy issuance.
 Digest-only bound brokers from the preceding development checkpoint must upgrade
-with Control. Unbound legacy issuance is available only without a v2 lease.
+with Control. Unbound legacy issuance is available only for memory.read and rag.query without a v2 lease. Writes require the complete bound request and owner protocol.
 No raw body or credential value belongs in the manifest. The original signed
 permit and non-credential manifest are authority metadata: do not log their
 contents or return them to package code.
@@ -191,7 +191,7 @@ unverified JWT payloads.
 
 A verifier request with transport facts explicitly requires httpRequestDigest.
 An unbound legacy permit is refused before consumption. Other adapters using the
-legacy four-argument request constructor retain their existing behavior.
+legacy four-argument request constructor may continue reads; writes must migrate to accepted-request facts and the bound claim protocol.
 
 ### Owner-bound write dispatch
 
@@ -250,3 +250,41 @@ APPLYING before business actions and completion/outcome intent with SQL
 publication. Startup requires the additive target schema and restricted runtime
 permissions; writes have no one-shot fallback. Whole-operation finalization
 remains conservative and separate.
+
+
+## Legacy write upgrade
+
+Control refuses unbound write issuance and consumption with HTTP 409 and the
+typed detail code BOUND_SERVICE_EFFECT_REQUIRED. This also applies to correctly
+signed, unexpired grants issued by an older Control. No nonce or effect ownership
+is consumed by this refusal.
+
+Upgrade the executor and target adapters together: reserve and consume a v2
+invocation, construct the immutable prepared HTTP manifest from the admitted
+profile, request the bound service permit with broker/handler ownership, cross
+the SENDING gate once, and let the target independently verify accepted-request
+facts before its durable claim. Do not retry an ambiguous legacy write to
+complete the upgrade; reconcile its existing target outcome first.
+
+Legacy memory.read and rag.query calls remain compatible when no v2 lease is
+present. A v2 lease always requires its signed admission and prepared manifest,
+including for reads. This migration grants no target deduplication guarantee.
+
+
+## Current-source owned stack qualification
+
+Build an isolated qualification image with
+`python tools/security/knowledge_image.py`. Its report identifies the image,
+known parent revision and exact runtime-source content. The builder compiles
+Control and the native Gateway/Tool Host from those inputs and rechecks their
+source identity before emitting evidence. This supports testing a complete
+uncommitted stage without an intermediate delivery commit.
+
+Pass the resulting image name to `tools/security/knowledge.py --full-stack
+--stack-image IMAGE --knowledge-source PATH --gradle GRADLE_8_12`. Select the
+upgraded knowledge component with trusted transport bindings. The gate requires
+actual component PostgreSQL/TLS/vector results, verifies the installed SDK
+artifacts, then compares committed memory/RAG claims and delivered target
+outcomes to actual Control records. It accepts the exact owned content identity
+or the legacy clean-revision image path; stale source and unowned images fail.
+Image preparation alone is not stack acceptance.

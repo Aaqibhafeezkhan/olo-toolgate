@@ -826,9 +826,16 @@ export interface McpApprovedTool {
   readonly toolId: string;
   readonly upstreamName: string;
   readonly definitionDigest: string;
+  readonly effectPolicy?: McpEffectPolicy;
 }
 export type McpAuthScheme = "BEARER" | "HEADER";
 export type McpCheckFailure = "PIN_MISMATCH" | "TLS_ERROR" | "UPSTREAM_UNREACHABLE" | "UPSTREAM_ERROR" | "PROTOCOL_ERROR" | "SCAN_LIMIT_EXCEEDED" | "DEADLINE_EXCEEDED" | "DEFINITION_CHANGED" | "TOOL_MISSING" | "SERVER_CHANGED";
+/** Explicit operator review for one native MCP business call. Upstream annotations do not confer effect authority. */
+export interface McpEffectPolicy {
+  readonly classification: EffectClassification;
+  readonly consentRequired: boolean;
+  readonly acknowledgedUnfencedRisk: boolean;
+}
 export type McpName = string;
 /** Freshness evidence an invocation permit carries for an MCP_PROXY tool. */
 export interface McpPermitVerification {
@@ -984,6 +991,7 @@ export type McpTaskStatus = "working" | "input_required" | "completed" | "failed
 export interface McpToolApproval {
   readonly upstreamName: string;
   readonly name: string;
+  readonly effectPolicy?: McpEffectPolicy;
 }
 /** A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy). */
 export interface McpToolDefinition {
@@ -1015,6 +1023,13 @@ export interface McpVerification {
 export type McpVerificationStatus = "CURRENT" | "UNVERIFIED";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";
 export type NamespacePrefix = string;
+/** Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors. */
+export interface NativeMcpEffectReview {
+  readonly toolId: string;
+  readonly policy: McpEffectPolicy;
+  readonly reviewedBy: string;
+  readonly reviewedAtUnixMs: number;
+}
 /** Version requirements checked at enable. */
 export interface PackageCompatibility {
   readonly contractsVersion: string;
@@ -1476,6 +1491,7 @@ export interface ServiceProfile {
   readonly routes: ReadonlyArray<RouteDeclaration>;
   readonly privateRanges: ReadonlyArray<PrivateRangeApproval>;
   readonly effectReviews?: ReadonlyArray<RouteEffectReview>;
+  readonly nativeMcpEffects?: ReadonlyArray<NativeMcpEffectReview>;
 }
 export type ServiceRoute = RouteDeclaration;
 export type Sha256 = string;

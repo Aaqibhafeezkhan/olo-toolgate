@@ -15,6 +15,11 @@ public final class ServicePermits {
     public ServicePermits(Store store, Codec codec, EnterpriseOperations operations) {
         this.store=store;this.codec=codec;this.operations=operations;
     }
+    /** Legacy readers remain compatible; writes require the immutable admitted HTTP request and owner protocol. */
+    static void requireBoundWrite(String operation,String digest){
+        if(!Set.of("memory.read","rag.query").contains(operation)&&digest==null)
+            throw Failure.detail(409,ControlErrorDetailCode.BOUND_SERVICE_EFFECT_REQUIRED,List.of());
+    }
     public Store.Reply issue(Ids.TenantId tenant, java.util.function.Function<Store.Session,String> certificate,
             String executorKeySha256, String document) {
         var request=codec.model(document,ServicePermitIssue.class);
@@ -27,6 +32,7 @@ public final class ServicePermits {
             var admission=tx.enterprise().nonce(i.reservedNonce());
             if(admission==null||admission.consumedAt()==null)throw ManagementAccess.denied();
             operations.requireFresh(tenant,tx,i);
+            requireBoundWrite(i.evaluation().action(),request.httpRequestDigest());
             ServiceRequestValidation.validate(tx,codec,operations.signer(),operations.issuer(),i,device,request,operations.clock(tx));
             String op=i.evaluation().action();
             if(c.mode()==RequestMode.DELEGATED || (c.mode()==RequestMode.SERVICE&&!op.equals("rag.update")))throw ManagementAccess.denied();
@@ -101,6 +107,7 @@ public final class ServicePermits {
     public Store.Reply consume(DirectoryService.Actor service, ServiceAudience audience, String document) {
         var request=codec.model(document,ServicePermitConsumption.class);
         var claims=operations.signer().verifyService(request.permit());
+        requireBoundWrite(claims.operation(),claims.httpRequestDigest());
         return store.transaction(service.tenant(),true,tx->{
             long now=operations.clock(tx);
             var i=operations.invocationIn(tx,claims.invocationId());

@@ -34,6 +34,12 @@ final class McpPackages {
         for (var approval : tools) {
             var upstream = definitions.get(approval.upstreamName()).get("tool");
             var descriptor = descriptor(slug, approval.name(), upstream);
+            if(approval.effectPolicy()!=null){
+                McpEffectValidation.review(approval.effectPolicy());
+                var effect=(ObjectNode)descriptor.path("effect");
+                effect.put("safety",approval.effectPolicy().classification()==io.ololabs.toolgate.contracts.v2.EffectClassification.READ?"READ_ONLY":"UNKNOWN");
+                effect.put("destructive",approval.effectPolicy().classification()==io.ololabs.toolgate.contracts.v2.EffectClassification.DESTRUCTIVE);
+            }
             byte[] canonical = Canonical.bytes(descriptor); String digest = Canonical.sha256(canonical);
             files.put("tools/" + approval.name() + ".json", canonical);
             var entry = entries.addObject(); entry.set("descriptor", descriptor);

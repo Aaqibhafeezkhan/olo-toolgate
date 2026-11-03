@@ -236,13 +236,17 @@ def render_version(ver, version, outputs):
                     arguments = ', '.join(java_ident(key) if key != 'businessKeyHash' else 'null' for key in props)
                     java += ['    /** Construct a request without an explicit business key. */',
                              f'    public {name}({signature}) {{ this({arguments}); }}']
-                if v2 and name in ('ServiceProfile', 'PackageDeploymentRequest'):
-                    added = 'effectReviews' if name == 'ServiceProfile' else 'effectPolicies'
-                    previous = [key for key in props if key != added]
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key != added else 'null' for key in props)
-                    java += ['    /** Construct legacy metadata without generic effect authority. */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
+                if v2 and name in ('ServiceProfile', 'PackageDeploymentRequest', 'McpToolApproval', 'McpApprovedTool'):
+                    if name == 'ServiceProfile':
+                        variants = [('effectReviews', 'nativeMcpEffects'), ('nativeMcpEffects',)]
+                    else:
+                        variants = [('effectPolicies' if name == 'PackageDeploymentRequest' else 'effectPolicy',)]
+                    for added in variants:
+                        previous = [key for key in props if key not in added]
+                        signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
+                        arguments = ', '.join(java_ident(key) if key not in added else 'null' for key in props)
+                        java += ['    /** Construct legacy metadata without the new effect authority fields. */',
+                                 f'    public {name}({signature}) {{ this({arguments}); }}']
                 if v2 and name == 'InvocationResultReport':
                     previous = [key for key in props if key != 'executionTier']
                     signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)

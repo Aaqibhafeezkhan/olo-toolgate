@@ -77,4 +77,29 @@ class KnowledgeQualificationTest(unittest.TestCase):
         with patch.object(gate.subprocess,"check_output",return_value=json.dumps([image])),self.assertRaises(ValueError):
             gate.stack_image("unowned")
 
+    def test_content_bound_images_allow_uncommitted_stage_source_but_never_stale_bytes(self):
+        image=dict(Id="sha256:"+"a"*64,Config=dict(Labels={"io.olo.qualification.owner":"olo-knowledge",
+            "org.opencontainers.image.revision":"b"*40,
+            "io.olo.qualification.runtime-source-sha256":"c"*64}))
+        for current,allowed in [("c"*64,True),("d"*64,False)]:
+            with patch.object(gate.subprocess,"check_output",return_value=json.dumps([image])),patch.object(gate.subprocess,"run"),patch.object(gate,"runtime_source_digest",return_value=current):
+                if allowed:self.assertEqual(image,gate.stack_image("current-stage"))
+                else:
+                    with self.assertRaises(ValueError):gate.stack_image("stale-stage")
+        image["Config"]["Labels"]["io.olo.qualification.runtime-source-sha256"]="invalid"
+        with patch.object(gate.subprocess,"check_output",return_value=json.dumps([image])),patch.object(gate.subprocess,"run"),self.assertRaises(ValueError):
+            gate.stack_image("malformed")
+
+    def test_runtime_content_digest_tracks_bytes_and_refuses_links(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root/"runtime.rs").write_text("original")
+            with patch.object(gate,"ROOT",root),patch.object(gate.subprocess,"check_output",return_value=b"runtime.rs"+bytes([0])):
+                before=gate.runtime_source_digest()
+                (root/"runtime.rs").write_text("changed")
+                self.assertNotEqual(before,gate.runtime_source_digest())
+                (root/"runtime.rs").unlink()
+                (root/"runtime.rs").symlink_to(root/"other")
+                with self.assertRaises(ValueError):gate.runtime_source_digest()
+
 if __name__=="__main__":unittest.main()

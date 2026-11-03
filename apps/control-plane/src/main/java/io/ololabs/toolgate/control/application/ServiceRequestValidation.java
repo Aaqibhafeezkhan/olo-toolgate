@@ -33,6 +33,13 @@ public final class ServiceRequestValidation {
     /** Shared signed admission/profile verification. The caller must check current authority and the live lease. */
     public static ServiceProfile admission(Store.Session tx,Codec codec,EffectSigner signer,String issuer,EnterpriseInvocation invocation,
             String device,io.ololabs.toolgate.contracts.v2.SignedInvocationPermit proof,PreparedHttpRequestManifest manifest,long now){
+        var profile=admissionProfile(tx,codec,signer,issuer,invocation,device,proof,manifest,now);
+        if(!signer.verifyInvocation(proof).target().routes().contains(manifest.routeId()))throw ManagementAccess.denied();
+        return profile;
+    }
+    /** Only native MCP callers may omit a route declaration; they must enforce McpEffectValidation independently. */
+    static ServiceProfile admissionProfile(Store.Session tx,Codec codec,EffectSigner signer,String issuer,EnterpriseInvocation invocation,
+            String device,SignedInvocationPermit proof,PreparedHttpRequestManifest manifest,long now){
         var claims=signer.verifyInvocation(proof);
         var e=invocation.evaluation();var c=e.context();var identity=claims.identity();var target=claims.target();
         if(!issuer.equals(claims.iss())||!device.equals(claims.aud())||!invocation.id().equals(claims.invocationId())
@@ -51,7 +58,7 @@ public final class ServiceRequestValidation {
         if(raw==null||!Canonical.digest(tree(raw)).equals(target.serviceProfileDigest()))throw ManagementAccess.denied();
         var profile=codec.model(raw,ServiceProfile.class);
         if(!profile.profileId().equals(manifest.profileId())||!target.serviceProfileDigest().equals(manifest.profileDigest())
-            ||!profile.revision().equals(target.serviceProfileRevision())||!target.routes().contains(manifest.routeId()))
+            ||!profile.revision().equals(target.serviceProfileRevision()))
             throw ManagementAccess.denied();
         return profile;
     }

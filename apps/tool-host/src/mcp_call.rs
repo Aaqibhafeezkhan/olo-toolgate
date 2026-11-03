@@ -132,11 +132,15 @@ pub async fn execute(call: Call<'_>) -> Outcome {
 /// [`execute`], and whether the upstream sent `notifications/tools/list_changed` during the call.
 pub async fn execute_observed(call: Call<'_>) -> (Outcome, bool) {
     let mut list_changed = false;
-    let outcome = attempt(call, &mut list_changed).await;
+    let outcome = attempt(call, &mut list_changed, None).await;
     (outcome, list_changed)
 }
 
-async fn attempt(call: Call<'_>, list_changed: &mut bool) -> Outcome {
+async fn attempt(
+    call: Call<'_>,
+    list_changed: &mut bool,
+    authority: Option<&crate::mcp_effect::Authority<'_>>,
+) -> Outcome {
     let document = call.document;
     let Some(approved) = document.tools.iter().find(|t| t.tool_id == call.tool_id) else {
         return refused(
@@ -229,7 +233,18 @@ async fn attempt(call: Call<'_>, list_changed: &mut bool) -> Outcome {
             );
         }
     }
-    let called = session.call(&approved.upstream_name, call.arguments).await;
+    let called = if let Some(authority) = authority {
+        session
+            .call_authorized(
+                &approved.upstream_name,
+                call.arguments,
+                authority,
+                &document.server.slug,
+            )
+            .await
+    } else {
+        session.call(&approved.upstream_name, call.arguments).await
+    };
     *list_changed = session.list_changed;
     let result = match called {
         Ok(result) => result,
@@ -290,6 +305,50 @@ pub(crate) async fn run(
     use olo_toolgate_contracts::v2::{InvocationOutcome, McpQuarantineReport, RefusalReason};
     let control = host.control();
     let id = &claims.invocation_id;
+    let reviewed = document
+        .tools
+        .iter()
+        .find(|tool| tool.tool_id == claims.target.tool_id)
+        .and_then(|tool| tool.effect_policy.as_ref())
+        .filter(|policy| !policy.consent_required)
+        .is_some_and(|policy| {
+            prepared
+                .profile
+                .native_mcp_effects
+                .as_ref()
+                .is_some_and(|reviews| {
+                    reviews
+                        .iter()
+                        .filter(|review| {
+                            review.tool_id == claims.target.tool_id && review.policy == *policy
+                        })
+                        .count()
+                        == 1
+                })
+        });
+    if !reviewed {
+        return (
+            InvocationOutcome::Failed,
+            frame(
+                vec![],
+                None,
+                Some((
+                    "MCP_EFFECT_REVIEW_REQUIRED",
+                    "Review this tool's effect policy before calling it".into(),
+                )),
+                true,
+            ),
+            None,
+        );
+    }
+    let authority = crate::mcp_effect::Authority::new(
+        &control,
+        dispatch,
+        claims,
+        &prepared.profile,
+        fencing_token,
+        deadline_ms,
+    );
     let secret = match control
         .secret(id, fencing_token, &document.server.auth.secret_name)
         .await
@@ -320,19 +379,24 @@ pub(crate) async fn run(
         .clone()
         .map(|m| Value::Object(m.into_iter().collect()));
     let now = crate::now_ms();
-    let (outcome, list_changed) = execute_observed(Call {
-        document,
-        tool_id: &claims.target.tool_id,
-        input_schema: &input_schema,
-        output_schema: output_schema.as_ref(),
-        arguments: Value::Object(dispatch.arguments.clone().into_iter().collect()),
-        verification: claims.mcp_verification.as_ref(),
-        now_ms: now,
-        secret,
-        allow_loopback: host.allow_loopback(),
-        deadline: Instant::now()
-            + std::time::Duration::from_millis(deadline_ms.saturating_sub(now)),
-    })
+    let mut list_changed = false;
+    let outcome = attempt(
+        Call {
+            document,
+            tool_id: &claims.target.tool_id,
+            input_schema: &input_schema,
+            output_schema: output_schema.as_ref(),
+            arguments: Value::Object(dispatch.arguments.clone().into_iter().collect()),
+            verification: claims.mcp_verification.as_ref(),
+            now_ms: now,
+            secret,
+            allow_loopback: host.allow_loopback(),
+            deadline: Instant::now()
+                + std::time::Duration::from_millis(deadline_ms.saturating_sub(now)),
+        },
+        &mut list_changed,
+        Some(&authority),
+    )
     .await;
     if list_changed {
         let request = olo_toolgate_contracts::v2::McpRefreshRequest {
@@ -368,9 +432,10 @@ pub(crate) async fn run(
         Outcome::Answered(result) => (InvocationOutcome::Completed, result, None),
         // Nothing reached the upstream tool.
         Outcome::Refused { code, message, .. } => (InvocationOutcome::Failed, frame(vec![], None, Some((code, message)), true), None),
-        Outcome::Failed { frame, timed_out: true, .. } if claims.requires_execution_ledger => (
+        Outcome::Failed { frame, .. } if claims.requires_execution_ledger
+            &&authority.started.load(std::sync::atomic::Ordering::SeqCst) => (
             InvocationOutcome::OutcomeUnknown,
-            ResultFrame { error: Some(ToolErrorBody { code: "OUTCOME_UNKNOWN".into(), message: "The upstream did not answer before the deadline; its effect may have happened".into(), retryable: false, data: None }), ..frame },
+            ResultFrame { error: Some(ToolErrorBody { code: "OUTCOME_UNKNOWN".into(), message: "The upstream effect was dispatched but has no authoritative outcome; reconcile it".into(), retryable: false, data: None }), ..frame },
             None,
         ),
         Outcome::Failed { frame, .. } => (InvocationOutcome::Failed, frame, None),

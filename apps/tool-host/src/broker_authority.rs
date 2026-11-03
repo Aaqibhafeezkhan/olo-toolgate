@@ -343,11 +343,7 @@ impl Grants {
     }
 }
 
-struct BoundedTransport {
-    client: reqwest::Client,
-    #[cfg(unix)]
-    _window: crate::send_window::SendWindow,
-}
+use crate::effect_dispatch::BoundedTransport;
 
 pub(crate) struct Local {
     control: Arc<Control>,
@@ -377,82 +373,42 @@ impl Local {
         destination: &ServiceDestination,
     ) -> Result<BoundedTransport, serde_json::Value> {
         let refused = || serde_json::json!({"refused":"fresh effect authority or bounded transport unavailable"});
-        #[cfg(not(unix))]
-        {
-            let _ = (manifest, digest, handler, destination);
-            Err(refused())
+        let (proof, arguments) = self.scope.admission.get().ok_or_else(refused)?;
+        if !self.scope.live() || !identifier(handler) {
+            return Err(refused());
         }
-        #[cfg(unix)]
-        {
-            let (proof, arguments) = self.scope.admission.get().ok_or_else(refused)?;
-            if !self.scope.live() || !identifier(handler) {
-                return Err(refused());
-            }
-            // Reserve/burn before awaiting authority; a lost reply never reuses this handler.
-            self.grants
-                .generic(handler, digest)
-                .map_err(|_| refused())?;
-            let started = tokio::time::Instant::now();
-            let response_until = started
-                + std::time::Duration::from_millis(
-                    self.scope.deadline.saturating_sub(crate::now_ms()),
-                );
-            let grant = self
-                .control
-                .effect_grant(&olo_toolgate_contracts::v2::EffectGrantIssue {
-                    invocation_id: self.scope.invocation.clone(),
-                    fencing_token: self.scope.fence.clone(),
-                    invocation_permit: proof.clone(),
-                    broker_instance_id: self.scope.broker.clone(),
-                    handler_id: handler.into(),
-                    arguments: arguments.clone(),
-                    http_request_digest: digest.into(),
-                    http_request_manifest: manifest.clone(),
-                })
-                .await
-                .map_err(|_| refused())?;
-            if grant.valid_for_ms == 0 || grant.valid_for_ms > 2000 {
-                return Err(refused());
-            }
-            let send_until = (started + std::time::Duration::from_millis(grant.valid_for_ms))
-                .min(response_until);
-            if !self.scope.live() || tokio::time::Instant::now() >= send_until {
-                return Err(refused());
-            }
-            let allowed = self
-                .control
-                .effect_sending(&olo_toolgate_contracts::v2::EffectGrantDispatch {
-                    grant: grant.grant,
-                    broker_instance_id: self.scope.broker.clone(),
-                    handler_id: handler.into(),
-                })
-                .await
-                .map_err(|_| refused())?;
-            if !allowed.authorized
-                || !self.scope.live()
-                || tokio::time::Instant::now() >= send_until
-            {
-                return Err(refused());
-            }
-            // A broker observation cannot settle this unfenced effect. Mark even an unknown transport result conservatively.
-            self.scope.effect_started.store(true, Ordering::SeqCst);
-            let policy = crate::egress::AddressPolicy {
-                host: destination.host.clone(),
-                port: u16::try_from(destination.port).map_err(|_| refused())?,
-                private_ranges: self.scope.private_ranges.clone(),
-                allow_loopback: self.scope.development_loopback_http,
-            };
-            let window =
-                crate::send_window::SendWindow::open(policy.clone(), send_until, response_until)
-                    .map_err(|_| refused())?;
-            let client = crate::egress::client_with_socket(destination, policy, window.socket())
-                .map_err(|_| refused())?;
-            Ok(BoundedTransport {
-                client,
-                _window: window,
-            })
-        }
+        self.grants
+            .generic(handler, digest)
+            .map_err(|_| refused())?;
+        let request = olo_toolgate_contracts::v2::EffectGrantIssue {
+            invocation_id: self.scope.invocation.clone(),
+            fencing_token: self.scope.fence.clone(),
+            invocation_permit: proof.clone(),
+            broker_instance_id: self.scope.broker.clone(),
+            handler_id: handler.into(),
+            arguments: arguments.clone(),
+            http_request_digest: digest.into(),
+            http_request_manifest: manifest.clone(),
+        };
+        let policy = crate::egress::AddressPolicy {
+            host: destination.host.clone(),
+            port: u16::try_from(destination.port).map_err(|_| refused())?,
+            private_ranges: self.scope.private_ranges.clone(),
+            allow_loopback: self.scope.development_loopback_http,
+        };
+        crate::effect_dispatch::authorize(
+            &self.control,
+            &request,
+            destination,
+            policy,
+            self.scope.deadline,
+            &self.scope.effect_started,
+            &self.scope.closed,
+        )
+        .await
+        .map_err(|_| refused())
     }
+
     pub fn new(control: Arc<Control>, scope: Scope) -> Self {
         Self {
             control,

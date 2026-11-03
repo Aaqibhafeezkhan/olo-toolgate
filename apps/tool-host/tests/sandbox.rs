@@ -301,21 +301,74 @@ async fn frame_and_diagnostic_flooding_end_the_worker_before_the_deadline() {
 #[tokio::test]
 #[ignore = "requires a prepared rootless OCI service; run tools/security/sandbox.py"]
 async fn broker_works_but_cancellation_and_deadline_remove_the_entire_worker() {
-    use axum::{routing::get, Router};
+    use axum::{
+        routing::{get, post},
+        Json, Router,
+    };
     let calls = Arc::new(AtomicUsize::new(0));
     let seen = calls.clone();
+    let issued = Arc::new(std::sync::Mutex::new(None::<Value>));
+    let issue_owner = issued.clone();
+    let sending_owner = issued.clone();
+    let gates = Arc::new(AtomicUsize::new(0));
+    let issue_gates = gates.clone();
+    let target_gates = gates.clone();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let app = Router::new().route(
-        "/ping",
-        get(move || {
-            let seen = seen.clone();
-            async move {
-                seen.fetch_add(1, Ordering::SeqCst);
-                "ok"
-            }
-        }),
-    );
+    let app = Router::new()
+        .route(
+            "/api/control/v1/access/effects/authorize",
+            post(move |Json(body): Json<Value>| {
+                let owner = issue_owner.clone();
+                async move {
+                    assert_eq!(body["invocationPermit"]["jws"], "containment-fixture-only");
+                    assert_eq!(body["arguments"], json!({}));
+                    assert_eq!(body["httpRequestManifest"]["path"], "/ping");
+                    assert_eq!(
+                        body["httpRequestDigest"],
+                        tool_host::digest::jcs(&body["httpRequestManifest"]).unwrap()
+                    );
+                    assert!(body["brokerInstanceId"].as_str().unwrap().len() >= 16);
+                    assert!(body["handlerId"].as_str().unwrap().len() >= 16);
+                    *owner.lock().unwrap() = Some(body);
+                    Json(json!({"grant":{"jws":"containment-owner-grant"},"validForMs":2000}))
+                }
+            }),
+        )
+        .route(
+            "/api/control/v1/access/effects/sending",
+            post(move |Json(body): Json<Value>| {
+                let owner = sending_owner.clone();
+                let gates = issue_gates.clone();
+                async move {
+                    let issued = owner
+                        .lock()
+                        .unwrap()
+                        .take()
+                        .expect("one owner issue before sending");
+                    assert_eq!(body["grant"]["jws"], "containment-owner-grant");
+                    assert_eq!(body["brokerInstanceId"], issued["brokerInstanceId"]);
+                    assert_eq!(body["handlerId"], issued["handlerId"]);
+                    gates.fetch_add(1, Ordering::SeqCst);
+                    Json(json!({"authorized":true}))
+                }
+            }),
+        )
+        .route(
+            "/ping",
+            get(move || {
+                let seen = seen.clone();
+                let gates = target_gates.clone();
+                async move {
+                    assert!(
+                        gates.load(Ordering::SeqCst) > seen.load(Ordering::SeqCst),
+                        "target contact requires owner gate"
+                    );
+                    seen.fetch_add(1, Ordering::SeqCst);
+                    "ok"
+                }
+            }),
+        );
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let dir = area();
     let pool = Sandbox::open(config(), &dir, "oci-cancellation", 1).unwrap();
@@ -350,11 +403,23 @@ time.sleep(60)
             vec![],
             Default::default(),
             true,
-            control(),
+            Arc::new(
+                tool_host::control::Control::new(
+                    &serde_json::from_value(json!({
+                        "tenantId":"10000000-0000-4000-8000-000000000001",
+                        "url":format!("http://127.0.0.1:{port}"),"developmentLoopbackHttp":true
+                    }))
+                    .unwrap(),
+                )
+                .unwrap(),
+            ),
         );
         invocation.invocation_permit = Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
             jws: "containment-fixture-only".into(),
         });
+        invocation
+            .bind_effect_arguments(input.arguments.clone())
+            .unwrap();
         let broker = Arc::new(invocation);
         let (sink, _source) = tool_host::events::channel();
         let worker = pool.clone();

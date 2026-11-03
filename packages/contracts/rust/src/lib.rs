@@ -650,6 +650,8 @@ pub enum ControlErrorDetailCode {
     RequiredReviewsChange,
     #[serde(rename = "RATE_LIMITED")]
     RateLimited,
+    #[serde(rename = "BOUND_SERVICE_EFFECT_REQUIRED")]
+    BoundServiceEffectRequired,
 }
 /// Explicit Tool Group to Device Group binding; one binding is selected per invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

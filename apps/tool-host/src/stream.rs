@@ -90,6 +90,8 @@ pub struct Event {
 pub struct Upstream {
     client: reqwest::Client,
     url: reqwest::Url,
+    destination: ServiceDestination,
+    policy: AddressPolicy,
 }
 
 impl Upstream {
@@ -139,8 +141,10 @@ impl Upstream {
             policy.check(ip).map_err(|e| e.0)?;
         }
         Ok(Upstream {
-            client: egress::client(&destination, policy)?,
+            client: egress::client(&destination, policy.clone())?,
             url,
+            destination,
+            policy,
         })
     }
 
@@ -148,12 +152,37 @@ impl Upstream {
     /// upstream credential, marked sensitive so it never appears in logs.
     pub async fn post(
         &self,
-        mut headers: HeaderMap,
+        headers: HeaderMap,
         secret: Option<(HeaderName, String)>,
         body: Vec<u8>,
         limits: &Limits,
         deadline: Instant,
     ) -> Result<Reply, StreamError> {
+        self.post_inner(headers, secret, body, limits, deadline, None)
+            .await
+    }
+    pub(crate) async fn post_authorized(
+        &self,
+        headers: HeaderMap,
+        secret: Option<(HeaderName, String)>,
+        body: Vec<u8>,
+        limits: &Limits,
+        deadline: Instant,
+        authority: (&crate::mcp_effect::Authority<'_>, &str, &str),
+    ) -> Result<Reply, StreamError> {
+        self.post_inner(headers, secret, body, limits, deadline, Some(authority))
+            .await
+    }
+    async fn post_inner(
+        &self,
+        mut headers: HeaderMap,
+        secret: Option<(HeaderName, String)>,
+        body: Vec<u8>,
+        limits: &Limits,
+        deadline: Instant,
+        authority: Option<(&crate::mcp_effect::Authority<'_>, &str, &str)>,
+    ) -> Result<Reply, StreamError> {
+        let credential_name = secret.as_ref().map(|(name, _)| name.as_str().to_owned());
         if let Some((name, value)) = secret {
             let mut value = HeaderValue::from_str(&value)
                 .map_err(|_| StreamError::Connect("the credential is not a header value".into()))?;
@@ -165,7 +194,40 @@ impl Upstream {
             .post(self.url.clone())
             .headers(headers)
             .body(body);
-        let response = match tokio::time::timeout_at(deadline, request.send()).await {
+        let (send, transport) = if let Some((authority, handler, slug)) = authority {
+            let credential = credential_name
+                .ok_or_else(|| StreamError::Connect("MCP credential binding missing".into()))?;
+            let prepared = crate::request_binding::PreparedRequest::new(
+                &self.client,
+                request
+                    .build()
+                    .map_err(|e| StreamError::Connect(error_chain(&e)))?,
+                authority.metadata(slug, &credential),
+            )
+            .map_err(StreamError::Connect)?;
+            let transport = authority
+                .authorize(&prepared, handler, &self.destination, self.policy.clone())
+                .await?;
+            let client = transport.client.clone();
+            (
+                std::pin::Pin::from(Box::new(prepared.using_client(client).send())
+                    as Box<
+                        dyn std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>
+                            + Send,
+                    >),
+                Some(transport),
+            )
+        } else {
+            (
+                std::pin::Pin::from(Box::new(request.send())
+                    as Box<
+                        dyn std::future::Future<Output = Result<reqwest::Response, reqwest::Error>>
+                            + Send,
+                    >),
+                None,
+            )
+        };
+        let response = match tokio::time::timeout_at(deadline, send).await {
             Err(_) => return Err(StreamError::Deadline),
             Ok(Err(e)) => return Err(StreamError::Connect(error_chain(&e))),
             Ok(Ok(response)) => response,
@@ -222,6 +284,7 @@ impl Upstream {
             headers,
             observed_pin,
             body,
+            _effect_transport: transport,
         })
     }
 }
@@ -233,6 +296,8 @@ pub struct Reply {
     /// The `sha256/<base64>` SPKI pin of the server's certificate, over TLS.
     pub observed_pin: Option<String>,
     pub body: Body,
+    // The fixed-destination relay must survive through Session's JSON/SSE response consumption.
+    _effect_transport: Option<crate::effect_dispatch::BoundedTransport>,
 }
 
 pub enum Body {

@@ -1205,7 +1205,8 @@
         "REPLACE_CONFLICTS",
         "ONE_DEVICE_PER_ACCOUNT",
         "REQUIRED_REVIEWS_CHANGE",
-        "RATE_LIMITED"
+        "RATE_LIMITED",
+        "BOUND_SERVICE_EFFECT_REQUIRED"
       ]
     },
     "ControlErrorDetail": {

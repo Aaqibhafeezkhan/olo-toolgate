@@ -3171,5 +3171,20 @@
   },
   "EffectGrantDispatchAllowed": {
     "authorized": true
+  },
+  "McpEffectPolicy": {
+    "classification": "READ",
+    "consentRequired": false,
+    "acknowledgedUnfencedRisk": false
+  },
+  "NativeMcpEffectReview": {
+    "toolId": "mcp.orders/get-order",
+    "policy": {
+      "classification": "READ",
+      "consentRequired": false,
+      "acknowledgedUnfencedRisk": false
+    },
+    "reviewedBy": "admin",
+    "reviewedAtUnixMs": 1000
   }
 }

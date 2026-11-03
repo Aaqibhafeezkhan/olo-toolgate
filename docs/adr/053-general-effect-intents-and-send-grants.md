@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # ADR 053: General effect intents and single-owner send grants
 
-**Status:** Accepted; generic HTTP increment ready for the user-requested checkpoint commit. S18 remains Partial.
+**Status:** Accepted; S18 declared delivery implemented and qualified. Full phase/claim acceptance remains outstanding.
 
 ## Problem
 

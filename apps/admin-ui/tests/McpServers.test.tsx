@@ -18,12 +18,12 @@ const approval:McpApproval={sequence:1,snapshotRevision:1,tools:[{toolId:'mcp.or
 const server={slug:'orders',url:'https://mcp.example.com/mcp',auth:{secretName:'orders/mcp-token',scheme:'BEARER'},bindingId:'mcp-binding',strict:false,state:'APPROVED',revision:3,createdAtUnixMs:1,latestSnapshotRevision:2,approvalSequence:1,verification:{status:'CURRENT',approvalSequence:1,checkedAtUnixMs:1}};
 
 /** Control as the page sees it: one approved server, its approvals and latest snapshot, and recorded mutations. */
-function control(tools=[definition('get_order',D('b')),definition('list_orders',D('e'))],servers:unknown[]=[server]){
+function control(tools=[definition('get_order',D('b')),definition('list_orders',D('e'))],servers:unknown[]=[server],currentApproval:McpApproval=approval){
  const fetcher=vi.fn(async(url:string,init?:RequestInit)=>{
   if(init?.method==='POST'&&url.endsWith('/approvals'))return json({...approval,sequence:2,packageVersion:'1.0.2',tools:JSON.parse(String(init.body)).tools.map((t:{name:string;upstreamName:string})=>({toolId:`mcp.orders/${t.name}`,upstreamName:t.upstreamName,definitionDigest:D('b')}))});
   if(init?.method==='POST'&&url.endsWith('/mcp-servers'))return json({...server,slug:JSON.parse(String(init.body)).slug,state:'REGISTERED'});
   if(init?.method==='POST'&&url.endsWith('/scans'))return json({scanId:'scan-3',slug:'orders',purpose:'DISCOVER',state:'QUEUED',hostId:'host-a',createdAtUnixMs:1,deadlineUnixMs:2});
-  if(url.endsWith('/approvals'))return json({items:[approval]});
+  if(url.endsWith('/approvals'))return json({items:[currentApproval]});
   if(url.includes('/snapshots/'))return json(snapshot(tools));
   const detail=/\/mcp-servers\/([a-z][a-z0-9-]+)$/.exec(url);if(detail)return json((servers as {slug:string}[]).find(s=>s.slug===detail[1])??{...server,slug:detail[1]});
   return json({items:servers});
@@ -56,22 +56,37 @@ it('reviews definitions with the diff and approves the selected tools with their
  expect((screen.getByLabelText('Local name for get_order') as HTMLInputElement).value).toBe('get-order');
  fireEvent.click(screen.getByLabelText('Approve list_orders'));
  expect((screen.getByLabelText('Local name for list_orders') as HTMLInputElement).value).toBe('list_orders');
- fireEvent.click(screen.getByRole('button',{name:'Approve 3 tools'}));
- await screen.findByText(/Approved 3 tools of orders as mcp.orders 1.0.2/);
+ fireEvent.change(screen.getByLabelText('Effect classification for get_order'),{target:{value:'READ'}});
+ fireEvent.change(screen.getByLabelText('Effect classification for list_orders'),{target:{value:'READ'}});
+ fireEvent.click(screen.getByRole('button',{name:'Approve 2 tools'}));
+ await screen.findByText(/Approved 2 tools of orders as mcp.orders 1.0.2/);
  const [,init]=fetcher.mock.calls.find(([url,i])=>url.endsWith('/approvals')&&i?.method==='POST')!;
- expect(JSON.parse(String(init!.body))).toEqual({snapshotRevision:2,tools:[{upstreamName:'get_order',name:'get-order'},{upstreamName:'old_tool',name:'old'},{upstreamName:'list_orders',name:'list_orders'}]});
+ expect(JSON.parse(String(init!.body))).toEqual({snapshotRevision:2,tools:[{upstreamName:'get_order',name:'get-order',effectPolicy:{classification:'READ',consentRequired:false,acknowledgedUnfencedRisk:false}},{upstreamName:'list_orders',name:'list_orders',effectPolicy:{classification:'READ',consentRequired:false,acknowledgedUnfencedRisk:false}}]});
  expect(new Headers(init!.headers).get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/);
 });
 
-it('refuses invalid or duplicate local names and more than 64 tools',async()=>{
- control(Array.from({length:MAX_APPROVED_TOOLS+1},(_,i)=>definition(`tool_${i}`,D('b'))));
+it('refuses invalid and duplicate local names',async()=>{
+ control();
  render(<McpServers client={new ControlClient('token',vi.fn())}/>);await review();
  fireEvent.change(screen.getByLabelText('Local name for get_order'),{target:{value:'Get Order'}});
  await screen.findByText(/Local names must be unique and lowercase ToolGate names: Get Order/);
  fireEvent.change(screen.getByLabelText('Local name for get_order'),{target:{value:'get-order'}});
- for(let i=0;i<MAX_APPROVED_TOOLS;i++)fireEvent.click(screen.getByLabelText(`Approve tool_${i}`));
- await screen.findByText(/At most 64 tools per approval; 66 are selected/);
- expect((screen.getByRole('button',{name:'Approve 66 tools'}) as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.click(screen.getByLabelText('Approve list_orders'));
+ fireEvent.change(screen.getByLabelText('Local name for list_orders'),{target:{value:'get-order'}});
+ await screen.findByText(/Local names must be unique and lowercase ToolGate names: get-order/);
+ expect((screen.getByRole('button',{name:'Approve 2 tools'}) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('refuses adding a sixty-fifth tool to an existing sixty-four-tool approval',async()=>{
+ const tools=Array.from({length:MAX_APPROVED_TOOLS+1},(_,i)=>definition('tool_'+i,D('b')));
+ const current={...approval,tools:tools.slice(0,MAX_APPROVED_TOOLS).map(t=>({
+  toolId:'mcp.orders/'+t.tool.name,upstreamName:t.tool.name,definitionDigest:t.definitionDigest,
+ }))};
+ control(tools,[server],current);
+ render(<McpServers client={new ControlClient('token',vi.fn())}/>);await review();
+ fireEvent.click(screen.getByLabelText('Approve tool_64'));
+ await screen.findByText(/At most 64 tools per approval; 65 are selected/);
+ expect((screen.getByRole('button',{name:'Approve 65 tools'}) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it('reads but cannot change without mcp_server.register',async()=>{
@@ -103,4 +118,21 @@ it('registers by URL with the pool binding and scans, and shows quarantine evide
  await screen.findByText(/Quarantined: DEFINITION_CHANGED/);
  fireEvent.click(screen.getByRole('button',{name:'Scan orders'}));
  await waitFor(()=>expect(fetcher.mock.calls.some(([url,i])=>url.endsWith('/mcp-servers/orders/scans')&&i?.method==='POST')).toBe(true));
+});
+
+it('requires explicit critical effect review and never sends a client review stamp',async()=>{
+ const fetcher=control();render(<McpServers client={new ControlClient('token',vi.fn())}/>);await review();
+ fireEvent.click(screen.getByRole('button',{name:'Approve 1 tools'}));
+ await screen.findByText('Review the effect classification for get_order.');
+ expect(fetcher.mock.calls.some(([url,init])=>url.endsWith('/approvals')&&init?.method==='POST')).toBe(false);
+ fireEvent.change(screen.getByLabelText('Effect classification for get_order'),{target:{value:'FINANCIAL'}});
+ fireEvent.click(screen.getByRole('button',{name:'Approve 1 tools'}));
+ await screen.findByText('Acknowledge the unfenced target risk for get_order.');
+ fireEvent.click(screen.getByLabelText('I acknowledge the unfenced target risk for get_order'));
+ fireEvent.click(screen.getByRole('button',{name:'Approve 1 tools'}));
+ await waitFor(()=>expect(fetcher.mock.calls.some(([url,init])=>url.endsWith('/approvals')&&init?.method==='POST')).toBe(true));
+ const body=JSON.parse(String(fetcher.mock.calls.find(([url,init])=>url.endsWith('/approvals')&&init?.method==='POST')![1]?.body));
+ expect(body.tools[0].effectPolicy).toEqual({classification:'FINANCIAL',consentRequired:false,acknowledgedUnfencedRisk:true});
+ expect(body.tools[0]).not.toHaveProperty('reviewedBy');
+ expect(body.tools).toHaveLength(1);
 });

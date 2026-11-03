@@ -42,8 +42,9 @@ class ServicePermitBridgeTest {
         var i=rig.graph.codec.model(submit(request(id)).body(),EnterpriseInvocation.class);
         return rig.consume(rig.reserve(i));
     }
-    ServicePermit issue(EnterpriseInvocation i){return rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",KEY,
+    ServicePermit legacyIssue(EnterpriseInvocation i){return rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",KEY,
         rig.graph.codec.json(new ServicePermitIssue(i.id(),(i.reservedNonce()==null?"not-admitted":i.reservedNonce()),ServiceAudience.olo_memory,null,null,null,null,null))).body(),ServicePermit.class);}
+    ServicePermit issue(EnterpriseInvocation i){return issueBound(i,bound(i).digest());}
     ServicePermitConsumption consumption(ServicePermit p){var c=rig.signer.verifyService(p);return new ServicePermitConsumption(p,c.operation(),c.resources(),c.requestFingerprint(),KEY,c.httpRequestDigest());}
     record Bound(PreparedHttpRequestManifest manifest,SignedInvocationPermit proof,String digest) {}
     Bound bound(EnterpriseInvocation i){
@@ -177,16 +178,42 @@ class ServicePermitBridgeTest {
         rig.operations=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,rig.clock,"control","toolgate-client",60000,100);
         permits=new ServicePermits(rig.store,rig.graph.codec,rig.operations);claimReplayExercise();
     }
-    @Test void legacyGrantsCannotBeAdoptedByTheClaimProtocol(){
-        var permit=issue(start("legacy-claim"));assertThrows(Failure.class,()->claimConsume(permit,CLAIM_A));
-        permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(permit)));
+    @Test void legacyWritesRequireUpgradeAtIssuanceAndHistoricalConsumption(){
+        var i=start("legacy-claim");
+        var denied=assertThrows(Failure.class,()->legacyIssue(i));
+        assertEquals(409,denied.status());
+        assertEquals(ControlErrorDetailCode.BOUND_SERVICE_EFFECT_REQUIRED,denied.detail());
+        var bound=issue(i);
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var old=json.valueToTree(rig.signer.verifyService(bound));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)old).remove(List.of("httpRequestDigest","effectId","authorizationGeneration"));
+        var historical=rig.signer.signService(rig.graph.codec.model(old.toString(),ServicePermitClaims.class));
+        var rejected=assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,
+            rig.graph.codec.json(consumption(historical))));
+        assertEquals(ControlErrorDetailCode.BOUND_SERVICE_EFFECT_REQUIRED,rejected.detail());
+        assertThrows(Failure.class,()->claimConsume(historical,CLAIM_A));
+        assertEquals("AUTHORIZED",rig.store.transaction(rig.gateway.tenant(),false,
+            tx->tx.effects().byNonce(rig.signer.verifyService(bound).nonce()).state()));
+    }
+    @Test void legacyReadsStillIssueAndConsumeWithoutWriteAuthority(){
+        var request=request("legacy-read");
+        var read=new EnterpriseInvocationRequest(request.context(),
+            new AuthorizationRequest(request.request().toolId(),"memory.read",request.request().arguments()),
+            request.toolDigest(),request.packageDigest(),null,null);
+        var queued=rig.graph.codec.model(submit(read).body(),EnterpriseInvocation.class);
+        var running=rig.consume(rig.reserve(queued));
+        var permit=legacyIssue(running);
+        assertNull(rig.signer.verifyService(permit).httpRequestDigest());
+        assertEquals(200,permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(permit))).status());
+        assertNull(rig.store.transaction(rig.gateway.tenant(),false,
+            tx->tx.effects().byNonce(rig.signer.verifyService(permit).nonce())));
     }
     @Test void preparedHttpDigestIsSignedImmutableAndRequiredForConsumption(){
         var i=start("http-bound");String digest=bound(i).digest();
         var permit=issueBound(i,digest);var claims=rig.signer.verifyService(permit);
         assertEquals(digest,claims.httpRequestDigest());assertEquals(permit,issueBound(i,digest));
         assertThrows(Failure.class,()->issueBound(i,"sha256:"+"b".repeat(64)));
-        assertThrows(Failure.class,()->issue(i)); // no downgrade through the legacy issue request
+        assertThrows(Failure.class,()->legacyIssue(i)); // no downgrade through the legacy issue request
         var good=consumption(permit);
         for(String bad:Arrays.asList(null,"sha256:"+"b".repeat(64))){
             assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,
@@ -210,7 +237,7 @@ class ServicePermitBridgeTest {
     }
     @Test void independentManifestValidationRejectsChangedDestinationsAndUndeclaredScope(){
         var i=start("manifest-attacks");var facts=bound(i);
-        assertThrows(Failure.class,()->issue(i)); // v2 leases cannot opt out even before the first bound grant
+        assertThrows(Failure.class,()->legacyIssue(i)); // v2 leases cannot opt out even before the first bound grant
         var json=new com.fasterxml.jackson.databind.ObjectMapper();
         var baseline=(com.fasterxml.jackson.databind.node.ObjectNode)json.valueToTree(facts.manifest());
         var mutations=new LinkedHashMap<String,java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode>>();
@@ -354,6 +381,7 @@ class ServicePermitBridgeTest {
         assertEquals("alice",c.sub());assertNull(c.act());assertEquals(rig.gateway.tenant().value(),c.tenantId());
         assertEquals(i.evaluation().resources(),c.resources());assertEquals(i.evaluation().argumentsDigest(),c.requestFingerprint());
         assertEquals(15000,c.exp()-c.iat());
+        sending(p,"broker-test","handler-test");
         permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p)));
         assertEquals("CONSUMED",rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().byNonce(c.nonce()).state()));
         assertEquals(1,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),EnterpriseConformanceTest.NOW).size()).intValue());
@@ -361,11 +389,11 @@ class ServicePermitBridgeTest {
         assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p))));
     }
     @Test void revocationAfterIssuanceStopsTheStorageEffect(){
-        var p=issue(start("service-revoked"));rig.graph.remove(Ids.Kind.GRANT,"human");rig.saveGraph();
+        var p=issue(start("service-revoked"));sending(p,"broker-test","handler-test");rig.graph.remove(Ids.Kind.GRANT,"human");rig.saveGraph();
         assertThrows(Failure.class,()->permits.consume(rig.gateway,ServiceAudience.olo_memory,rig.graph.codec.json(consumption(p))));
     }
     @Test void forgedBodyAudienceExecutorAndScopeAreRefused(){
-        var p=issue(start("service-forgery"));var good=consumption(p);
+        var p=issue(start("service-forgery"));sending(p,"broker-test","handler-test");var good=consumption(p);
         for(var bad:List.of(new ServicePermitConsumption(p,good.operation(),good.resources(),"e".repeat(64),KEY,null),
             new ServicePermitConsumption(p,good.operation(),good.resources(),good.requestFingerprint(),"e".repeat(64),null),
             new ServicePermitConsumption(p,"memory.delete",good.resources(),good.requestFingerprint(),KEY,null))){
@@ -392,8 +420,10 @@ class ServicePermitBridgeTest {
         var later=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,
             java.time.Clock.fixed(java.time.Instant.ofEpochMilli(EnterpriseConformanceTest.NOW+14900),java.time.ZoneOffset.UTC),"control","toolgate-client",60000,100);
         var bridge=new ServicePermits(rig.store,rig.graph.codec,later);
+        var facts=bound(i);
         var p=rig.graph.codec.model(bridge.issue(rig.gateway.tenant(),tx->"device",KEY,
-            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory,null,null,null,null,null))).body(),ServicePermit.class);
+            rig.graph.codec.json(new ServicePermitIssue(i.id(),i.reservedNonce(),ServiceAudience.olo_memory,
+                facts.digest(),facts.manifest(),facts.proof(),"broker-test","handler-test"))).body(),ServicePermit.class);
         var c=rig.signer.verifyService(p);
         assertEquals(EnterpriseConformanceTest.NOW+15000,c.exp());assertEquals(100,c.exp()-c.iat());
         var expired=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,
