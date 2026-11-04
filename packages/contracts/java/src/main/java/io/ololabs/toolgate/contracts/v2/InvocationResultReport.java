@@ -19,7 +19,7 @@ public record InvocationResultReport(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "outcome", required = true) InvocationOutcome outcome,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "result", required = false) ResultFrame result,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "notStarted", required = false) RefusalReason notStarted,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionTier", required = false) RuntimeTier executionTier
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionTier", required = true) RuntimeTier executionTier
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -34,7 +34,6 @@ public record InvocationResultReport(
         java.util.Objects.requireNonNull(invocationId, "invocationId");
         java.util.Objects.requireNonNull(fencingToken, "fencingToken");
         java.util.Objects.requireNonNull(outcome, "outcome");
+        java.util.Objects.requireNonNull(executionTier, "executionTier");
     }
-    /** Construct legacy executor evidence without a reported execution tier. */
-    public InvocationResultReport(String invocationId, String fencingToken, InvocationOutcome outcome, ResultFrame result, RefusalReason notStarted) { this(invocationId, fencingToken, outcome, result, notStarted, null); }
 }

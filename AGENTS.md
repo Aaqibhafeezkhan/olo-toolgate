@@ -22,6 +22,17 @@ For work implementing or fixing issue #230 and its attached execution plan:
 
 Follow `CONTRIBUTING.md` and the component's verification requirements as well.
 
+## Fresh breaking-build constraint
+
+For issue #230, current and future implementation uses current contracts and
+fresh schemas only. Do not add backward compatibility, database migrations,
+upgrade/backfill/conversion paths, compatibility constructors, legacy aliases
+or legacy runtime support. Reject unsupported existing stores and obsolete
+wire/package formats without converting or deleting them. Fold schema changes
+into fresh initialization; recovery within the current schema remains required.
+This user constraint supersedes migration/compatibility proposals in preserved
+planning documents.
+
 ## Stage delivery workflow
 
 For issue #230, follow the weighted S01–S33 baseline and completion criteria in

@@ -12,12 +12,13 @@ final readonly class RouteEffectPolicy implements \JsonSerializable {
         public EffectClassification $classification,
         public bool $consentRequired,
         public bool $acknowledgedUnfencedRisk,
-        public EffectIntentBlueprint $intent
+        public EffectIntentBlueprint $intent,
+        public ?TargetDedupeGuarantee $targetDedupeGuarantee = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['routeId', 'classification', 'consentRequired', 'acknowledgedUnfencedRisk', 'intent']) || array_diff(['routeId', 'classification', 'consentRequired', 'acknowledgedUnfencedRisk', 'intent'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['routeId', 'classification', 'consentRequired', 'acknowledgedUnfencedRisk', 'intent', 'targetDedupeGuarantee']) || array_diff(['routeId', 'classification', 'consentRequired', 'acknowledgedUnfencedRisk', 'intent'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class RouteEffectPolicy implements \JsonSerializable {
             EffectClassification::from($data['classification']),
             $data['consentRequired'],
             $data['acknowledgedUnfencedRisk'],
-            EffectIntentBlueprint::fromArray($data['intent'])
+            EffectIntentBlueprint::fromArray($data['intent']),
+            array_key_exists('targetDedupeGuarantee', $data) ? TargetDedupeGuarantee::fromArray($data['targetDedupeGuarantee']) : null
         );
     }
 

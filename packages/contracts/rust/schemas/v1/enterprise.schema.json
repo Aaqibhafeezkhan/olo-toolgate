@@ -3119,7 +3119,8 @@
         "authorizationEpoch",
         "iat",
         "exp",
-        "executionNonce"
+        "executionNonce",
+        "httpRequestDigest"
       ],
       "properties": {
         "iss": {
@@ -3190,7 +3191,7 @@
         "httpRequestDigest": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$",
-          "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
+          "description": "Required exact prepared transport fingerprint; unbound and earlier-stage formats are rejected."
         },
         "effectId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier",
@@ -3211,7 +3212,12 @@
       "required": [
         "invocationId",
         "fencingToken",
-        "audience"
+        "audience",
+        "httpRequestDigest",
+        "httpRequestManifest",
+        "invocationPermit",
+        "brokerInstanceId",
+        "handlerId"
       ],
       "properties": {
         "invocationId": {
@@ -3226,7 +3232,7 @@
         "httpRequestDigest": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$",
-          "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
+          "description": "Required exact prepared transport fingerprint; unbound and earlier-stage formats are rejected."
         },
         "httpRequestManifest": {
           "$ref": "#/$defs/PreparedHttpRequestManifest"
@@ -3239,6 +3245,9 @@
         },
         "handlerId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "effectKey": {
+          "$ref": "../v2/effect-authorization.schema.json#/$defs/EffectKey"
         }
       }
     },
@@ -3266,7 +3275,8 @@
         "operation",
         "resources",
         "requestFingerprint",
-        "executorKeySha256"
+        "executorKeySha256",
+        "httpRequestDigest"
       ],
       "properties": {
         "permit": {
@@ -3296,7 +3306,7 @@
         "httpRequestDigest": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$",
-          "description": "Optional toolgate-http-request-v1 fingerprint of the exact prepared transport. Bound permits require matching target-observed HTTP facts; omission preserves legacy behavior."
+          "description": "Required exact prepared transport fingerprint; unbound and earlier-stage formats are rejected."
         }
       }
     },

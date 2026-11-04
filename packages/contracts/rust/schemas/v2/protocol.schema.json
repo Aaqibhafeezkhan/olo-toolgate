@@ -534,7 +534,8 @@
       "required": [
         "invocationId",
         "fencingToken",
-        "outcome"
+        "outcome",
+        "executionTier"
       ]
     },
     "RunEventKind": {

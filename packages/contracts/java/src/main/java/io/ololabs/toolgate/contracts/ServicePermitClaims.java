@@ -43,7 +43,7 @@ public record ServicePermitClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "iat", required = true) Long iat,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "exp", required = true) Long exp,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "executionNonce", required = true) String executionNonce,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = true) String httpRequestDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "effectId", required = false) String effectId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationGeneration", required = false) Long authorizationGeneration
 ) {
@@ -86,5 +86,6 @@ public record ServicePermitClaims(
         java.util.Objects.requireNonNull(iat, "iat");
         java.util.Objects.requireNonNull(exp, "exp");
         java.util.Objects.requireNonNull(executionNonce, "executionNonce");
+        java.util.Objects.requireNonNull(httpRequestDigest, "httpRequestDigest");
     }
 }

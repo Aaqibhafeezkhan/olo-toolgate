@@ -16,12 +16,8 @@ import java.util.*;
 public final class ServicePermitVerifier {
     public record Epoch(long value, long observedAtUnixMs) {}
     @FunctionalInterface public interface EpochFeed { Epoch current(String tenant); }
-    @FunctionalInterface public interface WriteConsumer { boolean consume(ServiceAudience audience, ServicePermitConsumption request); }
     public record Request(String tenant, String operation, List<ResourceDescriptor> resources, byte[] exactBody,
                           Transport transport) {
-        public Request(String tenant,String operation,List<ResourceDescriptor> resources,byte[] exactBody){
-            this(tenant,operation,resources,exactBody,null);
-        }
         public Request { resources=List.copyOf(resources);exactBody=exactBody.clone(); }
         @Override public byte[] exactBody(){return exactBody.clone();}
     }
@@ -48,16 +44,15 @@ public final class ServicePermitVerifier {
     private final Map<String,PublicKey> keys;
     private final Clock clock;
     private final EpochFeed epochs;
-    private final WriteConsumer consumer;
     private static final ObjectMapper JSON=JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
         .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     public ServicePermitVerifier(String issuer, ServiceAudience audience, Map<String,PublicKey> trustedKeys,
-            Clock clock, EpochFeed epochs, WriteConsumer consumer){
+            Clock clock, EpochFeed epochs){
         this.issuer=Objects.requireNonNull(issuer);this.audience=Objects.requireNonNull(audience);this.keys=Map.copyOf(trustedKeys);
         if(keys.isEmpty()||keys.size()>16||keys.values().stream().anyMatch(key->!(key instanceof java.security.interfaces.RSAPublicKey rsa)
                 ||rsa.getModulus().bitLength()<2048||!rsa.getPublicExponent().equals(java.math.BigInteger.valueOf(65537))))
             throw new IllegalArgumentException("Pinned RSA service permit keys required");
-        this.clock=Objects.requireNonNull(clock);this.epochs=Objects.requireNonNull(epochs);this.consumer=Objects.requireNonNull(consumer);
+        this.clock=Objects.requireNonNull(clock);this.epochs=Objects.requireNonNull(epochs);
     }
     /** Verified facts only. This object cannot authorize a business commit before online claim consumption. */
     public final class VerifiedWrite {
@@ -93,7 +88,7 @@ public final class ServicePermitVerifier {
     // Package-private test seams; production enters through the accepted TLS session above.
     Authorization authorizeKey(ServicePermit permit,Request request,String executorKey){
         var verified=verifyKey(permit,request,executorKey);
-        if(!verified.read()&&!consumer.consume(audience,verified.consumption()))throw denied();
+        if(!verified.read())throw denied();
         verified.authorization().checkCommitDeadline();return verified.authorization();
     }
     VerifiedWrite verifyWriteKey(ServicePermit permit,Request request,String executorKey){
@@ -124,15 +119,11 @@ public final class ServicePermitVerifier {
                 ||!digest.equals(claims.requestFingerprint())||!executorKey.equals(claims.executorKeySha256())
                 ||claims.iat()>now||claims.exp()<=now||claims.exp()<=claims.iat()||claims.exp()-claims.iat()>15000
                 ||request.resources().isEmpty()||request.resources().stream().anyMatch(r->r.kind()!=ResourceKind.CUSTOM||!r.locator().startsWith("olo://"+request.tenant()+"/")))throw denied();
-            // Transport-aware targets never silently downgrade to an unbound permit.
-            if(request.transport()!=null&&claims.httpRequestDigest()==null)throw denied();
-            String transportDigest=null;
-            if(claims.httpRequestDigest()!=null){
-                var transport=request.transport();if(transport==null)throw denied();
-                transportDigest=HttpRequestFingerprint.digest(transport.profile(),transport.uri(),transport.method(),
-                    transport.headers(),request.exactBody());
-                if(!transportDigest.equals(claims.httpRequestDigest()))throw denied();
-            }
+            var transport=request.transport();
+            if(transport==null)throw denied();
+            String transportDigest=HttpRequestFingerprint.digest(transport.profile(),transport.uri(),transport.method(),
+                transport.headers(),request.exactBody());
+            if(!transportDigest.equals(claims.httpRequestDigest()))throw denied();
             boolean read=switch(request.operation()){
                 case "memory.read","rag.query" -> true;
                 case "memory.append","memory.delete","memory.share","memory.export","rag.ingest","rag.update","rag.delete","rag.share" -> false;

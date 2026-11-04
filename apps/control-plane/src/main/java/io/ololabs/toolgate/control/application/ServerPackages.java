@@ -73,6 +73,7 @@ public final class ServerPackages {
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
         var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
         PackageCompatibility.require(PackageCompatibility.problems(manifest));
+        codec.model(codec.json(manifest),io.ololabs.toolgate.contracts.v2.PackageManifest.class);
         // Only Control generates MCP_PROXY packages, from an approved MCP server snapshot.
         if (PackageCompatibility.proxy(manifest)) throw PackageCompatibility.incompatible();
         return store.transaction(actor.tenant(), true, tx -> {
@@ -122,7 +123,7 @@ public final class ServerPackages {
             var stored = tx.packages().version(request.packageDigest());
             // A generated MCP_PROXY package is deployed by its approval only, onto its registration's pool.
             if (stored != null && PackageCompatibility.proxy(node(stored.document()).get("manifest"))) throw Failure.conflict();
-            return reply(200, deployIn(tx, actor.id(), request, requestId));
+            return reply(200, deployIn(tx, actor.id(), actor.userId(), request, requestId));
         });
     }
 
@@ -130,6 +131,9 @@ public final class ServerPackages {
      *  manifest omits are retired in the same directory change: disabled with their extractors, so catalogs stop listing
      *  them and permits for them are refused. */
     ObjectNode deployIn(Store.Session tx, String actor, PackageDeploymentRequest request, String requestId) {
+        return deployIn(tx,actor,null,request,requestId);
+    }
+    private ObjectNode deployIn(Store.Session tx,String actor,String reviewerUser,PackageDeploymentRequest request,String requestId){
         {
             var version = tx.packages().version(request.packageDigest());
             if (version == null) throw notFound();
@@ -143,6 +147,10 @@ public final class ServerPackages {
                 for (var global : descriptor.path("variables").path("globals")) same(declared, global.get("name").asText(), global);
                 var names = new TreeSet<String>();
                 for (var secret : descriptor.path("variables").path("secrets")) names.add(secret.get("name").asText());
+                var usedAuths=new HashSet<String>();
+                for(var route:descriptor.path("routes"))if(route.path("auth").isTextual())usedAuths.add(route.path("auth").asText());
+                for(var auth:descriptor.path("httpAuth"))if(usedAuths.contains(auth.path("id").asText())&&auth.path("secret").isTextual())
+                    names.add(auth.path("secret").asText());
                 secrets.put(toolId, names);
                 for (var destination : descriptor.path("destinations")) { same(destinations, destination.get("id").asText(), destination); hosts.add(destination.get("hostSetting").asText()); }
                 for (var route : descriptor.path("routes")) same(routes, route.get("id").asText(), route);
@@ -205,7 +213,8 @@ public final class ServerPackages {
                     if(declaredRoute==null||!reviewedRoutes.add(policy.routeId()))throw Failure.validation();
                     var route=codec.model(codec.json(declaredRoute),io.ololabs.toolgate.contracts.v2.RouteDeclaration.class);
                     EffectIntentValidation.review(policy,route);
-                    reviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.RouteEffectReview(policy,actor,clock.millis()))));
+                    if(policy.targetDedupeGuarantee()!=null&&(reviewerUser==null||!tx.load().entries().containsKey(Ids.Kind.USER.id(reviewerUser))))throw Failure.validation();
+                    reviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.RouteEffectReview(policy,reviewerUser==null?actor:reviewerUser,clock.millis()))));
                 }
             }
             if(PackageCompatibility.proxy(manifest)){
@@ -231,6 +240,7 @@ public final class ServerPackages {
                 } catch (IllegalArgumentException | java.net.UnknownHostException invalid) { throw Failure.validation(); }
                 ranges.add(node(codec.json(range)));
             }
+            TargetLookupRoutes.validate(codec.model(codec.json(profile),io.ololabs.toolgate.contracts.v2.ServiceProfile.class));
             String profileDigest = Canonical.digest(profile), globalsDigest = Canonical.digest(globals);
             tx.packages().saveDocument(profileDigest, codec.json(profile));
             tx.packages().saveDocument(globalsDigest, codec.json(globals));
@@ -459,6 +469,18 @@ public final class ServerPackages {
 
     /** The permit for one attempt on the Tool Host the invocation was placed on. Only a declaration whose execution
      *  location allows SERVER can be permitted here, whatever the directory, placement or a forged request says. */
+    boolean qualifiedForRecovery(Store.Session tx,JsonNode deployment,JsonNode descriptor,JsonNode runtime,JsonNode profile){
+        var seen=new HashSet<String>();
+        for(String pin:qualifiedRecoveryExecutors){
+            String device=pin.substring(0,pin.indexOf('@'));if(!seen.add(device))continue;
+            var entry=tx.load().entries().get(Ids.Kind.DEVICE.id(device));
+            if(entry==null||!entry.enabled()||!targets(tx.load(),codec,deployment,device))continue;
+            String registration=tx.packages().toolHost(device);
+            if(registration!=null&&RecoveryAdmissionPolicy.qualify(runtime,descriptor,profile,node(registration),qualifiedRecoveryExecutors)!=null)
+                return true;
+        }
+        return false;
+    }
     private io.ololabs.toolgate.contracts.v2.SignedInvocationPermit permitIn(Store.Session tx, DirectoryService.Actor actor, PermitReservationRequest request) {
         {
             var i = operations.invocationIn(tx, request.invocationId()); var e = i.evaluation(); String device = e.context().deviceId();

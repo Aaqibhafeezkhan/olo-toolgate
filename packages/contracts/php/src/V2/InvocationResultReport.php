@@ -11,23 +11,23 @@ final readonly class InvocationResultReport implements \JsonSerializable {
         public string $invocationId,
         public string $fencingToken,
         public InvocationOutcome $outcome,
+        public RuntimeTier $executionTier,
         public ?ResultFrame $result = null,
-        public ?RefusalReason $notStarted = null,
-        public ?RuntimeTier $executionTier = null
+        public ?RefusalReason $notStarted = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['invocationId', 'fencingToken', 'outcome', 'result', 'notStarted', 'executionTier']) || array_diff(['invocationId', 'fencingToken', 'outcome'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['invocationId', 'fencingToken', 'outcome', 'result', 'notStarted', 'executionTier']) || array_diff(['invocationId', 'fencingToken', 'outcome', 'executionTier'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['invocationId'],
             $data['fencingToken'],
             InvocationOutcome::from($data['outcome']),
+            RuntimeTier::from($data['executionTier']),
             array_key_exists('result', $data) ? ResultFrame::fromArray($data['result']) : null,
-            array_key_exists('notStarted', $data) ? RefusalReason::from($data['notStarted']) : null,
-            array_key_exists('executionTier', $data) ? RuntimeTier::from($data['executionTier']) : null
+            array_key_exists('notStarted', $data) ? RefusalReason::from($data['notStarted']) : null
         );
     }
 

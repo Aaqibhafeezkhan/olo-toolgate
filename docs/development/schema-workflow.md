@@ -39,7 +39,7 @@ format
 compile every language package
        |
        v
-compatibility test
+current-format and obsolete-input rejection tests
        |
        v
 CI verifies no generated drift

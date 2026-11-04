@@ -228,12 +228,19 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     public EnterpriseInvocation rebind(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){
-        var recovery=recordRecovery(previous,proof,now);
+        return rebind(previous,proof,null,now);
+    }
+    public EnterpriseInvocation rebindTargetDeduplication(EnterpriseInvocation previous,List<Map<String,Object>> plan,long now){
+        if(plan==null||plan.isEmpty()||plan.size()>256)throw Failure.conflict();
+        return rebind(previous,OperationRebindingPolicy.Proof.TARGET_DEDUPLICATION,plan,now);
+    }
+    private EnterpriseInvocation rebind(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,List<Map<String,Object>> plan,long now){
+        var recovery=recordRecovery(previous,proof,plan,now);
         var snapshot=(com.fasterxml.jackson.databind.JsonNode)codec.value(recovery.document());
         var next=new EnterpriseInvocation(previous.id(),previous.requestDigest(),previous.evaluation(),
                 EnterpriseInvocationState.QUEUED,recovery.toRevision(),previous.authorizationEpoch(),null,
                 previous.expiresAtUnixMs(),List.of(),previous.downstreamIdempotencyKey(),null,
-                previous.diagnosticId(),previous.reconciliation());
+                previous.diagnosticId(),previous.reconciliation(), null);
         String dispatch=snapshot.path("dispatch").asText(null);
         try {
             // Remove only the active pointer after its exact bytes are durably archived above.
@@ -248,10 +255,14 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         return next;
     }
     public Recovery recordRecovery(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){
+        return recordRecovery(previous,proof,null,now);
+    }
+    private Recovery recordRecovery(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,List<Map<String,Object>> plan,long now){
         var stored=invocation(previous.id());
         if(stored==null||!codec.json(stored).equals(codec.json(previous)))throw Failure.conflict();
         var facts=recoveryFacts(previous.id());
-        if(proof==null||OperationRebindingPolicy.proof(facts,now)!=proof)throw Failure.conflict();
+        if(proof==null||(proof==OperationRebindingPolicy.Proof.TARGET_DEDUPLICATION
+            ?plan==null||!OperationRebindingPolicy.targetCandidate(facts,now):OperationRebindingPolicy.proof(facts,now)!=proof))throw Failure.conflict();
         var operation=operation(previous.id());
         var ids=new ArrayList<String>();
         String dispatch=null;
@@ -265,6 +276,7 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
             }
             var snapshot=new LinkedHashMap<String,Object>();
             snapshot.put("format","toolgate-operation-recovery-v1");
+            if(plan!=null)snapshot.put("targetPlan",plan);
             snapshot.put("invocation",codec.json(previous));snapshot.put("attemptIds",ids);
             var lease=executionLease(previous.id());
             snapshot.put("lease",lease==null?null:codec.json(lease));
@@ -434,7 +446,7 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         // Derived response metadata is never persisted as executor or authorization evidence.
         if(value.operationOutcome()!=null)value=new EnterpriseInvocation(value.id(),value.requestDigest(),value.evaluation(),
                 value.state(),value.revision(),value.authorizationEpoch(),value.reservedNonce(),value.expiresAtUnixMs(),
-                value.completedResources(),value.downstreamIdempotencyKey(),value.resultDigest(),value.diagnosticId(),value.reconciliation());
+                value.completedResources(),value.downstreamIdempotencyKey(),value.resultDigest(),value.diagnosticId(),value.reconciliation(), null);
         String document=checked(value,EnterpriseInvocation.class);int changed;String previous=null;
         try{
             // Every ledger transition is recorded as a platform run event in the same transaction.

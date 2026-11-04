@@ -158,7 +158,7 @@ def render_version(ver, version, outputs):
                 '            let value = <$ty as Deserialize>::deserialize(deserializer)?;', '            if value == $value {', '                Ok(value)', '            } else {',
                 '                Err(serde::de::Error::custom(concat!(', '                    "expected constant ",', '                    stringify!($value)', '                )))', '            }', '        }', '    };', '}']
     else:
-        rust = ['//! Shared structural contracts. Validate canonical schemas at input boundaries.', '// ' + HEADER.replace('\n', '\n// '), 'use serde::{Deserialize, Serialize};', '', '/// Contract set v2 models, side by side with v1 during migration.', 'pub mod v2;']
+        rust = ['//! Shared structural contracts. Validate canonical schemas at input boundaries.', '// ' + HEADER.replace('\n', '\n// '), 'use serde::{Deserialize, Serialize};', '', '/// Current execution models and current transport model namespaces.', 'pub mod v2;']
     ts = ['// ' + HEADER.replace('\n', '\n// ')] + (['import type * as V1 from "../index.js";'] if v2 else ['import type * as V2 from "./v2/index.js";'])
     rust_consts = []
     for name, schema in sorted(defs.items()):
@@ -202,59 +202,7 @@ def render_version(ver, version, outputs):
                 java += ['    }', '    /** Stable package identity. */', '    public static final String NAME = "olo-toolgate-contracts";', '    /** Canonical contract-set version. */', f'    public static final String VERSION = "{version}";', '    /** Embedded canonical schema inventory. */', '    public static final java.util.List<String> SCHEMA_FILES = java.util.List.of('+','.join('\"'+p.name+'\"' for p in sorted((CONTRACTS/'schemas/v1').glob('*.json')))+');', '    /** Current contract-set marker.\n     * @return the canonical identity and version\n     */', '    public static ContractSet current() { return new ContractSet(NAME, VERSION); }', '}']
             else:
                 java += ['    }']
-                # Retain the pre-email/pre-bootstrap-metadata Java construction API.
-                if not v2 and name in ('ControlUser', 'AdminSession'):
-                    previous = [key for key in props if key in required]
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key in required else 'null' for key in props)
-                    java += ['    /** Construct a record without optional installation metadata.\n     *\n' + '\n'.join(f'     * @param {java_ident(key)} canonical {key} value' for key in previous) + '\n     */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
-                if not v2 and name == 'AdminSession':
-                    java += ['    /** Construct a session without an optional tenant display name. */',
-                             '    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }']
-                if not v2 and name in ('ToolDefinition', 'LocalToolInfo'):
-                    previous = [key for key in props if key != 'businessKeyPolicy']
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key != 'businessKeyPolicy' else 'null' for key in props)
-                    java += ['    /** Construct legacy metadata without admission key policy. */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
-                if not v2 and name in ('EnterpriseInvocation', 'RemoteToolResponse'):
-                    previous = [key for key in props if key != 'operationOutcome']
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key != 'operationOutcome' else 'null' for key in props)
-                    java += ['    /** Construct stored/legacy execution state without a derived response projection. */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
-                if not v2 and name == 'EnterpriseReconciliationRequest':
-                    previous = [key for key in props if key != 'attemptSettlement']
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key != 'attemptSettlement' else 'null' for key in props)
-                    java += ['    /** Construct a resource-only reconciliation without attempt scope attestation. */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
-                if not v2 and name == 'EnterpriseInvocationRequest':
-                    previous = [key for key in props if key != 'businessKeyHash']
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key != 'businessKeyHash' else 'null' for key in props)
-                    java += ['    /** Construct a request without an explicit business key. */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
-                if v2 and name in ('ServiceProfile', 'PackageDeploymentRequest', 'McpToolApproval', 'McpApprovedTool', 'InvocationPermitClaims'):
-                    if name == 'ServiceProfile':
-                        variants = [('effectReviews', 'nativeMcpEffects'), ('nativeMcpEffects',)]
-                    elif name == 'InvocationPermitClaims':
-                        variants = [('effectConsent',)]
-                    else:
-                        variants = [('effectPolicies' if name == 'PackageDeploymentRequest' else 'effectPolicy',)]
-                    for added in variants:
-                        previous = [key for key in props if key not in added]
-                        signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                        arguments = ', '.join(java_ident(key) if key not in added else 'null' for key in props)
-                        java += ['    /** Construct legacy metadata without the new effect authority fields. */',
-                                 f'    public {name}({signature}) {{ this({arguments}); }}']
-                if v2 and name == 'InvocationResultReport':
-                    previous = [key for key in props if key != 'executionTier']
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key != 'executionTier' else 'null' for key in props)
-                    java += ['    /** Construct legacy executor evidence without a reported execution tier. */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
+                # Current records expose their canonical constructor only; no compatibility overloads.
                 java += ['}']
             rust += [f'/// {description}'.rstrip(), '#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]', '#[serde(rename_all = "camelCase", deny_unknown_fields)]', f'pub struct {name} {{']
             ts += [f'/** {description} */', f'export interface {name} {{']

@@ -7,16 +7,16 @@ does not establish a passing security claim.
 
 ## Overall task progress
 
-Updated: **2026-11-03**. Branch: `feature/zero-trust-execution-plan`.
+Updated: **2026-11-05**. Branch: `feature/zero-trust-execution-plan`.
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
 **Overall: partially implemented.** Scoped deliveries now include:
 renewable leases/durable execution recovery, qualified Python OCI containment,
-explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, verified target-claim orchestration with memory/RAG transaction integration, source-bound actual Control/Gateway/target outcome qualification, adoption of the complete A1–A9/C1–C8 security model, a fail-closed diagnostic scorecard/CI harness, and reviewed business-key policy with immutable window history and retention maintenance, and proof-bound whole-invocation recovery with immutable predecessor archives and stale-receipt fencing; plus S10 all-attempt finalization, immutable closure/settlement and current-authority caller history under the explicit stage scope amendment below; S12 per-invocation broker identity/network separation with scoped private authority/transport IPC and paired teardown/recovery; and S13 strict worker framing and declared-tier containment/interface/egress qualification with verified-leaf TLS pins; plus S14 managed-unit crash/automatic-restart qualification, engine-uncertainty fencing and measured local teardown/recovery. S18 adds reviewed generic HTTP/native MCP intent, fresh owner grants, guarded sends and legacy-write refusal. Executed validation for the current
+explicit business-key binding, independent operation/permit-attempt journaling, an effect-generation foundation, exact broker transport preparation (explicitly restricted to HTTP/1.1), OLO service HTTP fingerprint grants, independent Control validation of their pinned manifests, actual knowledge-target transport integration, owner-bound OLO single-dispatch gates, a shared SQL target-claim foundation, OLO claim-token consumption/status/outcome APIs, verified target-claim orchestration with memory/RAG transaction integration, source-bound actual Control/Gateway/target outcome qualification, adoption of the complete A1–A9/C1–C8 security model, a fail-closed diagnostic scorecard/CI harness, and reviewed business-key policy with immutable window history and retention maintenance, and proof-bound whole-invocation recovery with immutable predecessor archives and stale-receipt fencing; plus S10 all-attempt finalization, immutable closure/settlement and current-authority caller history under the explicit stage scope amendment below; S12 per-invocation broker identity/network separation with scoped private authority/transport IPC and paired teardown/recovery; and S13 strict worker framing and declared-tier containment/interface/egress qualification with verified-leaf TLS pins; plus S14 managed-unit crash/automatic-restart qualification, engine-uncertainty fencing and measured local teardown/recovery. S18 adds reviewed generic HTTP/native MCP intent, fresh owner grants and guarded sends. S20 delivers explicit current effect keys, independently reviewed bounded target resend, read-only reconciliation and scoped operator readiness, with fresh schemas and current contracts across S01–S20. Executed validation for the current
 delivery is recorded below. **0 of 7 full roadmap phases have met every exit
 criterion.** Phases 0–3 have
 partial delivery; phases 4–6 have not started as generalized implementations.
-**Weighted delivery progress: 51.6% complete; 48.4% pending.** This planning metric credits only completed delivery stages, not partially completed stages. It is separate from full-phase security acceptance (still 0 of 7). See the baseline below.
+**Weighted delivery progress: 53.8% complete; 46.2% pending.** This planning metric credits only completed delivery stages, not partially completed stages. It is separate from full-phase security acceptance (still 0 of 7). See the baseline below.
 
 The roadmap defines **7 major phases**, not a fixed number of incremental
 deliveries. Its original per-phase estimates sum to approximately **35–44
@@ -27,9 +27,9 @@ completion forecast. The midpoint of each original phase estimate supplies the f
 | Plan phase | Status | Delivered | Remaining before full phase completion |
 |---|---|---|---|
 | 0 — Boundary and harness | Partial | Weighted delivery baseline and one-commit stage workflow; source-bound actual stack gate; adopted A1–A9/C1–C8 threat model across security docs; diagnostic scorecard/CI harness inventories all 220 current security/integration cases (209 original plus 11 S10 component vectors) with explicit missing coverage; preserved revision-10 plan, claim inventory and executable OCI conformance gate with revision/source/image evidence. | Execute the full C1–C8 case/target matrix and integrate a strict release scorecard; obtain hosted CI/release evidence. Four delivery-stage checkmarks do not satisfy these full-phase exit criteria. |
-| 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; SQLite/PostgreSQL migrations and tests; conservative business-key binding; V3 operation/attempt records, immutable snapshots, historical backfill, positive-proof reservation replacement and conservative operation summaries; reviewed required/argument keys, verified namespaces, bounded optional dedupe windows, immutable generation history and retention tombstones, tested on SQLite/PostgreSQL and Gateway/human paths; S09 whole-operation recovery with fresh current authority, retained attempts/leases/dispatches and late-receipt fencing. S10 complete all-attempt/effect derivation for the declared qualified OLO path, immutable manifests/settlement/finality, independent scope review, PARTIAL business keys, bounded current-authority history and Gateway/MCP/native/console presentation; qualified component vectors and affected regression/OCI/target gates pass. | Complete original distributed transitions/audit-spool/duplicate-execution suites remain required, including task/input, kill, host-spool lifecycle and crash/redispatch assertions. S10 is Done under the explicit bounded scope amendment; this does not accept the original full suites or phase. Live consent/equivalence/generalized target-guarantee sources retain their S19/S20 requirements. S09 delivers public proof-bound recovery, immutable predecessor archives, original deadlines, qualified released-generation replacement and SQLite/PostgreSQL/OCI evidence; it does not accept the entire phase. |
+| 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; current fresh SQLite/PostgreSQL schemas and tests; conservative business-key binding; current operation/attempt records and immutable snapshots, positive-proof reservation replacement and conservative operation summaries; reviewed required/argument keys, verified namespaces, bounded optional dedupe windows, immutable generation history and retention tombstones, tested on SQLite/PostgreSQL and Gateway/human paths; S09 whole-operation recovery with fresh current authority, retained attempts/leases/dispatches and late-receipt fencing. S10 complete all-attempt/effect derivation for the declared qualified OLO path, immutable manifests/settlement/finality, independent scope review, PARTIAL business keys, bounded current-authority history and Gateway/MCP/native/console presentation; qualified component vectors and affected regression/OCI/target gates pass. | Complete original distributed transitions/audit-spool/duplicate-execution suites remain required, including task/input, kill, host-spool lifecycle and crash/redispatch assertions. S10 is Done under the explicit bounded scope amendment; this does not accept the original full suites or phase. Live consent/equivalence/generalized target-guarantee sources retain their S19/S20 requirements. S09 delivers public proof-bound recovery, immutable predecessor archives, original deadlines, qualified released-generation replacement and SQLite/PostgreSQL/OCI evidence; it does not accept the entire phase. |
 | 2 — Containment | Partial; declared runtime/interface/deployment slices delivered | Qualified worker/broker isolation and strict interface/egress matrix, plus exact managed-unit hard-kill readiness and retained engine-uncertainty journals. Final current-source matrix passes 101 native/component and 13 OCI cases; owned local deployment passes weak-mode/signal refusals and three real supervisor-crash/automatic-restart cycles with actual process/cgroup/namespace witnesses and measured bounds. | Full original optional-transport/generalized-kill, Kubernetes/production connectivity and release criteria remain unaccepted in their owning stages/S33. Four bounded delivery stages do not accept those original full-phase exit criteria. Other runtime/OS/VM tiers remain unqualified; local measurements are not production SLOs. |
-| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. The owned actual Control/Gateway fixture now verifies committed memory/RAG outcome settlement against Control records.  S18 now delivers independently reconstructed reviewed generic HTTP/native MCP intents, immutable SQL intent records, fresh two-second unfenced grants and one-owner monotonic send transport. Native MCP approval stamps are Control-owned; legacy unbound writes are refused at issuance and historical consumption, while legacy reads remain supported. S19 delivers mandatory high-risk exact ASK review, immutable bounded resolved previews, independent scoped approval and private preview access, pending admission, atomic SQLite/PostgreSQL slot reservation, durable typed refusal audits and signed native consent references. Source-matched 48 focused enterprise and 14 native package cases pass without skips; complete repository gates and affected final checks, current-source OCI 13/matrix 106 and owned memory/RAG qualification pass. Application-signed frontend intents remain unsupported.  | Generalized per-effect keys/resend/reconciliation (S20), target fencing (S21), kill/dispatch/SLO and complete phase-3 conformance (S22). Native MCP/actual-Control joined qualification, complete partition/crash catalogs, other runtime tiers and production SLOs remain outside this scoped delivery. |
+| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. The owned actual Control/Gateway fixture now verifies committed memory/RAG outcome settlement against Control records.  S18 now delivers independently reconstructed reviewed generic HTTP/native MCP intents, immutable SQL intent records, fresh two-second unfenced grants and one-owner monotonic send transport. Native MCP approval stamps are Control-owned; legacy unbound writes are refused at issuance and historical consumption, current read permits also require prepared HTTP facts; older incomplete formats are refused. S19 delivers mandatory high-risk exact ASK review, immutable bounded resolved previews, independent scoped approval and private preview access, pending admission, atomic SQLite/PostgreSQL slot reservation, durable typed refusal audits and signed native consent references. Source-matched 48 focused enterprise and 14 native package cases pass without skips; complete repository gates and affected final checks, current-source OCI 13/matrix 106 and owned memory/RAG qualification pass. Application-signed frontend intents remain unsupported. S20 delivers current explicit generic/OLO keys and fresh schemas across S01–S20; independently reviewed pinned target keys, complete-history bounded resend, read-only two-phase lookup with immutable terminal witnesses and scoped readiness. Source/published Java, SQLite/PostgreSQL, TLS/credential rotation, UI, 13 OCI/111 native component cases and actual memory/RAG outcome qualification pass. Replay never renews authority or its original window; ambiguous resend requires every current independent guarantee/history/executor condition. | Generalized target fencing (S21), kill/dispatch/SLO and complete phase-3 conformance (S22). Native MCP/actual-Control joined qualification, complete partition/crash catalogs, other runtime tiers and production SLOs remain outside this scoped delivery. |
 | 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
 | 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
 | 6 — Policy differentiation | Not started | Existing approvals remain the baseline. | Broker OAuth/token exchange, trusted provenance, exact effect previews and stronger step-up approvals. |
@@ -45,16 +45,54 @@ items below retain their existing implementation status. S08 adds admission/wind
 |---|---|---|
 | Exact consent rejects recipient changes and additional effects | Partial; S19 mapped ASK path delivered | Immutable resolved generic HTTP/native MCP previews bind the original argument preimage, operation/run, pinned profile and mapped business request. Current independent scoped approval, expiry/revocation and atomic one-use route slots refuse changed requests and additional effects; requester/agent-owner self-review and metadata-only payload reads are refused. Final source-matched 48 enterprise and 14 native package cases, UI 249, CI 383, complete repository gates plus affected final checks, OCI 13/matrix 106 and the current owned stack pass. Dynamic/unmapped plans, generalized effect keys/resend, other runtime tiers and the complete original distributed catalog remain outstanding; the full vertical-slice guarantee is not accepted. |
 | Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down both a real OCI SDK worker and its isolated broker; broker loss and worker private-channel forgery also terminate the pair, with zero Control contact on forgery; S13 raw socket witnesses additionally prove pending-call cancellation and diagnostic failure close the target socket. S14 additionally measures actual managed-unit supervisor-crash/automatic-restart cleanup, including a TERM-ignoring worker. S18 delivers generic HTTP current-authority/owner checks and expired/refused/lost-gate wire witnesses, including slow TLS; the actual Control and scripted-target witnesses are separate, not yet a joined stack qualification. Native MCP has separate actual TLS/owner/send-window witnesses; S18 also passes 13 current-source OCI cases and 106 native/component matrix witnesses. Joined native MCP stack qualification, generalized signed kill and production connectivity-class SLOs remain outstanding. |
-| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; S09 focused SQLite/PostgreSQL checks cover atomic rollback, competing public replay, fresh permits, original deadlines and stale receipt fencing; S08 adds two-Control-instance window races, immutable history/retention and refusal to rotate ambiguous work on SQLite/PostgreSQL; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; actual target tests now exercise paused-owner abandonment, two JVMs, writer loss after business commit and lost outcome acknowledgement; complete Control/Gateway crash scenarios remain outstanding. |
+| Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | S20 explicit generic/OLO keys, consent exhaustion, same-generation replay, current-only initialization, independently reviewed history-aware resend, read-only terminal witnesses and scoped readiness pass the bounded stage gates. Fresh SQLite/PostgreSQL stores and current contracts refuse obsolete formats without conversion; target witness closure fences further sends.  Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; S09 focused SQLite/PostgreSQL checks cover atomic rollback, competing public replay, fresh permits, original deadlines and stale receipt fencing; S08 adds two-Control-instance window races, immutable history/retention and refusal to rotate ambiguous work on SQLite/PostgreSQL; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; actual target tests now exercise paused-owner abandonment, two JVMs, writer loss after business commit and lost outcome acknowledgement; complete Control/Gateway crash scenarios remain outstanding. |
 | Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claims and actual memory/RAG JVM replicas now exercise one mutation, paused-owner fencing, writer loss and outcome redelivery; actual Control/Gateway normal-path settlement now passes; complete partition/crash qualification remains outstanding. |
 | Operation finalization includes all attempts/effects and late evidence | Partial; bounded S10 delivered | Control derives the union of every bounded attempt/effect generation, closes immutable manifests and settles only with positive automatic/human scope evidence. Qualified late reports contribute without rewriting current dispatch; conflicts fence authority and final outcomes latch reconciliation. Current-authority caller/history, business-key projections and console presentation pass component regression checks; 143 renewed Control cases (including 17 policy cases and required PostgreSQL scenarios), six actual OCI tests and 32 current target cases pass. S10 is Done only under the recorded scope amendment. Full original distributed suites and later independent consent/equivalence/deduplication sources remain required for full acceptance.  S18 current native forwarding fixtures explicitly use 17 two-independent-reviewer scope attestations and retain REVIEWER_CONFIRMED alongside seven actual target-completed writes; unqualified native scope is never inferred from a successful reply. |
-| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | S14 final OCI/matrix/deployment reports match known parent ee61e550 and source e1b046f79e5e10ba5b9e5a483bb6c22315efe792af13087bbeeb412c3c37de7b, both image pins, broker binary and measured platform/service properties. They pass 13 OCI plus 101 native/component witnesses and five owned deployment observations. Stale image/source evidence is refused; securityAccepted=false, originalCatalogsAccepted=false and productionSloAccepted=false remain explicit. Full original catalogs and C1–C8 release/phase acceptance remain outstanding.  S18 final source checkpoint 49d1ef7f739bfca3474e4c0aeaab5d30581d1baeef93bc5a4920d688fefdda4b and parent e71bdcaa qualify 13 OCI/106 native matrix cases; runtime-source 1522be7317186f1c5032a4a2b2c3cfa097c8b892507f52a7bb71c8c6fd08e5f4 binds the actual owned stack. Full claim acceptance remains false. |
+| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | S14 final OCI/matrix/deployment reports match known parent ee61e550 and source e1b046f79e5e10ba5b9e5a483bb6c22315efe792af13087bbeeb412c3c37de7b, both image pins, broker binary and measured platform/service properties. They pass 13 OCI plus 101 native/component witnesses and five owned deployment observations. Stale image/source evidence is refused; securityAccepted=false, originalCatalogsAccepted=false and productionSloAccepted=false remain explicit. Full original catalogs and C1–C8 release/phase acceptance remain outstanding.  S18 final source checkpoint 49d1ef7f739bfca3474e4c0aeaab5d30581d1baeef93bc5a4920d688fefdda4b and parent e71bdcaa qualify 13 OCI/106 native matrix cases; runtime-source 1522be7317186f1c5032a4a2b2c3cfa097c8b892507f52a7bb71c8c6fd08e5f4 binds the actual owned stack. Full claim acceptance remains false. S20 source checkpoint 8cb2497bc03bb2e587ce25c70b7666c8925fb2b7842163f574b89d6364a9794c and known parent 8da2b98d qualify 13 OCI/111 native cases; runtime-source 2292274a0cb1515d215daff4267d3a52a418b5274eb6d086aa050707ea7e0620 binds the actual joined stack. Current-stage documentation follows that tested checkpoint; no commit self-SHA is asserted. |
 
-**Next implementation stage:** S20, per-effect keys, safe resend and reconciliation (S19 is delivered).
+**Next implementation stage:** S21, generalized target fencing SDK/adapters (S20 is delivered).
 S03, the clarified S04 diagnostic harness, S09 proof-bound rebinding and the explicitly amended S10 finalization stage are complete. Continue in stage order;
 dependencies may be implemented inside a stage but cannot earn duplicate credit.
 S18 generalized grants and S19 exact mapped ASK consent are complete for their declared scope; generalized resend/fencing,
 full distributed operation acceptance and production deployment evidence remain outstanding.
+
+### Standing fresh-build constraint reaffirmed — 2026-11-05
+
+The user reaffirms that this feature has no backward compatibility, database
+migrations or legacy runtime support, including future implementation stages.
+Use current contracts and fresh initialization only. Future schema changes fold
+into fresh schemas; obsolete stores/formats are refused without conversion or
+deletion. Migration/compatibility requirements in preserved proposals are
+superseded by fresh initialization and refusal verification. This changes no
+stage weights or the 39.5-week denominator and earns no delivery credit.
+
+### User-directed S01–S20 fresh-build scope amendment — 2026-11-03
+
+The user explicitly requires a fresh breaking build across every implemented
+stage through S20: no backward compatibility, database upgrades or historical
+format support. This supersedes earlier compatibility/migration decisions.
+
+Old S20 delivery scope included preservation of legacy default identities,
+compatibility constructors, database upgrade handling and migration preflight.
+New S20 scope removes those layers across S01–S20, updates first-party callers
+and fixtures to current contracts, and initializes one fresh schema for each SQL
+dialect. Existing databases/old wire formats must be rejected rather than
+converted. Current-operation journals, original deadlines, crash recovery,
+independent target review and safe resend remain required current behavior.
+
+Fresh PostgreSQL/SQLite initialization, runtime-role/tenant/storage guards,
+current-only contract validation and full affected-stage regression replace
+upgrade/compatibility qualification. Target-status adapters, operator eligibility
+visibility and the complete S20 stage gates are required for its single
+commit/push and requested PR; their executed delivery evidence is recorded below.
+The revision-10 proposal remains preserved.
+
+This explicit scope amendment did not itself earn delivery credit. S01–S19 retain
+their executed historical deliveries. The complete amended S20 scope has now
+passed the delivery gates recorded below. Stage definitions, phase weights and
+the 39.5 denominator remain unchanged; the current weighted result is 53.8%
+complete / 46.2% pending.
+No full roadmap phase is accepted by this amendment.
 
 ### Weighted delivery baseline (2026-11-01)
 
@@ -67,9 +105,9 @@ A stage earns its entire weight only when its stated scope and executed validati
 are complete; Partial and Pending earn zero. Existing work is credited only for
 the bounded Done stages below, not for the complete parent phase.
 
-**Completed weight = 2 + 7 + 7 + 4.375 = 20.375.**
-**Completion = 100 × 20.375 / 39.5 = 51.6% (rounded).**
-Pending weight is 19.125, or 48.4% (rounded). Nineteen of 33 delivery stages are Done;
+**Completed weight = 2 + 7 + 7 + 5.25 = 21.25.**
+**Completion = 100 × 21.25 / 39.5 = 53.8% (rounded).**
+Pending weight is 18.25, or 46.2% (rounded). Twenty of 33 delivery stages are Done;
 S10 credit uses the explicit scope amendment below, not full distributed-suite acceptance;
 stage count is not the percentage formula. No phase receives full acceptance
 until all its original exit criteria have executed evidence.
@@ -79,7 +117,7 @@ until all its original exit criteria have executed evidence.
 | 0 | 2 | 4 / 4 | 2 | 5.06% |
 | 1 | 7 | 6 / 6 | 7 | 17.72% |
 | 2 | 7 | 4 / 4 | 7 | 17.72% |
-| 3 | 7 | 5 / 8 | 4.375 | 11.08% |
+| 3 | 7 | 6 / 8 | 5.25 | 13.29% |
 | 4 | 3.5 | 0 / 4 | 0 | 0.00% |
 | 5 | 6 | 0 / 3 | 0 | 0.00% |
 | 6 | 7 | 0 / 4 | 0 | 0.00% |
@@ -109,7 +147,7 @@ Future percentages use this formula and the evidence-backed stage statuses.
 | S17 | 3 | Fenced OLO memory/RAG integration | Done | Independent manifests, owner dispatch, shared SQL claims, authenticated outcomes, actual JVM crash/replica tests and real Control/Gateway development-stack settlement. |
 | S18 | 3 | Generalized effect grants and owner protocol | Done | Reviewed generic HTTP/native MCP intent, durable current-authority grants and single-owner guarded send; legacy write issuance/historical consumption refused, legacy reads retained. Java/source+published-contract builds, Rust workspace/Clippy, UI 245, four-language contracts, Quickstart/browser/restore, PHP/Helm and current-source OCI 13/matrix 106 pass. Current owned stack: 13 gates, 17 explicit independent reviews and seven committed target outcomes. Exact consent, generalized resend/fencing and full phase acceptance remain S19–S22. |
 | S19 | 3 | Exact consent effect slots | Done | Mandatory high-risk mapped ASK consent, immutable complete previews, independent scoped review/private payload access, admission gating, atomic bounded slots, signed native references and refusal audits. Full repository gates plus final source-matched 48 enterprise/14 native cases, four-language contracts/UI/CI, current OCI 13/matrix 106 and owned memory/RAG stack (32 component cases, 13 gates, 17 scope reviews, seven settled writes) pass. Application-signed frontend intents, generalized keys/resend and full phase acceptance remain outstanding. |
-| S20 | 3 | Per-effect keys, safe resend and reconciliation | Pending | Approved targetDedupeGuarantee only; history-aware generations, downstream effect keys and reconciliation adapters; ambiguous outcomes never unsafe retries. |
+| S20 | 3 | Per-effect keys, safe resend and reconciliation | Done | Fresh current-only generic/OLO keys and schemas; immutable independently reviewed target bindings, credential/window/history-aware resend, read-only two-phase target lookup and terminal-witness fencing, scoped paginated tenant/operator readiness, UI and operator guide. Both SQL dialects, TLS/custody/rotation, consent/races/late evidence and current contract rejection pass focused and complete affected regressions. Source/published Java checks, four-language contracts, 252 UI cases, standard remaining foundation gates, 13 current-source OCI and 111 native/component cases, 32 memory/RAG component cases and 13 actual joined-stack gates pass. Known parent/source/image evidence and explicit skips/retries are recorded below. No full phase acceptance. |
 | S21 | 3 | Generalized target fencing SDK/adapters | Partial | Generalize OLO claims to declared fenced target classes; shared claim ownership and recovery/crash conformance. |
 | S22 | 3 | Revocation, dispatch and phase-3 acceptance | Partial | Push/long-poll kill, inbound mTLS dispatch, connectivity-class SLOs, kill-* and full-stack partition/crash cases; phase-3 exit matrix including operation aggregation from S10. |
 | S23 | 4 | Outcome grades and honest presentation | Pending | Console, exports and analytics distinguish fenced/unfenced/unknown evidence. |
@@ -196,16 +234,16 @@ carry this requirement into future work.
 
 | Claim | Implementation status | Evidence / remaining work |
 |---|---|---|
-| C1, no ambient target authority | Available for qualified Python OCI pools | Workers have no network socket authority, route, resolver, host mounts or ambient supervisor environment. Native pools do not establish this claim. S19 full effect previews are restricted to the requester and eligible scoped reviewers; operation metadata-read rights alone do not expose their payloads. The source-matched access case passes. |
+| C1, no ambient target authority | Available for qualified Python OCI pools | Workers have no network socket authority, route, resolver, host mounts or ambient supervisor environment. Native pools do not establish this claim. S19 full effect previews are restricted to the requester and eligible scoped reviewers; operation metadata-read rights alone do not expose their payloads. The source-matched access case passes. S20 broker-only reachable API-key references do not require worker Secret handles; current admission and custody/rotation tests pass. |
 | C2, verified sender-constrained run identity | Partial | Device certificate admission exists; sender-constrained agent runs remain planned. |
 | C3a, current admission authorization | Implemented existing boundary | Signed-permit admission and current Control checks; Tool Host `bad_permits_are_refused_before_anything_runs`. |
-| C3b, current per-effect authorization | Partial; declared effect paths delivered | Existing fenced OLO paths independently bind admission, prepared HTTP facts, owners and current authority; actual target claims/outcomes agree with Control in the owned stack. S18 extends current per-effect grants to reviewed generic HTTP and trusted native MCP tools/call: Control reconstructs complete admitted business intent, records immutable intents and owner generations, and rechecks at SENDING. One-use Unix transports enforce a monotonic send window of at most two seconds, preserve TLS/leaf pins and refuse retries, stale owners/profiles and expired/lost gates. Native MCP requires explicit Control-stamped review; unbound OLO writes, including historical claims, are refused. Current-source OCI 13/matrix 106, actual SQLite/PostgreSQL, native TLS JSON/SSE and owned-stack witnesses pass. The native forwarding fixtures require explicit two-independent-reviewer attempt-scope witness and retain REVIEWER_CONFIRMED; they do not establish native containment. S19 exact previews, independent consent/policy reviews, private payload access, durable atomic slots, audit and historical-admission guards are delivered. Final source-matched Control/native checks, full repository gates plus affected final checks, four-language contracts/UI/CI, OCI/matrix and current owned-stack qualification pass. Generalized resend/fencing, joined native MCP full-stack/partition/kill catalogs, other tiers and complete claim acceptance remain outstanding. |
+| C3b, current per-effect authorization | Partial; declared effect paths delivered | Existing fenced OLO paths independently bind admission, prepared HTTP facts, owners and current authority; actual target claims/outcomes agree with Control in the owned stack. S18 extends current per-effect grants to reviewed generic HTTP and trusted native MCP tools/call: Control reconstructs complete admitted business intent, records immutable intents and owner generations, and rechecks at SENDING. One-use Unix transports enforce a monotonic send window of at most two seconds, preserve TLS/leaf pins and refuse retries, stale owners/profiles and expired/lost gates. Native MCP requires explicit Control-stamped review; unbound OLO writes, including historical claims, are refused. Current-source OCI 13/matrix 106, actual SQLite/PostgreSQL, native TLS JSON/SSE and owned-stack witnesses pass. The native forwarding fixtures require explicit two-independent-reviewer attempt-scope witness and retain REVIEWER_CONFIRMED; they do not establish native containment. S19 exact previews, independent consent/policy reviews, private payload access, durable atomic slots, audit and historical-admission guards are delivered. Final source-matched Control/native checks, full repository gates plus affected final checks, four-language contracts/UI/CI, OCI/matrix and current owned-stack qualification pass. S20 current explicit generic/OLO keys, fresh stores, reviewed pinned target bindings and guarded resend/reconciliation pass the bounded delivery gates. Current scope/authority/credential/history checks and post-I/O lookup rechecks are exercised on both dialects and real TLS; 13 OCI/111 native and current joined-stack evidence pass. This extends the delivered slice without accepting the complete C3 claim. Generalized resend/fencing, joined native MCP full-stack/partition/kill catalogs, other tiers and complete claim acceptance remain outstanding. |
 | C3c, bounded unmediated execution | Partial | Native direct-worker supervision and OCI teardown on cancellation/deadline are tested. Enforced service cgroups contain worker processes; measured deployment revocation SLOs remain required. |
 | C4, bound admission intent | Implemented existing boundary | Tool Host admission binds signature, audience, arguments and content digests; dispatch integration tests. |
 | C5, contained execution | Available for qualified Linux x86_64 Python OCI pools | Final S14 reports pass 13 actual OCI and 101 native/component witnesses. Readiness checks the actual delegated service, exact cgroup and control-group SIGKILL; uncertain engine completion fences the pool and retains its journal/identity reservation. Five owned deployment observations verify weak-unit refusal and three actual supervisor-crash/automatic-restart cycles with disjoint PIDs/UIDs/namespaces and cleanup without replay. Local observed kill/recovery maxima are 34.797/2697.509 ms at 25 ms polling, not production SLOs. Supervisor/broker/engine/kernel remain trusted. Native/other tiers and full original catalogs/security acceptance remain unqualified. |
 | C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence, independent immutable attempt snapshots, immutable recovery archives and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. S10 derived-outcome/scope-review records and audit share writer transactions; rollback and replay checks pass. Eleven source-bound component vectors passed without promoting original distributed suites. S19 delivered consent/slot/refusal records use tenant-scoped immutable storage; authenticated typed refusal audits survive rolled-back authority transactions without retaining raw request values. Source-matched rollback/audit cases pass. Hash chains and external anchors remain required. |
 | C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required.  S14 adds source-bound local managed-unit crash/restart measurements; it does not accept production connectivity-class revocation SLOs or an A4 bound. |
-| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; unqualified or potentially sent consumed work remains fenced. S09 implements immutable proof-bound whole-operation recovery, with default-off admission-time device/pool/image qualification and all predecessor generations released; full-stage verification passes. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, and actual memory/RAG transactions now adopt them with restricted SQL state/binding guards and durable outcome delivery. Reviewed required/argument keys, verified namespaces, proof-bound windows and retention tombstones are implemented and tested across Control, Gateway and human admission. S10 all-attempt derivation, immutable finality, automatic/human scope settlement, late evidence, current-context caller history and console/business-key projections pass the amended stage gates. Full original distributed conformance remains required, alongside other route classes, consent slots and independently approved generalized target deduplication/equivalence sources. |
+| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; unqualified or potentially sent consumed work remains fenced. S09 implements immutable proof-bound whole-operation recovery, with default-off admission-time device/pool/image qualification and all predecessor generations released; full-stage verification passes. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, and actual memory/RAG transactions now adopt them with restricted SQL state/binding guards and durable outcome delivery. Reviewed required/argument keys, verified namespaces, proof-bound windows and retention tombstones are implemented and tested across Control, Gateway and human admission. S10 all-attempt derivation, immutable finality, automatic/human scope settlement, late evidence, current-context caller history and console/business-key projections pass the amended stage gates. S19 exact mapped ASK consent slots are delivered. S20 delivered explicit generic/OLO effect keys have no default aliases and cannot bypass distinct-effect consent limits. Lost-reply observations retain the same nonce/generation/deadline and one SENDING winner. Independently reviewed immutable target bindings preserve derived keys across signer rotation; bounded complete-history resend rechecks current authority, credentials and original deadlines. Read-only lookup appends hashed terminal witnesses, preserves ambiguous history and fences future sends. Complete affected SQLite/PostgreSQL, actual TLS/custody/rotation, source/published Java, OCI/matrix and joined memory/RAG outcomes pass; target assumptions remain visible in the outcome grade. Full original distributed conformance remains required, alongside other route classes and independently approved generalized target deduplication/equivalence sources. |
 
 The adopted [A1–A9 matrix and C1–C8 definitions](zero-trust-boundaries.md)
 now apply across the security documentation. S03 corrects claim scope, especially
@@ -2701,3 +2739,375 @@ accepted here. S19 does not complete phase 3 or the first vertical slice.
 Weighted progress is now **20.375 / 39.5 = 51.6% complete / 48.4% pending**,
 19/33 stages Done, unchanged baseline/denominator and **0/7 full phases accepted**.
 Next: S20, per-effect keys, approved safe resend and reconciliation.
+
+### S20 started — 2026-11-03
+
+S19 was pushed in 8da2b98d11bbba224f13b27bee85d2cfde4f9588 before this stage.
+ADR 056 records stable per-effect identity, independent target-guarantee review,
+first-authorization window accounting, broker-owned downstream keys and read-only
+reconciliation. The first increment adds internal identity/window rules and
+focused tests; these are not yet wired as runtime resend authority. S20 earns no
+partial credit. Weighted progress remains 51.6% complete / 48.4% pending, 19/33
+Done and 0/7 full phases accepted. Next: canonical protocol/persistence and
+current-authority integration, followed by adapters, migration/operator handling
+and complete stage qualification before a single S20 commit.
+
+#### S20 identity/window focused increment
+
+Five focused Java cases passed with zero failures/skips. They exercise scope
+separation, bounded ASCII effect keys, unambiguous framed hashing, first-issue
+retention accounting, upward-rounded safety margins, original/review expiry and
+invalid window refusal. The first command refused a missing prebuilt UI metadata
+artifact after browser hooks; a normal dependency build regenerated it and the
+focused suite passed. This was build setup, not an ignored test failure.
+
+The canonical optional EffectGrantIssue.effectKey and bounded EffectKey scalar
+are now generated for all four languages, including the legacy Java constructor.
+Current Rust producers explicitly send no new key until broker/Control wiring is
+implemented. Contract verification is pending; no new runtime authority or S20
+weight is claimed. Next: persistent identity compatibility and full owner/history
+handling, broker/SDK key propagation, independently reviewed guarantees and
+reconciliation integration.
+
+#### S20 generic effect-key increment
+
+Generic route calls now propagate a bounded explicit key through the prepared
+request and private buffered transport into authenticated Control issuance.
+Non-default keys create scoped logical identities. Missing and explicit default
+keys retain the exact S18/S19 generic identity; upgrading cannot mint another
+effect by renaming the legacy key. This is an explicit compatibility exception
+to the new domain-separated keyed hash, with no change to stage weights.
+
+Twenty-seven focused enterprise cases passed without skips/failures (identity/
+windows 5, generic grants 10, consent lifecycle 12), including actual PostgreSQL
+grant checks. They prove separate generic logical effects and refusal of a second
+key against one approved consent slot, with its attempted authorization rolled
+back. Java contract round trips, seven focused Python schema checks and two Rust
+contract cases passed. Tool Host library tests passed 72, with the existing real
+OCI test explicitly ignored in this non-OCI command; the separate focused key/
+buffering case also passed. This does not replace the future full S20 gates.
+
+Explicit keyed OLO service calls are currently refused before service authority,
+rather than silently using a different key. Native MCP still uses its one default
+effect; generic key support does not qualify native containment. No automatic
+resend is enabled. Remaining work includes OLO/SDK key propagation, reviewed
+target guarantees and broker-owned downstream keys, replay/history/reconciliation
+rules and actual adapters, migration/operator handling and complete stage checks.
+All S20 changes remain uncommitted until the full stage is complete; weighted
+progress remains 51.6% complete / 48.4% pending.
+
+#### S20 lost-authorization-reply increment
+
+A matching still-AUTHORIZED generation can now be observed again by its exact
+device/broker/handler/attempt owner after full current-authority and intent checks.
+The replay retains the original authNonce, generation and expiry; elapsed time
+reduces validForMs instead of renewing the two-second window. SENDING, consumed,
+terminal, ambiguous, expired or foreign-owner requests cannot acquire this replay
+authority. A positively RELEASED generation may receive a fresh nonce/generation
+while retaining its first immutable intent and consent use; this is proven
+pre-send replacement, not ambiguous downstream resend.
+
+The recompiled focused suite passed 28 enterprise cases with no skips/failures,
+including real PostgreSQL duplicate issuance/send races, plus Java contract
+checks. Two concurrent matching issue requests observe one generation; concurrent
+SENDING requests have one winner. A clock-advanced replay retains expiry and
+the released generation cannot dispatch after replacement. Strict Tool Host
+Clippy (all targets, warnings denied) passed. Independent guarantee review,
+downstream key injection, OLO/SDK keys and reconciliation remain unimplemented;
+S20 stays Partial/uncommitted and receives no weight.
+
+#### S20 OLO service keys and SDK increment — 2026-11-03
+
+OLO service permits now accept the optional canonical effect key. Distinct keys
+produce distinct signed effect identities and nonces; target claim consumption
+and completion settle those effects independently. Missing, default and the
+historical service-write alias retain the exact original OLO capability/effect
+identity. No upgrade can acquire a second effect by selecting a legacy alias.
+Private broker issuance retains the key alongside its handler and request digest;
+changing/removing that key before transport is refused.
+
+The latest focused Control suite passed 53 cases without failures/errors/skips:
+identity/windows 6, generic grants 11, consent lifecycle 12 and service bridge 24,
+including actual PostgreSQL scenarios. A service-route validation regression
+(initially rejecting its historical audience/operation slash) was corrected and
+the entire affected group rerun green. The new outcome assertions were also
+corrected to use the existing status accessor before that successful run.
+
+Java RouteCall.effectKey and Python RouteCall.effect_key now carry bounded logical
+keys as broker metadata, never caller headers. Recorded exchanges can match the
+key. Standalone direct-network paths refuse explicit keys instead of silently
+ignoring them. The focused Java SDK case and all 28 Python runtime cases pass;
+the Java test uses the SDK's supported Java 17 collection API. Fresh Tool Host
+library verification passed 73 with one explicit delegated-OCI-only ignore.
+Strict all-target Clippy passed. Retained current artifacts are under the ignored
+build/security/stages/s20 directory; the known delivered parent is
+8da2b98d11bbba224f13b27bee85d2cfde4f9588.
+
+These are focused increment checks, not full S20 qualification. Independent
+target-guarantee review, broker-owned downstream key injection, complete
+history-aware recovery/resend and reconciliation adapters, upgrade/operator
+handling and thorough current-source stage gates remain. No ambiguous resend is
+enabled. S20 remains Partial/uncommitted, with **51.6% complete / 48.4% pending**
+and no full phase acceptance. Earlier S20 journal entries describe superseded
+increments; their temporary OLO-key refusal is replaced by the tested integration
+above. Commit/push still waits for the complete S20 stage.
+
+#### S20 target-contract review increment in progress
+
+Canonical target guarantee, route configuration and supervisor-only downstream
+key models are generated with legacy Java constructors. Seven focused schema
+checks passed. Route declarations reject reserved headers, invalid retention and
+unbound credential scopes. Configuration changes containing guarantees now
+require independent maker/checker review even for Super Admin/zero-review
+installations; runtime qualification checks the exact applied tool record and
+live reviewer permissions. These new enforcement changes await focused Java
+verification; they do not yet enable resend. The authoritative phase/vertical
+slice/C8 entries remain Partial, with all full S20 authority/integration gates
+still outstanding and no additional stage weight.
+
+#### S01–S20 fresh-schema checkpoint
+
+The user-directed breaking build now ships one current V1 initial schema per SQL
+dialect. Incremental V2–V10 product files and data-copy/backfill upgrade scripts
+are removed. SQLite uses a current schema identity/checksum and rejects previous
+stage databases, missing identity and incompatible checksums without conversion.
+
+Actual PostgreSQL initialization and runtime-role/tenant guards, current SQLite
+initialization/refusal, independent review and public target-deduplicated replay
+checks passed. Retained source/XML evidence precedes the remaining constructor/
+wire compatibility cleanup; this is not final S20 acceptance. The original
+deadline, one target key across new attempts/generations, refusal of extra effects
+and unqualified-attempt refusal are exercised. Current-only contract/caller
+cleanup, target status adapters, operator visibility and full-stage qualification
+remain before the requested single stage commit and PR. Weighted progress stays
+51.6% / 48.4%.
+
+Known tested parent 8da2b98d11bbba224f13b27bee85d2cfde4f9588, source ebedee59561148d59b86bb74eb7512ff5771b5d71de086b2ac8df2fb38ca1743.
+
+#### S01–S20 current-only authority checkpoint
+
+Known delivered parent: 8da2b98d11bbba224f13b27bee85d2cfde4f9588.
+All changes in this section remain an uncommitted S20 increment. The user
+explicitly extends the fresh breaking-build rule to every stage S01–S20;
+historical compatibility descriptions in earlier dated entries are superseded.
+
+- Generated Java models expose only current canonical constructors. Current
+  callers explicitly supply their complete arguments. Generic and OLO write
+  identities require explicit logical keys, with no missing/default/service-write
+  aliases. READ owner identity is current behavior, not a write fallback.
+- Current OLO issuance requires exact prepared HTTP digest/manifest, signed
+  invocation proof and broker/handler ownership. Read claims also bind accepted
+  transport facts. Direct target authorization and Control consumption are
+  read-only; writes require verified facts plus durable claim-token consumption.
+- Generic target initialization has a current schema identity, positive mandatory
+  claim expiry and no ALTER/backfill path. Older unidentified stores fail without
+  conversion. The knowledge target schema and packaged memory/RAG writes are
+  updated to fresh-only initialization and explicit keys; external qualification
+  is still pending.
+- Native MCP policy and executor tier become required current contracts.
+  Upstream read-only/idempotency hints cannot substitute for explicit approved
+  effect policy. Current outbox recovery remains, with explicit reported tier;
+  incomplete historical reports are rejected rather than converted.
+
+Executed focused evidence before the final native-policy/tier tightening:
+43 Control cases (identity/window 6, generic grants 13, OLO bridge 24) and 29
+target-library cases pass with zero failures/skips, including real PostgreSQL
+claim, RLS and ownership cases. The newer Rust Tool Host library run passes 73,
+with one existing ignored case. Seven current v2 schema tests and generation
+drift checks pass. These do not accept the complete S20 stage. Current native
+MCP/contract regression, external memory/RAG qualification, target lookup,
+operator eligibility and complete stage gates remain outstanding. No intermediate
+stage commit or push is made; weighted progress stays 51.6% complete / 48.4%
+pending, with 19/33 stages and 0/7 original full phases accepted.
+
+#### S20 current-only regression and read-only adapter increment
+
+The current-only recovery rerun passes 36 selected cases without skips, including
+the real TLS target-claim transaction and PostgreSQL resend/ownership cases.
+The previous complete enterprise regression ran 375 cases and found 16 failures
+in old fixture shapes; those affected cases were corrected and the focused rerun
+passed. A complete enterprise/stage rerun remains required.
+
+The first HTTPS lookup adapter passes five focused actual-TLS/protocol cases.
+Its tested source snapshot was
+2deb4598742dc3388dbfdd4a38f76e48de2e9ff469f90670c5d2a9e1c5d644e1.
+Later changes tighten explicit READ route review and add current scoped
+two-phase lookup wiring, append-only hashed provider receipts, post-network
+authority/profile/epoch/generation rechecks, conservative all-generation
+projection and resend fencing. Fresh initial-schema guards recognize this
+witness without upgrading databases or rewriting old generations. Lookup
+lifecycle tests are in progress; no new security guarantee is accepted yet.
+Unknown/pending status remains uncertainty, and a resolved effect does not
+invent successful completion of an unfinished worker operation. Operator
+eligibility/presentation, real PostgreSQL lookup checks, API/UI and complete
+stage qualification remain outstanding. S20 stays Partial and uncommitted.
+
+#### S20 current-only admission and operator readiness — 2026-11-05
+
+The current working tree now includes scoped read-only target reconciliation,
+append-only lookup witnesses, terminal-history resend fencing, independent
+live guarantee review and paginated tenant/operator recovery readiness. Readiness
+reports configured eligibility only; current operation-specific history and
+authority remain mandatory. The operator guide documents supported lookup
+contracts and manual fallbacks. Original AMBIGUOUS generations remain immutable.
+
+Generic reviewed HTTP routes and broker-only API-key references now participate
+in qualified Python execution. Reachable auth references are admitted resources
+without granting worker-readable secret handles. Other auth modes and raw worker
+secret declarations do not qualify. Package upload validates the complete current
+v2 manifest in a separate schema namespace; obsolete formats are rejected rather
+than converted. Fresh schema initialization and current-format contracts apply
+through S01–S20 as directed by the user.
+
+Executed focused evidence so far: 22 lookup/resend/TLS cases with actual
+PostgreSQL; 5 preflight/admission cases; 25 UI cases; Java declaration tests and
+24 Python declaration tests. The latest Rust Tool Host library run passed 75
+tests, failed zero and explicitly ignored one environment-dependent case.
+These runs precede some subsequent current-package and qualification edits;
+they are not final source-matched stage acceptance. The current full Java and
+repository checks are running, and failures will be fixed before the stage
+commit. S20 remains Partial with no weight: 51.6% complete / 48.4% pending.
+
+The current increment also restores generated capacity-accounting blocks in the
+fresh schemas and teaches the ownership inventory to recognize PostgreSQL's
+explicit public schema. All four ownership/capacity checks pass. Current-schema
+contract tests replace obsolete backfill/compatibility assertions while retaining
+archived fixtures as historical evidence. Full UI validation passes 252 tests
+across 36 files; the strict current-policy MCP adapter passes nine tests.
+
+Full current PostgreSQL enterprise regression executed 402 cases with zero
+skips: 401 passed and the new API-key custody case initially failed because its
+fixture secret name was outside the vault name grammar. The fixture now uses a
+valid current name; all ten applicable lookup cases pass in the focused rerun,
+with its PostgreSQL wrapper explicitly skipped in that isolated invocation.
+Credential confidentiality and rotation during I/O are exercised. Both normally
+skipped Python PostgreSQL storage checks also executed successfully in a
+separate owned PostgreSQL fixture (five cases across the two modules, no skips).
+A complete rerun and refreshed source-bound image/stack evidence remain pending.
+
+The subsequent actual PostgreSQL enterprise run passed all 402 cases with zero
+failures, errors or skips. Its raw XML is retained under
+build/security/stages/s20/full-postgres-pass-xml. Current-source OCI qualification
+passed all 13 cases and the native/component matrix passed 110 cases at source
+caf4c961438266b233da8ba5ef78ade600e7da3cfd505eeb24dfd628541e5106,
+parent 8da2b98d11bbba224f13b27bee85d2cfde4f9588. The matrix explicitly leaves
+securityAccepted and originalCatalogsAccepted false.
+
+The ordinary Control regression then ran 276 cases with nine failures and five
+explicit environment/worker skips. The failures identified obsolete test inputs:
+seven client-release packages lacked current descriptor fields, one late report
+omitted its required current execution tier, and the archive baseline still
+expected malformed UTF-8 replacement decoding. Current fixtures now include the
+required namespace/execution flags and HOST_NATIVE tier; malformed UTF-8 is
+explicitly rejected. All 26 affected package/client/archive/lease cases pass in
+focused reruns. Subsequent changes include those fixtures, fresh-build deployment
+and repository instructions, and the webhook example's explicit notification
+effect key. The example no longer describes a caller reference as a guaranteed
+downstream deduplication contract; its existing example gate is pending.
+The tested Control/broker runtime remains unchanged. Full repository,
+publication and owned memory/RAG qualification remain pending. No S20 stage
+weight is earned.
+
+
+#### S20 complete fresh-build delivery — 2026-11-05
+
+S20 is **Done** under the explicit user-directed fresh-build scope. The current
+baseline credits 0.875 additional planning weeks: 21.25/39.5 = **53.8% complete,
+46.2% pending**, 20/33 delivery stages. **0/7 original full roadmap phases** are
+accepted. S21 generalized target fencing is next; this delivery supplies neither
+production revocation SLOs nor full partition/crash/kill catalog acceptance.
+
+Current writes require an explicit bounded effect key. No default/service-write
+alias, compatibility constructor, package converter, store upgrade or backfill
+remains in the delivered paths. Fresh PostgreSQL/SQLite initialization includes
+the complete current schema; old/incompatible stores are refused without deletion
+or conversion. Current-schema crash recovery and immutable historical evidence
+remain supported. The coordinated olo-mono/olo-knowledge update requires its
+current target-schema marker, positive claim expiry and explicit memory/RAG keys.
+The webhook example now uses an explicit notification effect key and explains
+the limits of its external provider contract.
+
+The actual stack initially exposed a remaining direct-broker placeholder that
+refused explicit OLO service keys after dispatch authorization. It was removed:
+the existing permit/transport owner binding now carries the same explicit key
+end to end. A live Control regression covers both service audiences, exact key
+forwarding, substitution refusal and single use. No legacy fallback was added.
+
+Executed delivery evidence (raw logs/reports retained in
+build/security/stages/s20 and build/security/knowledge):
+
+- Full source Java check/build and published-contract publication/build proof
+  passed. Each complete Control enterprise run passed **402 cases with zero
+  skips**; ordinary Control ran **276 cases, five explicit skips and zero
+  failures**. The final affected package/archive/lease rerun passed 26 cases.
+  All four schema ownership/capacity cases and five separately provisioned
+  Python PostgreSQL storage cases passed without skips.
+- The full tools/check.py run passed CI/Python/contracts/SDK, source/published
+  Java, Rust workspace/strict Clippy, all 19 Java example packages (including
+  four webhook cases), and TypeScript generation/build/check before one default
+  parallel UI test exceeded its existing five-second deadline. The unchanged
+  full UI suite passed **252/252** on a bounded-worker rerun, without widening
+  timeouts. The original full command exited nonzero; it is not reported as a
+  single green run. All remaining standard gates were then executed explicitly:
+  actual Quickstart (13 gates plus browser), UI package, PHP roundtrip/lint and
+  strict Helm/Kubernetes render/negative checks passed. Existing prerequisite
+  skips remain explicit, including Maven-plugin E2E when mvn is absent and
+  separately validated ServiceMonitor custom resources.
+- After the final production broker fix, the complete Tool Host test command
+  and strict Clippy passed. The library passed **76**, failed zero and retained
+  one explicit environment-dependent ignore; OCI-only tests execute separately.
+  Actual TLS, API-key custody/rotation, lookup witness limits, resend races,
+  consent exhaustion and both-dialect ledger checks passed in the preceding
+  focused and complete Java/target runs.
+- Refreshed current-source OCI passed **13/13** and the native/component matrix
+  passed **111** cases. A first OCI run during competing release compilation
+  passed 12 and timed out waiting for the cancellation fixture's approved route.
+  The full rerun after compilation passed with unchanged limits. Both reports
+  are retained. securityAccepted=false and originalCatalogsAccepted=false remain.
+- The coordinated knowledge component qualification passed **32/32** with zero
+  skips, including actual PostgreSQL, TLS, vectors and retrieval evaluation.
+  The refreshed actual Control/Gateway/Tool Host/memory/RAG stack passed
+  **13/13 gates**, joining **three memory and four RAG completed writes** to
+  Control generations, with **zero pending outcome deliveries**. Runtime image,
+  installed target artifacts, SDK/contracts and component source were verified
+  again by tools/security/knowledge.py --verify-only --full-stack. This verifies
+  executed evidence; it does not substitute an unexecuted test run.
+
+Known tested parent: 8da2b98d11bbba224f13b27bee85d2cfde4f9588. OCI/matrix source
+checkpoint: 8cb2497bc03bb2e587ce25c70b7666c8925fb2b7842163f574b89d6364a9794c.
+Broker binary SHA-256:
+d04c7ae6bcb2f675a1e11a2bb3f2f5bd25ad48af8ef65512ddb4351d79da7410.
+Broker image:
+localhost/olo-toolgate-invocation-broker@sha256:0a5687ec618a0f9885c9a41c6060e27e24eff2404583d6b4823b0bb21bb88710.
+Worker image:
+docker.io/library/python@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159.
+Owned stack runtime-source SHA-256:
+2292274a0cb1515d215daff4267d3a52a418b5274eb6d086aa050707ea7e0620;
+image ID:
+sha256:bf34b3ecc968f2500d9e51a40c87a7456b07aecd0a81c2ae0c21f367eec8029f.
+Knowledge component parent: 63de7b94bbf2837aca570b124427cea5639a36ab;
+tested code digest:
+b6aa87dc556d03357bc4f015b8810b2854ef692221dd942b24ad189dc2ef6067.
+
+Final status/ADR clarification follows those tested checkpoints without further
+runtime changes. No SHA for the commit being created is invented. The preserved
+revision-10 proposal and RELEASE-NOTES.md remain unchanged. Each affected
+repository delivers its complete S20 code/tests/docs/progress together in one
+stage commit. Hosted PR checks and complete original release/phase acceptance
+remain separate from this local stage evidence.
+
+Final review also removed the unshipped versioned kill-switch upgrade proposal
+and its ship-unchanged/next-version test machinery. Nonversioned design fragments
+now live in docs/control-plane/schema-specifications; future implementation folds
+them into fresh initialization only. The current-schema specification test
+assembles empty fixtures, never upgrades an existing application store. Complete
+Python contract regression reran **171 cases with two explicit PostgreSQL skips**;
+the affected specification/lease selection then ran **five cases on an owned
+PostgreSQL fixture with zero skips**. Final metadata/generated-contract preflight
+passed (1,215 bindings). These final changes affect design docs/test assembly only;
+the executed runtime/image digests above remain unchanged.
+
+Final CI regression passed 383 cases with 17 explicit prerequisite skips; final
+metadata/generated-contract preflight and owned-stack evidence verification also
+passed after the schema-design cleanup. The complete stage remains one commit
+per affected repository.

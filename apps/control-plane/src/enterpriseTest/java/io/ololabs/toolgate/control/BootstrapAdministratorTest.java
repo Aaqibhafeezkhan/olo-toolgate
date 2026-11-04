@@ -32,7 +32,7 @@ class BootstrapAdministratorTest {
     @Test void firstAdminCannotBeDeletedOrDisabledEvenByAnotherSuperAdmin() {
         var before=fixture.store.transaction(owner.tenant(),false,tx->tx.load());
         for(var actor:List.of(owner,second))for(var operation:List.of("DELETE","UPDATE")) {
-            var body=operation.equals("DELETE")?null:codec.json(new ControlUser("admin","Admin",false,1L));
+            var body=operation.equals("DELETE")?null:codec.json(new ControlUser("admin","Admin",false,1L, null, null, null));
             var failure=assertThrows(Failure.class,()->directory.mutate(actor,Kind.USER,"admin",operation,body,1,UUID.randomUUID().toString(),"request"));
             assertEquals(409,failure.status());assertTrue(failure.getMessage().contains("login created during setup"));
             assertEquals(before,fixture.store.transaction(owner.tenant(),false,tx->tx.load()));
@@ -51,7 +51,7 @@ class BootstrapAdministratorTest {
         }
         var replace=codec.json(Map.of("snapshot",codec.value(exported.body()),"mode","REPLACE","dryRun",true));assertEquals(200,directory.importConfig(second,replace,false,exported.revision(),"replace-keeps-admin","request").status());
         var changes=new ConfigurationChanges(fixture.store,codec,Clock.systemUTC(),512,1048576);
-        var disable=new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.USER,"admin",codec.json(new ControlUser("admin","Admin",false,1L)),1L);
+        var disable=new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.USER,"admin",codec.json(new ControlUser("admin","Admin",false,1L, null, null, null)),1L);
         assertEquals(409,assertThrows(Failure.class,()->changes.mutate(second,disable,"direct-disable","request")).status());
         assertEquals(409,assertThrows(Failure.class,()->changes.create(second,disable,"draft-disable","request")).status());
         assertEquals(exported.revision(),directory.export(second,false).revision());
@@ -60,8 +60,8 @@ class BootstrapAdministratorTest {
     @Test void emailAndNameRemainEditableAndOrdinaryUsersCanStillBeDisabledOrDeleted() {
         var user=codec.model(directory.mutate(second,Kind.USER,"admin","UPDATE",codec.json(new ControlUser("admin","Installation owner",true,1L,"owner@example.com",null,null)),1,"edit-owner","request").body(),ControlUser.class);
         assertEquals("owner@example.com",user.email());assertEquals("Installation owner",user.name());
-        directory.mutate(second,Kind.USER,"ordinary","CREATE",codec.json(new ControlUser("ordinary","Ordinary",true,1L)),0,"create-ordinary","request");
-        assertEquals(200,directory.mutate(second,Kind.USER,"ordinary","UPDATE",codec.json(new ControlUser("ordinary","Ordinary",false,1L)),1,"disable-ordinary","request").status());
+        directory.mutate(second,Kind.USER,"ordinary","CREATE",codec.json(new ControlUser("ordinary","Ordinary",true,1L, null, null, null)),0,"create-ordinary","request");
+        assertEquals(200,directory.mutate(second,Kind.USER,"ordinary","UPDATE",codec.json(new ControlUser("ordinary","Ordinary",false,1L, null, null, null)),1,"disable-ordinary","request").status());
         assertEquals(204,directory.mutate(second,Kind.USER,"ordinary","DELETE",null,2,"delete-ordinary","request").status());
         assertThrows(Failure.class,()->codec.entry(Kind.USER,codec.json(new ControlUser("bad-email","Invalid",false,1L,"not-an-email",null,null))));
     }
@@ -71,7 +71,7 @@ class BootstrapAdministratorTest {
         var role=codec.model(directory.get(second,Kind.ROLE,"recovery-role").body(),ControlRole.class);
         directory.mutate(second,Kind.ROLE,role.id(),"UPDATE",codec.json(new ControlRole(role.id(),role.name(),true,role.revision(),UserRole.SUPER_ADMIN,role.roleType(),List.of())),role.revision(),"empty-super-rules","request");
         var cached=new DirectoryService.Actor(second.tenant(),second.id(),true,false,"alice");
-        assertEquals(201,directory.mutate(cached,Kind.USER,"created-by-second","CREATE",codec.json(new ControlUser("created-by-second","Created",false,1L)),0,"second-create","request").status());
+        assertEquals(201,directory.mutate(cached,Kind.USER,"created-by-second","CREATE",codec.json(new ControlUser("created-by-second","Created",false,1L, null, null, null)),0,"second-create","request").status());
         // Move the protected account out of the privileged Team. Protection is not a bypass.
         var membership=new GroupMembership(EnterpriseMemberType.USER,"admin",List.of("team-default"),directory.export(second,false).revision());
         assertEquals(409,assertThrows(Failure.class,()->directory.setMemberships(second,Kind.USER,"admin",codec.json(membership),membership.revision(),"remove-role","request")).status());

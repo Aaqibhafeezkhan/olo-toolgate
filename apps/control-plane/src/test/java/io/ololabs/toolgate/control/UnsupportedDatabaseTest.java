@@ -21,12 +21,12 @@ final class UnsupportedDatabaseTest {
         assertThrows(IllegalStateException.class,()->SqliteState.open(file));
         try(var c=DriverManager.getConnection(url);var s=c.createStatement()){
             try(var r=s.executeQuery("SELECT payload FROM existing_state")){assertTrue(r.next());assertEquals("must-preserve",r.getString(1));}
-            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name='quickstart_migrations'")){assertFalse(r.next());}
+            try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name='quickstart_schema'")){assertFalse(r.next());}
         }
         var current=temp.resolve("checksum.sqlite");var source=SqliteState.open(current);
-        try(var c=source.getConnection();var s=c.createStatement()){s.execute("UPDATE quickstart_migrations SET checksum='unsupported'");}
+        try(var c=source.getConnection();var s=c.createStatement()){s.execute("UPDATE quickstart_schema SET checksum='unsupported'");}
         assertThrows(IllegalStateException.class,()->SqliteState.open(current));
-        try(var c=source.getConnection();var s=c.createStatement();var r=s.executeQuery("SELECT checksum FROM quickstart_migrations")){assertTrue(r.next());assertEquals("unsupported",r.getString(1));}
+        try(var c=source.getConnection();var s=c.createStatement();var r=s.executeQuery("SELECT checksum FROM quickstart_schema")){assertTrue(r.next());assertEquals("unsupported",r.getString(1));}
     }
     @Test void postgresRejectsNonEmptyUnmanagedStateWithoutBaseliningOrDeletingIt() throws Exception {
         var base=Objects.requireNonNull(System.getenv("CONTROL_TEST_URL"));var password=Objects.requireNonNull(System.getenv("CONTROL_TEST_PASSWORD"));

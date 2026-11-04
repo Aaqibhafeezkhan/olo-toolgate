@@ -30,6 +30,9 @@ public final class EffectIntentValidation {
         if((policy.classification()==EffectClassification.DESTRUCTIVE||policy.classification()==EffectClassification.FINANCIAL)
             && !policy.acknowledgedUnfencedRisk())throw Failure.validation();
         var intent=policy.intent();
+        TargetDedupeGuarantees.validate(policy.targetDedupeGuarantee());
+        if(policy.targetDedupeGuarantee()!=null&&(policy.classification()==EffectClassification.READ
+            ||intent.headers().keySet().stream().anyMatch(h->h.equalsIgnoreCase(policy.targetDedupeGuarantee().header()))))throw Failure.validation();
         var count=new int[]{0};
         for(JsonNode template:List.of(intent.path(),JSON.objectNode().setAll(intent.query()),
                 JSON.objectNode().setAll(intent.headers()),intent.body()))checkTemplate(template,0,count);

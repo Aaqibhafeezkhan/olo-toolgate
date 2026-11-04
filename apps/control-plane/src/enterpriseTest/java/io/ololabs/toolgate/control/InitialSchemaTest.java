@@ -25,7 +25,7 @@ class InitialSchemaTest {
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.createStatement();
             var rows=s.executeQuery("SELECT version FROM flyway_schema_history ORDER BY installed_rank")){
-            for(int version=1;version<=9;version++){assertTrue(rows.next());assertEquals(Integer.toString(version),rows.getString(1));}
+            for(int version=1;version<=1;version++){assertTrue(rows.next());assertEquals(Integer.toString(version),rows.getString(1));}
             assertFalse(rows.next());
         }
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);

@@ -10,7 +10,6 @@ import org.junit.jupiter.api.io.TempDir;
 import javax.net.ssl.*;
 import java.nio.file.*;
 import java.security.*;
-import java.security.spec.RSAPublicKeySpec;
 import java.sql.DriverManager;
 import java.util.*;
 import java.util.concurrent.*;
@@ -45,15 +44,37 @@ class ServicePermitTlsQualificationTest {
         var expectedHeaders=Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of("alice"));
         String httpDigest=HttpRequestFingerprint.digest(profile,destination,"POST",expectedHeaders,body);
         var permit=rig.graph.codec.model(permits.issue(rig.gateway.tenant(),tx->"device",executorHash,
-            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest,bound.manifest(),bound.proof(),"broker-test","handler-test"))).body(),ServicePermit.class);
+            rig.graph.codec.json(new ServicePermitIssue(invocation.id(),invocation.reservedNonce(),ServiceAudience.olo_memory,httpDigest,bound.manifest(),bound.proof(),"broker-test","handler-test", "memory-effect"))).body(),ServicePermit.class);
         permits.sending(rig.gateway.tenant(),tx->"device",executorHash,
             rig.graph.codec.json(new ServicePermitDispatch(permit,"broker-test","handler-test")));
-        var publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(EnterpriseOperationTest.key.getModulus(),EnterpriseOperationTest.key.getPublicExponent()));
-        var verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("permit-key",publicKey),rig.clock,
-            tenant->null,(audience,request)->{permits.consume(rig.gateway,audience,rig.graph.codec.json(request));return true;});
+        var controlServer=com.sun.net.httpserver.HttpsServer.create(new java.net.InetSocketAddress("localhost",0),0);
+        controlServer.setHttpsConfigurator(new com.sun.net.httpserver.HttpsConfigurator(tls));
+        controlServer.createContext("/api/control/v1/access/service-permits/olo-memory/",exchange->{
+            try{
+                assertEquals("Bearer fixture-control",exchange.getRequestHeaders().getFirst("Authorization"));
+                String path=exchange.getRequestURI().getPath();
+                String document=new String(exchange.getRequestBody().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+                String reply=path.endsWith("/jwks")?rig.graph.codec.json(permits.keys()):
+                    path.endsWith("/epoch")?permits.epoch(rig.gateway).body():
+                    path.endsWith("/claims/consume")?permits.consumeClaim(rig.gateway,ServiceAudience.olo_memory,document).body():null;
+                if(reply==null){exchange.sendResponseHeaders(404,-1);return;}
+                byte[] bytes=reply.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type","application/json");
+                exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);
+            }finally{exchange.close();}
+        });
+        controlServer.start();
+        var http=java.net.http.HttpClient.newBuilder().sslContext(tls)
+            .followRedirects(java.net.http.HttpClient.Redirect.NEVER).build();
+        var authorizationClient=new io.ololabs.toolgate.service.ControlServiceAuthorization(http,
+            java.net.URI.create("https://localhost:"+controlServer.getAddress().getPort()),"control",
+            rig.gateway.tenant().value(),ServiceAudience.olo_memory,()->"fixture-control",rig.clock);
+        var localClaims=new io.ololabs.toolgate.service.JdbcEffectClaims();
         Path storage=temp.resolve("service-storage.sqlite");
         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage);var statement=connection.createStatement()){
             statement.execute("CREATE TABLE effects(invocation TEXT PRIMARY KEY,tenant TEXT,subject TEXT,actor TEXT)");
+            connection.setAutoCommit(false);
+            io.ololabs.toolgate.service.JdbcEffectClaims.initialize(connection);connection.commit();
         }
         try(var server=(SSLServerSocket)tls.getServerSocketFactory().createServerSocket(0,1,java.net.InetAddress.getLoopbackAddress())){
             server.setNeedClientAuth(true);
@@ -78,21 +99,32 @@ class ServicePermitTlsQualificationTest {
                         var transport=new ServicePermitVerifier.Transport(profile,destination,"POST",actualHeaders);
                         var request=new ServicePermitVerifier.Request(rig.gateway.tenant().value(),"memory.append",invocation.evaluation().resources(),actualBody,transport);
                         var changed=new LinkedHashMap<>(actualHeaders);changed.put("x-recipient",List.of("bob"));
-                        assertThrows(SecurityException.class,()->verifier.authorize(permit,new ServicePermitVerifier.Request(
+                        assertThrows(SecurityException.class,()->authorizationClient.verifyWrite(permit,new ServicePermitVerifier.Request(
                             request.tenant(),request.operation(),request.resources(),actualBody,
                             new ServicePermitVerifier.Transport(profile,destination,"POST",changed)),socket.getSession()));
-                        var authorization=verifier.authorize(permit,request,socket.getSession());
+                        assertThrows(SecurityException.class,()->authorizationClient.authorize(permit,request,socket.getSession()));
+                        var verified=authorizationClient.verifyWrite(permit,request,socket.getSession());
+                        io.ololabs.toolgate.service.JdbcEffectClaims.Owner owner;
+                        try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage)){
+                            connection.setAutoCommit(false);
+                            owner=localClaims.claim(connection,verified.binding(),verified.claims().exp()).owner();connection.commit();
+                        }
+                        assertNotNull(owner);
+                        var authorization=authorizationClient.consumeClaim(verified,owner);
                         var principal=authorization.claims();
                         try(var connection=DriverManager.getConnection("jdbc:sqlite:"+storage)){
                             connection.setAutoCommit(false);
+                            assertTrue(localClaims.beginApply(connection,owner));
                             try(var statement=connection.prepareStatement("INSERT INTO effects VALUES(?,?,?,?)")){
                                 statement.setString(1,principal.invocationId());statement.setString(2,principal.tenantId());
                                 statement.setString(3,principal.sub());statement.setString(4,principal.act());statement.executeUpdate();
                             }
+                            assertTrue(localClaims.finish(connection,owner,true,
+                                "sha256:"+"a".repeat(64)));
                             authorization.checkCommitDeadline();connection.commit();
                         }
-                        assertThrows(SecurityException.class,()->verifier.authorize(permit,new ServicePermitVerifier.Request(
-                            request.tenant(),request.operation(),request.resources(),"{}".getBytes()),socket.getSession()));
+                        assertThrows(SecurityException.class,()->authorizationClient.verifyWrite(permit,new ServicePermitVerifier.Request(
+                            request.tenant(),request.operation(),request.resources(),"{}".getBytes(), null),socket.getSession()));
                         socket.getOutputStream().write(1);return principal;
                     }
                 });
@@ -108,6 +140,6 @@ class ServicePermitTlsQualificationTest {
                     assertTrue(rows.next());assertEquals(rig.gateway.tenant().value(),rows.getString(1));assertEquals("alice",rows.getString(2));assertNull(rows.getString(3));assertFalse(rows.next());
                 }
             } finally {pool.shutdownNow();}
-        }
+        }finally{controlServer.stop(0);http.close();}
     }
 }

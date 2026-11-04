@@ -8170,6 +8170,103 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseAuthorityStatus
+  /api/control/v1/recovery-eligibility:
+    get:
+      operationId: listRecoveryEligibility
+      description: Return current configured recovery readiness. Operation-specific proof and current authority remain required before any resend.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 2048
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: Current readiness without credentials, target keys or business receipts.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/RecoveryPreflightPage
+        '403':
+          description: Current scoped authority required.
+        '409':
+          description: Directory changed; restart pagination.
+        '503':
+          description: Current readiness could not be determined.
+  /insights/v1/recovery-eligibility:
+    get:
+      operationId: listOperatorRecoveryEligibility
+      description: Return current configured recovery readiness. Operation-specific proof and current authority remain required before any resend.
+      security:
+      - operatorCertificate: []
+      parameters:
+      - name: tenant
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 2048
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: Current readiness without credentials, target keys or business receipts.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/RecoveryPreflightPage
+        '403':
+          description: Current scoped authority required.
+        '409':
+          description: Directory changed; restart pagination.
+        '503':
+          description: Current readiness could not be determined.
+  /api/control/v1/access/invocations/{id}/effects/{effect}/lookup:
+    post:
+      operationId: lookupTargetEffectStatus
+      description: Run the pinned read-only target adapter under current scoped operation read and approval authority. No business resend is authorized.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: effect
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Observed effect status; whole-operation completion remains independently derived.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/TargetEffectLookupResult
+        '403':
+          description: Current scoped authority or independent target review denied.
+        '409':
+          description: No supported current adapter, changed generation/profile/credential, or incompatible evidence.
+        '503':
+          description: Target lookup unavailable or refused; no execution authority granted.
   /api/control/v1/access/invocations/{id}/reconciliation:
     post:
       operationId: proposeOutcomeReconciliation
@@ -9621,6 +9718,9 @@ components:
       bearerFormat: JWT
       description: RS256 token with verified issuer/audience/expiry and signed tenant_id/groups.
         Not a Gateway runtime credential.
+    operatorCertificate:
+      type: mutualTLS
+      description: Direct operator identity verified by the dedicated operator CA on the Insights listener.
     deviceCertificate:
       type: mutualTLS
       description: Direct verified device TLS identity; forwarded identity headers

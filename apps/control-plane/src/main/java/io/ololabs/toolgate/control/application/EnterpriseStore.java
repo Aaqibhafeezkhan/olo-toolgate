@@ -43,6 +43,8 @@ public interface EnterpriseStore {
     /** Called only after fresh domain authorization in the same tenant writer transaction. */
     default EnterpriseInvocation rebind(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){throw Failure.unavailable();}
     default Recovery recordRecovery(EnterpriseInvocation previous,OperationRebindingPolicy.Proof proof,long now){throw Failure.unavailable();}
+    default EnterpriseInvocation rebindTargetDeduplication(EnterpriseInvocation invocation,
+        java.util.List<java.util.Map<String,Object>> plan,long now){throw Failure.unavailable();}
     default boolean hasRecovery(String operation){throw Failure.unavailable();}
     default boolean recoveryCoversAttempt(String operation,String attempt){throw Failure.unavailable();}
     default List<Recovery> recoveries(String operation,int limit){throw Failure.unavailable();}

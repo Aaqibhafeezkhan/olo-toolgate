@@ -31,9 +31,23 @@ public final class JdbcEffectClaims {
         if(c.getAutoCommit()||c.isReadOnly())throw new IllegalArgumentException("Writable caller transaction required");
     }
     private static void bounded(int limit){if(limit<1||limit>100)throw new IllegalArgumentException("Limit must be 1..100");}
-    /** Deployment migration only. Existing v1 claims get unknown expiry (0), never automatic abandonment. */
+    /** Fresh current schema only; existing unidentified claim stores are never upgraded. */
     public static void initialize(Connection c)throws SQLException {
         transaction(c);
+        String schema;
+        try{schema=c.getSchema();}catch(SQLFeatureNotSupportedException unsupported){schema=null;}
+        var tables=new HashSet<String>();
+        try(var rows=c.getMetaData().getTables(c.getCatalog(),schema,"toolgate_target_%",new String[]{"TABLE"})){
+            while(rows.next())tables.add(rows.getString("TABLE_NAME"));
+        }
+        boolean identified=tables.contains("toolgate_target_schema");
+        boolean claims=tables.contains("toolgate_target_claims"),outcomes=tables.contains("toolgate_target_outcomes");
+        if(!identified&&(claims||outcomes)||identified&&(!claims||!outcomes))
+            throw new SQLException("Unsupported target claim schema: a fresh current database is required");
+        if(identified)try(var q=c.createStatement();var rows=q.executeQuery("SELECT format FROM toolgate_target_schema")){
+            if(!rows.next()||!"toolgate-target-claims-v1".equals(rows.getString(1))||rows.next())
+                throw new SQLException("Unsupported target claim schema identity");
+        }
         try(var s=c.createStatement()){s.executeUpdate("""
             CREATE TABLE IF NOT EXISTS toolgate_target_claims (
               tenant_id VARCHAR(128) NOT NULL, effect_id VARCHAR(128) NOT NULL,
@@ -43,21 +57,17 @@ public final class JdbcEffectClaims {
               claim_token VARCHAR(64) NOT NULL,
               state VARCHAR(16) NOT NULL CHECK(state IN ('CLAIMED','APPLYING','DONE','FAILED','ABANDONED')),
               result_digest VARCHAR(71),
-              authorization_expires_at BIGINT NOT NULL DEFAULT 0 CHECK(authorization_expires_at>=0),
+              authorization_expires_at BIGINT NOT NULL CHECK(authorization_expires_at>0),
               PRIMARY KEY(tenant_id,effect_id), UNIQUE(tenant_id,auth_nonce),
               CHECK((state IN ('DONE','FAILED') AND result_digest IS NOT NULL)
                  OR (state NOT IN ('DONE','FAILED') AND result_digest IS NULL))
             )
             """);}
-        String schema;
-        try{schema=c.getSchema();}catch(SQLFeatureNotSupportedException unsupported){schema=null;}
         boolean expiry;
         try(var columns=c.getMetaData().getColumns(c.getCatalog(),schema,"toolgate_target_claims","authorization_expires_at")){
             expiry=columns.next();
         }
-        if(!expiry)try(var s=c.createStatement()){
-            s.executeUpdate("ALTER TABLE toolgate_target_claims ADD COLUMN authorization_expires_at BIGINT NOT NULL DEFAULT 0 CHECK(authorization_expires_at>=0)");
-        }
+        if(!expiry)throw new SQLException("Unsupported target claim schema: a fresh current database is required");
         try(var s=c.createStatement()){s.executeUpdate("""
             CREATE TABLE IF NOT EXISTS toolgate_target_outcomes (
               tenant_id VARCHAR(128) NOT NULL, effect_id VARCHAR(128) NOT NULL,
@@ -69,11 +79,13 @@ public final class JdbcEffectClaims {
               FOREIGN KEY(tenant_id,effect_id) REFERENCES toolgate_target_claims(tenant_id,effect_id)
             )
             """);}
+        if(!identified)try(var q=c.createStatement()){
+            q.executeUpdate("CREATE TABLE toolgate_target_schema(format VARCHAR(64) PRIMARY KEY CHECK(format='toolgate-target-claims-v1'))");
+            q.executeUpdate("INSERT INTO toolgate_target_schema(format) VALUES('toolgate-target-claims-v1')");
+        }
     }
-    /** Compatibility overload: unknown expiry is never used for automatic recovery. */
-    public Acquisition claim(Connection c,Binding b)throws SQLException{return claim(c,b,0);}
     public Acquisition claim(Connection c,Binding b,long authorizationExpiresAt)throws SQLException{
-        transaction(c);if(authorizationExpiresAt<0)throw new IllegalArgumentException("Invalid expiry");
+        transaction(c);if(authorizationExpiresAt<=0)throw new IllegalArgumentException("Invalid expiry");
         String token=UUID.randomUUID().toString().replace("-","")+UUID.randomUUID().toString().replace("-","");
         boolean inserted;
         try(var s=c.prepareStatement("""

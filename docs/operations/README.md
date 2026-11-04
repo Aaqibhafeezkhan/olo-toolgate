@@ -7,12 +7,13 @@ permission to execute.
 | Task | Runbook |
 |---|---|
 | Run and verify services | [Execution guide](execution-guide.md) |
+| Assess target recovery and reconcile an uncertain effect | [Target-deduplicated recovery](target-deduplicated-recovery.md) |
 | Diagnose a failure | [Debugging](debugging.md) and [device states](../control-plane/device-registry.md) |
 | Tune container load and understand caching | [Container performance](performance.md) |
 | Prepare external services and TLS | [Production deployment](../deployment/production.md) |
 | Monitor authority, decisions and device adoption | [Enterprise operations](../enterprise-access-control/operations.md) |
-| Back up, restore or migrate | [Reviewed recovery](../enterprise-access-control/operations.md) and [Quickstart persistence](../deployment/quickstart.md) |
-| Upgrade Control or Gateway | [Control upgrades](../control-plane/upgrades.md), [Gateway upgrades](../gateway/upgrades.md) |
+| Back up and recover current-format state | [Reviewed recovery](../enterprise-access-control/operations.md) and [Quickstart persistence](../deployment/quickstart.md) |
+| Deploy matching current Control and Gateway | [Fresh Control initialization](../control-plane/upgrades.md), [Gateway upgrades](../gateway/upgrades.md) |
 | Deploy or roll back client packages | [Package lifecycle](../client/package-deployment.md) |
 | Manage key custody | [Keys and credentials](../security/key-management.md) |
 

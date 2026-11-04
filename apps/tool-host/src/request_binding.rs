@@ -19,6 +19,7 @@ pub(crate) struct PreparedRequest {
     digest: String,
     service_permit_credential: bool,
     manifest: Value,
+    effect_key: Option<String>,
 }
 impl PreparedRequest {
     pub(crate) fn new(
@@ -173,7 +174,92 @@ impl PreparedRequest {
             digest,
             service_permit_credential: credentials.contains("toolgate-service-permit"),
             manifest,
+            effect_key: None,
         })
+    }
+    /// Logical identity metadata, excluded from request bytes; Control binds it to the immutable effect.
+    pub(crate) fn with_effect_key(mut self, key: Option<&str>) -> Result<Self, String> {
+        if key.is_some_and(|value| {
+            value.is_empty()
+                || value.len() > 128
+                || !value
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
+        }) {
+            return Err("invalid logical effect key".into());
+        }
+        self.effect_key = key.map(str::to_owned);
+        Ok(self)
+    }
+    pub(crate) fn effect_key(&self) -> Option<&str> {
+        self.effect_key.as_deref()
+    }
+    /// Only Control's derived target key may be injected after binding; its fixed name is bound by the pinned profile.
+    pub(crate) fn with_downstream_key(
+        mut self,
+        key: Option<&olo_toolgate_contracts::v2::DownstreamEffectKey>,
+    ) -> Result<Self, String> {
+        let Some(key) = key else {
+            return Ok(self);
+        };
+        let forbidden = [
+            "authorization",
+            "proxy-authorization",
+            "cookie",
+            "set-cookie",
+            "host",
+            "content-type",
+            "content-length",
+            "transfer-encoding",
+            "connection",
+            "te",
+            "upgrade",
+            "accept",
+            "user-agent",
+            "traceparent",
+            "tracestate",
+            "toolgate-service-permit",
+            "trailer",
+            "keep-alive",
+            "proxy-connection",
+            "content-encoding",
+            "expect",
+            "range",
+            "content-range",
+            "if-match",
+            "if-none-match",
+            "if-range",
+            "if-modified-since",
+            "if-unmodified-since",
+        ];
+        if !key
+            .header
+            .as_bytes()
+            .first()
+            .is_some_and(u8::is_ascii_lowercase)
+            || key.header.len() > 64
+            || forbidden.contains(&key.header.as_str())
+            || key.header.starts_with("x-forwarded-")
+            || !key
+                .header
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            || key.value.len() != 67
+            || !key.value.starts_with("tg-")
+            || !key.value[3..]
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+            || self.request.headers().contains_key(&key.header)
+        {
+            return Err("invalid or substituted target effect key".into());
+        }
+        let name = header::HeaderName::from_bytes(key.header.as_bytes())
+            .map_err(|_| "invalid target header")?;
+        let mut value =
+            header::HeaderValue::from_str(&key.value).map_err(|_| "invalid target key")?;
+        value.set_sensitive(true);
+        self.request.headers_mut().insert(name, value);
+        Ok(self)
     }
     pub(crate) fn manifest(&self) -> &Value {
         &self.manifest
@@ -204,7 +290,10 @@ impl PreparedRequest {
     ) -> Result<crate::broker_process::BufferedRequest, &'static str> {
         let manifest =
             serde_json::from_value(self.manifest).map_err(|_| "invalid prepared manifest")?;
-        crate::broker_process::freeze_request(&self.client, self.request, &manifest, handler)
+        let mut wire =
+            crate::broker_process::freeze_request(&self.client, self.request, &manifest, handler)?;
+        wire.effect_key = self.effect_key;
+        Ok(wire)
     }
     pub(crate) fn body_len(&self) -> usize {
         self.request
@@ -335,6 +424,32 @@ mod tests {
             auth_id: Some("api-key".into()),
             credential_headers: vec!["authorization".into()],
         }
+    }
+    #[test]
+    fn effect_keys_survive_private_buffering_without_changing_request_facts() {
+        let first = prepared("https://example.test/send", "{}", "alice", "credential")
+            .with_effect_key(Some("charge:7"))
+            .unwrap();
+        let second = prepared("https://example.test/send", "{}", "alice", "credential")
+            .with_effect_key(Some("receipt:7"))
+            .unwrap();
+        assert_eq!(first.digest(), second.digest());
+        assert_eq!(first.manifest(), second.manifest());
+        assert_eq!(first.effect_key(), Some("charge:7"));
+        let wire = first.into_buffered("handler").unwrap();
+        assert_eq!(wire.effect_key.as_deref(), Some("charge:7"));
+        for key in ["", "a/b", "a b", "é"] {
+            assert!(
+                prepared("https://example.test/send", "{}", "alice", "credential")
+                    .with_effect_key(Some(key))
+                    .is_err()
+            );
+        }
+        assert!(
+            prepared("https://example.test/send", "{}", "alice", "credential")
+                .with_effect_key(Some(&"x".repeat(129)))
+                .is_err()
+        );
     }
     fn prepared(url: &str, body: &str, recipient: &str, credential: &str) -> PreparedRequest {
         let client = client();
@@ -517,11 +632,61 @@ mod tests {
             "alice",
             "fixture-value",
         );
+        let digest = p.digest().to_owned();
+        let manifest = p.manifest().clone();
+        let key = olo_toolgate_contracts::v2::DownstreamEffectKey {
+            header: "idempotency-key".into(),
+            value: format!("tg-{}", "a".repeat(64)),
+        };
+        let p = p.with_downstream_key(Some(&key)).unwrap();
+        assert_eq!(p.digest(), digest);
+        assert_eq!(p.manifest(), &manifest);
+        assert!(p
+            .request
+            .headers()
+            .get("idempotency-key")
+            .unwrap()
+            .is_sensitive());
         assert!(p.send().await.is_err());
         let (wire, replayed) = peer.await.unwrap();
         assert!(!replayed);
         assert!(wire.starts_with("POST /items?a=2&a=1&z=3 HTTP/1.1\r\n"));
         assert!(wire.contains("content-type: application/json; charset=utf-8\r\n"));
         assert!(wire.ends_with("payload"));
+        assert_eq!(wire.matches("idempotency-key:").count(), 1);
+        assert!(wire
+            .lines()
+            .any(|line| line == format!("idempotency-key: {}", key.value)));
+    }
+    #[test]
+    fn target_keys_cannot_replace_protocol_headers_or_caller_values() {
+        for header in [
+            "authorization",
+            "content-encoding",
+            "if-match",
+            "trailer",
+            "proxy-connection",
+            "1-key",
+        ] {
+            let key = olo_toolgate_contracts::v2::DownstreamEffectKey {
+                header: header.into(),
+                value: format!("tg-{}", "a".repeat(64)),
+            };
+            assert!(
+                prepared("https://example.test/send", "{}", "alice", "credential")
+                    .with_downstream_key(Some(&key))
+                    .is_err()
+            );
+        }
+        let mut forged = prepared("https://example.test/send", "{}", "alice", "credential");
+        forged.request.headers_mut().insert(
+            "idempotency-key",
+            header::HeaderValue::from_static("worker-choice"),
+        );
+        let key = olo_toolgate_contracts::v2::DownstreamEffectKey {
+            header: "idempotency-key".into(),
+            value: format!("tg-{}", "a".repeat(64)),
+        };
+        assert!(forged.with_downstream_key(Some(&key)).is_err());
     }
 }

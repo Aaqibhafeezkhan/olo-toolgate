@@ -26,7 +26,7 @@ class JdbcEffectClaimsTest {
         try(var c=connection()){try{T result=work.run(c);c.commit();return result;}catch(Exception failure){c.rollback();throw failure;}}
     }
     JdbcEffectClaims.Binding binding(){String id=UUID.randomUUID().toString();return new JdbcEffectClaims.Binding("tenant",id,1,"auth-"+id,DIGEST);}
-    JdbcEffectClaims.Acquisition claim(JdbcEffectClaims.Binding b)throws Exception{return tx(c->claims.claim(c,b));}
+    JdbcEffectClaims.Acquisition claim(JdbcEffectClaims.Binding b)throws Exception{return tx(c->claims.claim(c,b, 1001));}
     JdbcEffectClaims.Snapshot inspect(JdbcEffectClaims.Binding b)throws Exception{return tx(c->claims.inspect(c,b.tenant(),b.effectId()));}
     void replicaRace()throws Exception{
         var b=binding();var ready=new CountDownLatch(2);var start=new CountDownLatch(1);
@@ -36,7 +36,7 @@ class JdbcEffectClaimsTest {
             List<Future<JdbcEffectClaims.Acquisition>> results=new ArrayList<>();
             for(int n=0;n<2;n++)results.add(pool.submit(()->{
                 ready.countDown();assertTrue(start.await(5,TimeUnit.SECONDS));
-                var acquisition=tx(c->new JdbcEffectClaims().claim(c,b));
+                var acquisition=tx(c->new JdbcEffectClaims().claim(c,b, 1001));
                 if(acquisition.acquired())tx(c->{
                     assertTrue(claims.beginApply(c,acquisition.owner()));
                     try(var q=c.prepareStatement("INSERT INTO business_effects VALUES(?)")){q.setString(1,b.effectId());q.executeUpdate();}
@@ -107,7 +107,7 @@ class JdbcEffectClaimsTest {
         assertThrows(SecurityException.class,()->claim(new JdbcEffectClaims.Binding(b.tenant(),b.effectId(),2,"another",DIGEST)));
         assertThrows(SecurityException.class,()->claim(new JdbcEffectClaims.Binding(b.tenant(),"other-effect",1,b.authNonce(),DIGEST)));
         assertTrue(claim(new JdbcEffectClaims.Binding("other-tenant",b.effectId(),1,b.authNonce(),DIGEST)).acquired());
-        try(var c=user==null?DriverManager.getConnection(url):DriverManager.getConnection(url,user,password)){assertThrows(IllegalArgumentException.class,()->claims.claim(c,b));}
+        try(var c=user==null?DriverManager.getConnection(url):DriverManager.getConnection(url,user,password)){assertThrows(IllegalArgumentException.class,()->claims.claim(c,b, 1001));}
     }
     void durableOutcomeDelivery()throws Exception{
         var b=binding();var a=tx(c->claims.claim(c,b,100));
@@ -132,11 +132,11 @@ class JdbcEffectClaimsTest {
         assertFalse(claim(b).acquired());assertEquals(JdbcEffectClaims.State.DONE,inspect(b).state());
     }
     void expiredClaimRecovery()throws Exception{
-        var legacy=binding();claim(legacy);var active=binding();tx(c->claims.claim(c,active,1001));
+        var active=binding();tx(c->claims.claim(c,active,1001));
         var expired=binding();var owner=tx(c->claims.claim(c,expired,100)).owner();
         var found=tx(c->claims.expiredClaims(c,expired.tenant(),1000,100));
         assertTrue(found.stream().anyMatch(p->p.binding().equals(expired)));
-        assertTrue(found.stream().noneMatch(p->p.binding().equals(legacy)||p.binding().equals(active)));
+        assertTrue(found.stream().noneMatch(p->p.binding().equals(active)));
         var observed=inspect(expired);
         try(var c=connection()){assertTrue(claims.abandon(c,observed));c.rollback();}
         assertEquals(JdbcEffectClaims.State.CLAIMED,inspect(expired).state());
@@ -150,19 +150,22 @@ class JdbcEffectClaimsTest {
         assertTrue(tx(c->claims.expiredClaims(c,applying.tenant(),1000,100)).stream().noneMatch(p->p.binding().equals(applying)));
         assertEquals(JdbcEffectClaims.State.APPLYING,inspect(applying).state());
     }
-    void existingV1ClaimsKeepTheirUnknownExpiry()throws Exception{
+    void oldClaimSchemasAreRejectedWithoutConversion()throws Exception{
         var b=binding();claim(b);
         tx(c->{try(var q=c.createStatement()){
+            q.executeUpdate("DROP TABLE toolgate_target_schema");
             q.executeUpdate("DROP TABLE toolgate_target_outcomes");
             q.executeUpdate("ALTER TABLE toolgate_target_claims DROP COLUMN authorization_expires_at");
         }return null;});
-        initialize();assertEquals(JdbcEffectClaims.State.CLAIMED,inspect(b).state());
-        assertTrue(tx(c->claims.expiredClaims(c,b.tenant(),Long.MAX_VALUE,100)).stream().noneMatch(p->p.binding().equals(b)));
-        assertFalse(claim(b).acquired());
+        assertThrows(SQLException.class,this::initialize);
+        assertEquals(JdbcEffectClaims.State.CLAIMED,inspect(b).state());
+        try(var c=connection();var q=c.createStatement()){
+            assertThrows(SQLException.class,()->q.executeQuery("SELECT authorization_expires_at FROM toolgate_target_claims"));
+        }
     }
     @Test void outcomesSurviveReopenAndDeliveryAcknowledgementDoesNotReopenClaims()throws Exception{durableOutcomeDelivery();}
     @Test void expiryRecoveryFencesOnlyClaimedWorkAndCommitsItsEvidenceAtomically()throws Exception{expiredClaimRecovery();}
-    @Test void upgradingV1NeverInventsARecoveryDeadline()throws Exception{existingV1ClaimsKeepTheirUnknownExpiry();}
+    @Test void oldSchemasHaveNoAutomaticUpgradePath()throws Exception{oldClaimSchemasAreRejectedWithoutConversion();}
     @Test void twoReplicasHaveOneClaimOwner()throws Exception{replicaRace();}
     @Test void pausedOwnerCannotActAfterRecovery()throws Exception{pausedOwner();}
     @Test void applyAndRecoveryHaveOneWinner()throws Exception{applyTakeoverRace();}
@@ -176,7 +179,7 @@ class JdbcEffectClaimsTest {
         try(var c=DriverManager.getConnection(base,"control_migrator",secret);var s=c.createStatement()){s.execute("CREATE DATABASE "+database);}
         try{
             url=base.replace("/control?","/"+database+"?");user="control_migrator";password=secret;initialize();
-            replicaRace();pausedOwner();applyTakeoverRace();atomicCommitAndRollback();uncertainApplying();bindingConflicts();durableOutcomeDelivery();expiredClaimRecovery();existingV1ClaimsKeepTheirUnknownExpiry();
+            replicaRace();pausedOwner();applyTakeoverRace();atomicCommitAndRollback();uncertainApplying();bindingConflicts();durableOutcomeDelivery();expiredClaimRecovery();oldClaimSchemasAreRejectedWithoutConversion();
         }finally{
             try(var c=DriverManager.getConnection(base,"control_migrator",secret);var s=c.createStatement()){s.execute("DROP DATABASE "+database+" WITH (FORCE)");}
         }

@@ -72,14 +72,14 @@ public final class EnterpriseOperations {
         var context=new EnterpriseContext(c.requestId(),c.tenantId(),c.mode(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),current.sessionEpoch(),current.credentialEpoch(),c.bindingId(),c.deviceId());
         var e=i.evaluation();
         var evaluation=new EnterpriseEvaluation(context,e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),e.nowUnixMs(),e.authorityRevision(),e.online(),e.amountMinorUnits(),e.operation());
-        var next=new EnterpriseInvocation(i.id(),i.requestDigest(),evaluation,i.state(),i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
+        var next=new EnterpriseInvocation(i.id(),i.requestDigest(),evaluation,i.state(),i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation(), null);
         tx.enterprise().saveInvocation(next,now,i.revision());audit(tx,actor,"INVOCATION_RENEWED",next);return next;}
     /** The reconciliation method the tool declared (OLO M5.4); a tool with effects that declared none is settled manually. */
     private ReconciliationMethod reconciliation(Directory directory,String toolId){
         var entry=directory.entries().get(Kind.TOOL.id(toolId));if(entry==null)return ReconciliationMethod.MANUAL;
         var declared=codec.model(entry.document(),ControlTool.class).definition().reconciliation();
         return declared!=null?declared:ReconciliationMethod.MANUAL;}
-    private EnterpriseInvocation changed(EnterpriseInvocation i,EnterpriseInvocationState state,String nonce,List<ResourceDescriptor> completed,String result){return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),state,i.revision()+1,i.authorizationEpoch(),nonce,i.expiresAtUnixMs(),completed,i.downstreamIdempotencyKey(),result,i.diagnosticId(),i.reconciliation());}
+    private EnterpriseInvocation changed(EnterpriseInvocation i,EnterpriseInvocationState state,String nonce,List<ResourceDescriptor> completed,String result){return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),state,i.revision()+1,i.authorizationEpoch(),nonce,i.expiresAtUnixMs(),completed,i.downstreamIdempotencyKey(),result,i.diagnosticId(),i.reconciliation(), null);}
     /** M4.4: who, as whom, through which workload, what operation on which resources, the decision, the policy and
      *  authorization epoch, and the resulting state, as separate audit fields. Never arguments, payloads or credentials;
      *  more than 16 resources are recorded by count and digest only. */
@@ -244,10 +244,13 @@ public final class EnterpriseOperations {
             var proof=OperationRebindingPolicy.proof(tx.enterprise().recoveryFacts(previous.id()),time);
             var latestOutcome=tx.enterprise().latestOperationOutcome(previous.id());
             if(latestOutcome!=null&&latestOutcome.value().state()==EnterpriseOperationState.RECONCILIATION_REQUIRED)proof=null;
-            if(proof!=null){
+            var targetPlan=proof==null&&(latestOutcome==null||latestOutcome.value().state()!=EnterpriseOperationState.RECONCILIATION_REQUIRED)
+                ?TargetResends.plan(tx,codec,previous,time):null;
+            if(proof!=null||targetPlan!=null){
                 fresh(actor.tenant(),tx,previous,time,true);
-                previous=tx.enterprise().rebind(previous,proof,time);
-                audit(tx,actor,"INVOCATION_REBOUND",previous);
+                previous=targetPlan==null?tx.enterprise().rebind(previous,proof,time)
+                    :tx.enterprise().rebindTargetDeduplication(previous,targetPlan,time);
+                audit(tx,actor,targetPlan==null?"INVOCATION_REBOUND":"RECONCILIATION_RESEND",previous);
             }else decide(actor.tenant(),tx,previous.evaluation(),time,true);
             return reply(projected(tx,previous,time),previous.revision());
         }
@@ -258,7 +261,7 @@ public final class EnterpriseOperations {
         var state=decision.decision()==Decision.ASK||consentPlan!=null?EnterpriseInvocationState.PENDING_APPROVAL:EnterpriseInvocationState.QUEUED;
         var i=new EnterpriseInvocation(context.requestId(),digest,e,state,1L,epoch,null,
                 time+(state==EnterpriseInvocationState.PENDING_APPROVAL?approvalExpiry():lifetime),List.of(),
-                request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()));
+                request.downstreamIdempotencyKey(),null,decision.diagnosticId(),reconciliation(tx.load(),e.toolId()), null);
         for(var budget:budgets)tx.enterprise().reserveBudget(budget,i.id(),time);
         tx.enterprise().saveInvocation(i,time,0);
         if(consentPlan!=null)consentPlan.save(tx,codec,i,(com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(request.request().arguments())),credentialExpiry,time);
@@ -463,7 +466,7 @@ public final class EnterpriseOperations {
             var next=new EnterpriseApproval(a.id(),a.approvalType(),a.invocationId(),a.requestDigest(),a.authorizationEpoch(),a.directoryRevision(),a.obligationIds(),reviews,state,a.revision()+1,a.expiresAtUnixMs());tx.enterprise().saveApproval(next,a.revision());
             if(state==EnterpriseApprovalState.APPROVED&&EffectConsents.approved(tx,codec,i,now)){if(i.state()!=EnterpriseInvocationState.PENDING_APPROVAL)throw Failure.conflict();var approved=changed(i,EnterpriseInvocationState.QUEUED,null,List.of(),null);
                 // The approved operation resumes (M5.5) with a fresh dispatch window, however long the review took.
-                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),consentDeadline(tx,i,now+lifetime),approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation());tx.enterprise().saveInvocation(queued,now,i.revision());}
+                var queued=new EnterpriseInvocation(approved.id(),approved.requestDigest(),approved.evaluation(),approved.state(),approved.revision(),approved.authorizationEpoch(),approved.reservedNonce(),consentDeadline(tx,i,now+lifetime),approved.completedResources(),approved.downstreamIdempotencyKey(),approved.resultDigest(),approved.diagnosticId(),approved.reconciliation(), null);tx.enterprise().saveInvocation(queued,now,i.revision());}
             else if((state==EnterpriseApprovalState.DENIED||state==EnterpriseApprovalState.REVOKED)&&Set.of(EnterpriseInvocationState.PENDING_APPROVAL,EnterpriseInvocationState.QUEUED,EnterpriseInvocationState.RESERVED,EnterpriseInvocationState.DISPATCHED,EnterpriseInvocationState.EXECUTING).contains(i.state())){
                 // End the original wait atomically with the review. Once dispatch may have started, cancellation
                 // cannot prove the effect did not happen: retain uncertainty for reconciliation instead.
@@ -640,7 +643,7 @@ public final class EnterpriseOperations {
                 if(decision.decision()!=Decision.ASK||policy!=null&&policy.state()==EnterpriseApprovalState.APPROVED){
                     fresh(actor.tenant(),tx,i,time);
                     var queued=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.QUEUED,i.revision()+1,
-                        i.authorizationEpoch(),null,consentDeadline(tx,i,time+lifetime),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
+                        i.authorizationEpoch(),null,consentDeadline(tx,i,time+lifetime),i.completedResources(),i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation(), null);
                     tx.enterprise().saveInvocation(queued,time,i.revision());
                 }
             }
@@ -665,6 +668,11 @@ public final class EnterpriseOperations {
         action=action.equals("read")?"operation.read":ManagementAccess.permission(Kind.BINDING,action);
         var entry=tx.load().entries().get(Kind.BINDING.id(i.evaluation().context().bindingId()));if(entry==null)throw ManagementAccess.denied();var b=codec.model(entry.document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);
         access.require(tx.load(),user,action,Kind.TOOL_GROUP,b.toolGroupId(),time);access.require(tx.load(),user,action,Kind.DEVICE_GROUP,b.deviceGroupId(),time);
+    }
+    void lookupScope(Store.Session tx,DirectoryService.Actor actor,EnterpriseInvocation invocation,long time){
+        if(actor.userId()==null)throw ManagementAccess.denied();
+        scope(tx,actor.userId(),invocation,"read",time);
+        scope(tx,actor.userId(),invocation,"operation.approve",time);
     }
     public Store.Reply page(DirectoryService.Actor actor,String after,int limit){if(actor.userId()==null||limit<1||limit>100)throw Failure.validation();if(after!=null)Ids.valid(after);sweep(actor.tenant());
         return store.transaction(actor.tenant(),false,tx->{long time=clock.millis();String cursor=after==null?"":after;var values=new ArrayList<EnterpriseInvocation>();boolean more=false;

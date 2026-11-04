@@ -24,6 +24,4 @@ public record RemoteToolResponse(
     public RemoteToolResponse {
         java.util.Objects.requireNonNull(record, "record");
     }
-    /** Construct stored/legacy execution state without a derived response projection. */
-    public RemoteToolResponse(RemoteToolRecord record, RemoteToolResult result) { this(record, result, null); }
 }

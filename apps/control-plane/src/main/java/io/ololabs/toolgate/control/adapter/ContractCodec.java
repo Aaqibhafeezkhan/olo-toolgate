@@ -92,8 +92,12 @@ public class ContractCodec implements Codec {
         var pending = new java.util.ArrayDeque<java.util.Map.Entry<String, String>>();
         for (var file : V2_FILES) v2.get(file).fieldNames().forEachRemaining(name -> pending.add(java.util.Map.entry(file, name)));
         pending.addAll(V2_NAMES);
+        // Package admission validates the complete current v2 manifest graph in its
+        // own namespace, rather than accidentally selecting its v1 namesake.
+        pending.add(java.util.Map.entry("package.schema.json","PackageManifest"));
         for (var ref : crossVersion) { int split = ref.indexOf("#/$defs/"); pending.add(java.util.Map.entry(ref.substring("../v2/".length(), split), ref.substring(split + 8))); }
         var requested = new java.util.HashSet<String>(); pending.forEach(entry -> requested.add(entry.getValue()));
+        requested.remove("PackageManifest");
         var adopted = new java.util.HashSet<String>(); var added = new java.util.ArrayList<String>(); var renamed = new java.util.HashSet<String>();
         while (!pending.isEmpty()) {
             var next = pending.poll(); var name = next.getValue();
@@ -272,7 +276,10 @@ public class ContractCodec implements Codec {
     }
     public Object value(String document) { return parse(document, false); }
     public <T> T model(String document, Class<T> type) {
-        var node = parse(document, false); validate(type.getSimpleName(), node);
+        var node = parse(document, false);
+        String name=type.getSimpleName();
+        if(type.getPackageName().equals("io.ololabs.toolgate.contracts.v2")&&validators.containsKey("V2"+name))name="V2"+name;
+        validate(name, node);
         try { return mapper.treeToValue(node, type); }
         catch (java.io.IOException | IllegalArgumentException e) { throw Failure.validation(); }
     }

@@ -26,7 +26,7 @@ final class RecoveryAdmissionIntegrationTest {
     private static final ObjectMapper JSON=new ObjectMapper();
     private static final String IMAGE="sha256:"+"a".repeat(64);
     @TempDir Path temp;
-    private boolean postgres;
+    private boolean postgres;private boolean brokerOnlyApiKey;private boolean rawWorkerSecret;
     @BeforeAll static void key() throws Exception {EnterpriseOperationTest.signingKey();}
     record Fixture(ServicePermitBridgeTest bridge,ServerPackages packages,JsonNode profile) {}
 
@@ -72,6 +72,19 @@ final class RecoveryAdmissionIntegrationTest {
         var route=(ObjectNode)profile.path("routes").get(0);
         route.put("destination",destination.path("id").asText()).put("method","POST").put("path","/v1/memory.append").put("streaming","NONE");
         route.remove("auth");
+        if(brokerOnlyApiKey){
+            route.put("auth","broker-key");
+            descriptor.putArray("httpAuth").addObject().put("id","broker-key").put("type","API_KEY")
+                .put("header","x-api-key").put("secret","AUTH_ONLY").putArray("scopes");
+            if(rawWorkerSecret)((ObjectNode)descriptor.path("variables")).putArray("secrets").addObject()
+                .put("name","AUTH_ONLY").put("type","STRING").put("scope","TENANT");
+            var policy=JSON.createObjectNode().put("routeId",route.path("id").asText()).put("classification","WRITE")
+                .put("consentRequired",false).put("acknowledgedUnfencedRisk",false);
+            var recipe=policy.putObject("intent").put("path",route.path("path").asText()).put("contentType","application/json")
+                .put("bodyMode","CANONICAL_JSON");
+            recipe.putObject("query");recipe.putObject("headers");recipe.putObject("body").putObject("path").put("$arg","/path");
+            profile.putArray("effectReviews").addObject().put("reviewedBy","admin").put("reviewedAtUnixMs",rig.clock.millis()).set("policy",policy);
+        }
         descriptor.set("routes",profile.path("routes").deepCopy());
         packaged.put("toolDescriptorDigest",Canonical.digest(descriptor));
         var artifact=(ObjectNode)manifest.path("artifacts").get(0);artifact.put("runtimeId","python");
@@ -130,7 +143,7 @@ final class RecoveryAdmissionIntegrationTest {
         manifest.putArray("credentialHeaders").add("toolgate-service-permit");
         manifest.putObject("headers").putArray("accept").add("*/*");
         var request=new ServicePermitIssue(i.id(),claims.nonce(),ServiceAudience.olo_memory,Canonical.arguments(manifest),
-                rig.graph.codec.model(manifest.toString(),PreparedHttpRequestManifest.class),signed,"broker-test",handler);
+                rig.graph.codec.model(manifest.toString(),PreparedHttpRequestManifest.class),signed,"broker-test",handler, "memory-effect");
         return rig.graph.codec.model(fixture.bridge().permits.issue(rig.gateway.tenant(),tx->"device",ServicePermitBridgeTest.KEY,
                 rig.graph.codec.json(request)).body(),ServicePermit.class);
     }
@@ -207,7 +220,7 @@ final class RecoveryAdmissionIntegrationTest {
                         c.sessionEpoch(),c.credentialEpoch(),c.delegatedSessionEpoch(),EnterpriseConformanceTest.NOW+120000,
                         c.bindingId(),c.credentialSha256());
                 var replay=new io.ololabs.toolgate.contracts.EnterpriseInvocationRequest(renewed,request.request(),
-                        request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),request.executionContext());
+                        request.toolDigest(),request.packageDigest(),request.downstreamIdempotencyKey(),request.executionContext(), null);
                 var terminal=rig.graph.codec.model(f.bridge().submit(replay).body(),EnterpriseInvocation.class);
                 assertEquals(EnterpriseInvocationState.FAILED,terminal.state());
                 assertEquals(failed.expiresAtUnixMs(),terminal.expiresAtUnixMs());
@@ -365,7 +378,7 @@ final class RecoveryAdmissionIntegrationTest {
     }
     private EnterpriseInvocation reportSuccess(Fixture f,SignedInvocationPermit signed){
         var rig=f.bridge().rig;var claims=rig.signer.verifyInvocation(signed);
-        var report=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED");
+        var report=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED").put("executionTier","OCI_SANDBOX");
         var result=report.putObject("result");result.put("kind","RESULT").put("resultType","complete").put("isError",false);result.putArray("content");
         return rig.graph.codec.model(rig.operations.reportInvocation(rig.gateway.tenant(),tx->"device",report.toString(),claims.nonce()).body(),EnterpriseInvocation.class);
     }
@@ -416,7 +429,7 @@ final class RecoveryAdmissionIntegrationTest {
         consume(f,signed);var claims=rig.signer.verifyInvocation(signed);var write=grant(f,signed,"error-frame");
         f.bridge().sending(write,"broker-test","error-frame");String token="e".repeat(64);f.bridge().claimConsume(write,token);
         f.bridge().targetOutcome(write,token,io.ololabs.toolgate.contracts.ServicePermitTargetOutcomeKind.COMPLETED);
-        var report=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED");
+        var report=JSON.createObjectNode().put("invocationId",claims.invocationId()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED").put("executionTier","OCI_SANDBOX");
         var result=report.putObject("result");result.put("kind","RESULT").put("resultType","complete").put("isError",true);result.putArray("content");
         var received=rig.graph.codec.model(rig.operations.reportInvocation(rig.gateway.tenant(),tx->"device",report.toString(),claims.nonce()).body(),EnterpriseInvocation.class);
         assertEquals(EnterpriseInvocationState.FAILED,received.state());
@@ -501,7 +514,7 @@ final class RecoveryAdmissionIntegrationTest {
             var running=tx.enterprise().invocation("outcome-rollback");
             var terminal=new EnterpriseInvocation(running.id(),running.requestDigest(),running.evaluation(),EnterpriseInvocationState.SUCCEEDED,
                     running.revision()+1,running.authorizationEpoch(),running.reservedNonce(),running.expiresAtUnixMs(),
-                    running.evaluation().resources(),running.downstreamIdempotencyKey(),"a".repeat(64),running.diagnosticId(),running.reconciliation());
+                    running.evaluation().resources(),running.downstreamIdempotencyKey(),"a".repeat(64),running.diagnosticId(),running.reconciliation(), null);
             tx.enterprise().saveInvocation(terminal,rig.clock.millis(),running.revision());
             var value=new OperationFinalizer(rig.graph.codec).refresh(tx,"outcome-rollback",rig.clock.millis());
             assertTrue(value.finalized());
@@ -551,6 +564,9 @@ final class RecoveryAdmissionIntegrationTest {
         var archive=JSON.readTree(history.getFirst().document());
         assertEquals(oldLease.fencingToken(),JSON.readTree(archive.path("lease").asText()).path("fencingToken").asText());
     }
+    private String relayResult(com.fasterxml.jackson.databind.node.ObjectNode report){
+        var frame=report.deepCopy();frame.remove("executionTier");return frame.toString();
+    }
     @Test void lateReceiptsCannotReplaceTheRecoveredDispatchOrItsCurrentOutcome() throws Exception {
         var fixture=fixture(true,false);var rig=fixture.bridge().rig;
         var signed=permit(fixture,"scope-receipt");var claims=rig.signer.verifyInvocation(signed);
@@ -559,9 +575,9 @@ final class RecoveryAdmissionIntegrationTest {
                 OperationRebindingPolicy.Proof.QUALIFIED_BROKER_NO_WRITE,rig.clock.millis()));
         var device=new EndpointDeviceRecord("device",rig.gateway.tenant().value(),"alice","f".repeat(64),
                 EndpointState.ACTIVE,1L,0L,0L,null,null,true,1L,null,null);
-        var late=JSON.createObjectNode().put("invocationId",failed.id()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED");
+        var late=JSON.createObjectNode().put("invocationId",failed.id()).put("fencingToken",claims.nonce()).put("outcome","COMPLETED").put("executionTier","OCI_SANDBOX");
         late.set("result",JSON.readTree("{\"kind\":\"RESULT\",\"resultType\":\"complete\",\"content\":[],\"isError\":false}"));
-        var receipt=fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),late.toString());
+        var receipt=fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),relayResult(late));
         assertEquals("EXPIRED",JSON.readTree(receipt.body()).path("state").asText());
         assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.packages().relayed(failed.id())));
         var next=rig.graph.codec.model(fixture.packages().permit(rig.gateway,rig.graph.codec.json(
@@ -579,15 +595,17 @@ final class RecoveryAdmissionIntegrationTest {
         consume(fixture,next);
         oldAdmission.put("fencingToken",nextClaims.nonce());
         fixture.packages().admission(rig.gateway.tenant(),tx->device,failed.id(),oldAdmission.toString());
-        fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),late.toString());
+        fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),relayResult(late));
         rig.operations.reportInvocation(rig.gateway.tenant(),tx->"device",late.toString(),claims.nonce());
         assertEquals(EnterpriseInvocationState.EXECUTING,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().invocation(failed.id())).state());
         var current=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.packages().relayed(failed.id()));
         assertEquals("ADMITTED",current.state());assertFalse(JSON.readTree(current.document()).path("status").has("result"));
         var attempts=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attempts(failed.id(),rig.clock.millis()));
-        assertEquals(2,attempts.size());assertEquals(2L,attempts.getFirst().evidenceCount());assertEquals(0L,attempts.getLast().evidenceCount());
+        assertEquals(2,attempts.size());
+        // Relay transport result and tier-bearing Control report are distinct current evidence.
+        assertEquals(3L,attempts.getFirst().evidenceCount());assertEquals(0L,attempts.getLast().evidenceCount());
         late.put("fencingToken","not-an-issued-attempt");
-        assertEquals(403,assertThrows(Failure.class,()->fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),late.toString())).status());
+        assertEquals(403,assertThrows(Failure.class,()->fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),relayResult(late))).status());
     }
     @Test void signedScopeAndLeaseRecoveryAlsoHoldUnderThePostgresRuntimeRole() throws Exception {
         Assumptions.assumeTrue(System.getenv("CONTROL_TEST_URL")!=null&&System.getenv("CONTROL_TEST_PASSWORD")!=null,
@@ -628,4 +646,44 @@ final class RecoveryAdmissionIntegrationTest {
         assertNull(OperationRebindingPolicy.proof(rig.store.transaction(rig.gateway.tenant(),false,
                 tx->tx.enterprise().recoveryFacts(failed.id())),rig.clock.millis()));
     }
+    @Test void reviewedGenericBrokerRoutesCaptureRealSignedRecoveryScopeAndMissingReviewCannotQualify()throws Exception{
+        var f=fixture(true,true);var rig=f.bridge().rig;
+        var profile=(ObjectNode)f.profile();var route=profile.path("routes").get(0);
+        var policy=JSON.createObjectNode().put("routeId",route.path("id").asText()).put("classification","WRITE")
+            .put("consentRequired",false).put("acknowledgedUnfencedRisk",false);
+        var intent=policy.putObject("intent").put("path",route.path("path").asText()).put("contentType","application/json")
+            .put("bodyMode","CANONICAL_JSON");
+        intent.putObject("query");intent.putObject("headers");intent.putObject("body").putObject("path").put("$arg","/path");
+        profile.putArray("effectReviews").addObject().put("reviewedBy","admin").put("reviewedAtUnixMs",rig.clock.millis()).set("policy",policy);
+        String digest=Canonical.digest(profile);
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var deployment=(ObjectNode)JSON.valueToTree(rig.graph.codec.value(tx.packages().deployment("acme.test")));
+            deployment.put("serviceProfileDigest",digest);
+            tx.packages().saveDocument(digest,profile.toString());tx.packages().saveDeployment("acme.test",deployment.toString());return null;
+        });
+        var signed=permit(f,"reviewed-generic-recovery");var claims=rig.signer.verifyInvocation(signed);
+        var scope=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().recoveryScope(claims.nonce()));
+        assertNotNull(scope);assertEquals(digest,scope.profileDigest());assertEquals(IMAGE,scope.imageDigest());
+        // Removing review changes the pinned profile and refuses qualification for the next admission.
+        profile.remove("effectReviews");String missing=Canonical.digest(profile);
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var deployment=(ObjectNode)JSON.valueToTree(rig.graph.codec.value(tx.packages().deployment("acme.test")));
+            deployment.put("serviceProfileDigest",missing);tx.packages().saveDocument(missing,profile.toString());
+            tx.packages().saveDeployment("acme.test",deployment.toString());return null;
+        });
+        var next=rig.signer.verifyInvocation(permit(f,"unreviewed-generic-recovery"));
+        assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().recoveryScope(next.nonce())));
+    }
+
+    @Test void brokerOnlyApiKeyRoutesQualifyButWorkerReadableSecretDeclarationsCannot()throws Exception{
+        brokerOnlyApiKey=true;
+        var broker=fixture(true,true);var rig=broker.bridge().rig;
+        var claims=rig.signer.verifyInvocation(permit(broker,"broker-api-key-scope"));
+        assertNotNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().recoveryScope(claims.nonce())));
+        rawWorkerSecret=true;
+        var unsafe=fixture(true,true);var other=unsafe.bridge().rig;
+        var denied=other.signer.verifyInvocation(permit(unsafe,"worker-secret-scope"));
+        assertNull(other.store.transaction(other.gateway.tenant(),false,tx->tx.enterprise().recoveryScope(denied.nonce())));
+    }
+
 }

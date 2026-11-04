@@ -363,6 +363,14 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
     let claims: InvocationPermitClaims =
         serde_json::from_value(corpus["InvocationPermitClaims"].clone()).unwrap();
     let dispatch: Dispatch = serde_json::from_value(corpus["Dispatch"].clone()).unwrap();
+    let mut unreviewed = corpus["McpProxyDocument"].clone();
+    unreviewed["tools"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("effectPolicy");
+    assert!(
+        serde_json::from_value::<olo_toolgate_contracts::v2::McpProxyDocument>(unreviewed).is_err()
+    );
     let base: olo_toolgate_contracts::v2::McpProxyDocument =
         serde_json::from_value(corpus["McpProxyDocument"].clone()).unwrap();
     let policy = olo_toolgate_contracts::v2::McpEffectPolicy {
@@ -371,7 +379,6 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
         acknowledged_unfenced_risk: false,
     };
     for case in [
-        "missing-policy",
         "missing-review",
         "mismatch",
         "duplicate",
@@ -382,7 +389,7 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
         let mut document = base.clone();
         document.tools.truncate(1);
         document.tools[0].tool_id = claims.target.tool_id.clone();
-        document.tools[0].effect_policy = (case != "missing-policy").then_some(policy.clone());
+        document.tools[0].effect_policy = policy.clone();
         let mut profile: ServiceProfile =
             serde_json::from_value(corpus["ServiceProfile"].clone()).unwrap();
         let mut review = olo_toolgate_contracts::v2::NativeMcpEffectReview {
@@ -396,11 +403,7 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
         }
         if case == "consent" {
             review.policy.consent_required = true;
-            document.tools[0]
-                .effect_policy
-                .as_mut()
-                .unwrap()
-                .consent_required = true;
+            document.tools[0].effect_policy.consent_required = true;
         }
         if matches!(case, "financial" | "destructive") {
             review.policy.classification = if case == "financial" {
@@ -409,7 +412,7 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
                 olo_toolgate_contracts::v2::EffectClassification::Destructive
             };
             review.policy.acknowledged_unfenced_risk = true;
-            document.tools[0].effect_policy = Some(review.policy.clone());
+            document.tools[0].effect_policy = review.policy.clone();
         }
         profile.native_mcp_effects = match case {
             "missing-review" => None,

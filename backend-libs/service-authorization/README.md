@@ -34,6 +34,8 @@ in the caller's business transaction. Deliver pending outcomes through
 reportOutcome and acknowledge only accepted evidence. Use keyset pagination so
 deferred records do not starve later delivery. Expired CLAIMED work may be
 abandoned by CAS; APPLYING is never automatically declared not-started.
-The migration adds expiry compatibly; legacy expiry 0 remains unknown. Owner
-and outcome string representations redact tokens. Credential suppliers used by
+Fresh initialization installs the current claim schema and its identity marker.
+Older stores are rejected without conversion. Every claim requires a positive
+authorization expiry. Direct authorization handles reads; writes require the
+verified-write and durable claim workflow. Owner and outcome string representations redact tokens. Credential suppliers used by
 the new concurrent reporting APIs must support concurrent reads.

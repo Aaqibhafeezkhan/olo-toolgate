@@ -124,7 +124,15 @@ class RouteCall:
         self.variables, self.queries, self.headers = {}, {}, {}
         self.patterns = {m.group(1): m.group(2)[1:] for m in _VARIABLE.finditer(route["path"])}
         self.data, self.content_type = None, None
+        self._effect_key = None
         self.seconds = route["timeoutMs"] / 1000
+
+    def effect_key(self, key):
+        """Stable logical write identity; the governed broker still decides all authority."""
+        if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", key) is None:
+            raise refused("Invalid logical effect key")
+        self._effect_key = key
+        return self
 
     def path_var(self, name, value):
         text = json_text(to_json(value))
@@ -281,6 +289,8 @@ class RouteCall:
             request = {"route": self.route["id"], "method": self.route["method"], "destination": self.route["destination"],
                        "variables": dict(self.variables), "query": copy_queries(self.queries), "headers": dict(self.headers),
                        "auth": self.route.get("auth")}
+            if self._effect_key is not None:
+                request["effectKey"] = self._effect_key
             if self.data is not None:
                 request["contentType"] = self.content_type
                 if self.content_type == "application/json" or self.content_type.endswith("+json"):
@@ -297,6 +307,8 @@ class RouteCall:
             body = base64.b64decode(response["bodyBase64"], validate=True) if "bodyBase64" in response else (
                 dumpb(response["body"]) if "body" in response else response.get("bodyText", "").encode("utf-8"))
             return self._answer(response.get("status", 200), response.get("headers", {}), body)
+        if self._effect_key is not None:
+            raise refused("Effect keys require the governed broker")
         host, port, plain = destination_target(self.client.destinations[self.route["destination"]], config)
         spec = self.client.destinations[self.route["destination"]]
         pins = spec.get("spkiPins", [])

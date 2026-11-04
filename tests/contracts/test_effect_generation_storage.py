@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Effect generation invariants on the shipped SQLite schema; PostgreSQL runs through the Java runtime role."""
 import unittest
-from test_migration_specs_v2 import QUICKSTART, TENANT, SqliteRun, invocation, versions
+from test_current_schema_specs import QUICKSTART, TENANT, SqliteRun, invocation, versions
 
 
 class EffectGenerationStorageTest(unittest.TestCase):

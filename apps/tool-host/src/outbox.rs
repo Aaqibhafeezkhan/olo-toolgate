@@ -128,13 +128,30 @@ mod tests {
         let spool = Outbox::open(root.join("admissions")).unwrap();
         let results = Outbox::open(root.join("results")).unwrap();
         let report: InvocationResultReport = serde_json::from_value(
-            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN"}),
+            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN","executionTier":"HOST_NATIVE"}),
         )
         .unwrap();
         let admission = spool.enqueue(&report).unwrap();
         std::fs::write(&admission, b"{}").unwrap();
         assert!(spool.recover_into(&results).is_err());
         assert!(admission.exists());
+        assert_eq!(std::fs::read_dir(root.join("results")).unwrap().count(), 0);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn old_incomplete_reports_are_retained_without_conversion() {
+        let root =
+            std::env::temp_dir().join(format!("toolgate-old-spool-{}", crate::random_hex(16)));
+        let spool = Outbox::open(root.join("admissions")).unwrap();
+        let results = Outbox::open(root.join("results")).unwrap();
+        let bytes = br#"{"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN"}"#;
+        let digest = toolgate_cli::canonical::sha256_tagged(bytes);
+        let path = root
+            .join("admissions")
+            .join(format!("{}.json", &digest[7..]));
+        std::fs::write(&path, bytes).unwrap();
+        assert!(spool.recover_into(&results).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
         assert_eq!(std::fs::read_dir(root.join("results")).unwrap().count(), 0);
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -176,7 +193,7 @@ mod tests {
         let root =
             std::env::temp_dir().join(format!("toolgate-outbox-retry-{}", crate::random_hex(16)));
         let report: InvocationResultReport = serde_json::from_value(
-            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN"}),
+            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN","executionTier":"HOST_NATIVE"}),
         )
         .unwrap();
         let box1 = Outbox::open(root.clone()).unwrap();
@@ -203,7 +220,7 @@ mod tests {
         let spool = Outbox::open(root.join("admissions")).unwrap();
         let results = Outbox::open(root.join("results")).unwrap();
         let report: InvocationResultReport = serde_json::from_value(
-            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN"}),
+            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN","executionTier":"HOST_NATIVE"}),
         )
         .unwrap();
         let admission = spool.enqueue(&report).unwrap();
@@ -223,7 +240,7 @@ mod tests {
     fn report_survives_reopen_and_acknowledgement_is_idempotent() {
         let root = std::env::temp_dir().join(format!("toolgate-outbox-{}", crate::random_hex(16)));
         let report: InvocationResultReport = serde_json::from_value(
-            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN"}),
+            serde_json::json!({"invocationId":"i","fencingToken":"f","outcome":"OUTCOME_UNKNOWN","executionTier":"HOST_NATIVE"}),
         )
         .unwrap();
         let path = Outbox::open(root.clone())

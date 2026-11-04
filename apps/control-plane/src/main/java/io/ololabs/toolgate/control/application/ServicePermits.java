@@ -15,11 +15,6 @@ public final class ServicePermits {
     public ServicePermits(Store store, Codec codec, EnterpriseOperations operations) {
         this.store=store;this.codec=codec;this.operations=operations;
     }
-    /** Legacy readers remain compatible; writes require the immutable admitted HTTP request and owner protocol. */
-    static void requireBoundWrite(String operation,String digest){
-        if(!Set.of("memory.read","rag.query").contains(operation)&&digest==null)
-            throw Failure.detail(409,ControlErrorDetailCode.BOUND_SERVICE_EFFECT_REQUIRED,List.of());
-    }
     public Store.Reply issue(Ids.TenantId tenant, java.util.function.Function<Store.Session,String> certificate,
             String executorKeySha256, String document) {
         var request=codec.model(document,ServicePermitIssue.class);
@@ -32,7 +27,6 @@ public final class ServicePermits {
             var admission=tx.enterprise().nonce(i.reservedNonce());
             if(admission==null||admission.consumedAt()==null)throw ManagementAccess.denied();
             operations.requireFresh(tenant,tx,i);
-            requireBoundWrite(i.evaluation().action(),request.httpRequestDigest());
             ServiceRequestValidation.validate(tx,codec,operations.signer(),operations.issuer(),i,device,request,operations.clock(tx));
             String op=i.evaluation().action();
             if(c.mode()==RequestMode.DELEGATED || (c.mode()==RequestMode.SERVICE&&!op.equals("rag.update")))throw ManagementAccess.denied();
@@ -45,17 +39,15 @@ public final class ServicePermits {
             if(c.mode()!=RequestMode.SERVICE&&credentialDeadline==null)throw ManagementAccess.denied();
             boolean read=Set.of("memory.read","rag.query").contains(op);
             boolean recovered=!read&&tx.enterprise().hasRecovery(i.id());
-            String nonceId=read?UUID.randomUUID().toString():"service-"+DirectoryService.digest(i.id()+"\n"+request.audience()
-                    +(recovered?"\n"+i.reservedNonce():"")).substring(0,48);
+            String route=request.httpRequestManifest().routeId();
+            String effectId=read?null:EffectIdentity.of(codec,tenant.value(),i.id(),route,EffectIdentity.key(request.effectKey()));
+            String nonceId=read?UUID.randomUUID().toString():"service-"+DirectoryService.digest(codec.json(List.of(
+                "toolgate-service-effect-nonce-v1",tenant.value(),effectId,i.reservedNonce()))).substring(0,48);
             var existing=tx.enterprise().nonce(nonceId);
-            // Preserve existing capability IDs until a proof-bound whole-operation recovery.
-            // A replacement gets its own nonce only after every predecessor was proven unable to write.
             if(existing!=null&&(existing.consumedAt()!=null||existing.expiresAt()<=now))throw ManagementAccess.denied();
             long expiry=existing==null?Math.min(now+MAX_LIFETIME_MS,Math.min(i.expiresAtUnixMs(),credentialDeadline==null?Long.MAX_VALUE:credentialDeadline)):existing.expiresAt();
             long issuedAt=existing==null?now:existing.issuedAt();
             if(expiry>i.expiresAtUnixMs())throw ManagementAccess.denied();
-            String route=request.audience().name()+"/"+op;
-            String effectId=read?null:"eff-"+DirectoryService.digest(codec.json(List.of("toolgate-effect-v1",tenant.value(),i.id(),route,"service-write")));
             var previous=read?null:tx.effects().current(effectId);
             Long generation=read?null:previous==null?1L:previous.generation();
             if(previous!=null&&!previous.binding().authNonce().equals(nonceId)){
@@ -65,16 +57,16 @@ public final class ServicePermits {
             }
             var claims=new ServicePermitClaims(operations.issuer(),request.audience(),tenant.value(),subject,
                 c.mode()==RequestMode.DELEGATED?c.agentId():null,c.mode(),op,i.evaluation().resources(),
-                i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce(),request.httpRequestDigest(),request.httpRequestDigest()==null?null:effectId,request.httpRequestDigest()==null?null:generation);
+                i.evaluation().argumentsDigest(),executorKeySha256,i.id(),nonceId,i.authorizationEpoch(),issuedAt,expiry,i.reservedNonce(),request.httpRequestDigest(),effectId,generation);
             String digest=DirectoryService.digest(codec.json(claims));
             if(existing!=null&&!existing.evaluationDigest().equals(digest))throw ManagementAccess.denied();
             var permit=operations.signer().signService(claims);
             if(existing==null)tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(claims.nonce(),i.id(),digest,i.authorizationEpoch(),issuedAt,expiry,null));
             if(!read){
                 var authorization=tx.effects().authorize(new EffectStore.Binding(effectId,i.id(),i.reservedNonce(),route,binding(claims),device,
-                    request.httpRequestDigest()==null?i.reservedNonce():request.brokerInstanceId(),
-                    request.httpRequestDigest()==null?nonceId:request.handlerId(),nonceId,expiry,expiry+60000),now);
-                if(request.httpRequestDigest()!=null&&!authorization.generation().state().equals("AUTHORIZED"))throw Failure.conflict();
+                    request.brokerInstanceId(),
+                    request.handlerId(),nonceId,expiry,expiry+60000),now);
+                if(!authorization.generation().state().equals("AUTHORIZED"))throw Failure.conflict();
             }
             tx.audit(DirectoryService.digest(device),"SERVICE_PERMIT_ISSUE","invocation:"+i.id(),i.revision(),c.requestId(),i.requestDigest());
             return new Store.Reply(200,codec.json(permit),i.revision());
@@ -107,7 +99,7 @@ public final class ServicePermits {
     public Store.Reply consume(DirectoryService.Actor service, ServiceAudience audience, String document) {
         var request=codec.model(document,ServicePermitConsumption.class);
         var claims=operations.signer().verifyService(request.permit());
-        requireBoundWrite(claims.operation(),claims.httpRequestDigest());
+        if(!Set.of("memory.read","rag.query").contains(claims.operation()))throw ManagementAccess.denied();
         return store.transaction(service.tenant(),true,tx->{
             long now=operations.clock(tx);
             var i=operations.invocationIn(tx,claims.invocationId());
@@ -123,13 +115,6 @@ public final class ServicePermits {
                 ||!nonce.evaluationDigest().equals(DirectoryService.digest(codec.json(claims)))
                 ||nonce.authorizationEpoch()!=claims.authorizationEpoch())throw ManagementAccess.denied();
             operations.requireFresh(service.tenant(),tx,i);
-            if(!Set.of("memory.read","rag.query").contains(claims.operation())){
-                var effect=tx.effects().byNonce(claims.nonce());
-                if(effect==null||!effect.binding().operationId().equals(i.id())||!effect.binding().attemptId().equals(i.reservedNonce())
-                    ||claims.httpRequestDigest()!=null&&!effect.state().equals("SENDING"))throw ManagementAccess.denied();
-                var consumed=tx.effects().consume(claims.nonce(),binding(claims),audience.name(),"legacy:"+claims.executorKeySha256(),now);
-                if(!consumed.newAuthority())throw ManagementAccess.denied();
-            }
             tx.enterprise().consumeNonce(claims.nonce(),now);
             tx.audit(service.id(),"SERVICE_PERMIT_CONSUME","invocation:"+i.id(),i.revision(),i.evaluation().context().requestId(),i.requestDigest());
             return new Store.Reply(200,codec.json(new ServicePermitConsumed(true)),i.revision());
@@ -209,7 +194,7 @@ public final class ServicePermits {
     private String binding(ServicePermitClaims claims){
         var values=new TreeMap<String,Object>();values.put("audience",claims.aud());values.put("operation",claims.operation());
         values.put("resources",claims.resources());values.put("requestFingerprint",claims.requestFingerprint());
-        if(claims.httpRequestDigest()!=null)values.put("httpRequestDigest",claims.httpRequestDigest());
+        values.put("httpRequestDigest",claims.httpRequestDigest());
         values.put("subject",claims.sub());values.put("mode",claims.mode());
         return "sha256:"+DirectoryService.digest(codec.json(values));
     }

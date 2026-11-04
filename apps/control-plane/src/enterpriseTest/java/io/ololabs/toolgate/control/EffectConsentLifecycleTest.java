@@ -32,11 +32,23 @@ class EffectConsentLifecycleTest {
         claims.put("invocationId",i.id()).put("nonce",i.reservedNonce()).put("deadlineUnixMs",i.expiresAtUnixMs());
         var v=view(i.id());claims.set("effectConsent",EffectGrantTest.JSON.valueToTree(new EffectConsentBinding(v.preview().consentId(),v.previewDigest())));
         var request=new EffectGrantIssue(i.id(),i.reservedNonce(),rig.signer.signInvocation(rig.graph.codec.model(claims.toString(),InvocationPermitClaims.class)),
-            original.brokerInstanceId(),original.handlerId(),original.arguments(),original.httpRequestDigest(),original.httpRequestManifest());
+            original.brokerInstanceId(),original.handlerId(),original.arguments(),original.httpRequestDigest(),original.httpRequestManifest(), original.effectKey());
         return request;
     }
     EffectGrant grant(EnterpriseInvocation i)throws Exception{
         return rig.graph.codec.model(fixture.grants.issue(rig.gateway.tenant(),tx->"device",rig.graph.codec.json(request(i))).body(),EffectGrant.class);
+    }
+    @Test void changingEffectKeyCannotSpendTheSameConsentSlotTwice()throws Exception{
+        var i=submit("distinct-effect-consent");approve(i.id());
+        var running=rig.consume(rig.reserve(invocation(i.id())));
+        var first=grant(running);
+        var document=(ObjectNode)EffectGrantTest.JSON.readTree(rig.graph.codec.json(request(running)));
+        document.put("effectKey","extra-charge");
+        var failure=assertThrows(Failure.class,()->fixture.grants.issue(rig.gateway.tenant(),tx->"device",document.toString()));
+        assertEquals(ControlErrorDetailCode.EFFECT_CONSENT_EXHAUSTED,failure.detail());
+        assertEquals(200,fixture.send(first,"handler").status());
+        String extra=EffectIdentity.of(rig.graph.codec,rig.gateway.tenant().value(),i.id(),"write","extra-charge");
+        assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().current(extra)));
     }
     @Test void mandatoryConsentWaitsBeforeDispatchAndAuthorizesOnlyThePreviewedMappedEffect()throws Exception{
         var i=submit("consented");

@@ -37,7 +37,7 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
 
    All of them are additive optional members or new definitions. No existing definition loses or tightens a field.
 9. **The synchronous deadline** is `min(platform ceiling 60 s, the Gateway's configured request timeout)`. Release 1's Gateway keeps its 10–30 s request timeout (default 20 s, `apps/gateway/src/config.rs`). So release 1's effective synchronous deadline is at most 30 s, which is the value ADR 021's check-in validation and `tool-sdk/spec/authoring/execution.md` use. The 60 s ceiling applies once the Gateway transport supports longer requests, a later milestone with its own ADR. The two numbers are a ceiling and the current effective maximum, not a contradiction. platform-requirements.md §13.5 and §17.2 now say so.
-10. **Quickstart** gets the same state on SQLite, through a runner whose version cap is raised with each migration. Cross-column checks are triggers there, because SQLite can't add table constraints.
+10. **Quickstart** initializes the same current state in a fresh SQLite schema. Cross-column checks use triggers. Unsupported existing stores are rejected without an upgrade or conversion path.
 
 ## Alternatives Considered
 
@@ -57,22 +57,22 @@ Two open inconsistencies in the plan are also settled here: the synchronous dead
 
 ## Operational Impact
 
-Invocation storage ships in the version 1 schema for each database; the future kill-switch extension starts at version 2. New jobs: lease expiry, input-deadline expiry, retention purge. Control's database grows by result payloads up to their retention. Operators size it like the relay queue, with a 4 MiB per-result bound.
+Invocation storage ships in the fresh version 1 schema for each database. Future feature schema changes fold into fresh initialization; no upgrade chain is supported. New jobs: lease expiry, input-deadline expiry, retention purge. Control's database grows by result payloads up to their retention. Operators size it like the relay queue, with a 4 MiB per-result bound.
 
 ## Compatibility Impact
 
-The first-release schema includes the current invocation model directly. Pre-release database histories are unsupported. The D1 amendments add optional members and new definitions only. One behaviour change: a denied approval now ends the invocation (`CANCELLED`, task `REJECTED`) at once, instead of waiting for it to expire.
+The fresh schema includes the current invocation model directly. Earlier database and incomplete wire formats are unsupported. Deploy matching current contracts across components; no backward compatibility is promised. One behaviour change: a denied approval now ends the invocation (`CANCELLED`, task `REJECTED`) at once, instead of waiting for it to expire.
 
 ## Consequences
 
 - Positive: tasks, ledger and business keys sit in the same transaction as approvals and kills.
-- Positive: the migration specifications are executable and tested on both databases before any code exists.
+- Positive: the fresh-schema specifications are executable and tested on both databases before any code exists.
 - Negative: Control's invocation table gains 18 columns, and its row becomes the hot spot for long-running work.
 - Negative: result payloads in PostgreSQL need retention discipline.
 
 ## Validation
 
-- `tests/contracts/test_migration_specs_v2.py` applies the current Flyway and Quickstart trees plus the specifications, and runs shared accept/refuse scenarios on SQLite always and on PostgreSQL when `TOOLGATE_D2_POSTGRES` is set. Both passed for this gate, on PostgreSQL 16 and SQLite 3.45.
+- `tests/contracts/test_current_schema_specs.py` applies the current Flyway and Quickstart trees plus the specifications, and runs shared accept/refuse scenarios on SQLite always and on PostgreSQL when `TOOLGATE_D2_POSTGRES` is set. Both passed for this gate, on PostgreSQL 16 and SQLite 3.45.
 - `tests/contracts/test_contracts_v2.py` covers the amended schemas and fixtures.
 - D3 authors conformance cases for every transition in invocation-state-v2.md §3, including the ambiguous-dispatch, lease-expiry, rebind, late-result and cross-identity cases.
 
@@ -88,3 +88,17 @@ completion. A final business status can leave finality only for
 RECONCILIATION_REQUIRED, except ADR 047's explicitly recorded proven-no-write
 FAILED-to-RUNNING recovery. Late evidence never grants execution authority.
 This amendment does not accept full roadmap-phase security claims.
+
+## S20 amendment: current-only per-effect recovery
+
+The fresh breaking build through S20 supersedes legacy invocation-wide retry
+and default-key compatibility. Every logical write has an explicit effect key,
+immutable request identity and first-authorization target window. An ambiguous
+operation can be retried only under the independently reviewed, history-aware
+target-deduplication exception in [ADR 056](056-per-effect-keys-and-qualified-resend.md).
+Current policy, consent, qualification and original deadlines are rechecked.
+Automatic retries are audited and final outcomes retain their target-deduplication
+assumption. Unsupported or expired cases use read-only lookup or manual review.
+A positive target receipt can resolve an effect without proving that the worker
+finished the whole operation. This provides no exactly-once external guarantee.
+No database upgrade, historical backfill or backward artifact support is shipped.

@@ -14,7 +14,7 @@ export function OperationHistory({client,id,onLoaded}:{client:ControlClient;id:s
  },[client,id,cursor,refresh]);
  const reload=()=>{setCursor(undefined);setRefresh(n=>n+1);};
  return <section aria-label="Verified operation history"><h3>Business outcome and history</h3>
-  <p>Worker reports and Control evidence are separate. Unknown outcomes do not permit an automatic retry.</p>
+  <p>Worker reports and Control evidence are separate. Unknown outcomes stay fenced unless a current reviewed target-deduplication retry qualifies. A lookup never authorizes a resend.</p>
   {Boolean(error)&&<Failure error={error} retry={reload}/>}
   {!page&&!error&&<p role="status">Loading operation history…</p>}
   {page&&<><dl><dt>Business outcome</dt><dd>{page.operation.state}</dd>
@@ -22,7 +22,7 @@ export function OperationHistory({client,id,onLoaded}:{client:ControlClient;id:s
    <dt>Automatic retry</dt><dd>{page.operation.retryable?'Allowed':'Disabled'}</dd></dl>
    {page.truncated&&<p role="status">History is incomplete and cannot establish final completion.</p>}
    <h4>Attempts</h4><ul>{page.attempts.map(a=><li key={a.attemptId}>{a.attemptId}: {a.state}; {a.grade}; {a.settled?'settled':'unsettled'}</li>)}</ul>
-   <h4>Effect generations</h4><ul>{page.effects.map(e=><li key={e.effectId+':'+e.generation}>{e.effectId}, generation {e.generation}: {e.state}; {e.grade}</li>)}</ul>
+   <h4>Effect generations</h4><p>Original generation states remain history. Target lookup witnesses may resolve an effect without changing these rows.</p><ul>{page.effects.map(e=><li key={e.effectId+':'+e.generation}>{e.effectId}, generation {e.generation}: {e.state}; {e.grade}</li>)}</ul>
    {page.next&&<button onClick={()=>setCursor(page.next)}>More effect history</button>}</>}
   <button onClick={reload}>Refresh history</button>
  </section>;

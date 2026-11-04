@@ -13,6 +13,7 @@ use tokio::time::Instant;
 
 pub(crate) struct BoundedTransport {
     pub(crate) client: reqwest::Client,
+    pub(crate) downstream_key: Option<olo_toolgate_contracts::v2::DownstreamEffectKey>,
     #[cfg(unix)]
     _window: crate::send_window::SendWindow,
 }
@@ -85,6 +86,7 @@ pub(crate) async fn authorize(
             .map_err(|_| refused())?;
         Ok(BoundedTransport {
             client,
+            downstream_key: grant.downstream_key,
             _window: window,
         })
     }

@@ -11,9 +11,9 @@
       "runtimeAccess": "none"
     },
     {
-      "name": "quickstart_migrations",
+      "name": "quickstart_schema",
       "storage": "sqlite",
-      "reason": "SQLite schema version/checksum only; no customer payload",
+      "reason": "Current fresh SQLite schema identity/checksum only; no customer payload",
       "runtimeAccess": "schema-initialization-only"
     },
     {
@@ -2770,6 +2770,55 @@
           "referencedColumns": [
             "tenant_id",
             "invocation_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_effect_target_bindings",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "effect_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_effects",
+          "columns": [
+            "tenant_id",
+            "effect_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "effect_id"
+          ]
+        },
+        {
+          "table": "control_operations",
+          "columns": [
+            "tenant_id",
+            "operation_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id"
           ]
         },
         {

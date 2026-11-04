@@ -31,12 +31,13 @@ import java.util.Map;
  *
  * <p>Shows the parts of the SDK that matter for anything with a side effect: the API key is route auth, so under
  * ToolGate the broker adds it and the code never sees it; the tool is {@code NON_IDEMPOTENT} with a business key
- * ({@code reference}), so a retried call with the same reference returns the first result instead of alerting twice,
- * and the key is forwarded as {@code Idempotency-Key} so the receiver can deduplicate too; and the channels a model may
- * post to are an administrator's allowlist. Change the route path to match your receiver.
+ * ({@code reference}) and an explicit stable logical effect key. A caller reference does not itself prove a
+ * downstream deduplication contract. Governed retry requires current independent target review and a qualified
+ * executor; uncertain outcomes otherwise require reconciliation. Channels are an administrator's allowlist.
+ * Change the route path to match your receiver.
  */
 @ToolPackage(id = "examples.notify", name = "Webhook notify", publisher = "ToolGate Examples",
-        description = "Sends alerts and notifications to an approved JSON webhook, at most once per reference.")
+        description = "Sends alerts and notifications to an approved JSON webhook with an explicit logical effect key.")
 @Destination(id = "webhook", hostSetting = "WebhookHost")
 @HttpAuth(id = "webhook-key", type = AuthType.API_KEY, header = "X-Api-Key", secret = "WebhookApiKey")
 @HttpRoute(id = "hook.post", destination = "webhook", method = HttpMethod.POST,
@@ -50,14 +51,14 @@ import java.util.Map;
 public class WebhookNotify {
     public record Sent(
             @Param(description = "Channel posted to") String channel,
-            @Param(description = "The caller's reference, used to send at most once") String reference,
+            @Param(description = "The caller's stable logical operation reference") String reference,
             @Param(description = "HTTP status the receiver answered") int httpStatus,
             @Param(description = "Id the receiver gave the message, when it returned one") String receiptId,
             @Param(description = "When it was sent, ISO 8601") String sentAt) {}
 
     @ServerTool(name = "send", title = "Send a notification",
-            description = "Posts a notification (title, text, severity) to an allowlisted webhook channel. Sending again"
-                    + " with the same reference returns the first result instead of sending twice.",
+            description = "Posts a notification (title, text, severity) to an allowlisted webhook channel."
+                    + " A reference identifies one operation; uncertain outcomes require reconciliation.",
             useWhen = "Use it to raise an alert or tell a team about something the user asked to share.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference", routes = "hook.post",
             errors = @ErrorDecl(code = "CHANNEL_NOT_ALLOWED", description = "The channel is not in AllowedChannels."), reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
@@ -73,8 +74,8 @@ public class WebhookNotify {
             @Param(description = "Message body", minLength = 1, maxLength = 4000) String text,
             @Param(description = "How urgent it is", defaultValue = "info", enumValues = {"info", "warning", "critical"})
             String severity,
-            @Param(description = "Your unique id for this notification, such as an incident or job id. A repeat with the"
-                    + " same reference is not sent again.", minLength = 1, maxLength = 128) String reference,
+            @Param(description = "Your unique id for this notification, such as an incident or job id."
+                    + " Reuse it for the same logical operation.", minLength = 1, maxLength = 128) String reference,
             ToolContext context) {
         boolean allowed = Arrays.stream(context.global().getStringValue("AllowedChannels").split(","))
                 .map(String::trim).anyMatch(channel::equals);
@@ -85,7 +86,7 @@ public class WebhookNotify {
         body.put("severity", severity);
         body.put("source", context.global().getStringValue("Source"));
         body.put("reference", reference);
-        RawResponse response = context.http().post("webhook", "/hooks/{channel}").pathVar("channel", channel).body(body).sendRaw();
+        RawResponse response = context.http().post("webhook", "/hooks/{channel}").effectKey("notification").pathVar("channel", channel).body(body).sendRaw();
         return new Sent(channel, reference, response.status(), receiptId(response.body()), Instant.now().toString());
     }
 

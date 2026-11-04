@@ -39,6 +39,4 @@ public record EnterpriseInvocationRequest(
         java.util.Objects.requireNonNull(toolDigest, "toolDigest");
         java.util.Objects.requireNonNull(packageDigest, "packageDigest");
     }
-    /** Construct a request without an explicit business key. */
-    public EnterpriseInvocationRequest(io.ololabs.toolgate.contracts.v2.RequestContext context, AuthorizationRequest request, String toolDigest, String packageDigest, String downstreamIdempotencyKey, io.ololabs.toolgate.contracts.v2.ExecutionContext executionContext) { this(context, request, toolDigest, packageDigest, downstreamIdempotencyKey, executionContext, null); }
 }

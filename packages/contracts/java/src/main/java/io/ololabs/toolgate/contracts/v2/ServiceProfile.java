@@ -49,8 +49,4 @@ public record ServiceProfile(
         effectReviews = effectReviews == null ? null : java.util.List.copyOf(effectReviews);
         nativeMcpEffects = nativeMcpEffects == null ? null : java.util.List.copyOf(nativeMcpEffects);
     }
-    /** Construct legacy metadata without the new effect authority fields. */
-    public ServiceProfile(String profileId, Long revision, String packageId, java.util.List<ServiceDestination> destinations, java.util.List<RouteDeclaration> routes, java.util.List<PrivateRangeApproval> privateRanges) { this(profileId, revision, packageId, destinations, routes, privateRanges, null, null); }
-    /** Construct legacy metadata without the new effect authority fields. */
-    public ServiceProfile(String profileId, Long revision, String packageId, java.util.List<ServiceDestination> destinations, java.util.List<RouteDeclaration> routes, java.util.List<PrivateRangeApproval> privateRanges, java.util.List<RouteEffectReview> effectReviews) { this(profileId, revision, packageId, destinations, routes, privateRanges, effectReviews, null); }
 }

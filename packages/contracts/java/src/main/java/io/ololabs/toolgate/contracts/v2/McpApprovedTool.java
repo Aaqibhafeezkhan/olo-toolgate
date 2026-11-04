@@ -15,7 +15,7 @@ public record McpApprovedTool(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolId", required = true) String toolId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "upstreamName", required = true) String upstreamName,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "definitionDigest", required = true) String definitionDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectPolicy", required = false) McpEffectPolicy effectPolicy
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectPolicy", required = true) McpEffectPolicy effectPolicy
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -28,7 +28,6 @@ public record McpApprovedTool(
         java.util.Objects.requireNonNull(toolId, "toolId");
         java.util.Objects.requireNonNull(upstreamName, "upstreamName");
         java.util.Objects.requireNonNull(definitionDigest, "definitionDigest");
+        java.util.Objects.requireNonNull(effectPolicy, "effectPolicy");
     }
-    /** Construct legacy metadata without the new effect authority fields. */
-    public McpApprovedTool(String toolId, String upstreamName, String definitionDigest) { this(toolId, upstreamName, definitionDigest, null); }
 }

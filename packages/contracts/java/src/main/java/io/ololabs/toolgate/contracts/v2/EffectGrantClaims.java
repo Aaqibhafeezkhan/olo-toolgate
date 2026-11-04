@@ -23,6 +23,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param profileDigest canonical profileDigest value
  * @param routeId canonical routeId value
  * @param classification canonical classification value
+ * @param downstreamKey canonical downstreamKey value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EffectGrantClaims(
@@ -43,7 +44,8 @@ public record EffectGrantClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = true) String httpRequestDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "profileDigest", required = true) String profileDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "routeId", required = true) String routeId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "classification", required = true) EffectClassification classification
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "classification", required = true) EffectClassification classification,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "downstreamKey", required = false) DownstreamEffectKey downstreamKey
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -65,6 +67,7 @@ public record EffectGrantClaims(
      * @param profileDigest canonical profileDigest value
      * @param routeId canonical routeId value
      * @param classification canonical classification value
+     * @param downstreamKey canonical downstreamKey value
      */
     public EffectGrantClaims {
         java.util.Objects.requireNonNull(iss, "iss");

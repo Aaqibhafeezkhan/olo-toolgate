@@ -13,7 +13,7 @@ package io.ololabs.toolgate.contracts.v2;
 public record McpToolApproval(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "upstreamName", required = true) String upstreamName,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "name", required = true) String name,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectPolicy", required = false) McpEffectPolicy effectPolicy
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectPolicy", required = true) McpEffectPolicy effectPolicy
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -24,7 +24,6 @@ public record McpToolApproval(
     public McpToolApproval {
         java.util.Objects.requireNonNull(upstreamName, "upstreamName");
         java.util.Objects.requireNonNull(name, "name");
+        java.util.Objects.requireNonNull(effectPolicy, "effectPolicy");
     }
-    /** Construct legacy metadata without the new effect authority fields. */
-    public McpToolApproval(String upstreamName, String name) { this(upstreamName, name, null); }
 }

@@ -17,10 +17,17 @@ class EffectGrantTest {
     static final ObjectMapper JSON=new ObjectMapper();
     @TempDir Path temp;
     ServicePermitBridgeTest base;EffectGrants grants;EnterpriseInvocation invocation;EffectGrantIssue issue;
-    ObjectNode profile;String packageDigest;String classification="WRITE";
+    ObjectNode profile;String packageDigest;String classification="WRITE";String reconciliationMode;String statusRouteId;boolean brokerOnly;
     @BeforeAll static void key()throws Exception{ServicePermitBridgeTest.key();}
     @BeforeEach void setup()throws Exception{
-        base=new ServicePermitBridgeTest();base.temp=temp;base.setup();prepare();
+        base=new ServicePermitBridgeTest();base.temp=temp;base.setup();
+        if(reconciliationMode!=null){
+            var rig=base.rig;var id=io.ololabs.toolgate.control.domain.Ids.Kind.TOOL.id("acme.test/tool");
+            var entry=rig.graph.entries.get(id);var doc=(ObjectNode)rig.graph.codec.value(entry.document());
+            ((ObjectNode)doc.path("definition")).put("reconciliation",reconciliationMode);
+            rig.graph.entries.put(id,rig.graph.codec.revision(rig.graph.codec.entry(id.kind(),doc.toString()),entry.revision()+1));rig.saveGraph();
+        }
+        prepare();
     }
     void prepare()throws Exception{
         invocation=base.start("generic-effect");
@@ -34,6 +41,7 @@ class EffectGrantTest {
         profile.put("packageId",invocation.evaluation().toolId().split("/")[0]);
         var destination=(ObjectNode)profile.path("destinations").get(0);destination.put("id","external").put("host","external.example.test");
         var route=(ObjectNode)profile.path("routes").get(0);route.put("destination","external").put("path","/send").put("streaming","NONE");
+        if(brokerOnly)route.put("auth","broker-key");
         var policy=JSON.createObjectNode().put("routeId","write").put("classification",classification)
             .put("consentRequired",false).put("acknowledgedUnfencedRisk",!classification.equals("WRITE"));
         var intent=policy.putObject("intent").put("path","/send").put("contentType","application/json").put("bodyMode","CANONICAL_JSON");
@@ -48,6 +56,11 @@ class EffectGrantTest {
         manifest.put("bodyDigest",Canonical.arguments(args));
         var packageDoc=JSON.createObjectNode();var descriptor=packageDoc.putObject("manifest").putArray("tools").addObject().putObject("descriptor");
         descriptor.put("toolId",invocation.evaluation().toolId()).putArray("httpAuth");descriptor.putArray("routes").addObject().put("id","write");descriptor.putObject("effect").put("safety","NON_IDEMPOTENT");
+        if(brokerOnly){
+            descriptor.withArray("httpAuth").addObject().put("id","broker-key").put("type","API_KEY").put("header","X-Api-Key").put("secret","authonly");
+            manifest.put("authDeclarationId","broker-key");manifest.withArray("credentialHeaders").add("x-api-key");
+        }
+        if(reconciliationMode!=null){descriptor.put("reconciliation",reconciliationMode);((ObjectNode)descriptor.path("effect")).put("safety","IDEMPOTENT");}
         base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->{
             tx.packages().saveDocument(profileDigest,profile.toString());
             tx.packages().saveVersion(new PackageStore.Version(packageDigest,profile.path("packageId").asText(),"1.0.0",EnterpriseConformanceTest.NOW,packageDoc.toString()),new byte[0]);
@@ -55,13 +68,77 @@ class EffectGrantTest {
             return null;
         });
         issue=new EffectGrantIssue(invocation.id(),invocation.reservedNonce(),base.rig.signer.signInvocation(codec.model(claims.toString(),InvocationPermitClaims.class)),
-            "broker","handler",Map.of("path",args.path("path")),Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class));
+            "broker","handler",Map.of("path",args.path("path")),Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class), "charge");
     }
     EffectGrant issue(){
         return base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device",base.rig.graph.codec.json(issue)).body(),EffectGrant.class);
     }
     Store.Reply send(EffectGrant grant,String owner){
         return grants.sending(base.rig.gateway.tenant(),tx->"device",base.rig.graph.codec.json(new EffectGrantDispatch(grant.grant(),"broker",owner)));
+    }
+    void reviewedTargetContract()throws Exception{
+        var codec=base.rig.graph.codec;
+        var guarantee=new TargetDedupeGuarantee("https://target.example.test/contracts/idempotency",86_400_000L,
+            brokerOnly?TargetDedupeScope.API_KEY:TargetDedupeScope.GLOBAL,"sha256:"+"b".repeat(64),TargetDedupeDifferentBody.REJECT,
+            EnterpriseConformanceTest.NOW+86_400_000,"idempotency-key",brokerOnly?1L:null,statusRouteId);
+        ((ObjectNode)profile.path("effectReviews").get(0).path("policy")).set("targetDedupeGuarantee",JSON.valueToTree(guarantee));
+        String digest=Canonical.digest(profile);
+        var claims=(ObjectNode)JSON.readTree(codec.json(base.rig.signer.verifyInvocation(issue.invocationPermit())));
+        ((ObjectNode)claims.path("target")).put("serviceProfileDigest",digest);
+        var manifest=(ObjectNode)JSON.readTree(codec.json(issue.httpRequestManifest()));manifest.put("profileDigest",digest);
+        base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->{
+            tx.packages().saveDocument(digest,profile.toString());
+            tx.packages().saveDeployment(profile.path("packageId").asText(),JSON.createObjectNode().put("packageDigest",packageDigest).put("serviceProfileDigest",digest).toString());return null;
+        });
+        issue=new EffectGrantIssue(issue.invocationId(),issue.fencingToken(),base.rig.signer.signInvocation(codec.model(claims.toString(),InvocationPermitClaims.class)),
+            issue.brokerInstanceId(),issue.handlerId(),issue.arguments(),Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class),issue.effectKey());
+    }
+    @Test void firstTargetKeyIsDurableAndSigningKeyRotationDoesNotChangeIt()throws Exception{
+        reviewedTargetContract();var first=issue();var original=base.rig.signer.verifyEffect(first.grant());
+        assertNotNull(first.downstreamKey());assertEquals(first.downstreamKey(),original.downstreamKey());
+        var saved=base.rig.store.transaction(base.rig.gateway.tenant(),false,tx->tx.effects().targetBinding(original.effectId()));
+        assertEquals(first.downstreamKey().value(),saved.targetKey());assertEquals(EnterpriseConformanceTest.NOW,saved.firstAuthorizedAt());
+        var oldClaims=base.rig.signer.verifyInvocation(issue.invocationPermit());
+        var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);
+        base.rig.signer=new io.ololabs.toolgate.control.adapter.RsaEffectSigner(
+            (java.security.interfaces.RSAPrivateCrtKey)generator.generateKeyPair().getPrivate(),"rotated",base.rig.graph.codec);
+        base.rig.operations=new EnterpriseOperations(base.rig.store,base.rig.graph.codec,base.rig.signer,base.rig.clock,
+            "control","toolgate-client",60000,100);grants=new EffectGrants(base.rig.store,base.rig.graph.codec,base.rig.operations);
+        issue=new EffectGrantIssue(issue.invocationId(),issue.fencingToken(),base.rig.signer.signInvocation(oldClaims),
+            issue.brokerInstanceId(),issue.handlerId(),issue.arguments(),issue.httpRequestDigest(),issue.httpRequestManifest(),issue.effectKey());
+        assertNotEquals(saved.targetKey(),base.rig.signer.downstreamKey(base.rig.gateway.tenant().value(),original.effectId()));
+        var replay=issue();assertEquals(first.downstreamKey(),replay.downstreamKey());
+        assertEquals(original.authNonce(),base.rig.signer.verifyEffect(replay.grant()).authNonce());
+        assertEquals(200,send(replay,"handler").status());
+        try(var connection=base.rig.keyPolicySource.getConnection();var statement=connection.createStatement()){
+            assertThrows(java.sql.SQLException.class,()->statement.executeUpdate("UPDATE control_effect_target_bindings SET target_key='tg-"+"f".repeat(64)+"'"));
+            assertThrows(java.sql.SQLException.class,()->statement.executeUpdate("DELETE FROM control_effect_target_bindings"));
+        }
+    }
+    @Test void downstreamKeysAreStableScopedAndSeparatedFromPublicEffectIdentifiers(){
+        var signer=base.rig.signer;
+        String key=signer.downstreamKey("tenant","eff-one");
+        assertTrue(key.matches("tg-[a-f0-9]{64}"));
+        assertEquals(key,signer.downstreamKey("tenant","eff-one"));
+        assertNotEquals(key,signer.downstreamKey("other","eff-one"));
+        assertNotEquals(key,signer.downstreamKey("tenant","eff-two"));
+        assertNotEquals("tg-"+DirectoryService.digest("eff-one"),key);
+    }
+    @Test void explicitKeysSeparateLogicalEffectsAndMissingKeysAreRejected()throws Exception{
+        var legacy=issue();var legacyClaims=base.rig.signer.verifyEffect(legacy.grant());
+        var document=(ObjectNode)JSON.readTree(base.rig.graph.codec.json(issue));
+        document.put("effectKey","charge");
+        var replay=base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()).body(),EffectGrant.class);
+        assertEquals(legacyClaims,base.rig.signer.verifyEffect(replay.grant()));
+        document.remove("effectKey");
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()));
+        document.put("effectKey","receipt");
+        var other=base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()).body(),EffectGrant.class);
+        var otherClaims=base.rig.signer.verifyEffect(other.grant());
+        assertNotEquals(legacyClaims.effectId(),otherClaims.effectId());
+        assertEquals(200,send(legacy,"handler").status());
+        assertEquals(200,send(other,"handler").status());
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()));
     }
     @Test void persistBeforeGrantAndOneOwnerCanSendOnlyOnce(){
         var grant=issue();var claims=base.rig.signer.verifyEffect(grant.grant());
@@ -75,8 +152,28 @@ class EffectGrantTest {
         assertThrows(Failure.class,this::issue);
     }
     @Test void losingIssuanceReplyCannotMintASecondSend(){
-        var first=issue();assertThrows(Failure.class,this::issue);
-        assertEquals(200,send(first,"handler").status());
+        var first=issue();var replay=issue();
+        assertEquals(base.rig.signer.verifyEffect(first.grant()),base.rig.signer.verifyEffect(replay.grant()));
+        assertEquals(200,send(replay,"handler").status());
+        assertThrows(Failure.class,()->send(first,"handler"));
+        assertThrows(Failure.class,this::issue);
+    }
+    @Test void replayCannotExtendExpiryOrChangeOwnerAndReleasedGenerationRetainsIntent()throws Exception{
+        var first=issue();var original=base.rig.signer.verifyEffect(first.grant());
+        var other=(ObjectNode)JSON.readTree(base.rig.graph.codec.json(issue));other.put("handlerId","other-handler");
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",other.toString()));
+        base.rig.clock=java.time.Clock.offset(base.rig.clock,java.time.Duration.ofMillis(500));
+        base.rig.operations=new EnterpriseOperations(base.rig.store,base.rig.graph.codec,base.rig.signer,base.rig.clock,
+            "control","toolgate-client",60000,100);
+        grants=new EffectGrants(base.rig.store,base.rig.graph.codec,base.rig.operations);
+        var replay=issue();var renewed=base.rig.signer.verifyEffect(replay.grant());
+        assertEquals(original.authNonce(),renewed.authNonce());assertEquals(original.exp(),renewed.exp());
+        assertEquals(1500,replay.validForMs());
+        base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->tx.effects().release(original.authNonce(),"device","broker","handler",base.rig.clock.millis()));
+        var replacement=issue();var next=base.rig.signer.verifyEffect(replacement.grant());
+        assertEquals(original.effectId(),next.effectId());assertEquals(original.generation()+1,next.generation());
+        assertNotEquals(original.authNonce(),next.authNonce());
+        assertEquals(200,send(replacement,"handler").status());assertThrows(Failure.class,()->send(first,"handler"));
     }
     @Test void wrongCertificateAndChangedArgumentsOrBodyCannotMintAuthority()throws Exception{
         assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"other-device",base.rig.graph.codec.json(issue)));
@@ -133,7 +230,8 @@ class EffectGrantTest {
                 ()->{try{return issue();}catch(Failure refused){return null;}}));
             var grantsIssued=new ArrayList<EffectGrant>();
             for(var task:issued)if(task.get()!=null)grantsIssued.add(task.get());
-            assertEquals(1,grantsIssued.size());var grant=grantsIssued.getFirst();
+            assertEquals(2,grantsIssued.size());var grant=grantsIssued.getFirst();
+            assertEquals(base.rig.signer.verifyEffect(grant.grant()),base.rig.signer.verifyEffect(grantsIssued.get(1).grant()));
             var sent=pool.invokeAll(List.<java.util.concurrent.Callable<Boolean>>of(
                 ()->{try{send(grant,"handler");return true;}catch(Failure refused){return false;}},
                 ()->{try{send(grant,"handler");return true;}catch(Failure refused){return false;}}));
@@ -155,8 +253,8 @@ class EffectGrantTest {
         base.rig.operations=new EnterpriseOperations(base.rig.store,base.rig.graph.codec,base.rig.signer,base.rig.clock,
             "control","toolgate-client",60000,100);
         prepare();concurrentIssuersAndSendersHaveExactlyOneWinner();
-        var effectId="eff-"+DirectoryService.digest(base.rig.graph.codec.json(List.of("toolgate-generic-effect-v1",
-            base.rig.gateway.tenant().value(),invocation.id(),issue.httpRequestManifest().routeId())));
+        var effectId=EffectIdentity.of(base.rig.graph.codec,base.rig.gateway.tenant().value(),invocation.id(),
+            issue.httpRequestManifest().routeId(),issue.effectKey());
         var retained=base.rig.store.transaction(base.rig.gateway.tenant(),false,tx->tx.effects().intent(effectId));
         assertNotNull(retained);assertEquals(issue.httpRequestDigest(),retained.requestDigest());
         assertThrows(Failure.class,()->base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->{

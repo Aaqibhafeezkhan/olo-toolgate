@@ -46,6 +46,4 @@ public record LocalToolInfo(
         java.util.Objects.requireNonNull(toolDigest, "toolDigest");
         java.util.Objects.requireNonNull(packageDigest, "packageDigest");
     }
-    /** Construct legacy metadata without admission key policy. */
-    public LocalToolInfo(String toolId, String action, String description, Boolean enabled, java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> inputSchema, String toolDigest, String packageDigest) { this(toolId, action, description, enabled, inputSchema, toolDigest, packageDigest, null); }
 }

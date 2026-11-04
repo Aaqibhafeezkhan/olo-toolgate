@@ -24,6 +24,21 @@ public final class RsaEffectSigner implements EffectSigner {
         effectHeader=encode(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("alg","RS256").put("typ","toolgate-effect-grant-v1").put("kid",keyId).toString());
         try{publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(key.getModulus(),key.getPublicExponent()));}catch(GeneralSecurityException invalid){throw new IllegalArgumentException("Invalid permit key",invalid);}
     }
+    public String downstreamKey(String tenant,String effectId){
+        Ids.valid(tenant);Ids.valid(effectId);
+        byte[] encoded=key.getEncoded(),derived=null;
+        if(encoded==null)throw Failure.unavailable();
+        try{
+            var digest=MessageDigest.getInstance("SHA-256");
+            digest.update("toolgate-downstream-hmac-key-v1".getBytes(StandardCharsets.UTF_8));
+            derived=digest.digest(encoded);
+            var mac=javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(derived,"HmacSHA256"));
+            return "tg-"+java.util.HexFormat.of().formatHex(mac.doFinal(codec.json(java.util.List.of(
+                "toolgate-downstream-effect-v1",tenant,effectId)).getBytes(StandardCharsets.UTF_8)));
+        }catch(GeneralSecurityException invalid){throw Failure.unavailable();}
+        finally{java.util.Arrays.fill(encoded,(byte)0);if(derived!=null)java.util.Arrays.fill(derived,(byte)0);}
+    }
     public io.ololabs.toolgate.contracts.v2.SignedEffectGrant signEffect(io.ololabs.toolgate.contracts.v2.EffectGrantClaims claims){
         String payload=codec.json(claims);codec.model(payload,io.ololabs.toolgate.contracts.v2.EffectGrantClaims.class);
         return new io.ololabs.toolgate.contracts.v2.SignedEffectGrant(signed(effectHeader,payload));

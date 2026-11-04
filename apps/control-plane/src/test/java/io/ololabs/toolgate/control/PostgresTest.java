@@ -29,37 +29,12 @@ final class PostgresTest {
         var migration = Flyway.configure().dataSource(url, "control_migrator", password).target("1").cleanDisabled(true).load();
         migration.migrate();
         var codec = new ContractCodec();
-        try (var connection = java.sql.DriverManager.getConnection(url, "control_migrator", password); var statement = connection.prepareStatement(
-                "INSERT INTO control_records (tenant_id,kind,record_id,revision,document) VALUES ('2e7a227d-83fc-39a0-aa45-a486d145c2d6','USER','kept',1,?::jsonb)")) {
-            io.ololabs.toolgate.control.fixtures.Tenants.provision(connection);
-            TestSupport.scope(connection, io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"));
-            statement.setString(1, DomainTest.user("kept", 1)); statement.executeUpdate();
-            try(var historic=connection.createStatement()){
-                String tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade").value();
-                historic.executeUpdate("INSERT INTO control_enterprise_invocations(tenant_id,invocation_id,request_digest,state,authorization_epoch,created_at,expires_at,revision,document) VALUES('"+tenant+"','historic','"+"a".repeat(64)+"','SUCCEEDED',1,1000,90000,4,'{\"id\":\"historic\",\"reservedNonce\":\"new-fence\",\"state\":\"SUCCEEDED\",\"revision\":4}')");
-                historic.executeUpdate("INSERT INTO control_enterprise_nonces VALUES('"+tenant+"','old-fence','historic','"+"b".repeat(64)+"',1,1000,2000,1500),('"+tenant+"','new-fence','historic','"+"b".repeat(64)+"',1,3000,4000,3500)");
-            }
-            connection.commit();
-        }
         var latest = Flyway.configure().dataSource(url, "control_migrator", password).cleanDisabled(true).load();
-        assertEquals(8, latest.migrate().migrationsExecuted); latest.validate();
+        assertEquals(0, latest.migrate().migrationsExecuted); latest.validate();
         assertEquals(0, latest.migrate().migrationsExecuted);
         var source = new PGSimpleDataSource(); source.setURL(url); source.setUser("control_app"); source.setPassword(password);
         var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); var service = new DirectoryService(store, codec, 512, 1048576);
         var actor = TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");
-        var upgrade=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"),"root");
-        assertEquals(200, service.get(upgrade, Kind.USER, "kept").status());
-        var operation=store.transaction(upgrade.tenant(),false,tx->tx.enterprise().operation("historic"));
-        assertTrue(operation.legacy());assertEquals("OUTCOME_UNKNOWN",operation.state());
-        var attempts=store.transaction(upgrade.tenant(),false,tx->tx.enterprise().attempts("historic",5000));
-        assertEquals(2,attempts.size());assertEquals("OUTCOME_UNKNOWN",attempts.getFirst().state());assertEquals("SUCCEEDED",attempts.getLast().state());
-        try(var c=source.getConnection();var q=c.createStatement()){
-            TestSupport.scope(c,upgrade.tenant());
-            assertThrows(java.sql.SQLException.class,()->q.executeUpdate("UPDATE control_enterprise_nonces SET consumed_at=NULL WHERE invocation_id='historic'"));
-            c.rollback();TestSupport.scope(c,upgrade.tenant());
-            assertThrows(java.sql.SQLException.class,()->q.executeUpdate("INSERT INTO control_enterprise_nonces VALUES('"+upgrade.tenant().value()+"','forbidden','historic','"+"b".repeat(64)+"',1,5000,6000,NULL,'EXECUTION')"));
-            c.rollback();
-        }
         try (var connection = source.getConnection(); var statement = connection.createStatement()) {
             assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("DELETE FROM control_audit"));
             assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("CREATE TABLE forbidden (id int)"));

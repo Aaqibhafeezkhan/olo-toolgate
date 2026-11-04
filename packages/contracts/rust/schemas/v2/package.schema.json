@@ -364,7 +364,7 @@
     },
     "PackageManifest": {
       "type": "object",
-      "description": "Package manifest v2. v1 manifests stay readable and are upgraded on read.",
+      "description": "Current package manifest. Earlier formats are rejected without conversion.",
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {

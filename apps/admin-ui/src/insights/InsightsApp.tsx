@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import {useCallback,useEffect,useMemo,useState,type FormEvent,type ReactNode} from 'react';
 import type {InsightsInvocation,InsightsInvocationDetail,InsightsOutcome,InsightsSeries,InsightsSession,InsightsSessionTimeline,InsightsSpan,InsightsSpanState,InsightsStatus} from '@olo-labs/toolgate-contracts/v2';
+import {RecoveryPreflight} from './RecoveryPreflight';
 import {EditorDialog} from '../EditorDialog';
 import {client as defaultClient,InsightsError,type InsightsClient} from './api';
 import {LatencyChart,OutcomeChart} from './charts';
@@ -42,6 +43,7 @@ export function InsightsApp({api=DEFAULT_CLIENT,now=DEFAULT_NOW}:{api?:InsightsC
       ?<section className="notice" role="status"><strong>Insights is off for this installation.</strong>
         <p>Set <code>TOOLGATE_INSIGHTS_MODE</code> to <code>BASIC</code> on Control and every Gateway, then restart them. Only activity after that is recorded; earlier calls are never reconstructed.</p></section>
       :<Workspace api={api} status={status.value} now={now}/>)}
+    {status.state==='ready'&&<RecoveryPreflight api={api}/>}
   </main>;
 }
 

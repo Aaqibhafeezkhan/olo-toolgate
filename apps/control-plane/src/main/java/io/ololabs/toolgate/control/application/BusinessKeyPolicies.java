@@ -37,7 +37,7 @@ final class BusinessKeyPolicies {
     }
 
 
-    /** Resolved optional AGENT defaults retain pre-policy admission compatibility. */
+    /** Resolve the current optional AGENT key declaration. */
     static BusinessKeyPolicy packaged(com.fasterxml.jackson.databind.JsonNode descriptor) {
         var key=descriptor.path("businessKey");
         if(key.isMissingNode())return null;

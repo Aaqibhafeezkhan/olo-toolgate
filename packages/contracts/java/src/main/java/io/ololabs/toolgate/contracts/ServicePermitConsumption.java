@@ -19,7 +19,7 @@ public record ServicePermitConsumption(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "resources", required = true) java.util.List<ResourceDescriptor> resources,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "requestFingerprint", required = true) String requestFingerprint,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "executorKeySha256", required = true) String executorKeySha256,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = false) String httpRequestDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = true) String httpRequestDigest
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -37,5 +37,6 @@ public record ServicePermitConsumption(
         resources = resources == null ? null : java.util.List.copyOf(resources);
         java.util.Objects.requireNonNull(requestFingerprint, "requestFingerprint");
         java.util.Objects.requireNonNull(executorKeySha256, "executorKeySha256");
+        java.util.Objects.requireNonNull(httpRequestDigest, "httpRequestDigest");
     }
 }

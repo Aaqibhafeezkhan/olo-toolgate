@@ -9,17 +9,19 @@ namespace OloLabs\ToolGate\Contracts\V2;
 final readonly class EffectGrant implements \JsonSerializable {
     public function __construct(
         public SignedEffectGrant $grant,
-        public int $validForMs
+        public int $validForMs,
+        public ?DownstreamEffectKey $downstreamKey = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['grant', 'validForMs']) || array_diff(['grant', 'validForMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['grant', 'validForMs', 'downstreamKey']) || array_diff(['grant', 'validForMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             SignedEffectGrant::fromArray($data['grant']),
-            $data['validForMs']
+            $data['validForMs'],
+            array_key_exists('downstreamKey', $data) ? DownstreamEffectKey::fromArray($data['downstreamKey']) : null
         );
     }
 

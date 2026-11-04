@@ -17,7 +17,7 @@ final class TestSupport {
     }
     static DirectoryService.Actor seed(Store store,Codec codec,Ids.TenantId tenant,String user) {
         store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());GroupGraph.defaults(entries,codec);
-            put(entries,codec,Ids.Kind.USER,new ControlUser(user,"Reviewed administrator",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,user);
+            put(entries,codec,Ids.Kind.USER,new ControlUser(user,"Reviewed administrator",true,1L, null, null, null));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,user);
             var all=new GroupSelection(List.of(),true);var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
             var ceiling=new EnterpriseScope(all,all,List.of(),true,Arrays.stream(ResourceKind.values()).map(kind->new EnterpriseResourceRule(kind,"",EnterpriseResourceMatch.ANY)).toList(),conditions);
             var actions=ManagementPermissionCatalog.ALL.stream().sorted().toList();

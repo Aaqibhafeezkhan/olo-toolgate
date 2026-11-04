@@ -309,7 +309,7 @@ pub(crate) async fn run(
         .tools
         .iter()
         .find(|tool| tool.tool_id == claims.target.tool_id)
-        .and_then(|tool| tool.effect_policy.as_ref())
+        .map(|tool| &tool.effect_policy)
         .filter(|policy| {
             claims.effect_consent.is_some()
                 || (!policy.consent_required

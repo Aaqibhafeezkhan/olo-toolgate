@@ -33,7 +33,7 @@ public final class IdentityIntake {
             String userId="user-"+stable.substring(0,40);var id=Kind.USER.id(userId);
             if(tx.used(id)||tx.used(bindingId)||before.entries().containsKey(id)||before.entries().size()>506)throw Failure.conflict();
             var entries=new HashMap<>(before.entries());GroupGraph.defaults(entries,codec);
-            entries.put(id,codec.entry(Kind.USER,codec.json(new ControlUser(userId,"Pending identity "+stable.substring(0,8),false,1L))));GroupGraph.addDefault(entries,codec,Kind.USER,userId);
+            entries.put(id,codec.entry(Kind.USER,codec.json(new ControlUser(userId,"Pending identity "+stable.substring(0,8),false,1L, null, null, null))));GroupGraph.addDefault(entries,codec,Kind.USER,userId);
             var observed=new ControlIdentityBinding(bindingId.value(),"Verified identity",true,1L,userId,issuer,subject,1L,now,now,1L,"FIRST_VERIFIED_ACCESS",0L);entries.put(bindingId,codec.entry(Kind.IDENTITY_BINDING,codec.json(observed)));
             var after=new Directory(before.revision()+1,entries);after.validate(512,1048576);codec.validatePolicies(after);tx.save(before,after);
             tx.audit(stable,"IDENTITY_REGISTER_DISABLED","users:"+userId,after.revision(),"identity-"+stable.substring(0,24),DirectoryService.digest("FIRST_VERIFIED_ACCESS"));

@@ -6,6 +6,8 @@ import java.time.Duration;
 
 /** One call on a declared route. */
 public interface RouteCall {
+    /** Stable key for one logical write across attempts. Requires the governed broker; never grants authority. */
+    RouteCall effectKey(String key);
     RouteCall pathVar(String name, Object value);
     /** A null value is omitted. */
     RouteCall query(String name, Object value);

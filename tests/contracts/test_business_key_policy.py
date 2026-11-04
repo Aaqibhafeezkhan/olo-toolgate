@@ -15,7 +15,7 @@ class BusinessKeyPolicySchemaTest(unittest.TestCase):
     def setUpClass(cls):
         cls.validators = validators(schemas_at(ROOT / "packages/contracts/schemas/v1"))
 
-    def test_legacy_tool_and_explicit_policy_are_both_valid(self):
+    def test_current_tool_and_explicit_policy_are_valid(self):
         tool = json.loads((ROOT / "tests/fixtures/contracts/v1/valid.json").read_text())["ToolDefinition"]
         self.validators["ToolDefinition"].validate(tool)
         for namespace in ("AGENT", "DELEGATED_USER", "TENANT"):
@@ -25,7 +25,7 @@ class BusinessKeyPolicySchemaTest(unittest.TestCase):
             self.validators["ToolDefinition"].validate(value)
 
 
-    def test_policy_requires_current_readers_with_frozen_fields_preserved(self):
+    def test_policy_requires_current_readers(self):
         baseline = schemas_at(ROOT / "tests/fixtures/contracts/v1/schemas")
         current = schemas_at(ROOT / "packages/contracts/schemas/v1")
         tool = json.loads((ROOT / "tests/fixtures/contracts/v1/valid.json").read_text())["ToolDefinition"]
@@ -41,10 +41,6 @@ class BusinessKeyPolicySchemaTest(unittest.TestCase):
                          current["tool.schema.json"]["$defs"]["ToolDefinition"]["properties"]["businessKeyPolicy"])
         with self.assertRaises(ValueError):
             compatible(baseline["tool.schema.json"], current["tool.schema.json"])
-        normalized = copy.deepcopy(current["tool.schema.json"])
-        for field in ("businessKeyPolicy", "reconciliation"):
-            del normalized["$defs"]["ToolDefinition"]["properties"][field]
-        compatible(baseline["tool.schema.json"], normalized)
 
     def test_policy_cannot_assert_owner_or_enable_result_sharing(self):
         valid = {"required": True, "namespace": "TENANT"}

@@ -359,4 +359,19 @@ class DeclarationTest {
         assertTrue(r.descriptor("items.mine").contains(
                 "\"permissions\":[\"CREDENTIALS_IN_SANDBOX\",\"HTTP_ROUTE\",\"TCP\",\"TOKEN_EXCHANGE\",\"USER_SECRET\"]"), r.descriptor("items.mine"));
     }
+    @Test void apiKeyVaultReferencesCanRemainBrokerOnlyWithoutWorkerSecretDeclarations() {
+        var result=ok(tools("""
+            @HttpAuth(id="key",type=AuthType.API_KEY,header="X-Key",secret="AUTH_KEY")
+            @HttpRoute(id="items.mine",destination="api",method=HttpMethod.GET,path="/me",auth="key")
+            ""","""
+            @ServerTool(name="items.mine",title="T",description="D",routes="items.mine")
+            public Out mine() { return null; }
+            """,GENERATION));
+        var descriptor=result.descriptor("items.mine");
+        assertTrue(descriptor.contains("\"secret\":\"AUTH_KEY\""),descriptor);
+        assertTrue(descriptor.contains("\"secrets\":[]"),descriptor);
+        assertTrue(descriptor.contains("\"permissions\":[\"HTTP_ROUTE\"]"),descriptor);
+        assertFalse(descriptor.contains("CREDENTIALS_IN_SANDBOX"));
+    }
+
 }

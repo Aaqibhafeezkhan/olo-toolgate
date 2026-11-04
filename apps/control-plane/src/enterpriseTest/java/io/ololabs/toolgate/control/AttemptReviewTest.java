@@ -19,7 +19,7 @@ final class AttemptReviewTest {
     @BeforeAll static void key()throws Exception{EnterpriseOperationTest.signingKey();}
     @BeforeEach void setup()throws Exception{
         rig=new EnterpriseOperationTest();rig.temp=Files.createDirectory(temp.resolve("review-"+UUID.randomUUID()));rig.setup();
-        rig.graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L));
+        rig.graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L, null, null, null));
         rig.graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker","bob"),List.of("reviewer-role")));
         rig.saveGraph();
         if(postgres){

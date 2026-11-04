@@ -84,8 +84,17 @@ public final class DirectoryService {
      *  delete one, never create one or change what it runs, so no script can add a tool outside the package path. */
     private void packaged(Kind kind,Directory.Entry old,Directory.Entry input,String operation){
         if(kind!=Kind.TOOL&&kind!=Kind.EXTRACTOR)return;
-        if(operation.equals("CREATE")||operation.equals("UPDATE")&&!Set.of("enabled").containsAll(changedFields(old,input)))
-            throw new Failure(ErrorCode.VALIDATION,422,"Tools and extractors come only from installed packages; only enabled can change here");
+        boolean guaranteeOnly=false;
+        if(kind==Kind.TOOL&&operation.equals("UPDATE")&&old!=null&&input!=null){
+            var before=((com.fasterxml.jackson.databind.node.ObjectNode)codec.value(old.document())).deepCopy();
+            var after=((com.fasterxml.jackson.databind.node.ObjectNode)codec.value(input.document())).deepCopy();
+            before.remove(List.of("enabled","revision"));after.remove(List.of("enabled","revision"));
+            ((com.fasterxml.jackson.databind.node.ObjectNode)before.path("definition")).remove("targetDedupeGuarantees");
+            ((com.fasterxml.jackson.databind.node.ObjectNode)after.path("definition")).remove("targetDedupeGuarantees");
+            guaranteeOnly=before.equals(after);
+        }
+        if(operation.equals("CREATE")||operation.equals("UPDATE")&&!Set.of("enabled").containsAll(changedFields(old,input))&&!guaranteeOnly)
+            throw new Failure(ErrorCode.VALIDATION,422,"Tools and extractors come only from installed packages; only enabled or reviewed target guarantees can change here");
     }
     /** Shared field/action authorization for direct changes and configuration imports. */
     private void authorizeMutation(Actor actor,Store.Session tx,Directory before,Directory.Entry old,Directory.Entry input,String operation){
@@ -212,7 +221,7 @@ public final class DirectoryService {
                 if(node.has("userIds")&&e.id().kind()==Kind.TEAM){var ids=new LinkedHashSet<String>();node.get("userIds").forEach(id->ids.add(mapped.getOrDefault(id.asText(),id.asText())));var array=node.putArray("userIds");ids.forEach(array::add);}}
             var entry=codec.entry(e.id().kind(),codec.json(node));entries.put(entry.id(),entry);
         }
-        for(var id:placeholders){var user=codec.entry(Kind.USER,codec.json(new ControlUser(id,id,false,1L)));entries.putIfAbsent(user.id(),user);}
+        for(var id:placeholders){var user=codec.entry(Kind.USER,codec.json(new ControlUser(id,id,false,1L, null, null, null)));entries.putIfAbsent(user.id(),user);}
         var settings=input.settings();var approval=settings==null?null:settings.deviceApproval();
         if(approval!=null&&approval.ownerUserId()!=null&&mapped.containsKey(approval.ownerUserId()))settings=new io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch(settings.gateway(),new io.ololabs.toolgate.contracts.v2.DeviceApproval(approval.autoApprove(),approval.durationMs(),mapped.get(approval.ownerUserId())),settings.configuration());
         return new Resolved(entries,teams,settings);

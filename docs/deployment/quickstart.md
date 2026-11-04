@@ -1,6 +1,10 @@
 # Quickstart deployment and recovery
 
-Quickstart runs Control, Gateway, the console and a real native executor in one non-HA local evaluation image. SQLite is the default; external PostgreSQL uses separate migration, runtime and protected platform principals. All execution requires current Control. There is no local policy ALLOW or Redis authorization fallback. See [multitenant deployment and qualification](multitenant.md) for UUID initialization, shared subdomains and release gates.
+Quickstart runs Control, Gateway, the console and a real native executor in one non-HA local evaluation image. SQLite is the default; external PostgreSQL uses separate initialization, runtime and protected platform principals. All execution requires current Control. There is no local policy ALLOW or Redis authorization fallback. See [multitenant deployment and qualification](multitenant.md) for UUID initialization, shared subdomains and release gates.
+
+Breaking builds require a fresh empty data directory or PostgreSQL database.
+Older stores and formats are rejected; there is no migration or conversion path.
+Current-format restart and recovery remain supported.
 
 Build and verify with `python tools/quickstart/check.py --build`. Use `--image IMAGE`, `--postgresql`, `--no-browser` or `--client-assets VERIFIED_DIRECTORY` as needed. The isolated gate records installation, real native CSR/mTLS, verified disabled-user intake, independently reviewed grants, HUMAN/SERVICE/ASK effects, exact retry, revocation, reviewed import/shadow, restart and browser accessibility. Small-fixture latency is measured in `build/quickstart/smoke.json`; it is not an enterprise throughput promise.
 
@@ -11,7 +15,7 @@ First boot installs protected default groups, separate local admin/reviewer-1/re
 The first setup user (`admin`) cannot be deleted or disabled, even after another
 Super Admin is assigned. Its initial email is `admin@admin.com`; set
 `TOOLGATE_ADMIN_EMAIL` on the container before first boot to override it. Restarts
-and upgrades never apply this variable again or change an existing email. Edit
+never apply this variable again or change an existing email. Edit
 the user's email in the console afterward; its stable `admin` login is unchanged.
 Super Admin authority comes from an enabled Management Role with `SUPER_ADMIN`
 classification on an enabled Team. Any enabled member receives the same management

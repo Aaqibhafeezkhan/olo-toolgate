@@ -63,8 +63,12 @@ public final class PackageArchive {
         var manifestBytes = files.get(MANIFEST);
         if (manifestBytes == null) throw reject(MANIFEST + " is missing");
         Json manifest;
-        // Decoded as Control always has: bytes that are not UTF-8 become U+FFFD.
-        try { manifest = Json.parse(new String(manifestBytes, StandardCharsets.UTF_8)); }
+        // Current package manifests must be exact UTF-8; never repair older/malformed bytes.
+        try { manifest = Json.parse(StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(manifestBytes)).toString()); }
+        catch(java.nio.charset.CharacterCodingException invalid){throw reject(MANIFEST+" is not UTF-8");}
         catch (Json.ParseException e) { throw reject(MANIFEST + " is not strict JSON: " + e.getMessage()); }
         if (!manifest.isObject() || manifest.path("schemaVersion").asInt() != 2 || !manifest.path("id").isTextual() || !manifest.path("version").isTextual())
             throw reject(MANIFEST + " is not a schemaVersion 2 manifest with a text id and version");

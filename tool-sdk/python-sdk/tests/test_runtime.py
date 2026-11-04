@@ -189,6 +189,27 @@ class RuntimeTest(unittest.TestCase):
             self.assertTrue(h.route_calls()[0]["answered"])
             self.assertEqual("ROUTE_REFUSED", h.call("lookup", {"id": "../7"}).error_code)
 
+    def test_effect_keys_reach_broker_metadata_and_are_matched_by_recorded_exchanges(self):
+        keyed = compile_package({"__init__": SOURCE.replace(
+            'route("items.get").path_var', 'route("items.get").effect_key("lookup:7").path_var')})
+        self.assertTrue(keyed.success, keyed.errors)
+        exchanges = [{"request": {"route": "items.get", "effectKey": "lookup:7", "variables": {"id": "7"}},
+                      "response": {"body": {"value": "keyed"}}}]
+        with ToolHarness(keyed.build, exchanges=exchanges) as h:
+            self.assertEqual({"value": "keyed"}, h.call("lookup", {"id": "7"}).output)
+            self.assertEqual("lookup:7", h.route_calls()[0]["effectKey"])
+            self.assertNotIn("effectKey", h.route_calls()[0]["headers"])
+        exchanges[0]["request"]["effectKey"] = "other"
+        with ToolHarness(keyed.build, exchanges=exchanges) as h:
+            self.assertEqual("ROUTE_REFUSED", h.call("lookup", {"id": "7"}).error_code)
+        from toolgate.runtime.network import RouteCall
+        from toolgate.errors import PlatformError
+        from types import SimpleNamespace
+        call = RouteCall(SimpleNamespace(), {"path": "/send", "timeoutMs": 1000})
+        for key in (None, "", "a/b", "é", "x"*129):
+            with self.assertRaises(PlatformError):
+                call.effect_key(key)
+
     def test_missing_route_mock_is_recorded(self):
         with ToolHarness(self.build) as h:
             self.assertEqual("ROUTE_REFUSED", h.call("lookup", {"id": "7"}).error_code)

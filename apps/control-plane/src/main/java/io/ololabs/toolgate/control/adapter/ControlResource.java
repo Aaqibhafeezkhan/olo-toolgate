@@ -27,6 +27,7 @@ public class ControlResource {
     @Inject MeterRegistry metrics;
     @Inject VerifiedActors actors;
     @Inject PostgresStore store;@Inject ContractCodec codec;
+    @Inject io.ololabs.toolgate.control.application.ServerPackages packages;@Inject TenantRegistry registry;
     private DirectoryService.Actor actor() { return actors.management(); }
     private Response response(Store.Reply reply, String operation, String kind) {
         metrics.counter("toolgate_control_operations_total", "operation", operation, "kind", kind).increment();
@@ -39,6 +40,12 @@ public class ControlResource {
         catch (NumberFormatException e) { throw Failure.validation(); }
     }
     @Inject io.ololabs.toolgate.control.application.ServerSettingsService settings;
+    @GET @Path("recovery-eligibility")
+    public Response recoveryEligibility(@QueryParam("cursor")String cursor,@QueryParam("limit")@DefaultValue("50")int limit){
+        var page=new io.ololabs.toolgate.control.application.RecoveryPreflight(store,codec,packages,registry::activeAfter)
+            .page(actors.human(),cursor,limit,System.currentTimeMillis());
+        return Response.ok(codec.json(page)).header("Cache-Control","no-store").build();
+    }
     @GET @Path("settings")
     public Response settings(@QueryParam("section") String section) {
         return Response.fromResponse(response(settings.get(actor(),section), "READ", "settings")).header("Cache-Control", "no-store").build();

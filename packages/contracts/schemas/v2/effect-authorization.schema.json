@@ -72,6 +72,9 @@
         },
         "intent": {
           "$ref": "effect-authorization.schema.json#/$defs/EffectIntentBlueprint"
+        },
+        "targetDedupeGuarantee": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeGuarantee"
         }
       },
       "required": [
@@ -132,6 +135,10 @@
         },
         "httpRequestManifest": {
           "$ref": "../v1/enterprise.schema.json#/$defs/PreparedHttpRequestManifest"
+        },
+        "effectKey": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectKey",
+          "description": "Required for non-READ effects; READ identities may derive from the current owner. No write-key fallback."
         }
       },
       "required": [
@@ -205,6 +212,9 @@
         },
         "classification": {
           "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        },
+        "downstreamKey": {
+          "$ref": "effect-authorization.schema.json#/$defs/DownstreamEffectKey"
         }
       },
       "required": [
@@ -255,6 +265,9 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 2000
+        },
+        "downstreamKey": {
+          "$ref": "effect-authorization.schema.json#/$defs/DownstreamEffectKey"
         }
       },
       "required": [
@@ -546,6 +559,305 @@
         "previewDigest",
         "state",
         "revision"
+      ]
+    },
+    "EffectKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Explicit current logical write key scoped to tenant, operation and route. No default or historical aliases. Keys never grant authority."
+    },
+    "TargetDedupeScope": {
+      "type": "string",
+      "enum": [
+        "GLOBAL",
+        "ACCOUNT",
+        "API_KEY"
+      ]
+    },
+    "TargetDedupeDifferentBody": {
+      "type": "string",
+      "enum": [
+        "REJECT",
+        "REPLAY_FIRST"
+      ]
+    },
+    "TargetDedupeGuarantee": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Explicit operator-reviewed target contract; its presence alone never authorizes resend.",
+      "properties": {
+        "documentationUrl": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "maxLength": 2048
+        },
+        "retentionMs": {
+          "type": "integer",
+          "minimum": 3600001,
+          "maximum": 31536000000
+        },
+        "scope": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeScope"
+        },
+        "scopeBindingDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "differentBody": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeDifferentBody"
+        },
+        "reviewExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "header": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "maxLength": 64
+        },
+        "credentialVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "statusRouteId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId",
+          "description": "Optional reviewed read-only per-effect lookup route in the same profile; never resend authority."
+        }
+      },
+      "required": [
+        "documentationUrl",
+        "retentionMs",
+        "scope",
+        "scopeBindingDigest",
+        "differentBody",
+        "reviewExpiresAtUnixMs",
+        "header"
+      ]
+    },
+    "RouteDedupeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tool configuration review binds the exact declaration to an immutable profile/route. Direct or self-reviewed metadata is insufficient.",
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "guarantee": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeGuarantee"
+        }
+      },
+      "required": [
+        "profileDigest",
+        "routeId",
+        "guarantee"
+      ]
+    },
+    "DownstreamEffectKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Supervisor-only broker-injected key. Persisted once per effect; tools cannot select its value.",
+      "properties": {
+        "header": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "maxLength": 64
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^tg-[a-f0-9]{64}$",
+          "maxLength": 67
+        }
+      },
+      "required": [
+        "header",
+        "value"
+      ]
+    },
+    "TargetEffectStatus": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "PENDING",
+        "COMPLETED",
+        "FAILED"
+      ]
+    },
+    "TargetEffectStatusReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Current target lookup response. Terminal evidence must match the stored key/body and include a stable business receipt and result digest; unknown/pending never authorize execution. FAILED means a durable target witness that the effect was not applied; an ordinary failed HTTP/business response is insufficient.",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^tg-[a-f0-9]{64}$",
+          "maxLength": 67
+        },
+        "state": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetEffectStatus"
+        },
+        "bodyDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "businessReceipt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resultDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "key",
+        "state"
+      ]
+    },
+    "TargetEffectLookupResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scoped operator result for one read-only target lookup. Effect status does not imply whole-operation completion; no target key, receipt or credential is exposed.",
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetEffectStatus"
+        },
+        "outcomeRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "evidenceDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "invocationId",
+        "effectId",
+        "state",
+        "outcomeRevision"
+      ]
+    },
+    "RecoveryReadinessReason": {
+      "type": "string",
+      "enum": [
+        "ELIGIBLE",
+        "DISABLED",
+        "MISSING_PROFILE",
+        "PROFILE_CHANGED",
+        "NO_WRITE_ROUTES",
+        "UNREVIEWED_ROUTE",
+        "MISSING_GUARANTEE",
+        "REVIEW_EXPIRED",
+        "INDEPENDENT_REVIEW_REQUIRED",
+        "UNSUPPORTED_CREDENTIAL",
+        "UNQUALIFIED_EXECUTOR"
+      ]
+    },
+    "RouteRecoveryReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Current reviewed contract facts for one write route; no operation-specific retry authority.",
+      "properties": {
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "reason": {
+          "$ref": "effect-authorization.schema.json#/$defs/RecoveryReadinessReason"
+        },
+        "lookupAvailable": {
+          "type": "boolean"
+        },
+        "reviewExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "routeId",
+        "reason",
+        "lookupAvailable"
+      ]
+    },
+    "ToolRecoveryReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Fresh-build preflight for tools declaring downstream idempotency. Eligibility is configured capability only; each retry independently needs qualified complete history, current policy/consent and its original window. No key, receipt or credential is exposed.",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+          "maxLength": 36
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "automaticResendEligible": {
+          "type": "boolean"
+        },
+        "effectiveMethod": {
+          "$ref": "../v1/tool.schema.json#/$defs/ReconciliationMethod"
+        },
+        "reason": {
+          "$ref": "effect-authorization.schema.json#/$defs/RecoveryReadinessReason"
+        },
+        "routes": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/RouteRecoveryReadiness"
+          }
+        }
+      },
+      "required": [
+        "tenantId",
+        "toolId",
+        "name",
+        "automaticResendEligible",
+        "effectiveMethod",
+        "reason",
+        "routes"
+      ]
+    },
+    "RecoveryPreflightPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Bounded current-only preflight. Opaque cursors fence a changed tenant directory; observed facts never authorize a resend.",
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/ToolRecoveryReadiness"
+          }
+        },
+        "nextCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "observedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "buildMode": {
+          "type": "string",
+          "const": "CURRENT_ONLY"
+        }
+      },
+      "required": [
+        "items",
+        "observedAtUnixMs",
+        "buildMode"
       ]
     }
   }

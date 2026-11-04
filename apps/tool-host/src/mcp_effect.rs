@@ -85,8 +85,9 @@ impl<'a> Authority<'a> {
             arguments: self.dispatch.arguments.clone(),
             http_request_digest: prepared.digest().into(),
             http_request_manifest: manifest,
+            effect_key: Some("mcp-call".into()),
         };
-        crate::effect_dispatch::authorize(
+        let transport = crate::effect_dispatch::authorize(
             self.control,
             &request,
             destination,
@@ -96,7 +97,11 @@ impl<'a> Authority<'a> {
             &self.closed,
         )
         .await
-        .map_err(|_| refused())
+        .map_err(|_| refused())?;
+        if transport.downstream_key.is_some() {
+            return Err(refused());
+        }
+        Ok(transport)
     }
 }
 impl Drop for Authority<'_> {

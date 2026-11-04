@@ -19,7 +19,7 @@ public class EnterpriseOperationResource {
     @Inject EnterpriseOperations operations;@Inject VerifiedActors actors;@Inject ContractCodec codec;
     @Inject EndpointService endpoints;@Inject PostgresStore store;@Inject RoutingContext routing;
     @Inject io.quarkus.security.identity.SecurityIdentity security;
-    @Inject VaultResource vault;
+    @Inject VaultResource vault;@Inject TargetStatusClient targetStatus;
     @Inject DirectoryService directory;
     @Inject ServerPackages packages;@Inject Correlation correlation;@Inject InsightsService insights;
     /** v2 bodies extend these endpoints for Tool Hosts; a v2 body is recognised by a field only it has. */
@@ -68,6 +68,10 @@ public class EnterpriseOperationResource {
     public Response invocations(@QueryParam("after")String after,@QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.page(actors.human(),after,limit));}
     @POST @Path("invocations/{id}/reconciliation") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response propose(@PathParam("id")String id,@HeaderParam("Idempotency-Key")String key,String document){return reply(operations.proposeReconciliation(actors.human(),id,body(document),key));}
+    @POST @Path("invocations/{id}/effects/{effect}/lookup") @io.quarkus.security.Authenticated
+    public Response lookupEffect(@PathParam("id")String id,@PathParam("effect")String effect){
+        return reply(new TargetLookups(store,codec,operations,vault::service,targetStatus).lookup(actors.human(),id,effect));
+    }
     @GET @Path("reconciliations/{id}") @io.quarkus.security.Authenticated
     public Response reconciliation(@PathParam("id")String id){return reply(operations.reconciliation(actors.human(),id));}
     @POST @Path("reconciliations/{id}/decision") @Consumes("application/json") @io.quarkus.security.Authenticated

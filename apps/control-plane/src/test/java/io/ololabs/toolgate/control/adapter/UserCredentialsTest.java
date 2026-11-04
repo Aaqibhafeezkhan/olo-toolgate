@@ -129,7 +129,7 @@ class UserCredentialsTest {
         store.transaction(TENANT, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
             var id = Ids.Kind.USER.id(userId); var user = codec.model(entries.get(id).document(), ControlUser.class);
-            entries.put(id, codec.entry(Ids.Kind.USER, codec.json(new ControlUser(user.id(), user.name(), true, user.revision() + 1))));
+            entries.put(id, codec.entry(Ids.Kind.USER, codec.json(new ControlUser(user.id(), user.name(), true, user.revision() + 1, null, null, null))));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null;
         });
     }

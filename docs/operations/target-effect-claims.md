@@ -10,8 +10,9 @@ this workflow; installing the library alone adds no target guarantee.
 
 All replicas must use the same database and retain claims across restarts.
 For a generic SDK store, provision the claim/outcome schema with initialize in
-a writable deployment migration transaction. Actual OLO deployments use the
-provided target-claims.sql migration with forced RLS and restricted runtime
+a writable fresh-initialization transaction. The generic initializer requires
+its current schema identity and rejects older stores without conversion.
+Actual OLO deployments use the provided current target-claims.sql schema with forced RLS and restricted runtime
 grants before accepting requests. The application must not delete claims,
 reset ownership, or silently fall back to an in-memory store. Back up and restore
 claims consistently with business data. Database exceptions grant no authority.
@@ -47,7 +48,7 @@ No retention/deletion policy or automatic takeover from APPLYING is provided.
 The OLO memory/RAG integration now commits APPLYING before business actions,
 including external RAG vector I/O, and records completion/outbox with SQL
 publication. It returns HTTP 409 status for duplicates without a mutation.
-Schema migration, forced tenant RLS, immutable-binding/transition guards and
+Fresh schema initialization, forced tenant RLS, immutable-binding/transition guards and
 restricted runtime privileges are required; missing or unsafe schema fails
 target startup. Follow the target component's deployment guide. See
 [ADR 042](../adr/042-shared-target-claims.md) and the
@@ -56,9 +57,9 @@ target startup. Follow the target component's deployment guide. See
 
 ## Recovery and delivery
 
-The additive SDK migration adds authorization_expires_at and the
-toolgate_target_outcomes outbox. Legacy claims receive expiry 0 and are never
-automatically abandoned. Target deployment migrations run as the schema owner;
+The fresh schema includes mandatory positive authorization_expires_at and the
+toolgate_target_outcomes outbox. Unknown-expiry claims and older schemas have no
+compatibility or upgrade path. Target schema initialization runs as the schema owner;
 the ordinary runtime cannot initialize schema, delete tombstones or rewrite
 claim bindings. Grant only the documented transition/delivery columns.
 

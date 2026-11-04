@@ -34,7 +34,7 @@ class EnterpriseOperationTest {
         gateway=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"a".repeat(64),false);reviewer=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"c".repeat(64),true,false,"admin");
     }
     void saveGraph(){store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var d=tx.load();tx.save(d,new Directory(d.revision()+1,graph.entries));return null;});}
-    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null,null);}
+    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null,null, null);}
     EnterpriseInvocation submit(String id){return graph.codec.model(operations.submit(gateway,graph.codec.json(request(id,"data/report.txt"))).body(),EnterpriseInvocation.class);}
     EnterpriseReservation reserve(EnterpriseInvocation i){return graph.codec.model(operations.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);}
     String consumption(EnterpriseReservation r){var e=r.invocation().evaluation();return graph.codec.json(new EnterprisePermitConsumption(r.invocation().id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest()));}
@@ -48,10 +48,10 @@ class EnterpriseOperationTest {
                 null,"alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
         var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
         var i=graph.codec.model(operations.submitHuman(alice,new EnterpriseInvocationRequest(context,original.request(),
-                original.toolDigest(),original.packageDigest(),null,null),"device").body(),EnterpriseInvocation.class);
+                original.toolDigest(),original.packageDigest(),null,null, null),"device").body(),EnterpriseInvocation.class);
         var finished=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.SUCCEEDED,
                 i.revision()+1,i.authorizationEpoch(),"host-fence",i.expiresAtUnixMs(),i.evaluation().resources(),
-                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId(),i.reconciliation());
+                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId(),i.reconciliation(), null);
         store.transaction(gateway.tenant(),true,tx->{
             tx.enterprise().saveInvocation(finished,clock.millis(),i.revision());tx.packages().saveToolHost("device","{}");
             tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),"device","FINISHED",i.expiresAtUnixMs(),
@@ -64,7 +64,7 @@ class EnterpriseOperationTest {
     private EnterpriseInvocation failWithoutAdditionalAuthority(EnterpriseInvocation i){
         var failed=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.FAILED,
                 i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),List.of(),
-                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation());
+                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation(), null);
         store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(failed,clock.millis(),i.revision());return null;});
         return failed;
     }
@@ -254,7 +254,7 @@ class EnterpriseOperationTest {
 
     EnterpriseInvocationRequest delegated(String id,CredentialKind kind,String issuer){var r=request(id,"data/report.txt");
         var c=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,kind,issuer,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);
-        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
+        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null, null);}
     /** M3.10: an on-behalf-of binding takes its user only from a verified user credential of the configured issuer. */
     @Test void onBehalfOfBindingNeedsAVerifiedUserCredential(){
         graph.remove(Kind.WORKLOAD_BINDING,"workload");graph.workload("workload","agent",RequestMode.DELEGATED,null,null);saveGraph();
@@ -276,12 +276,12 @@ class EnterpriseOperationTest {
     }
     EnterpriseInvocationRequest epochs(String id,String path,long session,long credential){var r=request(id,path);var c=r.context();
         var renewed=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),session,credential,c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
-        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
+        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null, null);}
     /** Compare the preserved report independently of additive response-only outcome metadata. */
     static EnterpriseInvocation reported(EnterpriseInvocation i){
         return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),i.state(),i.revision(),
                 i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),
-                i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation());
+                i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation(), null);
     }
     EnterpriseInvocation submitted(EnterpriseInvocationRequest r){return graph.codec.model(operations.submit(gateway,graph.codec.json(r)).body(),EnterpriseInvocation.class);}
     /** M5.3: the same logical operation with changed arguments is a conflict and never creates or changes an invocation. */
@@ -395,9 +395,9 @@ class EnterpriseOperationTest {
         var expired=graph.codec.model(later.get(reviewer,i.id()).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,expired.state());assertThrows(Failure.class,()->reserve(expired));assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id())).state());
     }
     @Test void reconciliationRequiresIndependentCurrentCheckerAndNeverReissuesPermit(){
-        graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L));graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker"),List.of("reviewer-role")));saveGraph();var executing=consume(reserve(submit("unknown-review")));
+        graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L, null, null, null));graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker"),List.of("reviewer-role")));saveGraph();var executing=consume(reserve(submit("unknown-review")));
         var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(new EnterpriseEffectReport(executing.id(),executing.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null))).body(),EnterpriseInvocation.class);
-        var request=new EnterpriseReconciliationRequest(unknown.revision(),EnterpriseReconciledState.SUCCEEDED,unknown.evaluation().resources(),EnterpriseConformanceTest.DIGEST,EnterpriseConformanceTest.DIGEST);
+        var request=new EnterpriseReconciliationRequest(unknown.revision(),EnterpriseReconciledState.SUCCEEDED,unknown.evaluation().resources(),EnterpriseConformanceTest.DIGEST,EnterpriseConformanceTest.DIGEST, null);
         var proposed=graph.codec.model(operations.proposeReconciliation(reviewer,unknown.id(),graph.codec.json(request),"reconcile-key").body(),EnterpriseReconciliation.class);assertEquals(proposed.id(),graph.codec.model(operations.proposeReconciliation(reviewer,unknown.id(),graph.codec.json(request),"reconcile-key").body(),EnterpriseReconciliation.class).id());
         String decision=graph.codec.json(new EnterpriseReconciliationDecision(proposed.revision(),true));assertEquals(403,assertThrows(Failure.class,()->operations.reconcile(reviewer,proposed.id(),decision)).status());
         var checker=new DirectoryService.Actor(reviewer.tenant(),"f".repeat(64),true,false,"checker");assertEquals(EnterpriseReconciliationState.APPLIED,graph.codec.model(operations.reconcile(checker,proposed.id(),decision).body(),EnterpriseReconciliation.class).state());
@@ -428,7 +428,7 @@ class EnterpriseOperationTest {
     }
     @Test void ambiguousBusinessOperationCannotBeReopenedByDownstreamRetry(){
         var initial=keyed("ambiguous-a","data/report.txt","c".repeat(64));var executing=consume(reserve(initial));
-        var unknown=new EnterpriseInvocation(executing.id(),executing.requestDigest(),executing.evaluation(),EnterpriseInvocationState.OUTCOME_UNKNOWN,executing.revision()+1,executing.authorizationEpoch(),executing.reservedNonce(),executing.expiresAtUnixMs(),List.of(),executing.downstreamIdempotencyKey(),null,executing.diagnosticId(),ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY);
+        var unknown=new EnterpriseInvocation(executing.id(),executing.requestDigest(),executing.evaluation(),EnterpriseInvocationState.OUTCOME_UNKNOWN,executing.revision()+1,executing.authorizationEpoch(),executing.reservedNonce(),executing.expiresAtUnixMs(),List.of(),executing.downstreamIdempotencyKey(),null,executing.diagnosticId(),ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY, null);
         store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(unknown,clock.millis(),executing.revision());return null;});
         assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,keyed("ambiguous-b","data/report.txt","c".repeat(64)).state());
         assertEquals(409,assertThrows(Failure.class,()->reserve(unknown)).status());
@@ -539,7 +539,7 @@ class EnterpriseOperationTest {
         var original=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
         var d=original.definition();
         var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),
-                d.outputSchema(),d.reconciliation(),policy);
+                d.outputSchema(),d.reconciliation(),policy, null);
         graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),
                 original.revision()+1,definition,original.extractorId(),original.version(),original.packageDigest()));
         saveGraph();
@@ -654,7 +654,7 @@ class EnterpriseOperationTest {
                 "alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
         var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
         var i=graph.codec.model(operations.submitHuman(owner,new EnterpriseInvocationRequest(context,original.request(),
-                original.toolDigest(),original.packageDigest(),null,null),"device").body(),EnterpriseInvocation.class);
+                original.toolDigest(),original.packageDigest(),null,null, null),"device").body(),EnterpriseInvocation.class);
         assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),graph.codec.json(context))).status());
         operations.userCredentialIssuer("https://identity.example");
         var body=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.codec.json(context));
@@ -857,7 +857,7 @@ class EnterpriseOperationTest {
         var unknown=new EnterpriseInvocation(executing.id(),executing.requestDigest(),executing.evaluation(),
                 EnterpriseInvocationState.OUTCOME_UNKNOWN,executing.revision()+1,executing.authorizationEpoch(),
                 executing.reservedNonce(),executing.expiresAtUnixMs(),List.of(),executing.downstreamIdempotencyKey(),
-                null,executing.diagnosticId(),executing.reconciliation());
+                null,executing.diagnosticId(),executing.reconciliation(), null);
         store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(unknown,clock.millis(),executing.revision());return null;});
         var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(executing.id()));
         advanceKeyClock(6000);
@@ -951,7 +951,7 @@ class EnterpriseOperationTest {
         assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(next.id(),100)).size());
         var extended=new EnterpriseInvocation(next.id(),next.requestDigest(),next.evaluation(),next.state(),next.revision()+1,
                 next.authorizationEpoch(),next.reservedNonce(),next.expiresAtUnixMs()+1,next.completedResources(),
-                next.downstreamIdempotencyKey(),next.resultDigest(),next.diagnosticId(),next.reconciliation());
+                next.downstreamIdempotencyKey(),next.resultDigest(),next.diagnosticId(),next.reconciliation(), null);
         assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
             tx.enterprise().saveInvocation(extended,clock.millis(),next.revision());return null;}));
         var replacement=reserve(next);
@@ -1025,7 +1025,7 @@ class EnterpriseOperationTest {
         for(var invalid:List.of(
                 new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,1000L,2000L),
                 new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,5000L,1000L,null))) {
-            var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),d.outputSchema(),d.reconciliation(),invalid);
+            var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),d.outputSchema(),d.reconciliation(),invalid, null);
             graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),original.revision()+1,
                     definition,original.extractorId(),original.version(),original.packageDigest()));
             assertThrows(IllegalArgumentException.class,()->graph.codec.validatePolicies(graph.directory()));
@@ -1105,7 +1105,7 @@ class EnterpriseOperationTest {
         businessPolicy(policy);
         var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
         var hint=new LocalToolInfo("tool","read","Human local tool",true,tool.definition().inputSchema(),
-                new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),tool.packageDigest());
+                new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),tool.packageDigest(), null);
         store.transaction(gateway.tenant(),true,tx->{
             tx.saveEndpointConfiguration(new Store.EndpointConfiguration("device",tx.load().revision(),"{}",null,
                     graph.codec.json(new LocalToolCatalog(List.of(hint)))));return null;

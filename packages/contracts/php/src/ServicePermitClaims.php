@@ -23,15 +23,15 @@ final readonly class ServicePermitClaims implements \JsonSerializable {
         public int $iat,
         public int $exp,
         public string $executionNonce,
+        public string $httpRequestDigest,
         public ?string $act = null,
-        public ?string $httpRequestDigest = null,
         public ?string $effectId = null,
         public ?int $authorizationGeneration = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['iss', 'aud', 'tenantId', 'sub', 'act', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce', 'httpRequestDigest', 'effectId', 'authorizationGeneration']) || array_diff(['iss', 'aud', 'tenantId', 'sub', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['iss', 'aud', 'tenantId', 'sub', 'act', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce', 'httpRequestDigest', 'effectId', 'authorizationGeneration']) || array_diff(['iss', 'aud', 'tenantId', 'sub', 'mode', 'operation', 'resources', 'requestFingerprint', 'executorKeySha256', 'invocationId', 'nonce', 'authorizationEpoch', 'iat', 'exp', 'executionNonce', 'httpRequestDigest'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -50,8 +50,8 @@ final readonly class ServicePermitClaims implements \JsonSerializable {
             $data['iat'],
             $data['exp'],
             $data['executionNonce'],
+            $data['httpRequestDigest'],
             array_key_exists('act', $data) ? $data['act'] : null,
-            array_key_exists('httpRequestDigest', $data) ? $data['httpRequestDigest'] : null,
             array_key_exists('effectId', $data) ? $data['effectId'] : null,
             array_key_exists('authorizationGeneration', $data) ? $data['authorizationGeneration'] : null
         );

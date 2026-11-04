@@ -66,6 +66,4 @@ public record EnterpriseInvocation(
         completedResources = completedResources == null ? null : java.util.List.copyOf(completedResources);
         java.util.Objects.requireNonNull(diagnosticId, "diagnosticId");
     }
-    /** Construct stored/legacy execution state without a derived response projection. */
-    public EnterpriseInvocation(String id, String requestDigest, EnterpriseEvaluation evaluation, EnterpriseInvocationState state, Long revision, Long authorizationEpoch, String reservedNonce, Long expiresAtUnixMs, java.util.List<ResourceDescriptor> completedResources, String downstreamIdempotencyKey, String resultDigest, String diagnosticId, ReconciliationMethod reconciliation) { this(id, requestDigest, evaluation, state, revision, authorizationEpoch, reservedNonce, expiresAtUnixMs, completedResources, downstreamIdempotencyKey, resultDigest, diagnosticId, reconciliation, null); }
 }

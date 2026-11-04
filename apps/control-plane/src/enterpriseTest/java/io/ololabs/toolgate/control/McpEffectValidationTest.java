@@ -81,7 +81,7 @@ class McpEffectValidationTest {
         var missing=fixture();missing.profile.remove("nativeMcpEffects");
         missing.manifest.put("profileDigest",Canonical.digest(missing.profile));assertThrows(Failure.class,()->validate(missing));
         var old=fixture();((ObjectNode)old.document.path("tools").get(0)).remove("effectPolicy");
-        assertThrows(Failure.class,()->validate(old));
+        assertThrows(com.fasterxml.jackson.databind.exc.MismatchedInputException.class,()->validate(old));
         var consent=fixture();var p=(ObjectNode)consent.profile.path("nativeMcpEffects").get(0).path("policy");
         p.put("consentRequired",true);((ObjectNode)consent.document.path("tools").get(0)).set("effectPolicy",p.deepCopy());
         consent.manifest.put("profileDigest",Canonical.digest(consent.profile));assertThrows(Failure.class,()->validate(consent));

@@ -60,7 +60,7 @@ public final class McpService {
             var evaluation=new RuntimeAccess(codec).evaluation(tenant,tx.load(),submission.context(),i.evaluation().context().deviceId(),submission.request(),i.evaluation().toolDigest(),i.evaluation().packageDigest(),now);
             var e=i.evaluation();if(!evaluation.context().equals(e.context())||!evaluation.argumentsDigest().equals(e.argumentsDigest())||!evaluation.resources().equals(e.resources())||!evaluation.toolId().equals(e.toolId())||!evaluation.action().equals(e.action()))throw forbidden();
             operations.requireFresh(tenant,tx,i);installed(tx,i,submission.request());var previous=tx.mcp().get(i.id());
-            if(previous!=null){if(!task(previous).request().equals(submission.request()))throw Failure.conflict();return reply(new RemoteToolResponse(record(previous),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record(previous).state())&&previous.result()!=null?codec.model(previous.result(),RemoteToolResult.class):null));}
+            if(previous!=null){if(!task(previous).request().equals(submission.request()))throw Failure.conflict();return reply(new RemoteToolResponse(record(previous),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record(previous).state())&&previous.result()!=null?codec.model(previous.result(),RemoteToolResult.class):null, null));}
             if(i.state()!=EnterpriseInvocationState.QUEUED||submission.expiresAtUnixMs()<=now||submission.expiresAtUnixMs()>now+30000)throw Failure.conflict();
             var d=device(tx,submission.context(),e.context().deviceId());if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))throw Failure.unavailable();
             long expires=Math.min(i.expiresAtUnixMs(),submission.expiresAtUnixMs());if(d.connectionExpiresAtUnixMs()!=null)expires=Math.min(expires,d.connectionExpiresAtUnixMs());
@@ -71,7 +71,7 @@ public final class McpService {
             tx.mcp().prune(Math.max(0,now-86400000));if(tx.mcp().count()>=1000||tx.mcp().pending(d.deviceId(),17).size()>=16)throw Failure.conflict();
             var record=new RemoteToolRecord(i.id(),d.deviceId(),e.context().agentId(),e.toolId(),RemoteToolState.WAITING_FOR_POLL,now,expires,null,null,null,null);
             tx.mcp().save(new McpStore.Row(record.requestId(),record.deviceId(),record.state().name(),expires,codec.json(record),codec.json(task),null));
-            tx.audit(actor.id(),"MCP_RECEIVED",record.requestId(),i.revision(),requestId,i.requestDigest());return reply(new RemoteToolResponse(record,null));});}
+            tx.audit(actor.id(),"MCP_RECEIVED",record.requestId(),i.revision(),requestId,i.requestDigest());return reply(new RemoteToolResponse(record,null, null));});}
     private RemoteToolRecord transition(Store.Session tx,McpStore.Row row,RemoteToolState state,long now,ErrorCode error,String result,String requestId){
         var old=record(row);var next=new RemoteToolRecord(old.requestId(),old.deviceId(),old.agentId(),old.toolId(),state,old.receivedAtUnixMs(),old.expiresAtUnixMs(),state==RemoteToolState.SUBMITTED?Long.valueOf(now):old.submittedAtUnixMs(),state==RemoteToolState.RESPONSE_RECEIVED?Long.valueOf(now):old.responseAtUnixMs(),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED,RemoteToolState.EXPIRED).contains(state)?Long.valueOf(now):old.completedAtUnixMs(),error);
         tx.mcp().save(new McpStore.Row(row.id(),row.deviceId(),state.name(),row.expiresAt(),codec.json(next),row.task(),result));

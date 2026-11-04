@@ -33,6 +33,7 @@ import org.jboss.logging.Logger;
 public class InsightsOperatorListener {
     private static final Logger AUDIT = Logger.getLogger("toolgate.audit.insights");
     @Inject Vertx vertx; @Inject Config config; @Inject InsightsService insights; @Inject ContractCodec codec;
+    @Inject PostgresStore store;@Inject TenantRegistry registry;@Inject io.ololabs.toolgate.control.application.ServerPackages packages;
     private HttpServer server;
 
     void start(@Observes StartupEvent event) {
@@ -62,6 +63,11 @@ public class InsightsOperatorListener {
         });
         router.get("/").handler(ctx -> ctx.response().setStatusCode(302).putHeader("Location", "/console/insights.html").putHeader("Cache-Control", "no-store").end());
         router.get("/console/*").blockingHandler(this::asset, false);
+        router.get("/insights/v1/recovery-eligibility").blockingHandler(ctx->respond(ctx,()->{
+            long limit=param(ctx,"limit")==null?50:number(ctx,"limit");if(limit<1||limit>100)throw Failure.validation();
+            return new io.ololabs.toolgate.control.application.RecoveryPreflight(store,codec,packages,registry::activeAfter)
+                .operatorPage(param(ctx,"tenant"),param(ctx,"cursor"),(int)limit,System.currentTimeMillis());
+        }),false);
         router.get("/insights/v1/status").blockingHandler(ctx -> respond(ctx, () -> insights.status(System.currentTimeMillis())), false);
         router.get("/insights/v1/series").blockingHandler(ctx -> respond(ctx, () -> {
             var granularity = InsightsGranularity.valueOf(required(ctx, "granularity"));

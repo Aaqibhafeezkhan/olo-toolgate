@@ -59,6 +59,7 @@ pub struct Invocation {
     pub deadline_unix_ms: u64,
     pub profile_id: String,
     pub profile_digest: String,
+    pub(crate) effect_key_headers: std::collections::BTreeMap<String, String>,
     pub invocation_permit: Option<olo_toolgate_contracts::v2::SignedInvocationPermit>,
     broker_instance_id: String,
     /// The permit's routes as the service profile approves them.
@@ -147,6 +148,7 @@ impl Invocation {
             deadline_unix_ms: self.deadline_unix_ms,
             profile_id: self.profile_id.clone(),
             profile_digest: self.profile_digest.clone(),
+            effect_key_headers: self.effect_key_headers.clone(),
             broker_instance_id: self.broker_instance_id.clone(),
             invocation_permit: self
                 .invocation_permit
@@ -175,6 +177,7 @@ impl Invocation {
             deadline_unix_ms: policy.deadline_unix_ms,
             profile_id: policy.profile_id.clone(),
             profile_digest: policy.profile_digest.clone(),
+            effect_key_headers: policy.effect_key_headers.clone(),
             invocation_permit: Some(policy.invocation_permit.clone()),
             broker_instance_id: policy.broker_instance_id.clone(),
             routes: policy.routes.clone(),
@@ -250,6 +253,7 @@ impl Invocation {
             deadline_unix_ms,
             profile_id,
             profile_digest,
+            effect_key_headers: std::collections::BTreeMap::new(),
             invocation_permit: None,
             broker_instance_id,
             routes,
@@ -533,6 +537,14 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
                 "route {route_id} does not allow header {name}"
             )));
         }
+        // The pinned profile owns this derived header; discard legacy invocation keys and caller substitutions.
+        if invocation
+            .effect_key_headers
+            .get(route_id)
+            .is_some_and(|header| header == &lower)
+        {
+            continue;
+        }
         let value = value
             .as_str()
             .ok_or_else(|| refused(format!("header {name} is not a string")))?;
@@ -703,6 +715,12 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
             credential_headers,
         },
     )
+    .map_err(refused)?
+    .with_effect_key(match body.get("effectKey") {
+        None => None,
+        Some(Value::String(key)) => Some(key.as_str()),
+        Some(_) => return Err(refused("invalid logical effect key")),
+    })
     .map_err(refused)?;
     let handler_id = crate::random_hex(16);
     let permit = if let Some(audience) = service_audience {
@@ -713,20 +731,17 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
                     invocation_id: invocation.invocation_id.clone(),
                     fencing_token: invocation.fencing_token.clone(),
                     audience,
-                    http_request_digest: Some(prepared.digest().into()),
-                    http_request_manifest: Some(
-                        serde_json::from_value(prepared.manifest().clone())
-                            .map_err(|_| refused("invalid prepared manifest"))?,
-                    ),
-                    invocation_permit: Some(
-                        invocation
-                            .invocation_permit
-                            .as_ref()
-                            .ok_or_else(|| refused("signed admission proof required"))?
-                            .clone(),
-                    ),
-                    broker_instance_id: Some(invocation.broker_instance_id.clone()),
-                    handler_id: Some(handler_id.clone()),
+                    http_request_digest: prepared.digest().into(),
+                    http_request_manifest: serde_json::from_value(prepared.manifest().clone())
+                        .map_err(|_| refused("invalid prepared manifest"))?,
+                    invocation_permit: invocation
+                        .invocation_permit
+                        .as_ref()
+                        .ok_or_else(|| refused("signed admission proof required"))?
+                        .clone(),
+                    broker_instance_id: invocation.broker_instance_id.clone(),
+                    handler_id: handler_id.clone(),
+                    effect_key: prepared.effect_key().map(str::to_owned),
                 })
                 .await
                 .map_err(|_| refused("downstream service authorization refused"))?,

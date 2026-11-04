@@ -11,19 +11,19 @@ final readonly class McpApprovedTool implements \JsonSerializable {
         public string $toolId,
         public string $upstreamName,
         public string $definitionDigest,
-        public ?McpEffectPolicy $effectPolicy = null
+        public McpEffectPolicy $effectPolicy
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['toolId', 'upstreamName', 'definitionDigest', 'effectPolicy']) || array_diff(['toolId', 'upstreamName', 'definitionDigest'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['toolId', 'upstreamName', 'definitionDigest', 'effectPolicy']) || array_diff(['toolId', 'upstreamName', 'definitionDigest', 'effectPolicy'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['toolId'],
             $data['upstreamName'],
             $data['definitionDigest'],
-            array_key_exists('effectPolicy', $data) ? McpEffectPolicy::fromArray($data['effectPolicy']) : null
+            McpEffectPolicy::fromArray($data['effectPolicy'])
         );
     }
 

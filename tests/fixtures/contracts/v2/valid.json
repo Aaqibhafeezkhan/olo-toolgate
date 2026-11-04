@@ -769,7 +769,8 @@
   "InvocationResultReport": {
     "invocationId": "inv-5",
     "fencingToken": "nonce-77",
-    "outcome": "OUTCOME_UNKNOWN"
+    "outcome": "OUTCOME_UNKNOWN",
+    "executionTier": "HOST_NATIVE"
   },
   "InvocationSubmission": {
     "invocationId": "inv-5",
@@ -2921,21 +2922,36 @@
   },
   "McpToolApproval": {
     "upstreamName": "get_order",
-    "name": "get-order"
+    "name": "get-order",
+    "effectPolicy": {
+      "classification": "READ",
+      "consentRequired": false,
+      "acknowledgedUnfencedRisk": false
+    }
   },
   "McpApprovalRequest": {
     "snapshotRevision": 2,
     "tools": [
       {
         "upstreamName": "get_order",
-        "name": "get-order"
+        "name": "get-order",
+        "effectPolicy": {
+          "classification": "READ",
+          "consentRequired": false,
+          "acknowledgedUnfencedRisk": false
+        }
       }
     ]
   },
   "McpApprovedTool": {
     "toolId": "mcp.orders/get-order",
     "upstreamName": "get_order",
-    "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "effectPolicy": {
+      "classification": "READ",
+      "consentRequired": false,
+      "acknowledgedUnfencedRisk": false
+    }
   },
   "McpApproval": {
     "sequence": 2,
@@ -2944,7 +2960,12 @@
       {
         "toolId": "mcp.orders/get-order",
         "upstreamName": "get_order",
-        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "effectPolicy": {
+          "classification": "READ",
+          "consentRequired": false,
+          "acknowledgedUnfencedRisk": false
+        }
       }
     ],
     "spkiPins": [
@@ -2964,7 +2985,12 @@
           {
             "toolId": "mcp.orders/get-order",
             "upstreamName": "get_order",
-            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "effectPolicy": {
+              "classification": "READ",
+              "consentRequired": false,
+              "acknowledgedUnfencedRisk": false
+            }
           }
         ],
         "spkiPins": [
@@ -3015,7 +3041,12 @@
       {
         "toolId": "mcp.orders/get-order",
         "upstreamName": "get_order",
-        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "effectPolicy": {
+          "classification": "READ",
+          "consentRequired": false,
+          "acknowledgedUnfencedRisk": false
+        }
       }
     ]
   },
@@ -3335,5 +3366,94 @@
     "previewDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "state": "PENDING",
     "revision": 1
+  },
+  "EffectKey": "charge:customer-7",
+  "TargetDedupeScope": "GLOBAL",
+  "TargetDedupeDifferentBody": "REJECT",
+  "TargetDedupeGuarantee": {
+    "documentationUrl": "https://target.example.test/contracts/idempotency",
+    "retentionMs": 86400000,
+    "scope": "GLOBAL",
+    "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "differentBody": "REJECT",
+    "reviewExpiresAtUnixMs": 1893456000000,
+    "header": "idempotency-key"
+  },
+  "RouteDedupeConfiguration": {
+    "profileDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "routeId": "send",
+    "guarantee": {
+      "documentationUrl": "https://target.example.test/contracts/idempotency",
+      "retentionMs": 86400000,
+      "scope": "GLOBAL",
+      "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "differentBody": "REJECT",
+      "reviewExpiresAtUnixMs": 1893456000000,
+      "header": "idempotency-key"
+    }
+  },
+  "DownstreamEffectKey": {
+    "header": "idempotency-key",
+    "value": "tg-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "TargetEffectStatus": "COMPLETED",
+  "TargetEffectStatusReply": {
+    "key": "tg-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "COMPLETED",
+    "bodyDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "businessReceipt": "provider-receipt-1",
+    "resultDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "TargetEffectLookupResult": {
+    "invocationId": "operation-1",
+    "effectId": "eff-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "COMPLETED",
+    "outcomeRevision": 1,
+    "evidenceDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "RecoveryReadinessReason": "ELIGIBLE",
+  "RouteRecoveryReadiness": {
+    "routeId": "payment",
+    "reason": "ELIGIBLE",
+    "lookupAvailable": true,
+    "reviewExpiresAtUnixMs": 1800000000000
+  },
+  "ToolRecoveryReadiness": {
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "toolId": "acme.orders/refund",
+    "name": "Refund",
+    "automaticResendEligible": false,
+    "effectiveMethod": "STATUS_LOOKUP",
+    "reason": "UNQUALIFIED_EXECUTOR",
+    "routes": [
+      {
+        "routeId": "payment",
+        "reason": "ELIGIBLE",
+        "lookupAvailable": true,
+        "reviewExpiresAtUnixMs": 1800000000000
+      }
+    ]
+  },
+  "RecoveryPreflightPage": {
+    "items": [
+      {
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "toolId": "acme.orders/refund",
+        "name": "Refund",
+        "automaticResendEligible": false,
+        "effectiveMethod": "STATUS_LOOKUP",
+        "reason": "UNQUALIFIED_EXECUTOR",
+        "routes": [
+          {
+            "routeId": "payment",
+            "reason": "ELIGIBLE",
+            "lookupAvailable": true,
+            "reviewExpiresAtUnixMs": 1800000000000
+          }
+        ]
+      }
+    ],
+    "observedAtUnixMs": 1790000000000,
+    "buildMode": "CURRENT_ONLY"
   }
 }

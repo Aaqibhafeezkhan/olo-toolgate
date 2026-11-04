@@ -13,6 +13,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param arguments canonical arguments value
  * @param httpRequestDigest canonical httpRequestDigest value
  * @param httpRequestManifest canonical httpRequestManifest value
+ * @param effectKey canonical effectKey value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EffectGrantIssue(
@@ -23,7 +24,8 @@ public record EffectGrantIssue(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "handlerId", required = true) String handlerId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "arguments", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> arguments,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = true) String httpRequestDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestManifest", required = true) io.ololabs.toolgate.contracts.PreparedHttpRequestManifest httpRequestManifest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestManifest", required = true) io.ololabs.toolgate.contracts.PreparedHttpRequestManifest httpRequestManifest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectKey", required = false) String effectKey
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -35,6 +37,7 @@ public record EffectGrantIssue(
      * @param arguments canonical arguments value
      * @param httpRequestDigest canonical httpRequestDigest value
      * @param httpRequestManifest canonical httpRequestManifest value
+     * @param effectKey canonical effectKey value
      */
     public EffectGrantIssue {
         java.util.Objects.requireNonNull(invocationId, "invocationId");

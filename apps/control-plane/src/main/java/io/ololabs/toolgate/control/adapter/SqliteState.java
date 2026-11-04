@@ -31,29 +31,30 @@ public final class SqliteState {
             settings.setTransactionMode(org.sqlite.SQLiteConfig.TransactionMode.IMMEDIATE);
             var source = new org.sqlite.SQLiteDataSource(settings); source.setUrl("jdbc:sqlite:" + path);
             try (var c = source.getConnection(); var s = c.createStatement()) {
-                boolean history=false,applicationTables=false;
+                boolean identity=false,applicationTables=false;
                 try(var rows=s.executeQuery("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")){
-                    while(rows.next()){if(rows.getString(1).equals("quickstart_migrations"))history=true;else applicationTables=true;}
+                    while(rows.next()){if(rows.getString(1).equals("quickstart_schema"))identity=true;else applicationTables=true;}
                 }
-                if(!history&&applicationTables)throw new IllegalStateException("Unsupported non-empty local database; use a new empty database");
-                s.execute("CREATE TABLE IF NOT EXISTS quickstart_migrations(version INTEGER PRIMARY KEY, checksum TEXT NOT NULL)");
-                try(var r=s.executeQuery("SELECT COALESCE(max(version),0) FROM quickstart_migrations")){if(!r.next() || r.getInt(1)>9)throw new IllegalStateException("Newer local state requires a newer image");}
-                for(int version=1;version<=9;version++) {
-                    String script;
-                    try(var input=SqliteState.class.getResourceAsStream("/db/quickstart/V"+version+".sql")){
-                        if(input==null)throw new IllegalStateException(); script=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).replace("\r\n","\n");
+                if(!identity&&applicationTables)throw new IllegalStateException("Unsupported existing database; start with an empty data directory");
+                String script;
+                try(var input=SqliteState.class.getResourceAsStream("/db/quickstart/V1.sql")){
+                    if(input==null)throw new IllegalStateException();
+                    script=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).replace("\r\n","\n");
+                }
+                String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(script.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                if(identity){
+                    try(var row=s.executeQuery("SELECT version,checksum FROM quickstart_schema")){
+                        if(!row.next()||row.getInt(1)!=1||!hash.equals(row.getString(2))||row.next())
+                            throw new IllegalStateException("Incompatible local schema; start with an empty data directory");
                     }
-                    String hash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(script.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-                    try(var query=c.prepareStatement("SELECT checksum FROM quickstart_migrations WHERE version=?")){
-                        query.setInt(1,version);try(var row=query.executeQuery()){if(row.next()){if(!hash.equals(row.getString(1)))throw new IllegalStateException("Local migration checksum mismatch");continue;}}
-                    }
+                }else{
                     c.setAutoCommit(false);
-                    try {
-                        // Each statement ends with a delimiter on its own line, including trigger bodies.
+                    try{
+                        s.execute("CREATE TABLE quickstart_schema(version INTEGER PRIMARY KEY CHECK(version=1),checksum TEXT NOT NULL)");
                         for(String statement:script.split("(?m)^-- statement\\s*$"))if(!statement.isBlank())s.execute(statement);
-                        try(var insert=c.prepareStatement("INSERT INTO quickstart_migrations VALUES(?,?)")){insert.setInt(1,version);insert.setString(2,hash);insert.executeUpdate();}
+                        try(var insert=c.prepareStatement("INSERT INTO quickstart_schema VALUES(1,?)")){insert.setString(1,hash);insert.executeUpdate();}
                         c.commit();
-                    } catch(Exception failure){c.rollback();throw failure;} finally{c.setAutoCommit(true);}
+                    }catch(Exception failure){c.rollback();throw failure;}finally{c.setAutoCommit(true);}
                 }
             }
             if (!pooled) return source;
@@ -63,7 +64,7 @@ public final class SqliteState {
             return io.agroal.api.AgroalDataSource.from(new io.agroal.api.configuration.supplier.AgroalDataSourceConfigurationSupplier()
                 .connectionPoolConfiguration(pool -> pool.minSize(1).initialSize(1).maxSize(4)
                     .acquisitionTimeout(java.time.Duration.ofSeconds(3)).connectionFactoryConfiguration(factory)));
-        } catch(Exception failure){throw new IllegalStateException("Quickstart local state validation/migration failed",failure);}
+        } catch(Exception failure){throw new IllegalStateException("Quickstart fresh schema initialization/validation failed",failure);}
     }
     static boolean local(Connection c) throws SQLException {return c.getMetaData().getDatabaseProductName().equals("SQLite");}
     static String sql(Connection c,String sql) throws SQLException {

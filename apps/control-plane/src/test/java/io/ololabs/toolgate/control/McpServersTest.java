@@ -194,7 +194,7 @@ final class McpServersTest {
             // Authority over the Tool Group and over another Device Group, not over the binding's pool.
             var rules = List.of(new EnterpriseManagementRule(actions, EnterpriseGroupType.TOOL_GROUP, all, List.of(), conditions, null),
                 new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, new GroupSelection(List.of("other"), false), List.of(), conditions, null));
-            TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("limited", "Limited registrar", true, 1L)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "limited");
+            TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("limited", "Limited registrar", true, 1L, null, null, null)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "limited");
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("limited-role", "Limited", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, rules));
             TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("limited-team", "Limited", true, 1L, List.of("limited"), List.of("limited-role")));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null;
@@ -212,7 +212,7 @@ final class McpServersTest {
     }
     private static String approval(long revision, String... mappings) {
         var tools = new StringBuilder();
-        for (int i = 0; i < mappings.length; i += 2) tools.append(i == 0 ? "" : ",").append("{\"upstreamName\":\"").append(mappings[i]).append("\",\"name\":\"").append(mappings[i + 1]).append("\"}");
+        for (int i = 0; i < mappings.length; i += 2) tools.append(i == 0 ? "" : ",").append("{\"upstreamName\":\"").append(mappings[i]).append("\",\"name\":\"").append(mappings[i + 1]).append("\",\"effectPolicy\":{\"classification\":\"READ\",\"consentRequired\":false,\"acknowledgedUnfencedRisk\":false}}");
         return "{\"snapshotRevision\":" + revision + ",\"tools\":[" + tools + "]}";
     }
     private Directory.Entry entry(Fixture f, Ids.TenantId tenant, Ids.Kind kind, String id) { return f.store.transaction(tenant, false, tx -> tx.load().entries().get(kind.id(id))); }
@@ -514,7 +514,7 @@ final class McpServersTest {
             return null;
         });
         var invocation=codec.model(operations.submitHuman(actor,new EnterpriseInvocationRequest(context,
-            new AuthorizationRequest("mcp.orders/send","invoke",args),toolDigest,approved.path("packageDigest").asText().substring(7),null,null),
+            new AuthorizationRequest("mcp.orders/send","invoke",args),toolDigest,approved.path("packageDigest").asText().substring(7),null,null, null),
             "host-a").body(),EnterpriseInvocation.class);
         var gateway=new DirectoryService.Actor(actor.tenant(),"b".repeat(64),false);
         long reservationRevision=invocation.revision();
@@ -546,7 +546,7 @@ final class McpServersTest {
         var headers=manifest.putObject("headers");headers.putArray("accept").add("application/json, text/event-stream");
         headers.putArray("mcp-protocol-version").add("2025-11-25");headers.putArray("mcp-session-id").add("opaque-from-upstream");
         var issue=new io.ololabs.toolgate.contracts.v2.EffectGrantIssue(invocation.id(),claims.nonce(),proof,"native-broker","native-handler",
-            args,Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class));
+            args,Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class), "mcp-call");
         var grants=new EffectGrants(f.store,codec,operations);
         var changed=(com.fasterxml.jackson.databind.node.ObjectNode)node(codec.json(issue));
         ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("httpRequestManifest")).put("bodyDigest","sha256:"+"a".repeat(64));

@@ -1882,7 +1882,7 @@ export interface ServicePermitClaims {
   readonly iat: number;
   readonly exp: number;
   readonly executionNonce: string;
-  readonly httpRequestDigest?: string;
+  readonly httpRequestDigest: string;
   readonly effectId?: string;
   readonly authorizationGeneration?: number;
 }
@@ -1897,7 +1897,7 @@ export interface ServicePermitConsumption {
   readonly resources: ReadonlyArray<ResourceDescriptor>;
   readonly requestFingerprint: string;
   readonly executorKeySha256: string;
-  readonly httpRequestDigest?: string;
+  readonly httpRequestDigest: string;
 }
 /** Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send. */
 export interface ServicePermitDispatch {
@@ -1914,11 +1914,12 @@ export interface ServicePermitIssue {
   readonly invocationId: string;
   readonly fencingToken: string;
   readonly audience: ServiceAudience;
-  readonly httpRequestDigest?: string;
-  readonly httpRequestManifest?: PreparedHttpRequestManifest;
-  readonly invocationPermit?: V2.SignedInvocationPermit;
-  readonly brokerInstanceId?: string;
-  readonly handlerId?: string;
+  readonly httpRequestDigest: string;
+  readonly httpRequestManifest: PreparedHttpRequestManifest;
+  readonly invocationPermit: V2.SignedInvocationPermit;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+  readonly effectKey?: string;
 }
 /** Authenticated target evidence, accepted after grant expiry without renewing authority. */
 export interface ServicePermitTargetOutcome {
@@ -1952,6 +1953,7 @@ export interface ToolDefinition {
   readonly outputSchema: Record<string, unknown>;
   readonly reconciliation?: ReconciliationMethod;
   readonly businessKeyPolicy?: BusinessKeyPolicy;
+  readonly targetDedupeGuarantees?: ReadonlyArray<V2.RouteDedupeConfiguration>;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
 export const CONTRACT_SET_VERSION = "1.0.0-dev.1" as const;

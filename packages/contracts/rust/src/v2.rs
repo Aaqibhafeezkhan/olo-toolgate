@@ -550,6 +550,13 @@ pub struct Dispatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collect_spans: Option<bool>,
 }
+/// Supervisor-only broker-injected key. Persisted once per effect; tools cannot select its value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DownstreamEffectKey {
+    pub header: String,
+    pub value: String,
+}
 /// Reviewed effect class per tool.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -675,6 +682,8 @@ pub struct EffectConsentView {
 pub struct EffectGrant {
     pub grant: SignedEffectGrant,
     pub valid_for_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downstream_key: Option<DownstreamEffectKey>,
 }
 /// Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -698,6 +707,8 @@ pub struct EffectGrantClaims {
     pub profile_digest: String,
     pub route_id: String,
     pub classification: EffectClassification,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downstream_key: Option<DownstreamEffectKey>,
 }
 /// One owner may claim the SENDING transition once.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -725,6 +736,8 @@ pub struct EffectGrantIssue {
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
     pub http_request_digest: String,
     pub http_request_manifest: crate::PreparedHttpRequestManifest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_key: Option<String>,
 }
 /// Reviewed request blueprint. Values are constants or closed $arg JSON-pointer references; resolved argument data is never interpreted as a template.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1389,8 +1402,7 @@ pub struct InvocationResultReport {
     pub result: Option<ResultFrame>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub not_started: Option<RefusalReason>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub execution_tier: Option<RuntimeTier>,
+    pub execution_tier: RuntimeTier,
 }
 /// v2 body of POST /access/invocations (invocation-state-v2.md T1). The Gateway generates invocationId; Control evaluates policy, reserves the business key and decides whether a task exists.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1645,8 +1657,7 @@ pub struct McpApprovedTool {
     pub tool_id: String,
     pub upstream_name: String,
     pub definition_digest: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub effect_policy: Option<McpEffectPolicy>,
+    pub effect_policy: McpEffectPolicy,
 }
 /// Canonical McpAuthScheme wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1952,8 +1963,7 @@ pub enum McpTaskStatus {
 pub struct McpToolApproval {
     pub upstream_name: String,
     pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub effect_policy: Option<McpEffectPolicy>,
+    pub effect_policy: McpEffectPolicy,
 }
 /// A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2103,7 +2113,7 @@ pub struct PackageLimits {
     pub max_tools: u64,
     pub max_descriptor_bytes: u64,
 }
-/// Package manifest v2. v1 manifests stay readable and are upgraded on read.
+/// Current package manifest. Earlier formats are rejected without conversion.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PackageManifest {
@@ -2476,6 +2486,43 @@ pub struct RecoveryEvent {
     pub issued_at_unix_ms: u64,
     pub signature: String,
 }
+/// Bounded current-only preflight. Opaque cursors fence a changed tenant directory; observed facts never authorize a resend.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoveryPreflightPage {
+    pub items: Vec<ToolRecoveryReadiness>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub observed_at_unix_ms: u64,
+    #[serde(deserialize_with = "const_recovery_preflight_page_build_mode")]
+    pub build_mode: String,
+}
+/// Canonical RecoveryReadinessReason wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecoveryReadinessReason {
+    #[serde(rename = "ELIGIBLE")]
+    Eligible,
+    #[serde(rename = "DISABLED")]
+    Disabled,
+    #[serde(rename = "MISSING_PROFILE")]
+    MissingProfile,
+    #[serde(rename = "PROFILE_CHANGED")]
+    ProfileChanged,
+    #[serde(rename = "NO_WRITE_ROUTES")]
+    NoWriteRoutes,
+    #[serde(rename = "UNREVIEWED_ROUTE")]
+    UnreviewedRoute,
+    #[serde(rename = "MISSING_GUARANTEE")]
+    MissingGuarantee,
+    #[serde(rename = "REVIEW_EXPIRED")]
+    ReviewExpired,
+    #[serde(rename = "INDEPENDENT_REVIEW_REQUIRED")]
+    IndependentReviewRequired,
+    #[serde(rename = "UNSUPPORTED_CREDENTIAL")]
+    UnsupportedCredential,
+    #[serde(rename = "UNQUALIFIED_EXECUTOR")]
+    UnqualifiedExecutor,
+}
 /// Request a reviewed recovery event.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2645,6 +2692,14 @@ pub struct RouteDeclaration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<String>,
 }
+/// Tool configuration review binds the exact declaration to an immutable profile/route. Direct or self-reviewed metadata is insufficient.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteDedupeConfiguration {
+    pub profile_digest: String,
+    pub route_id: String,
+    pub guarantee: TargetDedupeGuarantee,
+}
 /// Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2654,6 +2709,8 @@ pub struct RouteEffectPolicy {
     pub consent_required: bool,
     pub acknowledged_unfenced_risk: bool,
     pub intent: EffectIntentBlueprint,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_dedupe_guarantee: Option<TargetDedupeGuarantee>,
 }
 /// Review stamp created by Control, never accepted from package or worker input.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2662,6 +2719,16 @@ pub struct RouteEffectReview {
     pub policy: RouteEffectPolicy,
     pub reviewed_by: String,
     pub reviewed_at_unix_ms: u64,
+}
+/// Current reviewed contract facts for one write route; no operation-specific retry authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RouteRecoveryReadiness {
+    pub route_id: String,
+    pub reason: RecoveryReadinessReason,
+    pub lookup_available: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_expires_at_unix_ms: Option<u64>,
 }
 /// One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2941,6 +3008,76 @@ pub enum Streaming {
     Response,
     #[serde(rename = "BIDIRECTIONAL")]
     Bidirectional,
+}
+/// Canonical TargetDedupeDifferentBody wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TargetDedupeDifferentBody {
+    #[serde(rename = "REJECT")]
+    Reject,
+    #[serde(rename = "REPLAY_FIRST")]
+    ReplayFirst,
+}
+/// Explicit operator-reviewed target contract; its presence alone never authorizes resend.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TargetDedupeGuarantee {
+    pub documentation_url: String,
+    pub retention_ms: u64,
+    pub scope: TargetDedupeScope,
+    pub scope_binding_digest: String,
+    pub different_body: TargetDedupeDifferentBody,
+    pub review_expires_at_unix_ms: u64,
+    pub header: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_version: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_route_id: Option<String>,
+}
+/// Canonical TargetDedupeScope wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TargetDedupeScope {
+    #[serde(rename = "GLOBAL")]
+    Global,
+    #[serde(rename = "ACCOUNT")]
+    Account,
+    #[serde(rename = "API_KEY")]
+    ApiKey,
+}
+/// Scoped operator result for one read-only target lookup. Effect status does not imply whole-operation completion; no target key, receipt or credential is exposed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TargetEffectLookupResult {
+    pub invocation_id: String,
+    pub effect_id: String,
+    pub state: TargetEffectStatus,
+    pub outcome_revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_digest: Option<String>,
+}
+/// Canonical TargetEffectStatus wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TargetEffectStatus {
+    #[serde(rename = "UNKNOWN")]
+    Unknown,
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
+/// Current target lookup response. Terminal evidence must match the stored key/body and include a stable business receipt and result digest; unknown/pending never authorize execution. FAILED means a durable target witness that the effect was not applied; an ordinary failed HTTP/business response is insufficient.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TargetEffectStatusReply {
+    pub key: String,
+    pub state: TargetEffectStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_receipt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result_digest: Option<String>,
 }
 /// Canonical TargetKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3251,6 +3388,18 @@ pub enum ToolReconciliation {
     #[serde(rename = "MANUAL")]
     Manual,
 }
+/// Fresh-build preflight for tools declaring downstream idempotency. Eligibility is configured capability only; each retry independently needs qualified complete history, current policy/consent and its original window. No key, receipt or credential is exposed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ToolRecoveryReadiness {
+    pub tenant_id: String,
+    pub tool_id: String,
+    pub name: String,
+    pub automatic_resend_eligible: bool,
+    pub effective_method: crate::ReconciliationMethod,
+    pub reason: RecoveryReadinessReason,
+    pub routes: Vec<RouteRecoveryReadiness>,
+}
 /// Declared configuration and identity inputs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3345,6 +3494,11 @@ const_field!(
 );
 const_field!(const_progress_frame_kind, String, "PROGRESS");
 const_field!(const_recovery_event_issuer, String, "control");
+const_field!(
+    const_recovery_preflight_page_build_mode,
+    String,
+    "CURRENT_ONLY"
+);
 const_field!(const_result_frame_kind, String, "RESULT");
 const_field!(const_tenant_discovery_protocol_version, u64, 2);
 const_field!(const_tool_descriptor_descriptor_generation, u64, 1);

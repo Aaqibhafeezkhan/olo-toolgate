@@ -19,10 +19,6 @@ public final class ServiceRequestValidation {
                                 String device,ServicePermitIssue request,long now){
         var manifest=request.httpRequestManifest();
         var lease=tx.enterprise().executionLease(invocation.id());
-        if(request.httpRequestDigest()==null){
-            if(lease!=null||manifest!=null||request.invocationPermit()!=null||request.brokerInstanceId()!=null||request.handlerId()!=null)throw ManagementAccess.denied();
-            return;
-        }
         if(manifest==null||request.invocationPermit()==null||request.brokerInstanceId()==null||request.handlerId()==null||lease==null||lease.expiresAt()<=now
             ||!lease.deviceId().equals(device)||!lease.fencingToken().equals(invocation.reservedNonce()))throw ManagementAccess.denied();
         var profile=admission(tx,codec,signer,issuer,invocation,device,request.invocationPermit(),manifest,now);
@@ -52,7 +48,7 @@ public final class ServiceRequestValidation {
             ||!e.action().equals(claims.action())
             ||!tree(codec.json(e.resources())).equals(tree(codec.json(claims.resources()))))throw ManagementAccess.denied();
         // The issuer bound the signed JCS argument digest at admission. The consumed nonce binds this
-        // invocation; its legacy exact-body fingerprint below is a different digest domain (e.g. 1.0 vs 1).
+        // invocation; its exact-body fingerprint below is a different digest domain (e.g. 1.0 vs 1).
         // exp is only the already-consumed admission window. The caller checks current execution authority.
         String raw=tx.packages().document(target.serviceProfileDigest());
         if(raw==null||!Canonical.digest(tree(raw)).equals(target.serviceProfileDigest()))throw ManagementAccess.denied();

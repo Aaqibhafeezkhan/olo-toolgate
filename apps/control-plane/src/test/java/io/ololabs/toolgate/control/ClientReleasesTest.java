@@ -163,6 +163,8 @@ final class ClientReleasesTest {
             var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
                 + "\"inputSchema\":" + schema + ",\"outputSchema\":" + output + ",\"errors\":[],\"effect\":{\"safety\":\"READ_ONLY\",\"destructive\":false,\"openWorld\":false},\"businessKey\":{\"required\":false},"
                 + "\"execution\":{\"async\":false,\"maxDurationMs\":30000},\"routes\":[],\"destinations\":[],\"httpAuth\":[],\"tcp\":[],\"variables\":{\"globals\":[],\"secrets\":[],\"claims\":[]},\"permissions\":[],\"toolsets\":[]}");
+            d.withObject("/businessKey").put("namespace","AGENT");
+            d.withObject("/execution").put("stateless",true).put("cancelIfAbandoned",true);
             if(requiredKey&&spec[0].equals("client_greet"))
                 d.putObject("businessKey").put("required",true).put("namespace","DELEGATED_USER");
             if (spec[0].equals("client_greet")) d.putArray("permissions").add("DEVICE_FILES_READ").add("DEVICE_FILES_WRITE");

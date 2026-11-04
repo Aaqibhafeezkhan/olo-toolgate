@@ -11,10 +11,11 @@ beforeEach(()=>{vi.spyOn(ControlClient.prototype,'can').mockReturnValue(true);})
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks();});
 const json=(value:unknown,status=200)=>new Response(JSON.stringify(value),{status});
 const D=(c:string)=>'sha256:'+c.repeat(64);
+const READ_POLICY={classification:'READ' as const,consentRequired:false,acknowledgedUnfencedRisk:false};
 const PIN='sha256/'+'A'.repeat(43)+'=';
 const definition=(name:string,digest:string,description=`${name} tool`)=>({tool:{name,description,inputSchema:{type:'object'}},definitionDigest:digest});
 const snapshot=(tools:ReturnType<typeof definition>[]):McpSnapshot=>({revision:2,scanId:'scan-2',serverInfo:{name:'orders-mcp',version:'1.4.0'},protocolVersion:'2025-11-25',spkiPin:PIN,scannedAtUnixMs:1,tools});
-const approval:McpApproval={sequence:1,snapshotRevision:1,tools:[{toolId:'mcp.orders/get-order',upstreamName:'get_order',definitionDigest:D('a')},{toolId:'mcp.orders/old',upstreamName:'old_tool',definitionDigest:D('c')}],spkiPins:[PIN],packageId:'mcp.orders',packageVersion:'1.0.1',packageDigest:D('d'),approvedAtUnixMs:1};
+const approval:McpApproval={sequence:1,snapshotRevision:1,tools:[{toolId:'mcp.orders/get-order',upstreamName:'get_order',definitionDigest:D('a'),effectPolicy:READ_POLICY},{toolId:'mcp.orders/old',upstreamName:'old_tool',definitionDigest:D('c'),effectPolicy:READ_POLICY}],spkiPins:[PIN],packageId:'mcp.orders',packageVersion:'1.0.1',packageDigest:D('d'),approvedAtUnixMs:1};
 const server={slug:'orders',url:'https://mcp.example.com/mcp',auth:{secretName:'orders/mcp-token',scheme:'BEARER'},bindingId:'mcp-binding',strict:false,state:'APPROVED',revision:3,createdAtUnixMs:1,latestSnapshotRevision:2,approvalSequence:1,verification:{status:'CURRENT',approvalSequence:1,checkedAtUnixMs:1}};
 
 /** Control as the page sees it: one approved server, its approvals and latest snapshot, and recorded mutations. */
@@ -33,7 +34,7 @@ function control(tools=[definition('get_order',D('b')),definition('list_orders',
 const review=async()=>{fireEvent.click(await screen.findByRole('button',{name:'Review orders'}));await screen.findByRole('heading',{name:'orders'});};
 
 it('compares a snapshot with the approval in force',()=>{
- const rows=diff(snapshot([definition('get_order',D('b')),definition('list_orders',D('e')),definition('same',D('f'))]),{...approval,tools:[...approval.tools,{toolId:'mcp.orders/same',upstreamName:'same',definitionDigest:D('f')}]});
+ const rows=diff(snapshot([definition('get_order',D('b')),definition('list_orders',D('e')),definition('same',D('f'))]),{...approval,tools:[...approval.tools,{toolId:'mcp.orders/same',upstreamName:'same',definitionDigest:D('f'),effectPolicy:READ_POLICY}]});
  expect(rows.map(r=>[r.name,r.change])).toEqual([['get_order','changed'],['list_orders','new'],['same','unchanged'],['old_tool','removed']]);
  expect(diff(snapshot([definition('get_order',D('b'))])).map(r=>r.change)).toEqual(['new']);
  expect(localName('Get Order!')).toBe('get-order');expect(localName('_9x')).toBe('x');
@@ -80,7 +81,7 @@ it('refuses invalid and duplicate local names',async()=>{
 it('refuses adding a sixty-fifth tool to an existing sixty-four-tool approval',async()=>{
  const tools=Array.from({length:MAX_APPROVED_TOOLS+1},(_,i)=>definition('tool_'+i,D('b')));
  const current={...approval,tools:tools.slice(0,MAX_APPROVED_TOOLS).map(t=>({
-  toolId:'mcp.orders/'+t.tool.name,upstreamName:t.tool.name,definitionDigest:t.definitionDigest,
+  toolId:'mcp.orders/'+t.tool.name,upstreamName:t.tool.name,definitionDigest:t.definitionDigest,effectPolicy:READ_POLICY,
  }))};
  control(tools,[server],current);
  render(<McpServers client={new ControlClient('token',vi.fn())}/>);await review();

@@ -71,6 +71,13 @@
         },
         "businessKeyPolicy": {
           "$ref": "tool.schema.json#/$defs/BusinessKeyPolicy"
+        },
+        "targetDedupeGuarantees": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "../v2/effect-authorization.schema.json#/$defs/RouteDedupeConfiguration"
+          }
         }
       },
       "required": [

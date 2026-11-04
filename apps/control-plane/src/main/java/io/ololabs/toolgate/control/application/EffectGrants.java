@@ -51,6 +51,7 @@ public final class EffectGrants {
             if(descriptors.size()!=1)throw ManagementAccess.denied();
             var descriptor=descriptors.getFirst();
             EffectClassification classification;boolean consentRequired;EffectConsentMappedRequest consentRequest;
+            TargetDedupeGuarantee targetGuarantee=null;
             if(nativeMcp){
                 if(!claims.target().routes().isEmpty())throw ManagementAccess.denied();
                 var doc=ServerPackages.proxyDocument(tx,version,codec);
@@ -70,6 +71,7 @@ public final class EffectGrants {
                 try{policy=EffectIntentValidation.match(profile,manifest,arguments);}
                 catch(Failure invalid){if(consentBound&&invalid.status()==403)throw EffectConsents.mismatch();throw invalid;}
                 classification=policy.classification();consentRequired=EffectIntentValidation.requiresConsent(classification,policy.consentRequired());
+                targetGuarantee=policy.targetDedupeGuarantee();
                 consentRequest=EffectIntentValidation.preview(profile,manifest.routeId(),arguments);
                 credentialHeaders(descriptor,profile,manifest);
             }
@@ -81,21 +83,51 @@ public final class EffectGrants {
             if(credentialDeadline!=null)expiry=Math.min(expiry,credentialDeadline);
             if(expiry<=now)throw ManagementAccess.denied();
             // S19 reserves an exact consent use in this transaction. S20 retains qualified safe resend.
-            String effectId="eff-"+DirectoryService.digest(codec.json(List.of("toolgate-generic-effect-v1",tenant.value(),invocation.id(),manifest.routeId())));
-            if(tx.effects().current(effectId)!=null)throw Failure.conflict();
-            String nonce="auth-"+UUID.randomUUID();
-            var authorized=tx.effects().authorize(new EffectStore.Binding(effectId,invocation.id(),request.fencingToken(),manifest.routeId(),
-                request.httpRequestDigest(),device,request.brokerInstanceId(),request.handlerId(),nonce,expiry,expiry+60000),now);
-            if(!authorized.newAuthority())throw Failure.conflict();
+            String effectId=EffectIdentity.of(codec,tenant.value(),invocation.id(),manifest.routeId(),
+                request.effectKey()==null&&classification==EffectClassification.READ
+                    ?"read:"+DirectoryService.digest(request.handlerId()):EffectIdentity.key(request.effectKey()));
+            expiry=Math.min(expiry,TargetEffectKeys.deadline(tx,effectId,targetGuarantee,now,invocation.expiresAtUnixMs()));
+            if(expiry<=now)throw ManagementAccess.denied();
+            boolean targetResend=TargetResends.bound(tx,codec,invocation,effectId,request.httpRequestDigest(),manifest.profileDigest());
+            if(targetResend){
+                TargetResends.qualified(tx,invocation,manifest.profileDigest(),claims.target().runtimeDigest());
+                TargetResends.currentReview(tx,codec,invocation,profile,manifest.profileDigest(),manifest.routeId(),now);
+                if(tx.effects().hasTerminalHistory(effectId))throw Failure.conflict();
+            }
+            var previous=tx.effects().current(effectId);
+            var intent=tx.effects().intent(effectId);
+            if(previous!=null&&(intent==null||!intent.requestDigest().equals(request.httpRequestDigest())
+                ||!intent.argumentsDigest().equals(claims.argumentsDigest())||!intent.profileDigest().equals(manifest.profileDigest())
+                ||!intent.classification().equals(classification.name())||!intent.document().equals(codec.json(manifest))))
+                throw Failure.conflict();
+            String nonce;EffectStore.Generation generation;boolean replay=false;
+            if(previous!=null&&previous.state().equals("AUTHORIZED")){
+                var binding=previous.binding();
+                if(!binding.operationId().equals(invocation.id())||!binding.attemptId().equals(request.fencingToken())
+                    ||!binding.deviceId().equals(device)||!binding.brokerId().equals(request.brokerInstanceId())
+                    ||!binding.handlerId().equals(request.handlerId())||binding.expiresAt()<=now)throw Failure.conflict();
+                // A lost-response replay observes the same generation and never extends its original send window.
+                expiry=Math.min(expiry,binding.expiresAt());nonce=binding.authNonce();generation=previous;replay=true;
+            }else{
+                if(previous!=null&&!previous.state().equals("RELEASED")&&!(targetResend&&previous.state().equals("AMBIGUOUS")))throw Failure.conflict();
+                nonce="auth-"+UUID.randomUUID();
+                var binding=new EffectStore.Binding(effectId,invocation.id(),request.fencingToken(),manifest.routeId(),
+                    request.httpRequestDigest(),device,request.brokerInstanceId(),request.handlerId(),nonce,expiry,expiry+60000);
+                var authorized=targetResend&&previous!=null&&previous.state().equals("AMBIGUOUS")
+                    ?tx.effects().authorizeTargetResend(binding,now):tx.effects().authorize(binding,now);
+                if(!authorized.newAuthority())throw Failure.conflict();
+                generation=authorized.generation();
+            }
             if(consentRequired)EffectConsents.reserve(tx,codec,invocation,consentRequest,effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),now);
-            tx.effects().recordIntent(new EffectStore.Intent(effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),
+            if(intent==null)tx.effects().recordIntent(new EffectStore.Intent(effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),
                 classification.name(),codec.json(manifest),now));
+            var downstream=TargetEffectKeys.bind(tx,codec,operations.signer(),tenant.value(),invocation,profile,targetGuarantee,manifest,effectId,now);
             var grant=operations.signer().signEffect(new EffectGrantClaims(operations.issuer(),device,now,now,expiry,tenant.value(),
-                invocation.id(),request.fencingToken(),invocation.authorizationEpoch(),effectId,authorized.generation().generation(),nonce,
-                request.brokerInstanceId(),request.handlerId(),request.httpRequestDigest(),manifest.profileDigest(),manifest.routeId(),classification));
-            tx.audit(DirectoryService.digest(device),"EFFECT_GRANT_ISSUE","effect:"+effectId,authorized.generation().revision(),
+                invocation.id(),request.fencingToken(),invocation.authorizationEpoch(),effectId,generation.generation(),nonce,
+                request.brokerInstanceId(),request.handlerId(),request.httpRequestDigest(),manifest.profileDigest(),manifest.routeId(),classification,downstream));
+            tx.audit(DirectoryService.digest(device),replay?"EFFECT_GRANT_REPLAY":"EFFECT_GRANT_ISSUE","effect:"+effectId,generation.revision(),
                 invocation.evaluation().context().requestId(),request.httpRequestDigest().substring(7));
-            return new Store.Reply(200,codec.json(new EffectGrant(grant,expiry-now)),invocation.revision());
+            return new Store.Reply(200,codec.json(new EffectGrant(grant,expiry-now,downstream)),invocation.revision());
         });}catch(Failure failure){
             if(refused[0]!=null&&(failure.status()==403||failure.status()==409)){
                 // The authority/slot transaction has rolled back. Retain only authenticated refusal facts in a new commit.
@@ -143,6 +175,12 @@ public final class EffectGrants {
             var raw=tx.packages().document(claims.profileDigest());
             if(raw==null)throw ManagementAccess.denied();var profile=codec.model(raw,ServiceProfile.class);
             currentProfile(tx,profile.packageId(),claims.profileDigest(),"sha256:"+invocation.evaluation().packageDigest());
+            if(TargetResends.bound(tx,codec,invocation,claims.effectId(),claims.httpRequestDigest(),claims.profileDigest())){
+                TargetResends.qualified(tx,invocation,claims.profileDigest(),null);
+                TargetResends.currentReview(tx,codec,invocation,profile,claims.profileDigest(),claims.routeId(),now);
+                if(tx.effects().hasTerminalHistory(claims.effectId()))throw Failure.conflict();
+            }
+            TargetEffectKeys.sending(tx,claims,now);
             tx.effects().sending(claims.authNonce(),device,request.brokerInstanceId(),request.handlerId(),now);
             tx.audit(DirectoryService.digest(device),"EFFECT_GRANT_SENDING","effect:"+claims.effectId(),effect.revision()+1,
                 invocation.evaluation().context().requestId(),claims.httpRequestDigest().substring(7));

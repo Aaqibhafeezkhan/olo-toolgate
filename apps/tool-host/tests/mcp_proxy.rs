@@ -404,7 +404,7 @@ fn document(upstream: &Upstream, strict: bool, pins: Vec<String>) -> McpProxyDoc
     .unwrap();
     serde_json::from_value(json!({"formatVersion":1,"server":{"slug":"orders","url":upstream.url,"auth":{"secretName":"orders/mcp-token","scheme":"BEARER"},
         "serverInfo":{"name":"orders-mcp","version":"1.0.0"},"spkiPins":pins},"approvalSequence":2,"strict":strict,
-        "tools":[{"toolId":"mcp.orders/get-order","upstreamName":"get_order","definitionDigest":digest}]})).unwrap()
+        "tools":[{"toolId":"mcp.orders/get-order","upstreamName":"get_order","definitionDigest":digest,"effectPolicy":{"classification":"READ","consentRequired":false,"acknowledgedUnfencedRisk":false}}]})).unwrap()
 }
 
 fn verification(at: u64) -> McpPermitVerification {

@@ -6,7 +6,7 @@ import java.util.Set;
 
 /** Internal proof calculation. Facts must come from Control's complete journal in its writer transaction. */
 public final class OperationRebindingPolicy {
-    public enum Proof { NEVER_CONSUMED, QUALIFIED_BROKER_NO_WRITE }
+    public enum Proof { NEVER_CONSUMED, QUALIFIED_BROKER_NO_WRITE, TARGET_DEDUPLICATION }
     public record Attempt(boolean executionPurpose, boolean journalBound, Long consumedAt,
                    long expiresAt, boolean qualifiedBrokerOnly, List<String> generations) {
         public Attempt { generations=List.copyOf(generations); }
@@ -17,6 +17,15 @@ public final class OperationRebindingPolicy {
     }
     private OperationRebindingPolicy() {}
 
+    /** Candidate only: live reviewed per-effect target contracts must be checked separately. */
+    public static boolean targetCandidate(Facts facts,long now){
+        if(facts==null||facts.attempts().stream().flatMap(a->a.generations().stream())
+            .noneMatch("AMBIGUOUS"::equals))return false;
+        var attempts=facts.attempts().stream().map(a->new Attempt(a.executionPurpose(),a.journalBound(),a.consumedAt(),
+            a.expiresAt(),a.qualifiedBrokerOnly(),a.generations().stream().map(g->g.equals("AMBIGUOUS")?"RELEASED":g).toList())).toList();
+        return proof(new Facts(facts.present(),facts.legacy(),facts.completeJournal(),facts.cancelled(),facts.rejected(),
+            facts.invocationState(),facts.operationState(),facts.originalDeadline(),attempts),now)==Proof.QUALIFIED_BROKER_NO_WRITE;
+    }
     public static Proof proof(Facts facts,long now) {
         if(now<0||facts.attempts().size()>=64||!facts.present()||facts.legacy()||!facts.completeJournal()||facts.cancelled()||facts.rejected()
                 ||facts.originalDeadline()<=now||facts.invocationState()==null||facts.operationState()==null

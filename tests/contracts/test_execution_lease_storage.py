@@ -3,7 +3,7 @@
 """Durable lease and evidence invariants on the shipped database migrations."""
 import os
 import unittest
-from test_migration_specs_v2 import (
+from test_current_schema_specs import (
     FLYWAY, QUICKSTART, TENANT, PostgresRun, SqliteRun, invocation, versions,
 )
 

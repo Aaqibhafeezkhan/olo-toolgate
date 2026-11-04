@@ -49,6 +49,17 @@ public final class VaultService {
         try{return VaultEncryption.decrypt(encryption,secret.cipher(),context(tenant,secret.name(),secret.toolGroupId(),secret.deviceGroupId(),secret.version(),secret.keyVersion()));}
         finally{Arrays.fill(encryption,(byte)0);}
     }
+    /** Internal read-only target adapter. The caller has already validated exact profile/review/operator scope. */
+    String targetLookupSecret(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation invocation,String name,long version){
+        var secret=tx.enterprise().secret(name);
+        var entry=tx.load().entries().get(Ids.Kind.BINDING.id(invocation.evaluation().context().bindingId()));
+        if(secret==null||secret.version()!=version||entry==null||!entry.enabled())throw ManagementAccess.denied();
+        var binding=codec.model(entry.document(),ControlExecutionBinding.class);
+        if(!secret.toolGroupId().equals(binding.toolGroupId())||!secret.deviceGroupId().equals(binding.deviceGroupId()))
+            throw ManagementAccess.denied();
+        byte[] clear=decrypt(tenant,tx,secret);
+        try{return new String(clear,java.nio.charset.StandardCharsets.UTF_8);}finally{Arrays.fill(clear,(byte)0);}
+    }
     /** Called only by the serialized platform rotation transaction; any failure rolls back all new envelopes. */
     public void rotate(Ids.TenantId tenant,Store.Session tx) {
         var key=keys.rotate(tenant,tx);

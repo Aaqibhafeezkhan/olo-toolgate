@@ -40,15 +40,36 @@ final class JdbcOperationFinalization {
             return List.copyOf(values);
         }catch(SQLException failure){throw Failure.unavailable();}
     }
+    private record Lookup(String state,String receipt,String result) {}
+    private Map<String,Lookup> lookups(String operation){
+        var result=new HashMap<String,Lookup>();int count=0;
+        try(var s=query("SELECT g.auth_nonce,w.source,w.outcome,w.result_digest,b.document FROM control_effect_evidence w JOIN control_effect_generations g ON g.tenant_id=w.tenant_id AND g.effect_id=w.effect_id AND g.generation=w.generation JOIN control_effect_target_bindings b ON b.tenant_id=w.tenant_id AND b.effect_id=w.effect_id JOIN control_effect_intents i ON i.tenant_id=b.tenant_id AND i.effect_id=b.effect_id AND i.profile_digest=b.profile_digest WHERE w.tenant_id=? AND b.operation_id=? AND substr(w.source,1,14)='TARGET_LOOKUP:' ORDER BY w.effect_id,w.generation,w.evidence_digest LIMIT 4097",operation);var rows=s.executeQuery()){
+            while(rows.next()){
+                if(++count>4096)throw Failure.conflict();
+                String nonce=rows.getString(1),source=rows.getString(2),state=rows.getString(3),digest=rows.getString(4);
+                if(!source.matches("TARGET_LOOKUP:[a-f0-9]{64}")||!digest.matches("sha256:[a-f0-9]{64}")
+                    ||!((com.fasterxml.jackson.databind.JsonNode)codec.value(rows.getString(5))).path("statusRouteId").isTextual())
+                    throw Failure.conflict();
+                var observed=new Lookup(state,source.substring(14),digest);var previous=result.putIfAbsent(nonce,observed);
+                if(previous!=null&&!previous.equals(observed))result.put(nonce,new Lookup("CONFLICT",null,null));
+            }
+            return Map.copyOf(result);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
     private List<Write> writes(String operation){
-        var values=new ArrayList<Write>();
-        try(var s=query("SELECT e.effect_id,g.attempt_id,g.state,g.consumer,g.claim_token,CASE WHEN EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END FROM control_effects e LEFT JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id WHERE e.tenant_id=? AND e.operation_id=? ORDER BY e.effect_id,g.generation LIMIT 4097",operation);var rows=s.executeQuery()){
+        var values=new ArrayList<Write>();var lookups=lookups(operation);
+        try(var s=query("SELECT e.effect_id,g.attempt_id,g.state,g.consumer,g.claim_token,CASE WHEN EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END,g.auth_nonce FROM control_effects e LEFT JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id WHERE e.tenant_id=? AND e.operation_id=? ORDER BY e.effect_id,g.generation LIMIT 4097",operation);var rows=s.executeQuery()){
             while(rows.next()){
                 String state=rows.getString(3),consumer=rows.getString(4),claim=rows.getString(5);
                 boolean witnessed=consumer!=null&&claim!=null&&rows.getInt(6)==1;
                 // This is the authenticated, shared target-claim identity, not the response-body digest.
                 String receipt=witnessed&&"COMPLETED".equals(state)
                         ?receipt(tenant,rows.getString(1),consumer,claim):null;
+                var lookup=lookups.get(rows.getString(7));
+                if(lookup!=null){
+                    if(!"AMBIGUOUS".equals(state))throw Failure.conflict();
+                    state=lookup.state();witnessed=true;receipt="COMPLETED".equals(state)?lookup.receipt():null;
+                }
                 values.add(new Write(rows.getString(1),rows.getString(2),state==null?"MISSING":state,witnessed,receipt));
             }
             return List.copyOf(values);

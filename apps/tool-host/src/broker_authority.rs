@@ -187,15 +187,18 @@ impl Scope {
         if !self.live()
             || request.invocation_id != self.invocation
             || request.fencing_token != self.fence
-            || request.broker_instance_id.as_deref() != Some(self.broker.as_str())
-            || !request.handler_id.as_deref().is_some_and(identifier)
-            || request.invocation_permit.is_none()
+            || request.broker_instance_id != self.broker
+            || !identifier(&request.handler_id)
+            || request.invocation_permit.jws.is_empty()
+            || request.invocation_permit.jws.len() > 131072
+            || request
+                .effect_key
+                .as_deref()
+                .is_some_and(|key| !identifier(key))
         {
             return denied();
         }
-        let Some(manifest) = &request.http_request_manifest else {
-            return denied();
-        };
+        let manifest = &request.http_request_manifest;
         let Some(route) = self.routes.iter().find(|r| r.id == manifest.route_id) else {
             return denied();
         };
@@ -225,7 +228,7 @@ impl Scope {
         }
         let value = serde_json::to_value(manifest).map_err(|_| ControlError::Refused(403))?;
         let digest = crate::digest::jcs(&value).map_err(|_| ControlError::Refused(403))?;
-        if request.http_request_digest.as_deref() != Some(digest.as_str()) {
+        if request.http_request_digest != digest {
             return denied();
         }
         Ok(())
@@ -236,9 +239,10 @@ impl Scope {
 struct Issued {
     permit: ServicePermit,
     digest: String,
+    effect_key: Option<String>,
 }
 enum Grant {
-    Pending(String),
+    Pending(String, Option<String>),
     Issued(Issued),
     Checking(Issued),
     Allowed(Issued),
@@ -250,24 +254,39 @@ impl Grants {
         Self(Mutex::new(HashMap::new()))
     }
     fn reserve(&self, handler: &str, digest: &str) -> Result<(), ControlError> {
+        self.reserve_key(handler, digest, None)
+    }
+    fn reserve_key(
+        &self,
+        handler: &str,
+        digest: &str,
+        key: Option<&str>,
+    ) -> Result<(), ControlError> {
+        if key.is_some_and(|value| !identifier(value)) {
+            return denied();
+        }
         let mut grants = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if grants.len() >= 256 || grants.contains_key(handler) {
             return denied();
         }
-        grants.insert(handler.into(), Grant::Pending(digest.into()));
+        grants.insert(
+            handler.into(),
+            Grant::Pending(digest.into(), key.map(str::to_owned)),
+        );
         Ok(())
     }
     fn issued(&self, handler: &str, permit: ServicePermit) -> Result<(), ControlError> {
         let mut grants = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(value @ Grant::Pending(_)) = grants.get_mut(handler) else {
+        let Some(value @ Grant::Pending(_, _)) = grants.get_mut(handler) else {
             return denied();
         };
-        let Grant::Pending(digest) = value else {
+        let Grant::Pending(digest, key) = value else {
             unreachable!()
         };
         *value = Grant::Issued(Issued {
             permit,
             digest: digest.clone(),
+            effect_key: key.clone(),
         });
         Ok(())
     }
@@ -301,6 +320,7 @@ impl Grants {
         handler: &str,
         digest: &str,
         write: bool,
+        effect_key: Option<&str>,
     ) -> Result<ServicePermit, ControlError> {
         let grants = self.0.lock().unwrap_or_else(|e| e.into_inner());
         let issued = match grants.get(handler) {
@@ -308,7 +328,7 @@ impl Grants {
             Some(Grant::Allowed(issued)) if write => issued,
             _ => return denied(),
         };
-        if issued.digest != digest {
+        if issued.digest != digest || issued.effect_key.as_deref() != effect_key {
             return denied();
         }
         Ok(issued.permit.clone())
@@ -318,6 +338,7 @@ impl Grants {
         handler: &str,
         digest: &str,
         write: bool,
+        effect_key: Option<&str>,
     ) -> Result<ServicePermit, ControlError> {
         let mut grants = self.0.lock().unwrap_or_else(|e| e.into_inner());
         let Some(value) = grants.get_mut(handler) else {
@@ -328,7 +349,7 @@ impl Grants {
             Grant::Allowed(issued) if write => issued,
             _ => return denied(),
         };
-        if issued.digest != digest {
+        if issued.digest != digest || issued.effect_key.as_deref() != effect_key {
             return denied();
         }
         let permit = issued.permit.clone();
@@ -371,6 +392,7 @@ impl Local {
         digest: &str,
         handler: &str,
         destination: &ServiceDestination,
+        effect_key: Option<&str>,
     ) -> Result<BoundedTransport, serde_json::Value> {
         let refused = || serde_json::json!({"refused":"fresh effect authority or bounded transport unavailable"});
         let (proof, arguments) = self.scope.admission.get().ok_or_else(refused)?;
@@ -389,6 +411,7 @@ impl Local {
             arguments: arguments.clone(),
             http_request_digest: digest.into(),
             http_request_manifest: manifest.clone(),
+            effect_key: effect_key.map(str::to_owned),
         };
         let policy = crate::egress::AddressPolicy {
             host: destination.host.clone(),
@@ -455,7 +478,12 @@ impl BrokerControl for Local {
             let permit = if service {
                 Some(
                     self.grants
-                        .expected(&wire.handler_id, &wire.digest, write)
+                        .expected(
+                            &wire.handler_id,
+                            &wire.digest,
+                            write,
+                            wire.effect_key.as_deref(),
+                        )
                         .map_err(|_| refused())?,
                 )
             } else {
@@ -470,6 +498,7 @@ impl BrokerControl for Local {
                         &wire.digest,
                         &wire.handler_id,
                         destination,
+                        wire.effect_key.as_deref(),
                     )
                     .await?,
                 )
@@ -484,13 +513,20 @@ impl BrokerControl for Local {
             ));
             let frozen =
                 crate::broker_process::rebuild_request(&client, wire, permit.as_ref(), timeout)
+                    .map_err(|_| refused())?
+                    .with_downstream_key(bounded.as_ref().and_then(|b| b.downstream_key.as_ref()))
                     .map_err(|_| refused())?;
             if frozen.body_len() as u64 > route.max_request_bytes {
                 return Err(refused());
             }
             if service {
                 self.grants
-                    .take(&wire.handler_id, &wire.digest, write)
+                    .take(
+                        &wire.handler_id,
+                        &wire.digest,
+                        write,
+                        wire.effect_key.as_deref(),
+                    )
                     .map_err(|_| refused())?;
             }
             if !self.scope.live() {
@@ -534,8 +570,14 @@ impl BrokerControl for Local {
                 None
             } else {
                 Some(
-                    self.generic_transport(&manifest, prepared.digest(), handler, destination)
-                        .await?,
+                    self.generic_transport(
+                        &manifest,
+                        prepared.digest(),
+                        handler,
+                        destination,
+                        prepared.effect_key(),
+                    )
+                    .await?,
                 )
             };
             let client = match &bounded {
@@ -547,7 +589,7 @@ impl BrokerControl for Local {
             if service {
                 let permit = self
                     .grants
-                    .take(handler, prepared.digest(), write)
+                    .take(handler, prepared.digest(), write, prepared.effect_key())
                     .map_err(
                         |_| serde_json::json!({"refused":"transport owner is not authorized"}),
                     )?;
@@ -559,6 +601,8 @@ impl BrokerControl for Local {
                 return Err(serde_json::json!({"refused":"invocation has ended"}));
             }
             let response = prepared
+                .with_downstream_key(bounded.as_ref().and_then(|b| b.downstream_key.as_ref()))
+                .map_err(|_| serde_json::json!({"refused":"invalid target effect key"}))?
                 .using_client(client)
                 .send()
                 .await
@@ -593,16 +637,11 @@ impl BrokerControl for Local {
     ) -> BoxFuture<'a, Result<ServicePermit, ControlError>> {
         Box::pin(async move {
             self.scope.issue(request)?;
-            let handler = request
-                .handler_id
-                .as_deref()
-                .ok_or(ControlError::Refused(403))?;
-            self.grants.reserve(
+            let handler = request.handler_id.as_str();
+            self.grants.reserve_key(
                 handler,
-                request
-                    .http_request_digest
-                    .as_deref()
-                    .ok_or(ControlError::Refused(403))?,
+                request.http_request_digest.as_str(),
+                request.effect_key.as_deref(),
             )?;
             let permit = self.control.service_permit(request).await?;
             if permit.jws.is_empty() || permit.jws.len() > 131072 {
@@ -687,14 +726,44 @@ mod tests {
             invocation_id: scope.invocation.clone(),
             fencing_token: scope.fence.clone(),
             audience: olo_toolgate_contracts::ServiceAudience::OloMemory,
-            http_request_digest: Some(digest),
-            http_request_manifest: Some(manifest),
-            invocation_permit: Some(olo_toolgate_contracts::v2::SignedInvocationPermit {
+            http_request_digest: digest,
+            http_request_manifest: manifest,
+            invocation_permit: olo_toolgate_contracts::v2::SignedInvocationPermit {
                 jws: "test-admission".into(),
-            }),
-            broker_instance_id: Some(scope.broker.clone()),
-            handler_id: Some("handler".into()),
+            },
+            broker_instance_id: scope.broker.clone(),
+            handler_id: "handler".into(),
+            effect_key: None,
         }
+    }
+    #[test]
+    fn an_issued_service_key_cannot_be_substituted_at_the_private_transport_boundary() {
+        let grants = Grants::new();
+        let permit = ServicePermit {
+            jws: "issued".into(),
+        };
+        grants
+            .reserve_key("handler", "digest", Some("charge"))
+            .unwrap();
+        grants.issued("handler", permit.clone()).unwrap();
+        grants.sending("handler", &permit).unwrap();
+        grants.allowed("handler").unwrap();
+        assert!(grants
+            .expected("handler", "digest", true, Some("receipt"))
+            .is_err());
+        assert!(grants
+            .take("handler", "digest", true, Some("receipt"))
+            .is_err());
+        assert!(grants.take("handler", "digest", true, None).is_err());
+        assert!(grants
+            .expected("handler", "digest", true, Some("charge"))
+            .is_ok());
+        assert!(grants
+            .take("handler", "digest", true, Some("charge"))
+            .is_ok());
+        assert!(grants
+            .take("handler", "digest", true, Some("charge"))
+            .is_err());
     }
     #[test]
     fn scoped_secrets_refuse_other_operations_fences_and_undeclared_names() {
@@ -733,27 +802,19 @@ mod tests {
             match field {
                 "operation" => changed.invocation_id = "other".into(),
                 "fence" => changed.fencing_token = "other".into(),
-                "broker" => changed.broker_instance_id = Some("other".into()),
-                "handler" => changed.handler_id = Some("../escape".into()),
+                "broker" => changed.broker_instance_id = "other".into(),
+                "handler" => changed.handler_id = "../escape".into(),
                 "profile" => {
-                    changed
-                        .http_request_manifest
-                        .as_mut()
-                        .unwrap()
-                        .profile_digest = format!("sha256:{}", "c".repeat(64))
+                    changed.http_request_manifest.profile_digest =
+                        format!("sha256:{}", "c".repeat(64))
                 }
-                "route" => {
-                    changed.http_request_manifest.as_mut().unwrap().route_id = "other".into()
-                }
-                "host" => {
-                    changed.http_request_manifest.as_mut().unwrap().host =
-                        "control.example.test".into()
-                }
-                "port" => changed.http_request_manifest.as_mut().unwrap().port = 8443,
-                "method" => changed.http_request_manifest.as_mut().unwrap().method = "GET".into(),
+                "route" => changed.http_request_manifest.route_id = "other".into(),
+                "host" => changed.http_request_manifest.host = "control.example.test".into(),
+                "port" => changed.http_request_manifest.port = 8443,
+                "method" => changed.http_request_manifest.method = "GET".into(),
                 "audience" => changed.audience = olo_toolgate_contracts::ServiceAudience::OloRag,
-                "digest" => changed.http_request_digest = Some("sha256:wrong".into()),
-                "unsigned" => changed.invocation_permit = None,
+                "digest" => changed.http_request_digest = "sha256:wrong".into(),
+                "unsigned" => changed.invocation_permit.jws.clear(),
                 _ => unreachable!(),
             }
             assert!(scope.issue(&changed).is_err(), "{field}");
@@ -797,6 +858,89 @@ mod tests {
         }
         assert!(grants.reserve("overflow", "digest").is_err());
     }
+    #[tokio::test]
+    async fn explicit_service_effect_keys_reach_control_and_bind_single_use_grants() {
+        let observed = Arc::new(Mutex::new(Vec::<ServicePermitIssue>::new()));
+        let captured = observed.clone();
+        let app = axum::Router::new().fallback(
+            move |axum::Json(request): axum::Json<ServicePermitIssue>| {
+                let captured = captured.clone();
+                async move {
+                    captured.lock().unwrap().push(request);
+                    axum::Json(ServicePermit {
+                        jws: "issued-permit".into(),
+                    })
+                }
+            },
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let config = serde_json::from_value(json!({
+            "tenantId":"10000000-0000-4000-8000-000000000001",
+            "url":format!("http://{}", listener.local_addr().unwrap()),
+            "developmentLoopbackHttp":true
+        }))
+        .unwrap();
+        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        for (audience, destination) in [
+            (
+                olo_toolgate_contracts::ServiceAudience::OloMemory,
+                "olo-memory",
+            ),
+            (olo_toolgate_contracts::ServiceAudience::OloRag, "olo-rag"),
+        ] {
+            let mut scope = scope();
+            scope.routes[0].destination = destination.into();
+            scope.destinations[0].id = destination.into();
+            let mut request = issue(&scope);
+            request.audience = audience;
+            request.http_request_manifest.auth_declaration_id =
+                json!(format!("toolgate-service-permit:{destination}"));
+            request.http_request_manifest.path = if destination == "olo-rag" {
+                "/v1/rag.upsert".into()
+            } else {
+                "/v1/memory.append".into()
+            };
+            request.http_request_digest =
+                crate::digest::jcs(&serde_json::to_value(&request.http_request_manifest).unwrap())
+                    .unwrap();
+            request.effect_key = Some("document-write".into());
+            let port = Local::new(Arc::new(Control::new(&config).unwrap()), scope);
+            let permit = port.service_permit(&request).await.unwrap();
+            let captured = observed.lock().unwrap().last().unwrap().clone();
+            assert_eq!(captured.effect_key.as_deref(), Some("document-write"));
+            assert_eq!(captured.http_request_digest, request.http_request_digest);
+            assert_eq!(captured.audience, request.audience);
+            port.grants.sending(&request.handler_id, &permit).unwrap();
+            port.grants.allowed(&request.handler_id).unwrap();
+            for key in [None, Some("other-write")] {
+                assert!(port
+                    .grants
+                    .take(&request.handler_id, &request.http_request_digest, true, key)
+                    .is_err());
+            }
+            assert!(port
+                .grants
+                .take(
+                    &request.handler_id,
+                    &request.http_request_digest,
+                    true,
+                    request.effect_key.as_deref()
+                )
+                .is_ok());
+            assert!(port
+                .grants
+                .take(
+                    &request.handler_id,
+                    &request.http_request_digest,
+                    true,
+                    request.effect_key.as_deref()
+                )
+                .is_err());
+        }
+        assert_eq!(observed.lock().unwrap().len(), 2);
+        server.abort();
+    }
+
     #[tokio::test]
     async fn refused_scope_requests_contact_no_control_endpoint() {
         use std::sync::atomic::AtomicUsize;
@@ -903,20 +1047,23 @@ mod tests {
         };
         grants.reserve("write", "digest").unwrap();
         grants.issued("write", permit.clone()).unwrap();
-        assert!(grants.take("write", "digest", true).is_err());
+        assert!(grants.take("write", "digest", true, None).is_err());
         grants.sending("write", &permit).unwrap();
         assert!(
-            grants.take("write", "digest", true).is_err(),
+            grants.take("write", "digest", true, None).is_err(),
             "an HTTP error/false or lost decision is not an allowed gate"
         );
         grants.allowed("write").unwrap();
-        assert!(grants.take("write", "changed", true).is_err());
-        assert_eq!(grants.take("write", "digest", true).unwrap(), permit);
-        assert!(grants.take("write", "digest", true).is_err());
+        assert!(grants.take("write", "changed", true, None).is_err());
+        assert_eq!(grants.take("write", "digest", true, None).unwrap(), permit);
+        assert!(grants.take("write", "digest", true, None).is_err());
         grants.reserve("read", "read-digest").unwrap();
         grants.issued("read", permit.clone()).unwrap();
-        assert_eq!(grants.take("read", "read-digest", false).unwrap(), permit);
-        assert!(grants.take("read", "read-digest", false).is_err());
+        assert_eq!(
+            grants.take("read", "read-digest", false, None).unwrap(),
+            permit
+        );
+        assert!(grants.take("read", "read-digest", false, None).is_err());
     }
     #[test]
     fn concurrent_transport_delegates_have_one_owner_after_the_same_allowed_gate() {
@@ -932,7 +1079,7 @@ mod tests {
         for _ in 0..8 {
             let grants = grants.clone();
             handles.push(std::thread::spawn(move || {
-                grants.take("write", "digest", true).is_ok()
+                grants.take("write", "digest", true, None).is_ok()
             }));
         }
         assert_eq!(

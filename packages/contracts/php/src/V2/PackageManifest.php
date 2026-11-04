@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** Package manifest v2. v1 manifests stay readable and are upgraded on read. */
+/** Current package manifest. Earlier formats are rejected without conversion. */
 final readonly class PackageManifest implements \JsonSerializable {
     public function __construct(
         public int $schemaVersion,

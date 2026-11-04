@@ -4,7 +4,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 use serde::{Deserialize, Serialize};
 
-/// Contract set v2 models, side by side with v1 during migration.
+/// Current execution models and current transport model namespaces.
 pub mod v2;
 /// Server-verified administrator portal session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3212,8 +3212,7 @@ pub struct ServicePermitClaims {
     pub iat: u64,
     pub exp: u64,
     pub execution_nonce: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub http_request_digest: Option<String>,
+    pub http_request_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3234,8 +3233,7 @@ pub struct ServicePermitConsumption {
     pub resources: Vec<ResourceDescriptor>,
     pub request_fingerprint: String,
     pub executor_key_sha256: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub http_request_digest: Option<String>,
+    pub http_request_digest: String,
 }
 /// Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3258,16 +3256,13 @@ pub struct ServicePermitIssue {
     pub invocation_id: String,
     pub fencing_token: String,
     pub audience: ServiceAudience,
+    pub http_request_digest: String,
+    pub http_request_manifest: PreparedHttpRequestManifest,
+    pub invocation_permit: v2::SignedInvocationPermit,
+    pub broker_instance_id: String,
+    pub handler_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub http_request_digest: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub http_request_manifest: Option<PreparedHttpRequestManifest>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub invocation_permit: Option<v2::SignedInvocationPermit>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub broker_instance_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub handler_id: Option<String>,
+    pub effect_key: Option<String>,
 }
 /// Authenticated target evidence, accepted after grant expiry without renewing authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3319,6 +3314,8 @@ pub struct ToolDefinition {
     pub reconciliation: Option<ReconciliationMethod>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub business_key_policy: Option<BusinessKeyPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_dedupe_guarantees: Option<Vec<v2::RouteDedupeConfiguration>>,
 }
 /// Canonical UserRole wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

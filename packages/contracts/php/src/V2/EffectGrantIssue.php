@@ -15,12 +15,13 @@ final readonly class EffectGrantIssue implements \JsonSerializable {
         public string $handlerId,
         public \stdClass $arguments,
         public string $httpRequestDigest,
-        public \OloLabs\ToolGate\Contracts\PreparedHttpRequestManifest $httpRequestManifest
+        public \OloLabs\ToolGate\Contracts\PreparedHttpRequestManifest $httpRequestManifest,
+        public ?string $effectKey = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['invocationId', 'fencingToken', 'invocationPermit', 'brokerInstanceId', 'handlerId', 'arguments', 'httpRequestDigest', 'httpRequestManifest']) || array_diff(['invocationId', 'fencingToken', 'invocationPermit', 'brokerInstanceId', 'handlerId', 'arguments', 'httpRequestDigest', 'httpRequestManifest'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['invocationId', 'fencingToken', 'invocationPermit', 'brokerInstanceId', 'handlerId', 'arguments', 'httpRequestDigest', 'httpRequestManifest', 'effectKey']) || array_diff(['invocationId', 'fencingToken', 'invocationPermit', 'brokerInstanceId', 'handlerId', 'arguments', 'httpRequestDigest', 'httpRequestManifest'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -31,7 +32,8 @@ final readonly class EffectGrantIssue implements \JsonSerializable {
             $data['handlerId'],
             (object) $data['arguments'],
             $data['httpRequestDigest'],
-            \OloLabs\ToolGate\Contracts\PreparedHttpRequestManifest::fromArray($data['httpRequestManifest'])
+            \OloLabs\ToolGate\Contracts\PreparedHttpRequestManifest::fromArray($data['httpRequestManifest']),
+            array_key_exists('effectKey', $data) ? $data['effectKey'] : null
         );
     }
 

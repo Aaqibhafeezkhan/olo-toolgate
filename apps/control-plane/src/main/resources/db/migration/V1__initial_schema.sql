@@ -1,220 +1,258 @@
--- Copyright 2026 OLO Labs
--- SPDX-License-Identifier: Apache-2.0
--- Initial release schema. Initialize an empty database; pre-release schemas are unsupported.
--- Provision the NOLOGIN roles toolgate_control_runtime and toolgate_control_platform before initialization.
+-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+-- Fresh breaking-build schema. No upgrades from previous stage databases.
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
 
-CREATE TABLE control_records (
-    tenant_id varchar(128) NOT NULL,
-    kind varchar(32) NOT NULL CHECK (kind IN ('USER','TEAM','AGENT','TOOL','POLICY','DEVICE','ROLE','DEVICE_GROUP','AGENT_GROUP','TOOL_GROUP','GRANT','DELEGATION','AGENT_DELEGATION','BINDING','EXTRACTOR','WORKLOAD_BINDING','IDENTITY_BINDING','DEVICE_EVIDENCE')),
-    record_id varchar(128) NOT NULL,
-    revision bigint NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991),
-    document jsonb NOT NULL CHECK (jsonb_typeof(document) = 'object'),
-    PRIMARY KEY (tenant_id, kind, record_id),
-    CHECK (document->>'id' = record_id AND (document->>'revision')::bigint = revision)
-);
-
-CREATE TABLE control_audit (
-    sequence bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id varchar(128) NOT NULL,
-    actor_id char(64) NOT NULL,
-    operation varchar(40) NOT NULL CHECK(operation ~ '^[A-Z][A-Z0-9_]{0,39}$'),
-    target varchar(256) NOT NULL,
-    revision bigint NOT NULL,
-    request_id varchar(128) NOT NULL,
-    request_digest char(64) NOT NULL,
-    evidence text CHECK (evidence IS NULL OR octet_length(evidence) <= 4096),
-    occurred_at timestamptz NOT NULL DEFAULT clock_timestamp()
-);
-
-CREATE INDEX control_audit_tenant_cursor ON control_audit (tenant_id, sequence);
-
-GRANT USAGE ON SCHEMA public TO toolgate_control_runtime;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON control_records TO toolgate_control_runtime;
-
-GRANT SELECT, INSERT ON control_audit TO toolgate_control_runtime;
-
-GRANT USAGE ON SEQUENCE control_audit_sequence_seq TO toolgate_control_runtime;
-
-CREATE TABLE control_tenants (
-    tenant_id varchar(128) PRIMARY KEY CHECK(tenant_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
-    alias varchar(63) NOT NULL UNIQUE CHECK(alias ~ '^[a-z0-9][a-z0-9-]{0,62}$'),
-    display_name text NOT NULL CHECK(length(display_name) BETWEEN 1 AND 256),
-    status varchar(16) NOT NULL CHECK(status IN ('PROVISIONING','ACTIVE','SUSPENDED')),
-    created_at bigint NOT NULL CHECK(created_at>=0),
-    updated_at bigint NOT NULL CHECK(updated_at>=created_at),
-    initialization_failure_code varchar(32) CHECK(initialization_failure_code='INITIALIZATION_FAILED'),
-    initialization_failed_at bigint CHECK(initialization_failed_at>=0),
-    CHECK((initialization_failure_code IS NULL)=(initialization_failed_at IS NULL)),
-    CHECK(status='PROVISIONING' OR initialization_failure_code IS NULL)
-);
-
-CREATE TABLE control_tenant_authority (
-    tenant_id varchar(128) PRIMARY KEY REFERENCES control_tenants(tenant_id),
-    revision bigint NOT NULL DEFAULT 0 CHECK (revision BETWEEN 0 AND 9007199254740991),
-    authorization_epoch bigint NOT NULL DEFAULT 0 CHECK(authorization_epoch BETWEEN 0 AND 9007199254740991),
-    directory_cache_generation bigint NOT NULL DEFAULT 0 CHECK(directory_cache_generation>=0)
-);
-
-CREATE TABLE control_tenant_hosts (
-    hostname varchar(253) PRIMARY KEY CHECK(hostname=lower(hostname) AND length(hostname)>0),
-    tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id)
-);
-CREATE INDEX control_tenant_hosts_owner ON control_tenant_hosts(tenant_id);
-CREATE TABLE control_tenant_identity_keys(
-    tenant_id varchar(128) NOT NULL,
-    purpose varchar(16) NOT NULL CHECK(purpose IN ('DISCOVERY','DEVICE_CA')),
-    key_id varchar(128) NOT NULL CHECK(length(key_id) BETWEEN 1 AND 128),
-    state varchar(16) NOT NULL CHECK(state IN ('ACTIVE','READ_ONLY','RETIRED')),
-    provider_reference varchar(512) NOT NULL,
-    public_material text NOT NULL CHECK(octet_length(public_material)<=16384),
-    key_fingerprint varchar(64) NOT NULL UNIQUE CHECK(key_fingerprint ~ '^[a-f0-9]{64}$'),
-    generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),
-    PRIMARY KEY(tenant_id,purpose,key_id)
-);
-CREATE UNIQUE INDEX control_tenant_identity_keys_active ON control_tenant_identity_keys(tenant_id,purpose) WHERE state='ACTIVE';
-CREATE FUNCTION control_tenant_identity_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.consent_approval_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
-    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'identity key retention requires explicit offboarding'; END IF;
-    IF NEW.tenant_id<>OLD.tenant_id OR NEW.purpose<>OLD.purpose OR NEW.key_id<>OLD.key_id OR
-       NEW.provider_reference<>OLD.provider_reference OR NEW.public_material<>OLD.public_material OR NEW.key_fingerprint<>OLD.key_fingerprint OR
-       NEW.generation<OLD.generation OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED') THEN RAISE EXCEPTION 'invalid identity key transition'; END IF;
-    RETURN NEW;
+ IF NOT EXISTS(SELECT 1 FROM control_effect_consents c JOIN control_tenant_authority t ON t.tenant_id=c.tenant_id
+ WHERE c.tenant_id=NEW.tenant_id AND c.consent_id=NEW.consent_id AND t.authorization_epoch=NEW.authorization_epoch
+ AND c.not_before<=NEW.approved_at AND c.expires_at>NEW.approved_at
+ AND NOT EXISTS(SELECT 1 FROM control_effect_consent_revocations r WHERE r.tenant_id=c.tenant_id AND r.consent_id=c.consent_id)) THEN RAISE EXCEPTION 'effect consent scope or allowance refused'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.consent_approvals_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+0 WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.consent_revocations_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+0 WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.consent_slots_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+0 WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.consent_use_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id||'/consent/'||NEW.consent_id||'/'||NEW.slot_index,0));
+ IF NOT EXISTS(SELECT 1 FROM control_effect_consent_slots s
+ JOIN control_effect_consents c ON c.tenant_id=s.tenant_id AND c.consent_id=s.consent_id
+ JOIN control_effect_consent_approvals a ON a.tenant_id=c.tenant_id AND a.consent_id=c.consent_id
+ JOIN control_tenant_authority t ON t.tenant_id=c.tenant_id AND t.authorization_epoch=a.authorization_epoch
+ JOIN control_effects e ON e.tenant_id=c.tenant_id AND e.operation_id=c.operation_id AND e.route_id=s.route_id
+ JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id AND g.generation=e.current_generation
+ WHERE s.tenant_id=NEW.tenant_id AND s.consent_id=NEW.consent_id AND s.slot_index=NEW.slot_index
+ AND e.effect_id=NEW.effect_id AND e.request_digest=NEW.request_digest
+ AND c.not_before<=NEW.reserved_at AND c.expires_at>NEW.reserved_at AND a.approved_at<=NEW.reserved_at
+ AND g.state='AUTHORIZED' AND g.expires_at>NEW.reserved_at
+ AND NOT EXISTS(SELECT 1 FROM control_effect_consent_revocations r WHERE r.tenant_id=c.tenant_id AND r.consent_id=c.consent_id)
+ AND (SELECT count(*) FROM control_effect_consent_uses u WHERE u.tenant_id=s.tenant_id AND u.consent_id=s.consent_id AND u.slot_index=s.slot_index)<s.permitted_count) THEN RAISE EXCEPTION 'effect consent scope or allowance refused'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.consent_uses_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+0 WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.consents_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document) WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.control_attempt_binding_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=NEW.tenant_id AND n.nonce=NEW.attempt_id
+ AND n.purpose<>'SERVICE' AND n.invocation_id=NEW.operation_id AND n.evaluation_digest=NEW.evaluation_digest AND n.authorization_epoch=NEW.authorization_epoch
+ AND n.issued_at=NEW.issued_at AND n.expires_at=NEW.expires_at) THEN RAISE EXCEPTION 'attempt must bind its original permit'; END IF;
+ RETURN NEW;
 END $$;
-CREATE TRIGGER control_tenant_identity_key_guard BEFORE UPDATE OR DELETE ON control_tenant_identity_keys FOR EACH ROW EXECUTE FUNCTION control_tenant_identity_key_guard();
-GRANT SELECT ON control_tenant_identity_keys TO toolgate_control_runtime;
-GRANT SELECT,INSERT,UPDATE ON control_tenant_identity_keys TO toolgate_control_platform;
 
-CREATE TABLE control_tenant_runtime_profiles(
-    tenant_id varchar(128) NOT NULL PRIMARY KEY,
-    server_id varchar(128) NOT NULL,
-    organization text NOT NULL CHECK(length(organization) BETWEEN 1 AND 256),
-    control_url text NOT NULL CHECK(octet_length(control_url)<=2048),
-    gateway_url text NOT NULL CHECK(octet_length(gateway_url)<=2048)
-);
-GRANT SELECT ON control_tenant_runtime_profiles TO toolgate_control_runtime;
-GRANT SELECT,INSERT ON control_tenant_runtime_profiles TO toolgate_control_platform;
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_hosts TO toolgate_control_platform;
+CREATE FUNCTION public.control_attempt_effect_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN PERFORM 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id
+ AND o.operation_id=NEW.operation_id FOR UPDATE;
+ IF NOT(COALESCE(EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=NEW.tenant_id AND g.operation_id=NEW.operation_id AND g.attempt_id=NEW.attempt_id AND g.effect_id=NEW.effect_id)
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_manifest_seals m WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id) AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=NEW.tenant_id AND v.operation_id=NEW.operation_id
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id) AND v.state='RECONCILIATION_REQUIRED'),false)) THEN RAISE EXCEPTION 'manifest membership requires open admitted generation'; END IF; RETURN NEW; END $$;
 
-CREATE TABLE control_idempotency (
-    tenant_id varchar(128) NOT NULL,
-    actor_id char(64) NOT NULL,
-    key varchar(128) NOT NULL,
-    request_digest char(64) NOT NULL,
-    status integer NOT NULL,
-    body text NOT NULL,
-    revision bigint NOT NULL,
-    expires_at timestamptz NOT NULL DEFAULT (clock_timestamp() + interval '7 days'),
-    PRIMARY KEY (tenant_id, actor_id, key)
-);
+CREATE FUNCTION public.control_attempt_effects_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+length(NEW.effect_id)
+ WHERE tenant_id=NEW.tenant_id; IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
 
-CREATE INDEX control_idempotency_expiry ON control_idempotency (tenant_id, expires_at);
+CREATE FUNCTION public.control_attempt_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN RAISE EXCEPTION 'attempt journal is immutable'; END $$;
 
-CREATE TABLE control_record_ids (
-    tenant_id varchar(128) NOT NULL,
-    kind varchar(32) NOT NULL,
-    record_id varchar(128) NOT NULL,
-    PRIMARY KEY (tenant_id, kind, record_id)
-);
+CREATE FUNCTION public.control_attempt_manifest_seal_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN PERFORM 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id
+ AND o.operation_id=NEW.operation_id FOR UPDATE;
+ IF NOT(COALESCE(EXISTS(SELECT 1 FROM control_operation_attempts a JOIN control_enterprise_invocations i ON i.tenant_id=a.tenant_id AND i.invocation_id=a.operation_id
+ WHERE a.tenant_id=NEW.tenant_id AND a.operation_id=NEW.operation_id AND a.attempt_id=NEW.attempt_id
+ AND NEW.created_at>=a.issued_at AND i.revision=NEW.invocation_revision
+ AND (i.state NOT IN('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING') OR COALESCE(i.document::jsonb->>'reservedNonce','')<>NEW.attempt_id))
+ AND NEW.document::jsonb->>'format'='toolgate-attempt-manifest-v1'
+ AND NEW.document::jsonb->>'operationId'=NEW.operation_id AND NEW.document::jsonb->>'attemptId'=NEW.attempt_id
+ AND jsonb_typeof(NEW.document::jsonb->'effects')='array' AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.document::jsonb->'effects') j(value) WHERE jsonb_typeof(j.value)<>'string')
+ AND NEW.effect_count=(SELECT count(*) FROM jsonb_array_elements_text(NEW.document::jsonb->'effects') j(value))
+ AND NEW.effect_count=(SELECT count(*) FROM control_attempt_effects m WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id)
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_effects m WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id
+ AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements_text(NEW.document::jsonb->'effects') j(value) WHERE j.value=m.effect_id)),false)) THEN RAISE EXCEPTION 'manifest sealing requires closed authority and exact membership'; END IF; RETURN NEW; END $$;
 
-GRANT SELECT, INSERT ON control_record_ids TO toolgate_control_runtime;
+CREATE FUNCTION public.control_attempt_manifest_seals_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document)
+ WHERE tenant_id=NEW.tenant_id; IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
 
-GRANT USAGE ON SCHEMA public TO toolgate_control_platform;
-GRANT SELECT,INSERT,UPDATE ON control_tenants TO toolgate_control_platform;
-GRANT SELECT,UPDATE ON control_tenant_authority TO toolgate_control_runtime;
-GRANT SELECT,INSERT,UPDATE ON control_tenant_authority TO toolgate_control_platform;
+CREATE FUNCTION public.control_attempt_reservation_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$ BEGIN IF NEW.purpose<>'SERVICE' AND (
+ NOT EXISTS(SELECT 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id AND o.operation_id=NEW.invocation_id)
+ OR EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=NEW.tenant_id AND n.invocation_id=NEW.invocation_id AND n.purpose<>'SERVICE'
+ AND ((n.consumed_at IS NULL AND n.expires_at>NEW.issued_at)
+ OR NOT EXISTS(SELECT 1 FROM control_operation_attempts a WHERE a.tenant_id=n.tenant_id AND a.attempt_id=n.nonce)
+ OR (n.consumed_at IS NOT NULL AND NOT(EXISTS(SELECT 1 FROM control_operation_recoveries r JOIN control_enterprise_invocations i
+ ON i.tenant_id=r.tenant_id AND i.invocation_id=r.operation_id WHERE r.tenant_id=n.tenant_id AND r.operation_id=n.invocation_id
+ AND r.proof IN('QUALIFIED_BROKER_NO_WRITE','TARGET_DEDUPLICATION') AND r.created_at<=NEW.issued_at AND r.to_revision<=i.revision AND EXISTS(SELECT 1 FROM jsonb_array_elements_text(r.attempt_ids::jsonb) AS j(value) WHERE j.value=n.nonce))))))
+ OR EXISTS(SELECT 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id AND o.operation_id=NEW.invocation_id AND o.state='FAILED')) THEN RAISE EXCEPTION 'predecessor requires positive recovery coverage'; END IF; RETURN NEW; END $$;
 
-GRANT SELECT, INSERT, DELETE ON control_idempotency TO toolgate_control_runtime;
+CREATE FUNCTION public.control_attempt_review_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document) WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
 
-CREATE TABLE control_policy_bundles (
-    tenant_id varchar(128) NOT NULL,
-    sequence bigint NOT NULL CHECK (sequence BETWEEN 1 AND 9007199254740991),
-    directory_revision bigint NOT NULL CHECK (directory_revision BETWEEN 0 AND 9007199254740991),
-    document text NOT NULL CHECK (octet_length(document) <= 2000100),
-    policy text NOT NULL CHECK (octet_length(policy) <= 1048576),
-    published_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    PRIMARY KEY (tenant_id, sequence)
-);
-
-GRANT SELECT, INSERT ON control_policy_bundles TO toolgate_control_runtime;
-
-CREATE TABLE control_approval_clocks (
-    tenant_id varchar(128) PRIMARY KEY,
-    observed_at bigint NOT NULL CHECK (observed_at BETWEEN 0 AND 9007199254740991)
-);
-
-GRANT SELECT, INSERT, UPDATE ON control_approval_clocks TO toolgate_control_runtime;
-
-CREATE TABLE control_enrollments (
-    tenant_id varchar(128) NOT NULL,
-    enrollment_id varchar(128) NOT NULL,
-    code_digest char(64) NOT NULL,
-    device_digest char(64) NOT NULL,
-    document text NOT NULL CHECK (octet_length(document)<=16384),
-    csr text NOT NULL CHECK (octet_length(csr)<=16384),
-    user_id varchar(128),
-    certificate text CHECK (octet_length(certificate)<=32768),
-    expires_at bigint NOT NULL CHECK (expires_at>=0),
-    last_poll bigint NOT NULL DEFAULT 0 CHECK (last_poll>=0),
-    PRIMARY KEY (tenant_id,enrollment_id),
-    UNIQUE (tenant_id,code_digest)
-);
-
-CREATE INDEX control_enrollment_expiry ON control_enrollments (tenant_id,expires_at);
-
-CREATE TABLE control_endpoints (
-    tenant_id varchar(128) NOT NULL,
-    device_id varchar(128) NOT NULL,
-    key_fingerprint char(64) NOT NULL,
-    document text NOT NULL CHECK (octet_length(document)<=1048576),
-    csr text NOT NULL CHECK (octet_length(csr)<=16384),
-    report_digest char(64) NOT NULL,
-    acknowledgment text NOT NULL CHECK (octet_length(acknowledgment)<=131072),
-    PRIMARY KEY (tenant_id,device_id),
-    UNIQUE (tenant_id,key_fingerprint),
-    CHECK (document::jsonb->>'deviceId'=device_id AND document::jsonb->>'tenantId'=tenant_id)
-);
-
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_enrollments TO toolgate_control_runtime;
-
-GRANT SELECT,INSERT,UPDATE ON control_endpoints TO toolgate_control_runtime;
-
-CREATE TABLE control_fleet (
-    tenant_id TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('RELEASE','DESIRED','ROLLOUT')),
-    record_id TEXT NOT NULL,
-    revision BIGINT NOT NULL CHECK (revision > 0 AND revision <= 9007199254740991),
-    document TEXT NOT NULL CHECK (octet_length(document) <= 131072),
-    PRIMARY KEY (tenant_id, kind, record_id)
-);
-
-CREATE FUNCTION control_fleet_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.control_attempt_review_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
-  IF TG_OP = 'DELETE' OR OLD.kind = 'RELEASE' OR NEW.tenant_id <> OLD.tenant_id
-      OR NEW.kind <> OLD.kind OR NEW.record_id <> OLD.record_id OR NEW.revision <> OLD.revision + 1 THEN
-    RAISE EXCEPTION 'fleet immutable identity or generation violation';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+ PERFORM 1 FROM control_operations WHERE tenant_id=NEW.tenant_id AND operation_id=NEW.operation_id FOR UPDATE;
+ IF NOT(EXISTS(SELECT 1 FROM control_attempt_manifest_seals m
+ JOIN control_operation_attempts a ON a.tenant_id=m.tenant_id AND a.operation_id=m.operation_id AND a.attempt_id=m.attempt_id
+ JOIN control_enterprise_nonces n ON n.tenant_id=a.tenant_id AND n.nonce=a.attempt_id
+ JOIN control_enterprise_invocations i ON i.tenant_id=a.tenant_id AND i.invocation_id=a.operation_id
+ JOIN control_operations o ON o.tenant_id=i.tenant_id AND o.operation_id=i.invocation_id
+ JOIN control_operation_outcomes v ON v.tenant_id=i.tenant_id AND v.operation_id=i.invocation_id AND v.revision=NEW.expected_outcome_revision
+ JOIN control_outcome_reconciliations c ON c.tenant_id=i.tenant_id AND c.reconciliation_id=NEW.reconciliation_id
+ JOIN control_tenant_authority t ON t.tenant_id=i.tenant_id
+ WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id
+ AND NOT o.legacy AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=NEW.recorded_at
+ AND i.state NOT IN('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING')
+ AND v.state='OUTCOME_UNKNOWN' AND v.invocation_revision=i.revision
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)
+ AND v.document::jsonb->>'journalComplete'='true'
+ AND (v.document::jsonb->>'unresolvedEffectCount')::bigint=0
+ AND c.document::jsonb->>'state'='APPLIED'
+ AND c.document::jsonb->>'invocationId'=i.invocation_id
+ AND (c.document::jsonb->'request'->>'expectedRevision')::bigint=i.revision
+ AND (c.document::jsonb->'request'->'attemptSettlement'->>'expectedOutcomeRevision')::bigint=NEW.expected_outcome_revision
+ AND c.document::jsonb->'request'->'attemptSettlement'->>'noFurtherEffects'='true'
 
-CREATE TRIGGER control_fleet_guard BEFORE UPDATE OR DELETE ON control_fleet
-  FOR EACH ROW EXECUTE FUNCTION control_fleet_guard();
+ AND EXISTS(SELECT 1 FROM control_records u WHERE u.tenant_id=i.tenant_id AND u.kind='USER' AND u.record_id=c.document::jsonb->>'requesterUserId' AND u.document::jsonb->>'enabled'='true')
+ AND EXISTS(SELECT 1 FROM control_records u WHERE u.tenant_id=i.tenant_id AND u.kind='USER' AND u.record_id=c.document::jsonb->>'reviewerUserId' AND u.document::jsonb->>'enabled'='true')
+ AND NOT EXISTS(SELECT 1 FROM control_records d WHERE d.tenant_id=i.tenant_id AND d.kind='AGENT' AND d.record_id IN(SELECT i.document::jsonb->'evaluation'->'context'->>'agentId' UNION SELECT h.value->>'agentId' FROM jsonb_array_elements(i.document::jsonb->'evaluation'->'context'->'chain') h) AND d.document::jsonb->>'ownerUserId' IN(c.document::jsonb->>'requesterUserId',c.document::jsonb->>'reviewerUserId'))
+ AND NEW.attempt_id IN(SELECT value FROM jsonb_array_elements_text(c.document::jsonb->'request'->'attemptSettlement'->'attemptIds'))
+ AND c.document::jsonb->>'requesterUserId'<>c.document::jsonb->>'reviewerUserId'
+ AND (EXISTS(SELECT 1 FROM control_operation_review_owners w WHERE w.tenant_id=i.tenant_id AND w.operation_id=i.invocation_id
+ AND c.document::jsonb->>'requesterUserId' NOT IN(SELECT value FROM jsonb_array_elements_text(w.document::jsonb->'owners')) AND c.document::jsonb->>'reviewerUserId' NOT IN(SELECT value FROM jsonb_array_elements_text(w.document::jsonb->'owners')))
+ OR (NOT EXISTS(SELECT 1 FROM control_operation_review_owners w WHERE w.tenant_id=i.tenant_id AND w.operation_id=i.invocation_id)
+ AND i.document::jsonb->'evaluation'->'context'->>'mode'='HUMAN' AND i.document::jsonb->'evaluation'->'context'->>'agentId' IS NULL AND jsonb_array_length(i.document::jsonb->'evaluation'->'context'->'chain')=0
+ AND c.document::jsonb->>'requesterUserId'<>i.document::jsonb->'evaluation'->'context'->>'userId' AND c.document::jsonb->>'reviewerUserId'<>i.document::jsonb->'evaluation'->'context'->>'userId'))
+ AND NOT EXISTS(SELECT 1 FROM control_execution_leases l WHERE l.tenant_id=i.tenant_id AND l.invocation_id=i.invocation_id AND l.fencing_token=m.attempt_id AND l.expires_at>NEW.recorded_at)
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_settlements s WHERE s.tenant_id=m.tenant_id AND s.operation_id=m.operation_id AND s.attempt_id=m.attempt_id)
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=m.tenant_id AND g.operation_id=m.operation_id AND g.attempt_id=m.attempt_id
+ AND ((g.state NOT IN('RELEASED','COMPLETED','FAILED') AND NOT(g.state='AMBIGUOUS' AND EXISTS(SELECT 1 FROM control_effect_target_bindings b
+ JOIN control_effect_intents intent ON intent.tenant_id=b.tenant_id AND intent.effect_id=b.effect_id AND intent.profile_digest=b.profile_digest
+ JOIN control_effect_evidence witness ON witness.tenant_id=b.tenant_id AND witness.effect_id=b.effect_id
+ WHERE b.tenant_id=g.tenant_id AND b.effect_id=g.effect_id AND witness.generation=g.generation
+ AND b.document::jsonb->>'statusRouteId' IS NOT NULL AND substr(witness.source,1,14)='TARGET_LOOKUP:' AND length(witness.source)=78
+ AND NOT EXISTS(SELECT 1 FROM control_effect_evidence other WHERE other.tenant_id=witness.tenant_id AND other.effect_id=witness.effect_id
+ AND other.generation=witness.generation AND substr(other.source,1,14)='TARGET_LOOKUP:'
+ AND (other.source<>witness.source OR other.outcome<>witness.outcome OR other.result_digest<>witness.result_digest))))) OR (g.state IN('COMPLETED','FAILED') AND (g.consumer IS NULL OR g.claim_token IS NULL OR NOT EXISTS(
+ SELECT 1 FROM control_effect_evidence e WHERE e.tenant_id=g.tenant_id AND e.effect_id=g.effect_id AND e.generation=g.generation AND e.source='TARGET:'||g.consumer AND e.outcome=g.state)))))
+ AND NEW.document::jsonb->>'format'='toolgate-attempt-review-v1' AND NEW.document::jsonb->>'operationId'=NEW.operation_id
+ AND NEW.document::jsonb->>'attemptId'=NEW.attempt_id AND NEW.document::jsonb->>'manifestDigest'=m.manifest_digest
+ AND NEW.document::jsonb->>'outcomeSourceDigest'=v.source_digest
+ AND NEW.document::jsonb->'review'->>'requestDigest'=c.document::jsonb->>'requestDigest'
+ AND (NEW.document::jsonb->>'directoryRevision')::bigint=t.revision AND (NEW.document::jsonb->>'authorizationEpoch')::bigint=t.authorization_epoch
+)) THEN RAISE EXCEPTION 'attempt review requires exact independent approved closed resolved evidence'; END IF;
+ RETURN NEW;
+END $$;
 
-GRANT SELECT, INSERT, UPDATE ON control_fleet TO toolgate_control_runtime;
+CREATE FUNCTION public.control_attempt_settlement_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+ BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document)
+ WHERE tenant_id=NEW.tenant_id; IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
 
-REVOKE DELETE ON control_fleet FROM toolgate_control_runtime;
+CREATE FUNCTION public.control_attempt_settlement_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN PERFORM 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id AND o.operation_id=NEW.operation_id FOR UPDATE;
+ IF NOT(COALESCE(EXISTS(SELECT 1 FROM control_attempt_manifest_seals m
+ JOIN control_operation_attempts a ON a.tenant_id=m.tenant_id AND a.operation_id=m.operation_id AND a.attempt_id=m.attempt_id
+ JOIN control_enterprise_nonces n ON n.tenant_id=a.tenant_id AND n.nonce=a.attempt_id
+ JOIN control_enterprise_invocations i ON i.tenant_id=a.tenant_id AND i.invocation_id=a.operation_id
+ WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id
+ AND NEW.recorded_at>=m.created_at AND i.revision=NEW.invocation_revision AND n.purpose='EXECUTION'
+ AND (i.state NOT IN('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING') OR COALESCE(i.document::jsonb->>'reservedNonce','')<>NEW.attempt_id)
+ AND NEW.document::jsonb->>'format'='toolgate-attempt-settlement-v1'
+ AND NEW.document::jsonb->>'operationId'=NEW.operation_id AND NEW.document::jsonb->>'attemptId'=NEW.attempt_id
+ AND NEW.document::jsonb->>'proof'=NEW.proof AND NEW.document::jsonb->>'manifestDigest'=m.manifest_digest
+ AND NOT EXISTS(SELECT 1 FROM control_execution_leases l WHERE l.tenant_id=m.tenant_id AND l.invocation_id=m.operation_id AND l.fencing_token=m.attempt_id AND l.expires_at>NEW.recorded_at)
+ AND (SELECT count(*) FROM control_effect_generations g WHERE g.tenant_id=m.tenant_id AND g.operation_id=m.operation_id AND g.attempt_id=m.attempt_id)<=4096
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=m.tenant_id AND g.operation_id=m.operation_id AND g.attempt_id=m.attempt_id
+ AND ((g.state NOT IN('RELEASED','COMPLETED','FAILED') AND NOT(g.state='AMBIGUOUS' AND EXISTS(SELECT 1 FROM control_effect_target_bindings b
+ JOIN control_effect_intents intent ON intent.tenant_id=b.tenant_id AND intent.effect_id=b.effect_id AND intent.profile_digest=b.profile_digest
+ JOIN control_effect_evidence witness ON witness.tenant_id=b.tenant_id AND witness.effect_id=b.effect_id
+ WHERE b.tenant_id=g.tenant_id AND b.effect_id=g.effect_id AND witness.generation=g.generation
+ AND b.document::jsonb->>'statusRouteId' IS NOT NULL AND substr(witness.source,1,14)='TARGET_LOOKUP:' AND length(witness.source)=78
+ AND NOT EXISTS(SELECT 1 FROM control_effect_evidence other WHERE other.tenant_id=witness.tenant_id AND other.effect_id=witness.effect_id
+ AND other.generation=witness.generation AND substr(other.source,1,14)='TARGET_LOOKUP:'
+ AND (other.source<>witness.source OR other.outcome<>witness.outcome OR other.result_digest<>witness.result_digest)))))
+ OR (g.state IN('COMPLETED','FAILED') AND (g.consumer IS NULL OR g.claim_token IS NULL OR NOT EXISTS(
+ SELECT 1 FROM control_effect_evidence e WHERE e.tenant_id=g.tenant_id AND e.effect_id=g.effect_id AND e.generation=g.generation
+ AND e.source='TARGET:'||g.consumer AND e.outcome=g.state)))
+ OR NOT EXISTS(SELECT 1 FROM control_attempt_effects x WHERE x.tenant_id=g.tenant_id AND x.operation_id=g.operation_id AND x.attempt_id=g.attempt_id AND x.effect_id=g.effect_id)))
+ AND ((NEW.proof='NEVER_CONSUMED' AND n.consumed_at IS NULL AND n.expires_at<=NEW.recorded_at
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=m.tenant_id AND g.operation_id=m.operation_id AND g.attempt_id=m.attempt_id))
+ OR (NEW.proof='QUALIFIED_BROKER_ONLY' AND n.consumed_at IS NOT NULL AND EXISTS(
+ SELECT 1 FROM control_attempt_recovery_scopes s JOIN control_endpoints ep ON ep.tenant_id=s.tenant_id AND ep.device_id=s.device_id
+ JOIN control_records d ON d.tenant_id=s.tenant_id AND d.kind='DEVICE' AND d.record_id=s.device_id
+ WHERE s.tenant_id=m.tenant_id AND s.operation_id=m.operation_id AND s.attempt_id=m.attempt_id AND s.device_id=i.document::jsonb->'evaluation'->'context'->>'deviceId'
+ AND ep.document::jsonb->>'state'='ACTIVE' AND d.document::jsonb->>'enabled'='true' FOR SHARE OF ep,d)))),false)) THEN RAISE EXCEPTION 'attempt settlement requires closed resolved witnessed authority'; END IF;
+ RETURN NEW; END $$;
 
-CREATE TABLE control_builder (
- tenant_id TEXT NOT NULL,
- kind TEXT NOT NULL CHECK (kind IN ('DRAFT','VERSION','TEST')),
- record_id TEXT NOT NULL,
- revision BIGINT NOT NULL CHECK (revision > 0 AND revision <= 9007199254740991),
- document TEXT NOT NULL CHECK (octet_length(document) <= 65536),
- PRIMARY KEY (tenant_id,kind,record_id)
-);
 
-CREATE FUNCTION control_builder_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+
+CREATE FUNCTION public.control_builder_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
  IF TG_OP='DELETE' THEN
   IF OLD.kind='TEST' AND (OLD.document::jsonb->>'expiresAtUnixMs')::bigint <
@@ -228,360 +266,258 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER control_builder_guard BEFORE UPDATE OR DELETE ON control_builder FOR EACH ROW EXECUTE FUNCTION control_builder_guard();
-
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_builder TO toolgate_control_runtime;
-
-CREATE TABLE control_endpoint_configurations (
-    tenant_id varchar(128) NOT NULL,
-    device_id varchar(128) NOT NULL,
-    source_revision bigint NOT NULL CHECK (source_revision>=0),
-    document text NOT NULL CHECK (octet_length(document)<=98304),
-    acknowledged_digest char(64),
-    local_tools text NOT NULL CHECK (octet_length(local_tools)<=49152),
-    PRIMARY KEY (tenant_id,device_id),
-    FOREIGN KEY (tenant_id,device_id) REFERENCES control_endpoints(tenant_id,device_id)
-);
-
-GRANT SELECT,INSERT,UPDATE ON control_endpoint_configurations TO toolgate_control_runtime;
-
-CREATE TABLE control_mcp_requests (
-    tenant_id varchar(128) NOT NULL,
-    request_id varchar(128) NOT NULL,
-    device_id varchar(128) NOT NULL,
-    state varchar(32) NOT NULL CHECK (state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED','RESPONSE_RECEIVED','DONE','FAILED','EXPIRED')),
-    received_at bigint NOT NULL,
-    expires_at bigint NOT NULL,
-    record text NOT NULL CHECK (octet_length(record)<=8192),
-    task text NOT NULL CHECK (octet_length(task)<=16384),
-    result text CHECK (octet_length(result)<=65536),
-    PRIMARY KEY (tenant_id,request_id),
-    FOREIGN KEY (tenant_id,device_id) REFERENCES control_endpoints(tenant_id,device_id)
-);
-
-CREATE INDEX control_mcp_pending ON control_mcp_requests(tenant_id,device_id,state,received_at);
-
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_mcp_requests TO toolgate_control_runtime;
-
-CREATE TABLE control_authorization_outbox(tenant_id varchar(128) NOT NULL,revision bigint NOT NULL,authorization_epoch bigint NOT NULL,occurred_at bigint NOT NULL,published_at bigint,PRIMARY KEY(tenant_id,revision));
-
-CREATE TABLE control_enterprise_invocations(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,state varchar(32) NOT NULL,authorization_epoch bigint NOT NULL,created_at bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,invocation_id),
-    tool_id varchar(256),
-    package_id varchar(128),
-    package_digest char(71) CHECK (package_digest ~ '^sha256:[a-f0-9]{64}$'),
-    pool_id varchar(128),
-    runtime_digest char(71) CHECK (runtime_digest ~ '^sha256:[a-f0-9]{64}$'),
-    effect_safety varchar(16) CHECK (effect_safety IN ('READ_ONLY','IDEMPOTENT','NON_IDEMPOTENT','UNKNOWN')),
-    requires_execution_ledger boolean,
-    lease_holder varchar(256),
-    lease_expires_at bigint CHECK (lease_expires_at BETWEEN 0 AND 9007199254740991),
-    cancel_requested_at bigint CHECK (cancel_requested_at BETWEEN 0 AND 9007199254740991),
-    not_started boolean NOT NULL DEFAULT false,
-    task_id varchar(64) CHECK (task_id ~ '^[A-Za-z0-9_-]{22,64}$'),
-    task_state varchar(32),
-    task_owner_digest char(64) CHECK (task_owner_digest ~ '^[a-f0-9]{64}$'),
-    task_retain_until bigint CHECK (task_retain_until BETWEEN 0 AND 9007199254740991),
-    task_input_deadline_at bigint CHECK (task_input_deadline_at BETWEEN 0 AND 9007199254740991),
-    task_last_polled_at bigint CHECK (task_last_polled_at BETWEEN 0 AND 9007199254740991),
-    task_document text CHECK (octet_length(task_document) <= 32768),
-    insights_fact_seq bigint NOT NULL DEFAULT 0 CHECK (insights_fact_seq >= 0),
-    CONSTRAINT control_invocation_v2_class CHECK (
-    requires_execution_ledger IS NULL
-    OR (tool_id IS NOT NULL AND package_digest IS NOT NULL AND effect_safety IS NOT NULL
-        AND requires_execution_ledger = (effect_safety IN ('NON_IDEMPOTENT','UNKNOWN')))),
-    CONSTRAINT control_invocation_task_shape CHECK (
-    (task_id IS NULL) = (task_state IS NULL)
-    AND (task_id IS NULL) = (task_owner_digest IS NULL)
-    AND (task_id IS NULL) = (task_retain_until IS NULL)
-    AND (task_id IS NULL) = (task_document IS NULL)
-    AND (task_id IS NULL OR requires_execution_ledger IS NOT NULL)),
-    CONSTRAINT control_invocation_task_projection CHECK (
-    task_state IS NULL
-    OR (state = 'PENDING_APPROVAL' AND task_state = 'AWAITING_APPROVAL')
-    OR (state = 'QUEUED' AND task_state = 'QUEUED')
-    OR (state IN ('RESERVED','DISPATCHED') AND task_state IN ('DISPATCHED','CANCEL_REQUESTED'))
-    OR (state = 'EXECUTING' AND task_state IN ('RUNNING','INPUT_REQUIRED','CANCEL_REQUESTED'))
-    OR (state = 'SUCCEEDED' AND task_state = 'COMPLETED')
-    OR (state IN ('FAILED','PARTIAL') AND task_state = 'FAILED')
-    OR (state = 'CANCELLED' AND task_state IN ('CANCELLED','REJECTED'))
-    OR (state = 'EXPIRED' AND task_state = 'EXPIRED')
-    OR (state = 'OUTCOME_UNKNOWN' AND task_state = 'OUTCOME_UNKNOWN')),
-    CONSTRAINT control_invocation_lease_shape CHECK (
-    (lease_holder IS NULL) = (lease_expires_at IS NULL)
-    AND (lease_holder IS NULL OR state NOT IN ('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED'))),
-    CONSTRAINT control_invocation_cancel_shape CHECK (
-    (task_state IS DISTINCT FROM 'CANCEL_REQUESTED' OR cancel_requested_at IS NOT NULL)
-    AND (NOT not_started OR state = 'FAILED'))
-);
-
-CREATE INDEX control_enterprise_invocation_window ON control_enterprise_invocations(tenant_id,created_at);
-
-CREATE TABLE control_enterprise_approvals(tenant_id varchar(128) NOT NULL,approval_id varchar(128) NOT NULL,approval_type varchar(16) NOT NULL CHECK(approval_type IN('OPERATION','CONFIGURATION')),invocation_id varchar(128) NOT NULL,request_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,expires_at bigint NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,approval_id));
-
-CREATE TABLE control_enterprise_nonces(tenant_id varchar(128) NOT NULL,nonce varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,evaluation_digest char(64) NOT NULL,authorization_epoch bigint NOT NULL,issued_at bigint NOT NULL,expires_at bigint NOT NULL,consumed_at bigint,PRIMARY KEY(tenant_id,nonce));
-
-CREATE TABLE control_enterprise_adoptions(tenant_id varchar(128) NOT NULL,actor_type varchar(16) NOT NULL,actor_id varchar(128) NOT NULL,directory_revision bigint NOT NULL,snapshot_sequence bigint NOT NULL,graph_digest char(64) NOT NULL,observed_at bigint NOT NULL,PRIMARY KEY(tenant_id,actor_type,actor_id),authorization_epoch bigint NOT NULL DEFAULT 0);
-
-CREATE FUNCTION control_epoch_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.tenant_id<>OLD.tenant_id OR NEW.revision<OLD.revision OR NEW.authorization_epoch<OLD.authorization_epoch OR NEW.directory_cache_generation<OLD.directory_cache_generation THEN RAISE EXCEPTION 'authorization cannot move backwards or change ownership'; END IF; RETURN NEW; END $$;
-
-CREATE TRIGGER control_epoch_guard BEFORE UPDATE ON control_tenant_authority FOR EACH ROW EXECUTE FUNCTION control_epoch_guard();
-
-GRANT SELECT,INSERT,UPDATE ON control_authorization_outbox,control_enterprise_invocations,control_enterprise_approvals,control_enterprise_nonces,control_enterprise_adoptions TO toolgate_control_runtime;
-
-CREATE TABLE control_invocation_authority(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,expires_at bigint NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
-GRANT SELECT,INSERT,UPDATE ON control_invocation_authority TO toolgate_control_runtime;
-CREATE TABLE control_operation_cancellations(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,PRIMARY KEY(tenant_id,invocation_id));
-GRANT SELECT,INSERT ON control_operation_cancellations TO toolgate_control_runtime;
-CREATE TABLE control_credential_history(tenant_id varchar(128) NOT NULL,credential_sha256 char(64) NOT NULL,PRIMARY KEY(tenant_id,credential_sha256));
-
-GRANT SELECT,INSERT ON control_credential_history TO toolgate_control_runtime;
-
-CREATE FUNCTION control_credential_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable credential history'; END $$;
-
-CREATE TRIGGER control_credential_history_immutable BEFORE UPDATE OR DELETE ON control_credential_history FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
-CREATE TRIGGER control_operation_cancellations_immutable BEFORE UPDATE OR DELETE ON control_operation_cancellations FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
-
-CREATE TABLE control_reviewed_recovery(tenant_id varchar(128) NOT NULL,review_digest char(64) NOT NULL,PRIMARY KEY(tenant_id,review_digest));
-
-GRANT SELECT,INSERT ON control_reviewed_recovery TO toolgate_control_runtime;
-
-CREATE TRIGGER control_reviewed_recovery_immutable BEFORE UPDATE OR DELETE ON control_reviewed_recovery FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
-
-CREATE TABLE control_configuration_changes(tenant_id varchar(128) NOT NULL,change_id varchar(128) NOT NULL,revision bigint NOT NULL,request_digest char(64) NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,change_id));
-
-GRANT SELECT,INSERT,UPDATE ON control_configuration_changes TO toolgate_control_runtime;
-
-CREATE TABLE control_tenant_vault_keys(
-    tenant_id varchar(128) NOT NULL,
-    version bigint NOT NULL CHECK(version BETWEEN 1 AND 1024),
-    state varchar(16) NOT NULL CHECK(state IN('ACTIVE','READ_ONLY','RETIRED')),
-    provider_reference varchar(128) NOT NULL,
-    wrapped_encryption_key text NOT NULL CHECK(octet_length(wrapped_encryption_key)<=1024),
-    wrapped_retry_key text NOT NULL CHECK(octet_length(wrapped_retry_key)<=1024),
-    PRIMARY KEY(tenant_id,version)
-);
-CREATE UNIQUE INDEX control_tenant_vault_keys_current ON control_tenant_vault_keys(tenant_id) WHERE state='ACTIVE';
-GRANT SELECT ON control_tenant_vault_keys TO toolgate_control_runtime;
-GRANT SELECT,INSERT,UPDATE ON control_tenant_vault_keys TO toolgate_control_platform;
-CREATE FUNCTION control_vault_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.control_business_key_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
-    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'vault key retention requires explicit offboarding'; END IF;
-    IF NEW.version<>OLD.version OR NEW.tenant_id<>OLD.tenant_id OR OLD.state='RETIRED' OR
-       (NEW.state<>OLD.state AND NOT ((OLD.state='ACTIVE' AND NEW.state='READ_ONLY') OR (OLD.state='READ_ONLY' AND NEW.state='RETIRED'))) OR
-       (NEW.state='RETIRED' AND EXISTS(SELECT 1 FROM control_secrets WHERE tenant_id=OLD.tenant_id AND key_version=OLD.version))
-       THEN RAISE EXCEPTION 'invalid vault key transition'; END IF;
-    RETURN NEW;
-END $$;
-CREATE TABLE control_secrets(tenant_id varchar(128) NOT NULL,name varchar(128) NOT NULL,tool_group_id varchar(128) NOT NULL,device_group_id varchar(128) NOT NULL,version bigint NOT NULL CHECK(version BETWEEN 1 AND 9007199254740991),key_version bigint NOT NULL,cipher text NOT NULL CHECK(octet_length(cipher)<=65536),PRIMARY KEY(tenant_id,name),FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version));
-CREATE TRIGGER control_vault_key_guard BEFORE UPDATE OR DELETE ON control_tenant_vault_keys FOR EACH ROW EXECUTE FUNCTION control_vault_key_guard();
-CREATE FUNCTION control_secret_version_guard() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-    IF NEW.name<>OLD.name OR NEW.version<>OLD.version+1 THEN RAISE EXCEPTION 'invalid secret version transition'; END IF;
-    RETURN NEW;
-END $$;
-CREATE TRIGGER control_secret_version_guard BEFORE UPDATE ON control_secrets FOR EACH ROW EXECUTE FUNCTION control_secret_version_guard();
-
-GRANT SELECT,INSERT,UPDATE ON control_secrets TO toolgate_control_runtime;
-
-CREATE TABLE control_queued_authority(tenant_id varchar(128) NOT NULL,kind varchar(32) NOT NULL,record_id varchar(128) NOT NULL,creator_user_id varchar(128) NOT NULL,PRIMARY KEY(tenant_id,kind,record_id));
-
-GRANT SELECT,INSERT,UPDATE ON control_queued_authority TO toolgate_control_runtime;
-
-CREATE TABLE control_execution_budgets(tenant_id varchar(128) NOT NULL,budget_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,created_at bigint NOT NULL,PRIMARY KEY(tenant_id,budget_id,invocation_id));
-
-CREATE INDEX control_budget_window ON control_execution_budgets(tenant_id,budget_id,created_at);
-
-GRANT SELECT,INSERT ON control_execution_budgets TO toolgate_control_runtime;
-
-CREATE TABLE control_outcome_reconciliations(tenant_id varchar(128) NOT NULL,reconciliation_id varchar(128) NOT NULL,revision bigint NOT NULL,document text NOT NULL,PRIMARY KEY(tenant_id,reconciliation_id));
-
-CREATE TABLE control_recovery_floors(tenant_id varchar(128) PRIMARY KEY,snapshot_sequence bigint NOT NULL CHECK(snapshot_sequence>=0));
-
-GRANT SELECT,INSERT,UPDATE ON control_outcome_reconciliations TO toolgate_control_runtime;
-
-GRANT SELECT ON control_recovery_floors TO toolgate_control_runtime;
-
-CREATE TABLE control_server_settings(tenant_id varchar(128) PRIMARY KEY,revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document text NOT NULL CHECK(octet_length(document)<=16384));
-
-GRANT SELECT,INSERT,UPDATE ON control_server_settings TO toolgate_control_runtime;
-
-CREATE UNIQUE INDEX control_invocation_task ON control_enterprise_invocations (tenant_id, task_id)
-    WHERE task_id IS NOT NULL;
-
-CREATE INDEX control_invocation_lease ON control_enterprise_invocations (tenant_id, lease_expires_at)
-    WHERE state = 'EXECUTING';
-
-CREATE INDEX control_invocation_task_retention ON control_enterprise_invocations (tenant_id, task_retain_until)
-    WHERE task_id IS NOT NULL;
-
-CREATE INDEX control_invocation_input_deadline ON control_enterprise_invocations (tenant_id, task_input_deadline_at)
-    WHERE task_state IN ('AWAITING_APPROVAL','INPUT_REQUIRED');
-
-CREATE INDEX control_invocation_active_package ON control_enterprise_invocations (tenant_id, package_digest)
-    WHERE state IN ('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING');
-
-CREATE INDEX control_invocation_active_tool ON control_enterprise_invocations (tenant_id, tool_id)
-    WHERE state IN ('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING');
-
-CREATE TABLE control_business_keys (
-    tenant_id varchar(128) NOT NULL,
-    tool_id varchar(256) NOT NULL,
-    namespace varchar(16) NOT NULL CHECK (namespace IN ('AGENT','DELEGATED_USER','TENANT')),
-    namespace_identity varchar(128) NOT NULL,
-    business_key_hash char(64) NOT NULL CHECK (business_key_hash ~ '^[a-f0-9]{64}$'),
-    source varchar(16) NOT NULL CHECK (source IN ('HEADER','ARGUMENT','DEDUPE_WINDOW')),
-    fingerprint char(71) NOT NULL CHECK (fingerprint ~ '^sha256:[a-f0-9]{64}$'),
-    caller_agent_id varchar(128) NOT NULL,
-    caller_user_id varchar(128),
-    invocation_id varchar(128) NOT NULL,
-    created_at bigint NOT NULL CHECK (created_at BETWEEN 0 AND 9007199254740991),
-    dedupe_expires_at bigint CHECK (dedupe_expires_at BETWEEN 0 AND 9007199254740991),
-    retain_until bigint NOT NULL CHECK (retain_until BETWEEN 0 AND 9007199254740991),
-    outcome varchar(32) CHECK (outcome IN ('COMPLETED','FAILED','REJECTED','EXPIRED','CANCELLED','OUTCOME_UNKNOWN')),
-    tombstoned_at bigint CHECK (tombstoned_at BETWEEN 0 AND 9007199254740991),
-    PRIMARY KEY (tenant_id, tool_id, namespace, namespace_identity, business_key_hash),
-    CHECK ((namespace = 'TENANT') = (namespace_identity = '')),
-    CHECK ((source = 'DEDUPE_WINDOW') = (dedupe_expires_at IS NOT NULL)),
-    CHECK (dedupe_expires_at IS NULL OR dedupe_expires_at > created_at),
-    CHECK (retain_until >= created_at),
-    CHECK (tombstoned_at IS NULL OR outcome IS NOT NULL)
-);
-
-CREATE INDEX control_business_key_invocation ON control_business_keys (tenant_id, invocation_id);
-
-CREATE INDEX control_business_key_retention ON control_business_keys (tenant_id, retain_until)
-    WHERE tombstoned_at IS NULL;
-
-CREATE TABLE control_invocation_results (
-    tenant_id varchar(128) NOT NULL,
-    invocation_id varchar(128) NOT NULL,
-    fencing_nonce varchar(128) NOT NULL,
-    result_digest char(71) NOT NULL CHECK (result_digest ~ '^sha256:[a-f0-9]{64}$'),
-    byte_length integer NOT NULL CHECK (byte_length BETWEEN 0 AND 4194304),
-    payload bytea,
-    created_at bigint NOT NULL CHECK (created_at BETWEEN 0 AND 9007199254740991),
-    retain_until bigint NOT NULL CHECK (retain_until BETWEEN 0 AND 9007199254740991),
-    purged_at bigint CHECK (purged_at BETWEEN 0 AND 9007199254740991),
-    PRIMARY KEY (tenant_id, invocation_id),
-    FOREIGN KEY (tenant_id, invocation_id) REFERENCES control_enterprise_invocations (tenant_id, invocation_id),
-    CHECK ((payload IS NULL) = (purged_at IS NOT NULL)),
-    CHECK (payload IS NULL OR octet_length(payload) = byte_length),
-    CHECK (retain_until >= created_at)
-);
-
-CREATE INDEX control_invocation_result_retention ON control_invocation_results (tenant_id, retain_until)
-    WHERE purged_at IS NULL;
-
-CREATE FUNCTION control_invocation_result_guard() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-    IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'invocation results are purged, never deleted'; END IF;
-    IF OLD.purged_at IS NOT NULL OR NEW.payload IS NOT NULL OR NEW.purged_at IS NULL
-       OR NEW.tenant_id <> OLD.tenant_id OR NEW.invocation_id <> OLD.invocation_id
-       OR NEW.fencing_nonce <> OLD.fencing_nonce OR NEW.result_digest <> OLD.result_digest
-       OR NEW.byte_length <> OLD.byte_length OR NEW.created_at <> OLD.created_at
-       OR NEW.retain_until <> OLD.retain_until THEN
-        RAISE EXCEPTION 'invocation result is immutable except for its purge';
-    END IF;
-    RETURN NEW;
+ IF NEW.tenant_id IS NOT DISTINCT FROM OLD.tenant_id AND NEW.tool_id IS NOT DISTINCT FROM OLD.tool_id AND NEW.namespace IS NOT DISTINCT FROM OLD.namespace AND NEW.namespace_identity IS NOT DISTINCT FROM OLD.namespace_identity AND NEW.business_key_hash IS NOT DISTINCT FROM OLD.business_key_hash AND NEW.source IS NOT DISTINCT FROM OLD.source AND NEW.fingerprint IS NOT DISTINCT FROM OLD.fingerprint AND NEW.caller_agent_id IS NOT DISTINCT FROM OLD.caller_agent_id AND NEW.caller_user_id IS NOT DISTINCT FROM OLD.caller_user_id AND NEW.invocation_id IS NOT DISTINCT FROM OLD.invocation_id AND NEW.created_at IS NOT DISTINCT FROM OLD.created_at AND NEW.dedupe_expires_at IS NOT DISTINCT FROM OLD.dedupe_expires_at AND NEW.retain_until IS NOT DISTINCT FROM OLD.retain_until AND NEW.tombstoned_at IS NOT DISTINCT FROM OLD.tombstoned_at AND EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=OLD.tenant_id AND v.operation_id=OLD.invocation_id
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)
+ AND NEW.outcome IS NOT DISTINCT FROM CASE v.state WHEN 'RUNNING' THEN NULL WHEN 'SUCCEEDED' THEN 'COMPLETED'
+ WHEN 'FAILED' THEN 'FAILED' WHEN 'PARTIAL' THEN 'PARTIAL' ELSE 'OUTCOME_UNKNOWN' END) THEN RETURN NEW; END IF;
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'business keys are retained'; END IF;
+ IF NEW.tenant_id IS NOT DISTINCT FROM OLD.tenant_id AND NEW.tool_id IS NOT DISTINCT FROM OLD.tool_id AND NEW.namespace IS NOT DISTINCT FROM OLD.namespace AND NEW.namespace_identity IS NOT DISTINCT FROM OLD.namespace_identity AND NEW.business_key_hash IS NOT DISTINCT FROM OLD.business_key_hash AND NEW.source IS NOT DISTINCT FROM OLD.source AND NEW.fingerprint IS NOT DISTINCT FROM OLD.fingerprint AND NEW.caller_agent_id IS NOT DISTINCT FROM OLD.caller_agent_id AND NEW.caller_user_id IS NOT DISTINCT FROM OLD.caller_user_id AND NEW.invocation_id IS NOT DISTINCT FROM OLD.invocation_id AND NEW.created_at IS NOT DISTINCT FROM OLD.created_at AND NEW.dedupe_expires_at IS NOT DISTINCT FROM OLD.dedupe_expires_at AND NEW.retain_until IS NOT DISTINCT FROM OLD.retain_until AND NEW.tombstoned_at IS NOT DISTINCT FROM OLD.tombstoned_at
+ AND NEW.outcome IS NULL AND OLD.outcome IN('FAILED','EXPIRED','OUTCOME_UNKNOWN')
+ AND OLD.tombstoned_at IS NULL
+ AND EXISTS(SELECT 1 FROM control_operation_recoveries r JOIN control_enterprise_invocations i ON i.tenant_id=r.tenant_id AND i.invocation_id=r.operation_id
+ JOIN control_operations o ON o.tenant_id=i.tenant_id AND o.operation_id=i.invocation_id
+ WHERE r.tenant_id=OLD.tenant_id AND r.operation_id=OLD.invocation_id AND r.to_revision=i.revision AND i.state='QUEUED' AND o.state='RUNNING'
+ AND OLD.retain_until>r.created_at) THEN RETURN NEW; END IF;
+ IF (NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.tool_id IS DISTINCT FROM OLD.tool_id OR NEW.namespace IS DISTINCT FROM OLD.namespace OR NEW.namespace_identity IS DISTINCT FROM OLD.namespace_identity OR NEW.business_key_hash IS DISTINCT FROM OLD.business_key_hash) OR NEW.source<>OLD.source OR
+ (NEW.invocation_id<>OLD.invocation_id AND OLD.source<>'DEDUPE_WINDOW' AND
+ (OLD.tombstoned_at IS NOT NULL OR (NEW.fingerprint IS DISTINCT FROM OLD.fingerprint OR NEW.caller_agent_id IS DISTINCT FROM OLD.caller_agent_id OR NEW.caller_user_id IS DISTINCT FROM OLD.caller_user_id OR NEW.dedupe_expires_at IS DISTINCT FROM OLD.dedupe_expires_at OR NEW.retain_until IS DISTINCT FROM OLD.retain_until) OR
+ ((NEW.invocation_id<>OLD.invocation_id OR NEW.created_at<>OLD.created_at)
+ AND NOT(COALESCE(OLD.outcome,'') IN('EXPIRED','FAILED') AND NEW.outcome IS NULL)))) OR
+ (NEW.invocation_id<>OLD.invocation_id AND OLD.source='DEDUPE_WINDOW' AND
+ (OLD.dedupe_expires_at>NEW.created_at OR NEW.fingerprint IS DISTINCT FROM OLD.fingerprint OR NEW.caller_agent_id IS DISTINCT FROM OLD.caller_agent_id OR NEW.caller_user_id IS DISTINCT FROM OLD.caller_user_id OR NEW.outcome IS NOT NULL
+ OR NEW.tombstoned_at IS NOT NULL OR NEW.retain_until<NEW.dedupe_expires_at
+ OR NOT EXISTS(SELECT 1 FROM control_business_key_history h JOIN control_operations o
+ ON o.tenant_id=h.tenant_id AND o.operation_id=h.invocation_id
+ WHERE h.tenant_id IS NOT DISTINCT FROM OLD.tenant_id AND h.tool_id IS NOT DISTINCT FROM OLD.tool_id AND h.namespace IS NOT DISTINCT FROM OLD.namespace AND h.namespace_identity IS NOT DISTINCT FROM OLD.namespace_identity AND h.business_key_hash IS NOT DISTINCT FROM OLD.business_key_hash AND h.invocation_id IS NOT DISTINCT FROM OLD.invocation_id AND h.fingerprint IS NOT DISTINCT FROM OLD.fingerprint AND h.caller_agent_id IS NOT DISTINCT FROM OLD.caller_agent_id AND h.caller_user_id IS NOT DISTINCT FROM OLD.caller_user_id AND h.created_at IS NOT DISTINCT FROM OLD.created_at AND h.dedupe_expires_at IS NOT DISTINCT FROM OLD.dedupe_expires_at AND h.retain_until IS NOT DISTINCT FROM OLD.retain_until AND h.outcome IS NOT DISTINCT FROM OLD.outcome AND h.tombstoned_at IS NOT DISTINCT FROM OLD.tombstoned_at AND h.archived_at=NEW.created_at AND NOT o.legacy
+ AND ((o.state IN('FAILED','SUCCEEDED') OR EXISTS(SELECT 1 FROM control_operation_outcomes v
+ WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id AND v.state IN('SUCCEEDED','FAILED')
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))
+ AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id
+ AND v.state='RECONCILIATION_REQUIRED' AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))))) OR (NEW.invocation_id=OLD.invocation_id AND
+ (OLD.tombstoned_at IS NOT NULL OR (NEW.fingerprint IS DISTINCT FROM OLD.fingerprint OR NEW.caller_agent_id IS DISTINCT FROM OLD.caller_agent_id OR NEW.caller_user_id IS DISTINCT FROM OLD.caller_user_id OR NEW.dedupe_expires_at IS DISTINCT FROM OLD.dedupe_expires_at OR NEW.retain_until IS DISTINCT FROM OLD.retain_until) OR NEW.created_at<>OLD.created_at
+ OR (NEW.outcome IS DISTINCT FROM OLD.outcome AND OLD.outcome IS NOT NULL
+ AND NOT(OLD.outcome='OUTCOME_UNKNOWN' AND NEW.outcome IN('COMPLETED','FAILED'))) OR (NEW.tombstoned_at IS DISTINCT FROM OLD.tombstoned_at AND
+ (NEW.tombstoned_at IS NULL OR NEW.tombstoned_at<OLD.retain_until OR
+ OLD.outcome IS NULL OR OLD.outcome='OUTCOME_UNKNOWN' OR
+ NOT EXISTS(SELECT 1 FROM control_operations o WHERE o.tenant_id=OLD.tenant_id
+ AND o.operation_id=OLD.invocation_id AND NOT o.legacy AND ((o.state IN('FAILED','SUCCEEDED') OR EXISTS(SELECT 1 FROM control_operation_outcomes v
+ WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id AND v.state IN('SUCCEEDED','FAILED')
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))
+ AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id
+ AND v.state='RECONCILIATION_REQUIRED' AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))))))) THEN RAISE EXCEPTION 'business key identity, retention or recovery proof is immutable'; END IF;
+ RETURN NEW;
 END $$;
 
-CREATE TRIGGER control_invocation_result_guard BEFORE UPDATE OR DELETE ON control_invocation_results
-    FOR EACH ROW EXECUTE FUNCTION control_invocation_result_guard();
+CREATE FUNCTION public.control_business_key_history_insert_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN IF NOT EXISTS(SELECT 1 FROM control_business_keys k JOIN control_operations o
+ ON o.tenant_id=k.tenant_id AND o.operation_id=k.invocation_id
+ WHERE k.tenant_id IS NOT DISTINCT FROM NEW.tenant_id AND k.tool_id IS NOT DISTINCT FROM NEW.tool_id AND k.namespace IS NOT DISTINCT FROM NEW.namespace AND k.namespace_identity IS NOT DISTINCT FROM NEW.namespace_identity AND k.business_key_hash IS NOT DISTINCT FROM NEW.business_key_hash AND k.invocation_id IS NOT DISTINCT FROM NEW.invocation_id AND k.fingerprint IS NOT DISTINCT FROM NEW.fingerprint AND k.caller_agent_id IS NOT DISTINCT FROM NEW.caller_agent_id AND k.caller_user_id IS NOT DISTINCT FROM NEW.caller_user_id AND k.created_at IS NOT DISTINCT FROM NEW.created_at AND k.dedupe_expires_at IS NOT DISTINCT FROM NEW.dedupe_expires_at AND k.retain_until IS NOT DISTINCT FROM NEW.retain_until AND k.outcome IS NOT DISTINCT FROM NEW.outcome AND k.tombstoned_at IS NOT DISTINCT FROM NEW.tombstoned_at AND k.source='DEDUPE_WINDOW' AND k.dedupe_expires_at<=NEW.archived_at
+ AND NOT o.legacy AND ((o.state IN('FAILED','SUCCEEDED') OR EXISTS(SELECT 1 FROM control_operation_outcomes v
+ WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id AND v.state IN('SUCCEEDED','FAILED')
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))
+ AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=o.tenant_id AND v.operation_id=o.operation_id
+ AND v.state='RECONCILIATION_REQUIRED' AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id)))) THEN RAISE EXCEPTION 'window archive requires an exact resolved reservation'; END IF; RETURN NEW; END $$;
 
-CREATE FUNCTION control_business_key_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+
+
+CREATE FUNCTION public.control_credential_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$ BEGIN RAISE EXCEPTION 'immutable credential history'; END $$;
+
+CREATE FUNCTION public.control_effect_family_insert_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN IF NEW.current_generation<>1 THEN RAISE EXCEPTION 'effect starts at generation one'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.control_effect_generation_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
-    IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'business keys are tombstoned, never deleted'; END IF;
-    IF OLD.tombstoned_at IS NOT NULL OR NEW.source <> OLD.source THEN
-        RAISE EXCEPTION 'business key reservation is immutable';
-    END IF;
-    IF OLD.source = 'DEDUPE_WINDOW' THEN
-        IF NEW.invocation_id <> OLD.invocation_id AND OLD.dedupe_expires_at > NEW.created_at THEN
-            RAISE EXCEPTION 'dedupe window still open';
-        END IF;
-        RETURN NEW;
-    END IF;
-    IF NEW.fingerprint <> OLD.fingerprint OR NEW.caller_agent_id <> OLD.caller_agent_id
-       OR NEW.caller_user_id IS DISTINCT FROM OLD.caller_user_id THEN
-        RAISE EXCEPTION 'business key reservation is immutable';
-    END IF;
-    IF (NEW.invocation_id <> OLD.invocation_id OR NEW.created_at <> OLD.created_at)
-       AND NOT (COALESCE(OLD.outcome,'') IN ('EXPIRED','FAILED') AND NEW.outcome IS NULL) THEN
-        RAISE EXCEPTION 'business key already bound to an invocation';
-    END IF;
-    IF NEW.invocation_id = OLD.invocation_id AND OLD.outcome IS NOT NULL
-       AND NEW.outcome IS DISTINCT FROM OLD.outcome
-       AND NOT (OLD.outcome = 'OUTCOME_UNKNOWN' AND NEW.outcome IN ('COMPLETED','FAILED')) THEN
-        RAISE EXCEPTION 'business key outcome is final';
-    END IF;
-    RETURN NEW;
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'effect history is retained'; END IF;
+ IF NEW.tenant_id<>OLD.tenant_id OR NEW.effect_id<>OLD.effect_id OR NEW.generation<>OLD.generation OR NEW.operation_id<>OLD.operation_id OR NEW.attempt_id<>OLD.attempt_id OR NEW.auth_nonce<>OLD.auth_nonce OR NEW.device_id<>OLD.device_id OR NEW.broker_id<>OLD.broker_id OR NEW.handler_id<>OLD.handler_id OR NEW.issued_at<>OLD.issued_at OR NEW.expires_at<>OLD.expires_at OR NEW.outcome_deadline<>OLD.outcome_deadline OR NEW.revision<>OLD.revision+1 OR (OLD.consumer IS NOT NULL AND (NEW.consumer IS DISTINCT FROM OLD.consumer OR NEW.claim_token IS DISTINCT FROM OLD.claim_token)) OR (OLD.consumer IS NULL AND NEW.consumer IS NOT NULL AND NOT(OLD.state IN('AUTHORIZED','SENDING') AND NEW.state='CONSUMED')) OR NOT((NEW.state=OLD.state) OR
+ (OLD.state='AUTHORIZED' AND NEW.state IN('RELEASED','SENDING','CONSUMED','AMBIGUOUS')) OR
+ (OLD.state='SENDING' AND NEW.state IN('CONSUMED','AMBIGUOUS')) OR
+ (OLD.state='CONSUMED' AND NEW.state IN('COMPLETED','FAILED','AMBIGUOUS')) OR
+ (OLD.state='AMBIGUOUS' AND NEW.state IN('COMPLETED','FAILED')) OR
+ (OLD.state IN('COMPLETED','FAILED') AND NEW.state='CONFLICT')) THEN RAISE EXCEPTION 'invalid effect identity or transition'; END IF;
+ RETURN NEW;
 END $$;
 
-CREATE TRIGGER control_business_key_guard BEFORE UPDATE OR DELETE ON control_business_keys
-    FOR EACH ROW EXECUTE FUNCTION control_business_key_guard();
+CREATE FUNCTION public.control_effect_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'effect history is retained'; END IF;
+ IF NEW.tenant_id<>OLD.tenant_id OR NEW.effect_id<>OLD.effect_id OR NEW.operation_id<>OLD.operation_id OR NEW.route_id<>OLD.route_id OR NEW.request_digest<>OLD.request_digest OR NEW.current_generation<>OLD.current_generation+1 OR NOT EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=OLD.tenant_id AND g.effect_id=OLD.effect_id AND g.generation=OLD.current_generation AND (g.state='RELEASED' OR (g.state='AMBIGUOUS' AND EXISTS(SELECT 1 FROM control_operation_recoveries r JOIN control_enterprise_invocations i ON i.tenant_id=r.tenant_id AND i.invocation_id=r.operation_id
+ WHERE r.tenant_id=g.tenant_id AND r.operation_id=g.operation_id AND r.proof='TARGET_DEDUPLICATION'
+ AND r.to_revision<=i.revision AND i.state='EXECUTING' AND i.document::jsonb->>'reservedNonce'<>g.attempt_id
+ AND EXISTS(SELECT 1 FROM jsonb_array_elements(r.document::jsonb->'targetPlan') p(value) WHERE p.value->>'effectId'=g.effect_id AND (p.value->>'generation')::bigint=g.generation))))) THEN RAISE EXCEPTION 'invalid effect identity or transition'; END IF;
+ RETURN NEW;
+END $$;
 
-GRANT SELECT, INSERT, UPDATE ON control_business_keys, control_invocation_results TO toolgate_control_runtime;
+CREATE FUNCTION public.control_effect_insert_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN IF NEW.state<>'AUTHORIZED' OR NEW.revision<>1 OR NEW.consumer IS NOT NULL OR NOT EXISTS(SELECT 1 FROM control_effects e WHERE e.tenant_id=NEW.tenant_id AND e.effect_id=NEW.effect_id AND e.operation_id=NEW.operation_id AND e.current_generation=NEW.generation) THEN RAISE EXCEPTION 'generation must be current and new'; END IF; RETURN NEW; END $$;
 
-CREATE TABLE control_bootstrap_admins (
-    tenant_id varchar(128) PRIMARY KEY,
-    user_id varchar(128) NOT NULL
-);
+CREATE FUNCTION public.control_effect_intent_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document)
+ WHERE tenant_id=NEW.tenant_id; IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
 
-GRANT SELECT,INSERT ON control_bootstrap_admins TO toolgate_control_runtime;
+CREATE FUNCTION public.control_effect_intent_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM control_effects e JOIN control_effect_generations g
+ ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id AND g.generation=e.current_generation
+ WHERE e.tenant_id=NEW.tenant_id AND e.effect_id=NEW.effect_id AND e.request_digest=NEW.request_digest
+ AND g.state='AUTHORIZED' AND g.issued_at=NEW.recorded_at)
+ THEN RAISE EXCEPTION 'intent requires matching fresh effect authority'; END IF; RETURN NEW;
+END $$;
 
-CREATE TABLE control_server_packages(tenant_id varchar(128) NOT NULL,package_digest char(71) NOT NULL CHECK(package_digest ~ '^sha256:[a-f0-9]{64}$'),
-    package_id varchar(127) NOT NULL,version varchar(128) NOT NULL,uploaded_at bigint NOT NULL CHECK(uploaded_at BETWEEN 0 AND 9007199254740991),
-    document text NOT NULL CHECK(octet_length(document)<=4194304),content bytea NOT NULL CHECK(octet_length(content)<=67108864),
-    PRIMARY KEY(tenant_id,package_digest));
+CREATE FUNCTION public.control_effect_manifest_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN PERFORM 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id
+ AND o.operation_id=NEW.operation_id FOR UPDATE;
+ IF NOT(COALESCE(EXISTS(SELECT 1 FROM control_enterprise_invocations i JOIN control_enterprise_nonces n
+ ON n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.nonce=NEW.attempt_id
+ WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND i.state='EXECUTING'
+ AND i.document::jsonb->>'reservedNonce'=NEW.attempt_id AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=NEW.issued_at
+ AND i.expires_at>NEW.issued_at AND NEW.expires_at<=i.expires_at
+ AND i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id)
+ AND NOT EXISTS(SELECT 1 FROM control_operation_cancellations c WHERE c.tenant_id=i.tenant_id AND c.invocation_id=i.invocation_id)
+ AND NOT EXISTS(SELECT 1 FROM control_execution_leases l WHERE l.tenant_id=i.tenant_id AND l.invocation_id=i.invocation_id
+ AND l.fencing_token=NEW.attempt_id AND l.expires_at<=NEW.issued_at))
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_manifest_seals m WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id) AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=NEW.tenant_id AND v.operation_id=NEW.operation_id
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id) AND v.state='RECONCILIATION_REQUIRED'),false)) THEN RAISE EXCEPTION 'EFFECT_MANIFEST_SEALED or inactive execution authority'; END IF; RETURN NEW; END $$;
 
-CREATE TABLE control_server_documents(tenant_id varchar(128) NOT NULL,digest char(71) NOT NULL CHECK(digest ~ '^sha256:[a-f0-9]{64}$'),
-    document text NOT NULL CHECK(octet_length(document)<=1048576),PRIMARY KEY(tenant_id,digest));
+CREATE FUNCTION public.control_effect_manifest_member() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN INSERT INTO control_attempt_effects(tenant_id,operation_id,attempt_id,effect_id)
+ VALUES(NEW.tenant_id,NEW.operation_id,NEW.attempt_id,NEW.effect_id) ON CONFLICT DO NOTHING; RETURN NEW; END $$;
 
-CREATE TABLE control_server_deployments(tenant_id varchar(128) NOT NULL,package_id varchar(127) NOT NULL,
-    document text NOT NULL CHECK(octet_length(document)<=65536),PRIMARY KEY(tenant_id,package_id));
+CREATE FUNCTION public.control_effect_manifest_transition_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF OLD.state<>NEW.state AND OLD.state IN('AUTHORIZED','SENDING') AND NEW.state IN('SENDING','CONSUMED') THEN
+  PERFORM 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id
+   AND o.operation_id=NEW.operation_id FOR UPDATE;
+  IF NOT(COALESCE(EXISTS(SELECT 1 FROM control_enterprise_invocations i JOIN control_enterprise_nonces n
+ ON n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.nonce=NEW.attempt_id
+ WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND i.state='EXECUTING'
+ AND i.document::jsonb->>'reservedNonce'=NEW.attempt_id AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=NEW.issued_at
+ AND i.expires_at>NEW.issued_at AND NEW.expires_at<=i.expires_at
+ AND i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id)
+ AND NOT EXISTS(SELECT 1 FROM control_operation_cancellations c WHERE c.tenant_id=i.tenant_id AND c.invocation_id=i.invocation_id)
+ AND NOT EXISTS(SELECT 1 FROM control_execution_leases l WHERE l.tenant_id=i.tenant_id AND l.invocation_id=i.invocation_id
+ AND l.fencing_token=NEW.attempt_id AND l.expires_at<=NEW.issued_at))
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_manifest_seals m WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id) AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=NEW.tenant_id AND v.operation_id=NEW.operation_id
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id) AND v.state='RECONCILIATION_REQUIRED'),false)) THEN RAISE EXCEPTION 'EFFECT_MANIFEST_SEALED or inactive execution authority'; END IF;
+ END IF; RETURN NEW;
+END $$;
 
-CREATE TABLE control_tool_hosts(tenant_id varchar(128) NOT NULL,device_id varchar(128) NOT NULL,
-    document text NOT NULL CHECK(octet_length(document)<=16384),PRIMARY KEY(tenant_id,device_id));
+CREATE FUNCTION public.control_effect_target_binding_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM control_effects e JOIN control_effect_generations g
+ ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id AND g.generation=1
+ WHERE e.tenant_id=NEW.tenant_id AND e.effect_id=NEW.effect_id AND e.operation_id=NEW.operation_id
+ AND e.route_id=NEW.route_id AND e.current_generation=1 AND g.state='AUTHORIZED'
+ AND g.issued_at=NEW.first_authorized_at)
+ OR (NEW.document::jsonb->>'header') IS DISTINCT FROM NEW.header
+ OR NEW.document::jsonb->>'retentionMs' IS NULL OR NEW.document::jsonb->>'reviewExpiresAtUnixMs' IS NULL
+ OR NEW.valid_until>LEAST(NEW.first_authorized_at+(NEW.document::jsonb->>'retentionMs')::bigint
+ -GREATEST(3600000,((NEW.document::jsonb->>'retentionMs')::bigint+9)/10),
+ (NEW.document::jsonb->>'reviewExpiresAtUnixMs')::bigint)
+ THEN RAISE EXCEPTION 'target key requires first immutable effect authorization'; END IF; RETURN NEW;
+END $$;
 
-GRANT SELECT,INSERT ON control_server_packages,control_server_documents TO toolgate_control_runtime;
 
-GRANT SELECT,INSERT,UPDATE ON control_tool_hosts TO toolgate_control_runtime;
 
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_server_deployments TO toolgate_control_runtime;
+CREATE FUNCTION public.control_epoch_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$ BEGIN IF NEW.tenant_id<>OLD.tenant_id OR NEW.revision<OLD.revision OR NEW.authorization_epoch<OLD.authorization_epoch OR NEW.directory_cache_generation<OLD.directory_cache_generation THEN RAISE EXCEPTION 'authorization cannot move backwards or change ownership'; END IF; RETURN NEW; END $$;
 
-CREATE TABLE control_tool_host_dispatches(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,host_id varchar(128) NOT NULL,
-    state varchar(16) NOT NULL CHECK(state IN ('QUEUED','CLAIMED','ADMITTED','REFUSED','FINISHED','EXPIRED')),
-    expires_at bigint NOT NULL CHECK(expires_at BETWEEN 0 AND 9007199254740991),created_at bigint NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),
-    document text NOT NULL CHECK(octet_length(document)<=16777216),PRIMARY KEY(tenant_id,invocation_id));
+CREATE FUNCTION public.control_execution_evidence_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'execution evidence is immutable';
+END;
+$$;
 
-CREATE INDEX control_tool_host_dispatches_queue ON control_tool_host_dispatches(tenant_id,host_id,state,created_at);
+CREATE FUNCTION public.control_execution_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$ BEGIN IF NEW.tenant_id<>OLD.tenant_id OR NEW.invocation_id<>OLD.invocation_id OR NEW.device_id<>OLD.device_id OR (NEW.fencing_token<>OLD.fencing_token AND NOT(EXISTS(SELECT 1 FROM control_operation_recoveries r JOIN control_enterprise_invocations i
+ ON i.tenant_id=r.tenant_id AND i.invocation_id=r.operation_id JOIN control_enterprise_nonces n
+ ON n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.nonce=NEW.fencing_token
+ WHERE r.tenant_id=OLD.tenant_id AND r.operation_id=OLD.invocation_id AND r.to_revision<=i.revision
+ AND i.state='EXECUTING' AND i.document::jsonb->>'reservedNonce'=NEW.fencing_token
+ AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND NEW.expires_at<=i.expires_at
+ AND (r.document::jsonb->>'lease')::jsonb->>'fencingToken'=OLD.fencing_token AND (r.document::jsonb->>'lease')::jsonb->>'deviceId'=OLD.device_id
+ AND ((r.document::jsonb->>'lease')::jsonb->>'expiresAt')::bigint=OLD.expires_at AND EXISTS(SELECT 1 FROM jsonb_array_elements_text(r.attempt_ids::jsonb) AS j(value) WHERE j.value=OLD.fencing_token)))) THEN RAISE EXCEPTION 'execution identity requires archived recovery proof'; END IF; RETURN NEW; END $$;
 
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_tool_host_dispatches TO toolgate_control_runtime;
+CREATE FUNCTION public.control_execution_reconciliation_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NEW.purpose='EXECUTION' AND (TG_OP='INSERT' OR (OLD.consumed_at IS NULL AND NEW.consumed_at IS NOT NULL)) THEN
+  PERFORM 1 FROM control_operations WHERE tenant_id=NEW.tenant_id AND operation_id=NEW.invocation_id FOR UPDATE;
+  IF EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=NEW.tenant_id AND v.operation_id=NEW.invocation_id
+ AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id) AND v.state='RECONCILIATION_REQUIRED')
+ OR EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=NEW.tenant_id AND g.operation_id=NEW.invocation_id AND g.state='CONFLICT') THEN RAISE EXCEPTION 'reconciliation fences new execution authority'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
 
-CREATE TABLE control_mcp_servers(tenant_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),
-    document text NOT NULL CHECK(octet_length(document)<=65536),PRIMARY KEY(tenant_id,slug));
+CREATE FUNCTION public.control_execution_report_qualification_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NEW.qualified_report THEN
+  PERFORM 1 FROM control_enterprise_nonces n
+  JOIN control_attempt_recovery_scopes s ON s.tenant_id=n.tenant_id AND s.operation_id=n.invocation_id AND s.attempt_id=n.nonce
+  JOIN control_enterprise_invocations i ON i.tenant_id=n.tenant_id AND i.invocation_id=n.invocation_id
+  JOIN control_endpoints ep ON ep.tenant_id=s.tenant_id AND ep.device_id=s.device_id
+  JOIN control_records d ON d.tenant_id=s.tenant_id AND d.kind='DEVICE' AND d.record_id=s.device_id
+  WHERE n.tenant_id=NEW.tenant_id AND n.invocation_id=NEW.invocation_id AND n.nonce=NEW.fencing_token
+  AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=NEW.recorded_at
+  AND s.device_id=i.document::jsonb->'evaluation'->'context'->>'deviceId'
+  AND ep.document::jsonb->>'state'='ACTIVE' AND d.document::jsonb->>'enabled'='true'
+  FOR SHARE OF ep,d;
+  IF NOT FOUND THEN RAISE EXCEPTION 'qualified report requires independent current admission trust'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
 
-CREATE TABLE control_mcp_snapshots(tenant_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),revision bigint NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),
-    document text NOT NULL CHECK(octet_length(document)<=8388608),PRIMARY KEY(tenant_id,slug,revision));
+CREATE FUNCTION public.control_fleet_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' OR OLD.kind = 'RELEASE' OR NEW.tenant_id <> OLD.tenant_id
+      OR NEW.kind <> OLD.kind OR NEW.record_id <> OLD.record_id OR NEW.revision <> OLD.revision + 1 THEN
+    RAISE EXCEPTION 'fleet immutable identity or generation violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
-CREATE TABLE control_mcp_approvals(tenant_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),sequence bigint NOT NULL CHECK(sequence BETWEEN 1 AND 9007199254740991),
-    document text NOT NULL CHECK(octet_length(document)<=1048576),PRIMARY KEY(tenant_id,slug,sequence));
-
-CREATE TABLE control_mcp_scans(tenant_id varchar(128) NOT NULL,scan_id varchar(128) NOT NULL,slug varchar(31) NOT NULL CHECK(slug ~ '^[a-z][a-z0-9-]{1,30}$'),host_id varchar(128) NOT NULL,
-    state varchar(16) NOT NULL CHECK(state IN ('QUEUED','CLAIMED','ADMITTED','FINISHED','FAILED','EXPIRED')),
-    deadline bigint NOT NULL CHECK(deadline BETWEEN 0 AND 9007199254740991),created_at bigint NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),
-    document text NOT NULL CHECK(octet_length(document)<=65536),PRIMARY KEY(tenant_id,scan_id));
-
-CREATE INDEX control_mcp_scans_queue ON control_mcp_scans(tenant_id,host_id,state,created_at);
-
-CREATE INDEX control_mcp_scans_server ON control_mcp_scans(tenant_id,slug,state);
-
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_mcp_servers,control_mcp_scans TO toolgate_control_runtime;
-
-GRANT SELECT,INSERT,DELETE ON control_mcp_snapshots TO toolgate_control_runtime;
-
-GRANT SELECT,INSERT ON control_mcp_approvals TO toolgate_control_runtime;
-
-CREATE FUNCTION control_invalidate_directory_cache() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.control_invalidate_directory_cache() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
     IF TG_OP <> 'INSERT' THEN
         UPDATE public.control_tenant_authority SET directory_cache_generation=directory_cache_generation+1 WHERE tenant_id=OLD.tenant_id;
@@ -595,131 +531,305 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER control_records_cache_generation AFTER INSERT OR UPDATE OR DELETE ON control_records
-FOR EACH ROW EXECUTE FUNCTION control_invalidate_directory_cache();
 
-CREATE TRIGGER control_settings_cache_generation AFTER INSERT OR UPDATE OR DELETE ON control_server_settings
-FOR EACH ROW EXECUTE FUNCTION control_invalidate_directory_cache();
 
-CREATE TABLE control_console_devices (
- tenant_id text NOT NULL, session_id text NOT NULL, user_id text NOT NULL,
- device_id text NOT NULL, nonce_digest text NOT NULL, code_digest text NOT NULL,
- csr text NOT NULL, fingerprint text NOT NULL,
- expires_at bigint NOT NULL, verified_at bigint NOT NULL DEFAULT 0,
- PRIMARY KEY(tenant_id,session_id)
-);
+CREATE FUNCTION public.control_invocation_recovery_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$ BEGIN IF OLD.state IN('FAILED','EXPIRED','OUTCOME_UNKNOWN','CANCELLED','SUCCEEDED','PARTIAL') AND NEW.state IN('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING') AND NOT(NEW.state='QUEUED' AND NEW.revision=OLD.revision+1 AND NEW.tenant_id=OLD.tenant_id AND NEW.invocation_id=OLD.invocation_id AND NEW.request_digest=OLD.request_digest AND NEW.created_at=OLD.created_at AND NEW.expires_at=OLD.expires_at AND NEW.authorization_epoch=OLD.authorization_epoch
+ AND NEW.document::jsonb->>'state'=NEW.state AND (NEW.document::jsonb->>'revision')::bigint=NEW.revision AND (NEW.document::jsonb->>'expiresAtUnixMs')::bigint=NEW.expires_at
+ AND NEW.document::jsonb->'evaluation' IS NOT DISTINCT FROM OLD.document::jsonb->'evaluation'
+ AND NEW.document::jsonb->>'reservedNonce' IS NULL AND NEW.document::jsonb->>'resultDigest' IS NULL
+ AND NEW.document::jsonb->'completedResources'='[]'::jsonb
+ AND EXISTS(SELECT 1 FROM control_operation_recoveries r WHERE r.tenant_id=OLD.tenant_id
+ AND r.operation_id=OLD.invocation_id AND r.from_revision=OLD.revision AND r.to_revision=NEW.revision
+ AND r.original_deadline=OLD.expires_at AND r.document::jsonb->>'invocation'=OLD.document)) THEN RAISE EXCEPTION 'terminal invocation requires positive recovery proof'; END IF; RETURN NEW; END $$;
 
-CREATE INDEX control_console_devices_expiry ON control_console_devices(tenant_id,expires_at);
-
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_console_devices TO toolgate_control_runtime;
-
-CREATE TABLE control_invocation_event_streams(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
-    last_cursor bigint NOT NULL CHECK(last_cursor BETWEEN 0 AND 9007199254740991),
-    event_count integer NOT NULL CHECK(event_count>=0),byte_count bigint NOT NULL CHECK(byte_count>=0),
-    dropped_frames bigint NOT NULL CHECK(dropped_frames>=0),refused_frames bigint NOT NULL CHECK(refused_frames>=0),
-    retain_until bigint NOT NULL CHECK(retain_until BETWEEN 0 AND 9007199254740991),purged_at bigint CHECK(purged_at BETWEEN 0 AND 9007199254740991),
-    PRIMARY KEY(tenant_id,invocation_id),
-    FOREIGN KEY(tenant_id,invocation_id) REFERENCES control_enterprise_invocations(tenant_id,invocation_id));
-
-CREATE INDEX control_invocation_event_stream_retention ON control_invocation_event_streams(tenant_id,retain_until) WHERE purged_at IS NULL;
-
-CREATE TABLE control_invocation_events(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
-    event_cursor bigint NOT NULL CHECK(event_cursor BETWEEN 1 AND 9007199254740991),
-    source varchar(16) NOT NULL CHECK(source IN('EXECUTOR','PLATFORM')),kind varchar(16) NOT NULL CHECK(kind IN('LOG','PROGRESS','INPUT_REQUEST','STATE','RESULT')),
-    attempt integer CHECK(attempt BETWEEN 1 AND 16),fencing_token varchar(128),sequence integer CHECK(sequence BETWEEN 1 AND 2147483647),
-    recorded_at bigint NOT NULL CHECK(recorded_at BETWEEN 0 AND 9007199254740991),document text NOT NULL CHECK(octet_length(document)<=131072),
-    PRIMARY KEY(tenant_id,invocation_id,event_cursor),
-    FOREIGN KEY(tenant_id,invocation_id) REFERENCES control_invocation_event_streams(tenant_id,invocation_id),
-    CHECK((source='EXECUTOR')=(fencing_token IS NOT NULL AND attempt IS NOT NULL)),
-    CHECK(sequence IS NULL OR source='EXECUTOR'));
-
-CREATE UNIQUE INDEX control_invocation_event_identity ON control_invocation_events(tenant_id,invocation_id,fencing_token,sequence) WHERE sequence IS NOT NULL;
-
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_invocation_event_streams,control_invocation_events TO toolgate_control_runtime;
-
--- Operator Insights (ADR 031). Metadata only, never tool arguments, outputs or secrets. Deliberately outside tenant
--- capacity accounting: Insights rows must never make a ledger write fail; Insights retention and quota bound them.
-CREATE TABLE control_insights_facts(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
-    fact_seq bigint NOT NULL CHECK(fact_seq BETWEEN 1 AND 9007199254740991),revision bigint NOT NULL,
-    from_state varchar(32),to_state varchar(32) NOT NULL,occurred_at bigint NOT NULL CHECK(occurred_at BETWEEN 0 AND 9007199254740991),
-    execution_id char(35) CHECK(execution_id ~ '^ex-[0-9a-f]{32}$'),detail text NOT NULL CHECK(octet_length(detail)<=8192),
-    projected_at bigint,PRIMARY KEY(tenant_id,invocation_id,fact_seq));
-CREATE INDEX control_insights_facts_unprojected ON control_insights_facts(tenant_id,invocation_id,fact_seq) WHERE projected_at IS NULL;
-CREATE TABLE control_insights_checkpoints(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
-    last_fact_seq bigint NOT NULL CHECK(last_fact_seq>=0),contribution text NOT NULL CHECK(octet_length(contribution)<=8192),
-    final_at bigint,PRIMARY KEY(tenant_id,invocation_id));
-CREATE TABLE control_insights_invocations(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
-    tool_id varchar(256) NOT NULL,action varchar(256) NOT NULL,client_id varchar(128),user_id varchar(128),agent_id varchar(128),
-    tool_call_id varchar(128),session_id varchar(128),agent_run_id varchar(128),parent_invocation_id varchar(128),outcome varchar(32) NOT NULL,error_category varchar(32),
-    attempts integer NOT NULL CHECK(attempts BETWEEN 0 AND 64),accepted_at bigint NOT NULL,approval_requested_at bigint,approval_resolved_at bigint,
-    queued_at bigint,first_started_at bigint,terminal_at bigint,approval_ms bigint,queue_ms bigint,execution_ms bigint,end_to_end_ms bigint,
-    partial_coverage boolean NOT NULL,span_state varchar(16) CHECK(span_state IN('RETAINED','SAMPLED_OUT','DROPPED')),PRIMARY KEY(tenant_id,invocation_id));
-CREATE INDEX control_insights_invocations_accepted ON control_insights_invocations(tenant_id,accepted_at);
-CREATE INDEX control_insights_invocations_tool_call ON control_insights_invocations(tenant_id,tool_call_id) WHERE tool_call_id IS NOT NULL;
-CREATE INDEX control_insights_invocations_session ON control_insights_invocations(tenant_id,session_id) WHERE session_id IS NOT NULL;
-CREATE INDEX control_insights_invocations_run ON control_insights_invocations(tenant_id,agent_run_id) WHERE agent_run_id IS NOT NULL;
-CREATE INDEX control_insights_invocations_parent ON control_insights_invocations(tenant_id,parent_invocation_id) WHERE parent_invocation_id IS NOT NULL;
-CREATE TABLE control_insights_attempts(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,
-    attempt_number integer NOT NULL CHECK(attempt_number BETWEEN 1 AND 64),execution_id char(35) CHECK(execution_id ~ '^ex-[0-9a-f]{32}$'),
-    executor_id varchar(128),started_at bigint,ended_at bigint,outcome varchar(32),duration_ms bigint,
-    PRIMARY KEY(tenant_id,invocation_id,attempt_number));
-CREATE INDEX control_insights_attempts_execution ON control_insights_attempts(tenant_id,execution_id) WHERE execution_id IS NOT NULL;
-CREATE TABLE control_insights_cells(tenant_id varchar(128) NOT NULL,series varchar(8) NOT NULL CHECK(series IN('TOOL','CLIENT')),
-    granularity varchar(8) NOT NULL CHECK(granularity IN('MINUTE','HOUR','DAY')),bucket_start bigint NOT NULL,dim varchar(256) NOT NULL,
-    outcome varchar(32) NOT NULL,calls bigint NOT NULL CHECK(calls>=0),duration_count bigint NOT NULL CHECK(duration_count>=0),
-    duration_sum bigint NOT NULL CHECK(duration_sum>=0),histogram text NOT NULL CHECK(octet_length(histogram)<=1024),
-    PRIMARY KEY(tenant_id,series,granularity,bucket_start,dim,outcome));
-CREATE TABLE control_insights_admissions(tenant_id varchar(128) NOT NULL,bucket_start bigint NOT NULL,tool_id varchar(256) NOT NULL,
-    category varchar(32) NOT NULL,count bigint NOT NULL CHECK(count>=0),PRIMARY KEY(tenant_id,bucket_start,tool_id,category));
-CREATE TABLE control_insights_gateway_epochs(tenant_id varchar(128) NOT NULL,gateway_id varchar(128) NOT NULL,epoch varchar(128) NOT NULL,
-    last_sequence bigint NOT NULL CHECK(last_sequence>=0),missing bigint NOT NULL CHECK(missing>=0),dropped bigint NOT NULL CHECK(dropped>=0),
-    final boolean NOT NULL,last_seen bigint NOT NULL,PRIMARY KEY(tenant_id,gateway_id,epoch));
-CREATE TABLE control_insights_tenant_state(tenant_id varchar(128) NOT NULL,collecting_since bigint NOT NULL,
-    summaries_suspended_since bigint,summary_rows bigint NOT NULL DEFAULT 0 CHECK(summary_rows>=0),metrics_exported_through bigint,PRIMARY KEY(tenant_id));
-CREATE TABLE control_insights_spans(tenant_id varchar(128) NOT NULL,invocation_id varchar(128) NOT NULL,span_id char(16) NOT NULL CHECK(span_id ~ '^[0-9a-f]{16}$'),
-    trace_id char(32) NOT NULL CHECK(trace_id ~ '^[0-9a-f]{32}$'),parent_span_id char(16) CHECK(parent_span_id ~ '^[0-9a-f]{16}$'),name varchar(32) NOT NULL,
-    source varchar(16) NOT NULL CHECK(source IN('GATEWAY','TOOL_HOST','CLIENT')),execution_id char(35) CHECK(execution_id ~ '^ex-[0-9a-f]{32}$'),
-    start_at bigint NOT NULL,duration_ms bigint NOT NULL CHECK(duration_ms BETWEEN 0 AND 86400000),status varchar(8) NOT NULL CHECK(status IN('OK','ERROR')),
-    route_id varchar(128),http_status integer CHECK(http_status BETWEEN 100 AND 599),error_code varchar(64),stored_at bigint NOT NULL,
-    PRIMARY KEY(tenant_id,invocation_id,span_id));
-CREATE INDEX control_insights_spans_stored ON control_insights_spans(tenant_id,stored_at);
-GRANT SELECT,INSERT,UPDATE,DELETE ON control_insights_facts,control_insights_checkpoints,control_insights_invocations,control_insights_attempts,
-    control_insights_cells,control_insights_admissions,control_insights_gateway_epochs,control_insights_tenant_state,control_insights_spans TO toolgate_control_runtime;
-
-CREATE TABLE control_package_provisioning(tenant_id varchar(128) NOT NULL,profile_id varchar(128) NOT NULL,
-    generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),profile_digest char(71) NOT NULL CHECK(profile_digest ~ '^sha256:[a-f0-9]{64}$'),
-    document text NOT NULL CHECK(octet_length(document)<=262144),PRIMARY KEY(tenant_id,profile_id));
-
-GRANT SELECT,INSERT,UPDATE ON control_package_provisioning TO toolgate_control_runtime;
-
--- Registry access is available only through narrow helpers to tenant runtime.
-CREATE TABLE control_tenant_initializations(
-    tenant_id varchar(128) PRIMARY KEY REFERENCES control_tenants(tenant_id),
-    version integer NOT NULL CHECK(version=1),effective_digest char(64) NOT NULL CHECK(effective_digest ~ '^[a-f0-9]{64}$'),
-    provenance text NOT NULL CHECK(octet_length(provenance)<=65536),completed_at bigint NOT NULL CHECK(completed_at>=0)
-);
-GRANT SELECT ON control_tenant_initializations TO toolgate_control_runtime;
-GRANT SELECT,INSERT ON control_tenant_initializations TO toolgate_control_platform;
-CREATE TRIGGER control_tenant_initializations_immutable BEFORE UPDATE OR DELETE ON control_tenant_initializations
-FOR EACH ROW EXECUTE FUNCTION control_credential_immutable();
-
--- Fixed search paths and qualified tables prevent caller-controlled object resolution.
-CREATE FUNCTION control_tenant_admit(tenant text, write_lock boolean) RETURNS boolean
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
-DECLARE state text;
+CREATE FUNCTION public.control_invocation_result_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
-    IF tenant IS DISTINCT FROM NULLIF(current_setting('app.tenant_id',true),'') THEN RETURN false; END IF;
-    IF write_lock THEN
-        SELECT status INTO state FROM public.control_tenants WHERE tenant_id=tenant FOR SHARE;
-    ELSE
-        SELECT status INTO state FROM public.control_tenants WHERE tenant_id=tenant;
+    IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'invocation results are purged, never deleted'; END IF;
+    IF OLD.purged_at IS NOT NULL OR NEW.payload IS NOT NULL OR NEW.purged_at IS NULL
+       OR NEW.tenant_id <> OLD.tenant_id OR NEW.invocation_id <> OLD.invocation_id
+       OR NEW.fencing_nonce <> OLD.fencing_nonce OR NEW.result_digest <> OLD.result_digest
+       OR NEW.byte_length <> OLD.byte_length OR NEW.created_at <> OLD.created_at
+       OR NEW.retain_until <> OLD.retain_until THEN
+        RAISE EXCEPTION 'invocation result is immutable except for its purge';
     END IF;
-    RETURN COALESCE(state='ACTIVE',false);
-END;
-$$;
+    RETURN NEW;
+END $$;
 
-CREATE FUNCTION control_tenant_access(write_lock boolean) RETURNS boolean
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE FUNCTION public.control_nonce_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NEW.tenant_id<>OLD.tenant_id OR NEW.nonce<>OLD.nonce OR NEW.invocation_id<>OLD.invocation_id
+ OR NEW.evaluation_digest<>OLD.evaluation_digest OR NEW.authorization_epoch<>OLD.authorization_epoch
+ OR NEW.issued_at<>OLD.issued_at OR NEW.expires_at<>OLD.expires_at OR NEW.purpose<>OLD.purpose
+ OR (OLD.consumed_at IS NOT NULL AND NEW.consumed_at IS DISTINCT FROM OLD.consumed_at)
+ OR (NEW.consumed_at IS NOT NULL AND (NEW.consumed_at<OLD.issued_at OR NEW.consumed_at>=OLD.expires_at))
+ OR (NEW.purpose<>'SERVICE' AND OLD.consumed_at IS NULL AND NEW.consumed_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM control_operation_attempts a WHERE a.tenant_id=NEW.tenant_id AND a.attempt_id=NEW.nonce))
+ OR (OLD.consumed_at IS NULL AND NEW.consumed_at IS NOT NULL AND EXISTS(SELECT 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id AND o.operation_id=NEW.invocation_id AND o.state='FAILED'))
+ THEN RAISE EXCEPTION 'nonce identity and consumption are immutable'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_operation_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'operation is retained'; END IF;
+ IF NEW.tenant_id<>OLD.tenant_id OR NEW.operation_id<>OLD.operation_id OR NEW.request_digest<>OLD.request_digest
+ OR NEW.created_at<>OLD.created_at OR NEW.legacy<>OLD.legacy OR NEW.revision<>OLD.revision+1
+ OR (OLD.state='FAILED' AND NEW.state<>'FAILED' AND NOT(NEW.state='RUNNING' AND EXISTS(SELECT 1 FROM control_operation_recoveries r JOIN control_enterprise_invocations i
+ ON i.tenant_id=r.tenant_id AND i.invocation_id=r.operation_id WHERE r.tenant_id=OLD.tenant_id AND r.operation_id=OLD.operation_id
+ AND r.operation_revision=OLD.revision AND i.revision=r.to_revision AND i.state='QUEUED' AND i.expires_at=r.original_deadline))) THEN RAISE EXCEPTION 'operation identity or finality is immutable'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_operation_outcome_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+ BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document) WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.control_operation_outcome_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+ BEGIN PERFORM 1 FROM control_operations o WHERE o.tenant_id=NEW.tenant_id AND o.operation_id=NEW.operation_id FOR UPDATE;
+ IF NOT(COALESCE(EXISTS(SELECT 1 FROM control_enterprise_invocations i WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND i.revision=NEW.invocation_revision)
+ AND NEW.revision=COALESCE((SELECT max(p.revision) FROM control_operation_outcomes p WHERE p.tenant_id=NEW.tenant_id AND p.operation_id=NEW.operation_id),0)+1
+ AND NEW.document::jsonb->>'operationId'=NEW.operation_id AND NEW.document::jsonb->>'state'=NEW.state
+ AND (NEW.document::jsonb->>'revision')::bigint=NEW.revision AND (NEW.document::jsonb->>'updatedAtUnixMs')::bigint=NEW.recorded_at
+ AND NEW.document::jsonb->'retryable'='false'::jsonb
+ AND ((NEW.state NOT IN('SUCCEEDED','PARTIAL','FAILED') AND NEW.document::jsonb->'finalized'='false'::jsonb)
+ OR (NEW.state IN('SUCCEEDED','PARTIAL','FAILED') AND NEW.document::jsonb->'finalized'='true'::jsonb
+ AND NEW.document::jsonb->'journalComplete'='true'::jsonb AND (NEW.document::jsonb->>'unresolvedEffectCount')::bigint=0 AND (NEW.document::jsonb->>'unsettledAttemptCount')::bigint=0 AND EXISTS(SELECT 1 FROM control_enterprise_invocations i JOIN control_operations o ON o.tenant_id=i.tenant_id AND o.operation_id=i.invocation_id
+ WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND NOT o.legacy
+ AND i.state NOT IN('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING')
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n LEFT JOIN control_operation_attempts a ON a.tenant_id=n.tenant_id AND a.attempt_id=n.nonce
+ WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE'
+ AND (n.purpose<>'EXECUTION' OR a.attempt_id IS NULL OR a.operation_id<>n.invocation_id OR a.evaluation_digest<>n.evaluation_digest
+ OR a.authorization_epoch<>n.authorization_epoch OR a.issued_at<>n.issued_at OR a.expires_at<>n.expires_at
+ OR (n.consumed_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM control_attempt_settlements s WHERE s.tenant_id=n.tenant_id AND s.operation_id=n.invocation_id AND s.attempt_id=n.nonce) AND NOT EXISTS(SELECT 1 FROM control_attempt_reviews q WHERE q.tenant_id=n.tenant_id AND q.operation_id=n.invocation_id AND q.attempt_id=n.nonce))))
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=i.tenant_id AND g.operation_id=i.invocation_id AND
+ ((g.state NOT IN('RELEASED','COMPLETED','FAILED') AND NOT(g.state='AMBIGUOUS' AND EXISTS(SELECT 1 FROM control_effect_target_bindings b
+ JOIN control_effect_intents intent ON intent.tenant_id=b.tenant_id AND intent.effect_id=b.effect_id AND intent.profile_digest=b.profile_digest
+ JOIN control_effect_evidence witness ON witness.tenant_id=b.tenant_id AND witness.effect_id=b.effect_id
+ WHERE b.tenant_id=g.tenant_id AND b.effect_id=g.effect_id AND witness.generation=g.generation
+ AND b.document::jsonb->>'statusRouteId' IS NOT NULL AND substr(witness.source,1,14)='TARGET_LOOKUP:' AND length(witness.source)=78
+ AND NOT EXISTS(SELECT 1 FROM control_effect_evidence other WHERE other.tenant_id=witness.tenant_id AND other.effect_id=witness.effect_id
+ AND other.generation=witness.generation AND substr(other.source,1,14)='TARGET_LOOKUP:'
+ AND (other.source<>witness.source OR other.outcome<>witness.outcome OR other.result_digest<>witness.result_digest))))) OR (g.state IN('COMPLETED','FAILED') AND NOT EXISTS(
+ SELECT 1 FROM control_effect_evidence e WHERE e.tenant_id=g.tenant_id AND e.effect_id=g.effect_id AND e.generation=g.generation
+ AND e.source='TARGET:'||g.consumer AND e.outcome=g.state))))
+ AND (NEW.state<>'SUCCEEDED' OR EXISTS(SELECT 1 FROM control_attempt_snapshots h
+ WHERE h.tenant_id=i.tenant_id AND h.operation_id=i.invocation_id
+ AND (EXISTS(SELECT 1 FROM control_attempt_settlements s WHERE s.tenant_id=h.tenant_id AND s.operation_id=h.operation_id AND s.attempt_id=h.attempt_id)
+ OR EXISTS(SELECT 1 FROM control_attempt_reviews q WHERE q.tenant_id=h.tenant_id AND q.operation_id=h.operation_id AND q.attempt_id=h.attempt_id)) AND (h.state='SUCCEEDED' OR EXISTS(SELECT 1 FROM control_execution_evidence e WHERE e.tenant_id=h.tenant_id
+ AND e.invocation_id=h.operation_id AND e.fencing_token=h.attempt_id AND e.qualified_report=true
+ AND e.document::jsonb->>'outcome'='COMPLETED' AND e.document::jsonb->'result'->>'kind'='RESULT' AND e.document::jsonb->'result'->>'resultType'='complete' AND e.document::jsonb->'result'->>'isError'='false'))
+ AND h.revision=(SELECT max(x.revision) FROM control_attempt_snapshots x WHERE x.tenant_id=h.tenant_id AND x.attempt_id=h.attempt_id)))
+)))
+ AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes p WHERE p.tenant_id=NEW.tenant_id AND p.operation_id=NEW.operation_id
+ AND p.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=p.tenant_id AND x.operation_id=p.operation_id)
+ AND ((p.state='RECONCILIATION_REQUIRED' AND NEW.state<>'RECONCILIATION_REQUIRED')
+ OR (p.state IN('SUCCEEDED','PARTIAL','FAILED') AND NEW.state<>p.state AND NEW.state<>'RECONCILIATION_REQUIRED'
+ AND NOT(p.state='FAILED' AND NEW.state='RUNNING' AND EXISTS(SELECT 1 FROM control_operation_recoveries r
+ WHERE r.tenant_id=p.tenant_id AND r.operation_id=p.operation_id AND r.to_revision>p.invocation_revision AND r.to_revision<=NEW.invocation_revision))))),false)) THEN RAISE EXCEPTION 'derived outcome requires complete evidence and immutable finality'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.control_operation_recovery_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN
+ UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document)
+ WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_operation_recovery_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'operation recovery is immutable'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM control_enterprise_invocations i JOIN control_operations o
+ ON o.tenant_id=i.tenant_id AND o.operation_id=i.invocation_id
+ WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id
+ AND i.revision=NEW.from_revision AND o.revision=NEW.operation_revision AND NOT o.legacy
+ AND i.state IN('FAILED','EXPIRED','OUTCOME_UNKNOWN') AND o.state IN('FAILED','OUTCOME_UNKNOWN')
+ AND i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority WHERE tenant_id=i.tenant_id)
+ AND i.expires_at=NEW.original_deadline AND i.expires_at>NEW.created_at
+ AND i.document::jsonb->>'reservedNonce' IS NOT DISTINCT FROM NEW.previous_nonce
+ AND NEW.document::jsonb->>'invocation'=i.document
+ AND NEW.document::jsonb->'attemptIds'=NEW.attempt_ids::jsonb
+ AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.attempt_ids::jsonb) j(value) WHERE jsonb_typeof(j.value)<>'string')
+ AND NOT EXISTS(SELECT 1 FROM control_operation_cancellations c WHERE c.tenant_id=i.tenant_id AND c.invocation_id=i.invocation_id)
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_approvals a WHERE a.tenant_id=i.tenant_id AND a.invocation_id=i.invocation_id AND a.approval_type='OPERATION' AND (a.document::jsonb->>'state') IN('DENIED','REVOKED'))
+ AND NOT EXISTS(SELECT 1 FROM control_business_keys k WHERE k.tenant_id=i.tenant_id AND k.invocation_id=i.invocation_id
+ AND (k.tombstoned_at IS NOT NULL OR k.retain_until<=NEW.created_at))
+ AND (i.document::jsonb->>'reservedNonce' IS NULL OR EXISTS(SELECT 1 FROM control_operation_attempts a
+ WHERE a.tenant_id=i.tenant_id AND a.operation_id=i.invocation_id AND a.attempt_id=i.document::jsonb->>'reservedNonce'))
+ AND (SELECT count(*) FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE')<64
+ AND (SELECT count(*) FROM control_effect_generations g WHERE g.tenant_id=i.tenant_id AND g.operation_id=i.invocation_id)<=4096
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n LEFT JOIN control_operation_attempts a
+ ON a.tenant_id=n.tenant_id AND a.attempt_id=n.nonce WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id
+ AND n.purpose<>'SERVICE' AND (n.purpose<>'EXECUTION' OR NOT(a.attempt_id IS NOT NULL AND a.operation_id=n.invocation_id
+ AND a.evaluation_digest=n.evaluation_digest AND a.authorization_epoch=n.authorization_epoch
+ AND a.issued_at=n.issued_at AND a.expires_at=n.expires_at)
+ OR (n.consumed_at IS NULL AND n.expires_at>NEW.created_at)
+ OR (n.consumed_at IS NOT NULL AND n.consumed_at>NEW.created_at)))
+ AND (SELECT count(*) FROM jsonb_array_elements_text(NEW.attempt_ids::jsonb) AS j(value))=(SELECT count(*) FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE')
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE'
+ AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements_text(NEW.attempt_ids::jsonb) AS j(value) WHERE j.value=n.nonce))
+ AND (
+ (NEW.proof='NEVER_CONSUMED' AND o.state='FAILED'
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE' AND n.consumed_at IS NOT NULL)
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=i.tenant_id AND g.operation_id=i.invocation_id))
+ OR (NEW.proof='QUALIFIED_BROKER_NO_WRITE'
+ AND EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE' AND n.consumed_at IS NOT NULL)
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE' AND n.consumed_at IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_recovery_scopes s WHERE s.tenant_id=n.tenant_id AND s.operation_id=n.invocation_id AND s.attempt_id=n.nonce
+ AND s.device_id=i.document::jsonb->'evaluation'->'context'->>'deviceId'))
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g JOIN control_enterprise_nonces n
+ ON n.tenant_id=g.tenant_id AND n.nonce=g.attempt_id
+ WHERE g.tenant_id=i.tenant_id AND g.operation_id=i.invocation_id AND (g.state<>'RELEASED' OR n.consumed_at IS NULL)))
+ OR (NEW.proof='TARGET_DEDUPLICATION'
+ AND EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE' AND n.consumed_at IS NOT NULL)
+ AND NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n WHERE n.tenant_id=i.tenant_id AND n.invocation_id=i.invocation_id AND n.purpose<>'SERVICE' AND n.consumed_at IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM control_attempt_recovery_scopes s WHERE s.tenant_id=n.tenant_id AND s.operation_id=n.invocation_id AND s.attempt_id=n.nonce
+ AND s.device_id=i.document::jsonb->'evaluation'->'context'->>'deviceId'))
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations g JOIN control_enterprise_nonces n
+ ON n.tenant_id=g.tenant_id AND n.nonce=g.attempt_id
+ WHERE g.tenant_id=i.tenant_id AND g.operation_id=i.invocation_id AND (g.state NOT IN('RELEASED','AMBIGUOUS') OR n.consumed_at IS NULL))
+ AND jsonb_typeof(NEW.document::jsonb->'targetPlan')='array'
+ AND (SELECT count(*) FROM jsonb_array_elements(NEW.document::jsonb->'targetPlan') p(value)) BETWEEN 1 AND 256
+ AND (SELECT count(*) FROM jsonb_array_elements(NEW.document::jsonb->'targetPlan') p(value))=(SELECT count(*) FROM control_effects e WHERE e.tenant_id=i.tenant_id AND e.operation_id=i.invocation_id)
+ AND EXISTS(SELECT 1 FROM control_effect_generations g JOIN control_effects e ON e.tenant_id=g.tenant_id AND e.effect_id=g.effect_id WHERE e.tenant_id=i.tenant_id AND e.operation_id=i.invocation_id AND g.generation=e.current_generation AND g.state='AMBIGUOUS')
+ AND NOT EXISTS(SELECT 1 FROM control_effects e JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id AND g.generation=e.current_generation
+ WHERE e.tenant_id=i.tenant_id AND e.operation_id=i.invocation_id AND NOT EXISTS(SELECT 1 FROM control_effect_target_bindings b
+ WHERE b.tenant_id=e.tenant_id AND b.effect_id=e.effect_id AND b.valid_until>NEW.created_at
+ AND EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.document::jsonb->'targetPlan') p(value) JOIN control_configuration_changes c ON c.tenant_id=e.tenant_id AND c.change_id=p.value->>'reviewId'
+ WHERE p.value->>'effectId'=e.effect_id AND (p.value->>'generation')::bigint=e.current_generation AND p.value->>'requestDigest'=e.request_digest
+ AND p.value->>'profileDigest'=b.profile_digest AND p.value->>'guaranteeDigest'=b.guarantee_digest
+ AND c.document::jsonb->>'state'='APPLIED' AND (c.document::jsonb->>'requiredReviews')::bigint>=1 AND (SELECT count(*) FROM jsonb_array_elements(c.document::jsonb->'reviews') cr(value) WHERE cr.value->>'reviewerUserId'<>c.document::jsonb->>'requesterUserId')>=(c.document::jsonb->>'requiredReviews')::bigint)))
+))
+) THEN RAISE EXCEPTION 'positive complete Control recovery proof required'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_original_deadline_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN IF NEW.expires_at<>OLD.expires_at AND
+ (EXISTS(SELECT 1 FROM control_operation_attempts a WHERE a.tenant_id=OLD.tenant_id AND a.operation_id=OLD.invocation_id)
+ OR EXISTS(SELECT 1 FROM control_operation_recoveries r WHERE r.tenant_id=OLD.tenant_id AND r.operation_id=OLD.invocation_id)) THEN RAISE EXCEPTION 'admitted operation deadline is immutable'; END IF;RETURN NEW;END $$;
+
+
+
+CREATE FUNCTION public.control_reconciliation_history_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'reconciliation history is retained'; END IF;
+ IF NOT(COALESCE(NEW.document::jsonb->>'id'=NEW.reconciliation_id AND (NEW.document::jsonb->>'revision')::bigint=NEW.revision AND NEW.revision BETWEEN 1 AND 9007199254740991 AND length(NEW.document::jsonb->>'requesterUserId') BETWEEN 1 AND 128 AND EXISTS(SELECT 1 FROM control_enterprise_invocations i WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.document::jsonb->>'invocationId'),false)) THEN RAISE EXCEPTION 'invalid reconciliation identity'; END IF;
+ IF TG_OP='INSERT' THEN
+  IF NOT(COALESCE(NEW.revision=1 AND NEW.document::jsonb->>'state'='PENDING' AND NEW.document::jsonb->>'reviewerUserId' IS NULL,false)) THEN RAISE EXCEPTION 'reconciliation must begin pending'; END IF;
+ ELSE
+  IF NOT(COALESCE(NEW.tenant_id=OLD.tenant_id AND NEW.reconciliation_id=OLD.reconciliation_id AND NEW.revision=OLD.revision+1 AND OLD.document::jsonb->>'state'='PENDING' AND NEW.document::jsonb->>'state' IN('APPLIED','DENIED') AND length(NEW.document::jsonb->>'reviewerUserId') BETWEEN 1 AND 128 AND NEW.document::jsonb->>'id' IS NOT DISTINCT FROM OLD.document::jsonb->>'id' AND NEW.document::jsonb->>'invocationId' IS NOT DISTINCT FROM OLD.document::jsonb->>'invocationId' AND NEW.document::jsonb->>'requesterUserId' IS NOT DISTINCT FROM OLD.document::jsonb->>'requesterUserId' AND NEW.document::jsonb->>'requestDigest' IS NOT DISTINCT FROM OLD.document::jsonb->>'requestDigest' AND NEW.document::jsonb->'request' IS NOT DISTINCT FROM OLD.document::jsonb->'request',false)) THEN RAISE EXCEPTION 'reconciliation proposal and decision are immutable'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_recovery_scope_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN
+ UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,
+ stored_bytes=stored_bytes+octet_length(NEW.device_id||NEW.pool_id||NEW.image_digest||NEW.runtime_digest||NEW.descriptor_digest||NEW.profile_digest)
+ WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_recovery_scope_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP<>'INSERT' THEN RAISE EXCEPTION 'recovery scope is immutable'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM control_enterprise_nonces n JOIN control_enterprise_invocations i
+ ON i.tenant_id=n.tenant_id AND i.invocation_id=n.invocation_id
+ WHERE n.tenant_id=NEW.tenant_id AND n.invocation_id=NEW.operation_id AND n.nonce=NEW.attempt_id
+ AND n.purpose='EXECUTION' AND n.consumed_at IS NULL AND i.state='RESERVED'
+ AND i.document::jsonb->>'reservedNonce'=NEW.attempt_id
+ AND i.document::jsonb->'evaluation'->'context'->>'deviceId'=NEW.device_id)
+ THEN RAISE EXCEPTION 'recovery scope must bind fresh Control admission'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_review_owners_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+octet_length(NEW.document) WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+CREATE FUNCTION public.control_review_owners_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF NOT EXISTS(SELECT 1 FROM control_enterprise_invocations i JOIN control_tenant_authority t ON t.tenant_id=i.tenant_id
+ WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND i.revision=1 AND t.revision=NEW.directory_revision AND (i.document::jsonb->'evaluation'->>'authorityRevision')::bigint=NEW.directory_revision
+ AND NEW.document::jsonb->>'format'='toolgate-review-owners-v1' AND NEW.document::jsonb->>'operationId'=NEW.operation_id
+ AND jsonb_typeof(NEW.document::jsonb->'owners')='array' AND jsonb_array_length(NEW.document::jsonb->'owners') BETWEEN 1 AND 66 AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(NEW.document::jsonb->'owners') j WHERE jsonb_typeof(j.value)<>'string') AND NOT EXISTS(SELECT 1 FROM (SELECT i.document::jsonb->'evaluation'->'context'->>'userId' AS principal WHERE i.document::jsonb->'evaluation'->'context'->>'userId' IS NOT NULL UNION SELECT d.document::jsonb->>'ownerUserId' FROM control_records d WHERE d.tenant_id=i.tenant_id AND d.kind='AGENT' AND d.record_id IN(SELECT i.document::jsonb->'evaluation'->'context'->>'agentId' UNION SELECT h.value->>'agentId' FROM jsonb_array_elements(i.document::jsonb->'evaluation'->'context'->'chain') h)) owners WHERE owners.principal IS NULL) AND jsonb_array_length(NEW.document::jsonb->'owners')=(SELECT count(*) FROM (SELECT i.document::jsonb->'evaluation'->'context'->>'userId' AS principal WHERE i.document::jsonb->'evaluation'->'context'->>'userId' IS NOT NULL UNION SELECT d.document::jsonb->>'ownerUserId' FROM control_records d WHERE d.tenant_id=i.tenant_id AND d.kind='AGENT' AND d.record_id IN(SELECT i.document::jsonb->'evaluation'->'context'->>'agentId' UNION SELECT h.value->>'agentId' FROM jsonb_array_elements(i.document::jsonb->'evaluation'->'context'->'chain') h)) owners) AND NOT EXISTS(SELECT 1 FROM (SELECT i.document::jsonb->'evaluation'->'context'->>'userId' AS principal WHERE i.document::jsonb->'evaluation'->'context'->>'userId' IS NOT NULL UNION SELECT d.document::jsonb->>'ownerUserId' FROM control_records d WHERE d.tenant_id=i.tenant_id AND d.kind='AGENT' AND d.record_id IN(SELECT i.document::jsonb->'evaluation'->'context'->>'agentId' UNION SELECT h.value->>'agentId' FROM jsonb_array_elements(i.document::jsonb->'evaluation'->'context'->'chain') h)) owners WHERE owners.principal NOT IN(SELECT value FROM jsonb_array_elements_text(NEW.document::jsonb->'owners'))))
+ THEN RAISE EXCEPTION 'review owners require original admission'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_secret_version_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF NEW.name<>OLD.name OR NEW.version<>OLD.version+1 THEN RAISE EXCEPTION 'invalid secret version transition'; END IF;
+    RETURN NEW;
+END $$;
+
+
+
+
+
+
+
+CREATE FUNCTION public.control_snapshot_transition_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM control_attempt_snapshots s WHERE s.tenant_id=NEW.tenant_id AND s.attempt_id=NEW.attempt_id
+ AND (s.revision>=NEW.revision OR (s.state IN('SUCCEEDED','FAILED','PARTIAL','CANCELLED','EXPIRED') AND s.state<>NEW.state)
+ OR (s.state='OUTCOME_UNKNOWN' AND NEW.state IN('PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING'))))
+ THEN RAISE EXCEPTION 'attempt cannot reopen or rewrite history'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_tenant_access(write_lock boolean) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    AS $$
 DECLARE state text;
 BEGIN
     IF write_lock THEN
@@ -733,19 +843,45 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION control_tenant_admit(text,boolean),control_tenant_access(boolean) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION control_tenant_admit(text,boolean),control_tenant_access(boolean) TO toolgate_control_runtime,toolgate_control_platform;
+CREATE FUNCTION public.control_tenant_admit(tenant text, write_lock boolean) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    AS $$
+DECLARE state text;
+BEGIN
+    IF tenant IS DISTINCT FROM NULLIF(current_setting('app.tenant_id',true),'') THEN RETURN false; END IF;
+    IF write_lock THEN
+        SELECT status INTO state FROM public.control_tenants WHERE tenant_id=tenant FOR SHARE;
+    ELSE
+        SELECT status INTO state FROM public.control_tenants WHERE tenant_id=tenant;
+    END IF;
+    RETURN COALESCE(state='ACTIVE',false);
+END;
+$$;
 
-CREATE FUNCTION control_tenant_identity_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.control_tenant_identity_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
     IF TG_OP='DELETE' OR NEW.tenant_id<>OLD.tenant_id THEN RAISE EXCEPTION 'tenant identity is immutable'; END IF;
     RETURN NEW;
 END;
 $$;
-CREATE TRIGGER control_tenant_identity_guard BEFORE UPDATE OR DELETE ON control_tenants
-FOR EACH ROW EXECUTE FUNCTION control_tenant_identity_guard();
 
-CREATE FUNCTION control_tenant_lifecycle_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION public.control_tenant_identity_key_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'identity key retention requires explicit offboarding'; END IF;
+    IF NEW.tenant_id<>OLD.tenant_id OR NEW.purpose<>OLD.purpose OR NEW.key_id<>OLD.key_id OR
+       NEW.provider_reference<>OLD.provider_reference OR NEW.public_material<>OLD.public_material OR NEW.key_fingerprint<>OLD.key_fingerprint OR
+       NEW.generation<OLD.generation OR (OLD.state='RETIRED' AND NEW.state<>'RETIRED') THEN RAISE EXCEPTION 'invalid identity key transition'; END IF;
+    RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_tenant_lifecycle_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
 BEGIN
     IF NEW.created_at<>OLD.created_at OR NEW.updated_at<OLD.updated_at OR (NEW.status<>OLD.status AND NOT (
         (OLD.status='PROVISIONING' AND NEW.status='ACTIVE') OR (OLD.status='ACTIVE' AND NEW.status='SUSPENDED') OR
@@ -753,22 +889,3248 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-CREATE TRIGGER control_tenant_lifecycle_guard BEFORE UPDATE ON control_tenants
-FOR EACH ROW EXECUTE FUNCTION control_tenant_lifecycle_guard();
 
--- Customer data is denied without the transaction-local context and current lifecycle.
--- Keep this explicit list aligned with db/schema-ownership.json; CI rejects drift.
+
+
+CREATE FUNCTION public.control_vault_key_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP='DELETE' THEN RAISE EXCEPTION 'vault key retention requires explicit offboarding'; END IF;
+    IF NEW.version<>OLD.version OR NEW.tenant_id<>OLD.tenant_id OR OLD.state='RETIRED' OR
+       (NEW.state<>OLD.state AND NOT ((OLD.state='ACTIVE' AND NEW.state='READ_ONLY') OR (OLD.state='READ_ONLY' AND NEW.state='RETIRED'))) OR
+       (NEW.state='RETIRED' AND EXISTS(SELECT 1 FROM control_secrets WHERE tenant_id=OLD.tenant_id AND key_version=OLD.version))
+       THEN RAISE EXCEPTION 'invalid vault key transition'; END IF;
+    RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.effect_target_binding_capacity() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN UPDATE public.control_tenant_capacity SET stored_rows=stored_rows+1,
+ stored_bytes=stored_bytes+octet_length(NEW.document)+length(NEW.target_key)+length(NEW.header)
+ WHERE tenant_id=NEW.tenant_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity unavailable'; END IF; RETURN NEW; END $$;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+CREATE TABLE public.control_approval_clocks (
+    tenant_id character varying(128) NOT NULL,
+    observed_at bigint NOT NULL,
+    CONSTRAINT control_approval_clocks_observed_at_check CHECK (((observed_at >= 0) AND (observed_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_approval_clocks FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_attempt_effects (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    effect_id character varying(128) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_attempt_effects FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_attempt_manifest_seals (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    invocation_revision bigint NOT NULL,
+    created_at bigint NOT NULL,
+    effect_count bigint NOT NULL,
+    manifest_digest text NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_attempt_manifest_seals_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_attempt_manifest_seals_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_attempt_manifest_seals_effect_count_check CHECK (((effect_count >= 0) AND (effect_count <= 4096))),
+    CONSTRAINT control_attempt_manifest_seals_invocation_revision_check CHECK ((invocation_revision >= 1)),
+    CONSTRAINT control_attempt_manifest_seals_manifest_digest_check CHECK ((manifest_digest ~ '^[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_attempt_manifest_seals FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_attempt_recovery_scopes (
+    tenant_id text NOT NULL,
+    operation_id text NOT NULL,
+    attempt_id text NOT NULL,
+    device_id text NOT NULL,
+    pool_id text NOT NULL,
+    image_digest text NOT NULL,
+    runtime_digest text NOT NULL,
+    descriptor_digest text NOT NULL,
+    profile_digest text NOT NULL,
+    profile_revision bigint NOT NULL,
+    CONSTRAINT control_attempt_recovery_scopes_descriptor_digest_check CHECK ((length(descriptor_digest) = 71)),
+    CONSTRAINT control_attempt_recovery_scopes_image_digest_check CHECK ((length(image_digest) = 71)),
+    CONSTRAINT control_attempt_recovery_scopes_profile_digest_check CHECK ((length(profile_digest) = 71)),
+    CONSTRAINT control_attempt_recovery_scopes_profile_revision_check CHECK (((profile_revision >= 1) AND (profile_revision <= '9007199254740991'::bigint))),
+    CONSTRAINT control_attempt_recovery_scopes_runtime_digest_check CHECK ((length(runtime_digest) = 71))
+);
+
+ALTER TABLE ONLY public.control_attempt_recovery_scopes FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_attempt_reviews (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    reconciliation_id character varying(128) NOT NULL,
+    expected_outcome_revision bigint NOT NULL,
+    recorded_at bigint NOT NULL,
+    source_digest text NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_attempt_reviews_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_attempt_reviews_expected_outcome_revision_check CHECK ((expected_outcome_revision >= 1)),
+    CONSTRAINT control_attempt_reviews_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_attempt_reviews_source_digest_check CHECK ((source_digest ~ '^[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_attempt_reviews FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_attempt_settlements (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    proof text NOT NULL,
+    invocation_revision bigint NOT NULL,
+    recorded_at bigint NOT NULL,
+    source_digest text NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_attempt_settlements_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_attempt_settlements_invocation_revision_check CHECK ((invocation_revision >= 1)),
+    CONSTRAINT control_attempt_settlements_proof_check CHECK ((proof = ANY (ARRAY['NEVER_CONSUMED'::text, 'QUALIFIED_BROKER_ONLY'::text]))),
+    CONSTRAINT control_attempt_settlements_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_attempt_settlements_source_digest_check CHECK ((source_digest ~ '^[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_attempt_settlements FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_attempt_snapshots (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    state text NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_attempt_snapshots_check CHECK (((octet_length(document) <= 5242880) AND (COALESCE(((document)::jsonb ->> 'id'::text), ''::text) = (operation_id)::text) AND (COALESCE(((document)::jsonb ->> 'reservedNonce'::text), ''::text) = (attempt_id)::text) AND (COALESCE(((document)::jsonb ->> 'state'::text), ''::text) = state))),
+    CONSTRAINT control_attempt_snapshots_revision_check CHECK ((revision >= 1)),
+    CONSTRAINT control_attempt_snapshots_state_check CHECK ((state = ANY (ARRAY['PENDING_APPROVAL'::text, 'QUEUED'::text, 'RESERVED'::text, 'DISPATCHED'::text, 'EXECUTING'::text, 'SUCCEEDED'::text, 'PARTIAL'::text, 'FAILED'::text, 'OUTCOME_UNKNOWN'::text, 'CANCELLED'::text, 'EXPIRED'::text])))
+);
+
+ALTER TABLE ONLY public.control_attempt_snapshots FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_audit (
+    sequence bigint NOT NULL,
+    tenant_id character varying(128) NOT NULL,
+    actor_id character(64) NOT NULL,
+    operation character varying(40) NOT NULL,
+    target character varying(256) NOT NULL,
+    revision bigint NOT NULL,
+    request_id character varying(128) NOT NULL,
+    request_digest character(64) NOT NULL,
+    evidence text,
+    occurred_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT control_audit_evidence_check CHECK (((evidence IS NULL) OR (octet_length(evidence) <= 4096))),
+    CONSTRAINT control_audit_operation_check CHECK (((operation)::text ~ '^[A-Z][A-Z0-9_]{0,39}$'::text))
+);
+
+ALTER TABLE ONLY public.control_audit FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_audit ALTER COLUMN sequence ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.control_audit_sequence_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+CREATE TABLE public.control_authorization_outbox (
+    tenant_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    authorization_epoch bigint NOT NULL,
+    occurred_at bigint NOT NULL,
+    published_at bigint
+);
+
+ALTER TABLE ONLY public.control_authorization_outbox FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_bootstrap_admins (
+    tenant_id character varying(128) NOT NULL,
+    user_id character varying(128) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_bootstrap_admins FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_builder (
+    tenant_id text NOT NULL,
+    kind text NOT NULL,
+    record_id text NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_builder_document_check CHECK ((octet_length(document) <= 65536)),
+    CONSTRAINT control_builder_kind_check CHECK ((kind = ANY (ARRAY['DRAFT'::text, 'VERSION'::text, 'TEST'::text]))),
+    CONSTRAINT control_builder_revision_check CHECK (((revision > 0) AND (revision <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_builder FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_business_key_history (
+    tenant_id text NOT NULL,
+    tool_id text NOT NULL,
+    namespace text NOT NULL,
+    namespace_identity text NOT NULL,
+    business_key_hash text NOT NULL,
+    invocation_id text NOT NULL,
+    fingerprint text NOT NULL,
+    caller_agent_id text NOT NULL,
+    caller_user_id text,
+    created_at bigint NOT NULL,
+    dedupe_expires_at bigint NOT NULL,
+    retain_until bigint NOT NULL,
+    outcome text NOT NULL,
+    tombstoned_at bigint,
+    archived_at bigint NOT NULL,
+    CONSTRAINT control_business_key_history_business_key_hash_check CHECK ((length(business_key_hash) = 64)),
+    CONSTRAINT control_business_key_history_check CHECK ((dedupe_expires_at > created_at)),
+    CONSTRAINT control_business_key_history_check1 CHECK ((retain_until >= dedupe_expires_at)),
+    CONSTRAINT control_business_key_history_check2 CHECK (((archived_at >= dedupe_expires_at) AND (archived_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_business_key_history_check3 CHECK (((namespace = 'TENANT'::text) = (namespace_identity = ''::text))),
+    CONSTRAINT control_business_key_history_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_business_key_history_fingerprint_check CHECK ((length(fingerprint) = 71)),
+    CONSTRAINT control_business_key_history_namespace_check CHECK ((namespace = ANY (ARRAY['AGENT'::text, 'DELEGATED_USER'::text, 'TENANT'::text]))),
+    CONSTRAINT control_business_key_history_outcome_check CHECK ((outcome = ANY (ARRAY['COMPLETED'::text, 'FAILED'::text, 'REJECTED'::text, 'EXPIRED'::text, 'CANCELLED'::text])))
+);
+
+ALTER TABLE ONLY public.control_business_key_history FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_business_keys (
+    tenant_id character varying(128) NOT NULL,
+    tool_id character varying(256) NOT NULL,
+    namespace character varying(16) NOT NULL,
+    namespace_identity character varying(128) NOT NULL,
+    business_key_hash character(64) NOT NULL,
+    source character varying(16) NOT NULL,
+    fingerprint character(71) NOT NULL,
+    caller_agent_id character varying(128) NOT NULL,
+    caller_user_id character varying(128),
+    invocation_id character varying(128) NOT NULL,
+    created_at bigint NOT NULL,
+    dedupe_expires_at bigint,
+    retain_until bigint NOT NULL,
+    outcome character varying(32),
+    tombstoned_at bigint,
+    CONSTRAINT control_business_keys_business_key_hash_check CHECK ((business_key_hash ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_business_keys_check CHECK ((((namespace)::text = 'TENANT'::text) = ((namespace_identity)::text = ''::text))),
+    CONSTRAINT control_business_keys_check1 CHECK ((((source)::text = 'DEDUPE_WINDOW'::text) = (dedupe_expires_at IS NOT NULL))),
+    CONSTRAINT control_business_keys_check2 CHECK (((dedupe_expires_at IS NULL) OR (dedupe_expires_at > created_at))),
+    CONSTRAINT control_business_keys_check3 CHECK ((retain_until >= created_at)),
+    CONSTRAINT control_business_keys_check4 CHECK (((tombstoned_at IS NULL) OR (outcome IS NOT NULL))),
+    CONSTRAINT control_business_keys_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_business_keys_dedupe_expires_at_check CHECK (((dedupe_expires_at >= 0) AND (dedupe_expires_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_business_keys_fingerprint_check CHECK ((fingerprint ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_business_keys_namespace_check CHECK (((namespace)::text = ANY ((ARRAY['AGENT'::character varying, 'DELEGATED_USER'::character varying, 'TENANT'::character varying])::text[]))),
+    CONSTRAINT control_business_keys_outcome_check CHECK (((outcome)::text = ANY ((ARRAY['COMPLETED'::character varying, 'PARTIAL'::character varying, 'FAILED'::character varying, 'REJECTED'::character varying, 'EXPIRED'::character varying, 'CANCELLED'::character varying, 'OUTCOME_UNKNOWN'::character varying])::text[]))),
+    CONSTRAINT control_business_keys_retain_until_check CHECK (((retain_until >= 0) AND (retain_until <= '9007199254740991'::bigint))),
+    CONSTRAINT control_business_keys_source_check CHECK (((source)::text = ANY ((ARRAY['HEADER'::character varying, 'ARGUMENT'::character varying, 'DEDUPE_WINDOW'::character varying])::text[]))),
+    CONSTRAINT control_business_keys_tombstoned_at_check CHECK (((tombstoned_at >= 0) AND (tombstoned_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_business_keys FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_configuration_changes (
+    tenant_id character varying(128) NOT NULL,
+    change_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    request_digest character(64) NOT NULL,
+    document text NOT NULL
+);
+
+ALTER TABLE ONLY public.control_configuration_changes FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_console_devices (
+    tenant_id text NOT NULL,
+    session_id text NOT NULL,
+    user_id text NOT NULL,
+    device_id text NOT NULL,
+    nonce_digest text NOT NULL,
+    code_digest text NOT NULL,
+    csr text NOT NULL,
+    fingerprint text NOT NULL,
+    expires_at bigint NOT NULL,
+    verified_at bigint DEFAULT 0 NOT NULL
+);
+
+ALTER TABLE ONLY public.control_console_devices FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_credential_history (
+    tenant_id character varying(128) NOT NULL,
+    credential_sha256 character(64) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_credential_history FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_consent_approvals (
+    tenant_id character varying(128) NOT NULL,
+    consent_id character varying(128) NOT NULL,
+    reviewer character varying(128) NOT NULL,
+    authorization_epoch bigint NOT NULL,
+    approved_at bigint NOT NULL,
+    CONSTRAINT control_effect_consent_approvals_approved_at_check CHECK (((approved_at >= 0) AND (approved_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_consent_approvals_authorization_epoch_check CHECK (((authorization_epoch >= 0) AND (authorization_epoch <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_effect_consent_approvals FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_consent_revocations (
+    tenant_id character varying(128) NOT NULL,
+    consent_id character varying(128) NOT NULL,
+    reviewer character varying(128) NOT NULL,
+    revoked_at bigint NOT NULL,
+    CONSTRAINT control_effect_consent_revocations_revoked_at_check CHECK (((revoked_at >= 0) AND (revoked_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_effect_consent_revocations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_consent_slots (
+    tenant_id character varying(128) NOT NULL,
+    consent_id character varying(128) NOT NULL,
+    slot_index bigint NOT NULL,
+    route_id character varying(128) NOT NULL,
+    mapped_digest text NOT NULL,
+    permitted_count bigint NOT NULL,
+    CONSTRAINT control_effect_consent_slots_mapped_digest_check CHECK ((mapped_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_effect_consent_slots_permitted_count_check CHECK (((permitted_count >= 1) AND (permitted_count <= 64))),
+    CONSTRAINT control_effect_consent_slots_slot_index_check CHECK (((slot_index >= 0) AND (slot_index <= 63)))
+);
+
+ALTER TABLE ONLY public.control_effect_consent_slots FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_consent_uses (
+    tenant_id character varying(128) NOT NULL,
+    consent_id character varying(128) NOT NULL,
+    slot_index bigint NOT NULL,
+    effect_id character varying(128) NOT NULL,
+    request_digest text NOT NULL,
+    reserved_at bigint NOT NULL,
+    CONSTRAINT control_effect_consent_uses_request_digest_check CHECK ((request_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_effect_consent_uses_reserved_at_check CHECK (((reserved_at >= 0) AND (reserved_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_effect_consent_uses FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_consents (
+    tenant_id character varying(128) NOT NULL,
+    consent_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    preview_digest text NOT NULL,
+    document text NOT NULL,
+    not_before bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    CONSTRAINT control_effect_consents_check CHECK (((expires_at > not_before) AND (expires_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_consents_document_check CHECK (((octet_length(document) <= 2097152) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_effect_consents_not_before_check CHECK (((not_before >= 0) AND (not_before <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_consents_preview_digest_check CHECK ((preview_digest ~ '^sha256:[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_effect_consents FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_evidence (
+    tenant_id character varying(128) NOT NULL,
+    effect_id character varying(128) NOT NULL,
+    generation bigint NOT NULL,
+    evidence_digest text NOT NULL,
+    source text NOT NULL,
+    outcome text NOT NULL,
+    result_digest text NOT NULL,
+    recorded_at bigint NOT NULL,
+    CONSTRAINT control_effect_evidence_outcome_check CHECK ((outcome = ANY (ARRAY['COMPLETED'::text, 'FAILED'::text]))),
+    CONSTRAINT control_effect_evidence_recorded_at_check CHECK ((recorded_at >= 0))
+);
+
+ALTER TABLE ONLY public.control_effect_evidence FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_generations (
+    tenant_id character varying(128) NOT NULL,
+    effect_id character varying(128) NOT NULL,
+    generation bigint NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    auth_nonce character varying(128) NOT NULL,
+    device_id character varying(128) NOT NULL,
+    broker_id character varying(128) NOT NULL,
+    handler_id character varying(128) NOT NULL,
+    state text NOT NULL,
+    issued_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    outcome_deadline bigint NOT NULL,
+    revision bigint NOT NULL,
+    consumer text,
+    claim_token text,
+    CONSTRAINT control_effect_generations_check CHECK ((expires_at > issued_at)),
+    CONSTRAINT control_effect_generations_check1 CHECK ((outcome_deadline >= expires_at)),
+    CONSTRAINT control_effect_generations_check2 CHECK (((consumer IS NULL) = (claim_token IS NULL))),
+    CONSTRAINT control_effect_generations_check3 CHECK (((state <> 'CONSUMED'::text) OR (consumer IS NOT NULL))),
+    CONSTRAINT control_effect_generations_generation_check CHECK ((generation >= 1)),
+    CONSTRAINT control_effect_generations_issued_at_check CHECK ((issued_at >= 0)),
+    CONSTRAINT control_effect_generations_revision_check CHECK ((revision >= 1)),
+    CONSTRAINT control_effect_generations_state_check CHECK ((state = ANY (ARRAY['AUTHORIZED'::text, 'RELEASED'::text, 'SENDING'::text, 'CONSUMED'::text, 'COMPLETED'::text, 'FAILED'::text, 'AMBIGUOUS'::text, 'CONFLICT'::text])))
+);
+
+ALTER TABLE ONLY public.control_effect_generations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_intents (
+    tenant_id character varying(128) NOT NULL,
+    effect_id character varying(128) NOT NULL,
+    request_digest text NOT NULL,
+    arguments_digest text NOT NULL,
+    profile_digest text NOT NULL,
+    classification text NOT NULL,
+    document text NOT NULL,
+    recorded_at bigint NOT NULL,
+    CONSTRAINT control_effect_intents_arguments_digest_check CHECK ((arguments_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_effect_intents_classification_check CHECK ((classification = ANY (ARRAY['READ'::text, 'WRITE'::text, 'DESTRUCTIVE'::text, 'FINANCIAL'::text]))),
+    CONSTRAINT control_effect_intents_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_effect_intents_profile_digest_check CHECK ((profile_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_effect_intents_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_intents_request_digest_check CHECK ((request_digest ~ '^sha256:[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_effect_intents FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effect_target_bindings (
+    tenant_id character varying(128) NOT NULL,
+    effect_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    route_id character varying(128) NOT NULL,
+    profile_digest text NOT NULL,
+    guarantee_digest text NOT NULL,
+    header text NOT NULL,
+    target_key text NOT NULL,
+    credential_version bigint NOT NULL,
+    first_authorized_at bigint NOT NULL,
+    valid_until bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_effect_target_bindings_check CHECK (((valid_until > first_authorized_at) AND (valid_until <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_target_bindings_credential_version_check CHECK (((credential_version >= 0) AND (credential_version <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_target_bindings_document_check CHECK ((octet_length(document) <= 8192)),
+    CONSTRAINT control_effect_target_bindings_first_authorized_at_check CHECK (((first_authorized_at >= 0) AND (first_authorized_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_effect_target_bindings_guarantee_digest_check CHECK ((length(guarantee_digest) = 71)),
+    CONSTRAINT control_effect_target_bindings_header_check CHECK (((length(header) >= 1) AND (length(header) <= 64))),
+    CONSTRAINT control_effect_target_bindings_profile_digest_check CHECK ((length(profile_digest) = 71)),
+    CONSTRAINT control_effect_target_bindings_target_key_check CHECK ((length(target_key) = 67))
+);
+
+ALTER TABLE ONLY public.control_effect_target_bindings FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_effects (
+    tenant_id character varying(128) NOT NULL,
+    effect_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    route_id text NOT NULL,
+    request_digest text NOT NULL,
+    current_generation bigint NOT NULL,
+    CONSTRAINT control_effects_current_generation_check CHECK ((current_generation >= 1))
+);
+
+ALTER TABLE ONLY public.control_effects FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_endpoint_configurations (
+    tenant_id character varying(128) NOT NULL,
+    device_id character varying(128) NOT NULL,
+    source_revision bigint NOT NULL,
+    document text NOT NULL,
+    acknowledged_digest character(64),
+    local_tools text NOT NULL,
+    CONSTRAINT control_endpoint_configurations_document_check CHECK ((octet_length(document) <= 98304)),
+    CONSTRAINT control_endpoint_configurations_local_tools_check CHECK ((octet_length(local_tools) <= 49152)),
+    CONSTRAINT control_endpoint_configurations_source_revision_check CHECK ((source_revision >= 0))
+);
+
+ALTER TABLE ONLY public.control_endpoint_configurations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_endpoints (
+    tenant_id character varying(128) NOT NULL,
+    device_id character varying(128) NOT NULL,
+    key_fingerprint character(64) NOT NULL,
+    document text NOT NULL,
+    csr text NOT NULL,
+    report_digest character(64) NOT NULL,
+    acknowledgment text NOT NULL,
+    CONSTRAINT control_endpoints_acknowledgment_check CHECK ((octet_length(acknowledgment) <= 131072)),
+    CONSTRAINT control_endpoints_check CHECK (((((document)::jsonb ->> 'deviceId'::text) = (device_id)::text) AND (((document)::jsonb ->> 'tenantId'::text) = (tenant_id)::text))),
+    CONSTRAINT control_endpoints_csr_check CHECK ((octet_length(csr) <= 16384)),
+    CONSTRAINT control_endpoints_document_check CHECK ((octet_length(document) <= 1048576))
+);
+
+ALTER TABLE ONLY public.control_endpoints FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_enrollments (
+    tenant_id character varying(128) NOT NULL,
+    enrollment_id character varying(128) NOT NULL,
+    code_digest character(64) NOT NULL,
+    device_digest character(64) NOT NULL,
+    document text NOT NULL,
+    csr text NOT NULL,
+    user_id character varying(128),
+    certificate text,
+    expires_at bigint NOT NULL,
+    last_poll bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT control_enrollments_certificate_check CHECK ((octet_length(certificate) <= 32768)),
+    CONSTRAINT control_enrollments_csr_check CHECK ((octet_length(csr) <= 16384)),
+    CONSTRAINT control_enrollments_document_check CHECK ((octet_length(document) <= 16384)),
+    CONSTRAINT control_enrollments_expires_at_check CHECK ((expires_at >= 0)),
+    CONSTRAINT control_enrollments_last_poll_check CHECK ((last_poll >= 0))
+);
+
+ALTER TABLE ONLY public.control_enrollments FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_enterprise_adoptions (
+    tenant_id character varying(128) NOT NULL,
+    actor_type character varying(16) NOT NULL,
+    actor_id character varying(128) NOT NULL,
+    directory_revision bigint NOT NULL,
+    snapshot_sequence bigint NOT NULL,
+    graph_digest character(64) NOT NULL,
+    observed_at bigint NOT NULL,
+    authorization_epoch bigint DEFAULT 0 NOT NULL
+);
+
+ALTER TABLE ONLY public.control_enterprise_adoptions FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_enterprise_approvals (
+    tenant_id character varying(128) NOT NULL,
+    approval_id character varying(128) NOT NULL,
+    approval_type character varying(16) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    request_digest character(64) NOT NULL,
+    authorization_epoch bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_enterprise_approvals_approval_type_check CHECK (((approval_type)::text = ANY ((ARRAY['OPERATION'::character varying, 'CONFIGURATION'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_enterprise_approvals FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_enterprise_invocations (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    request_digest character(64) NOT NULL,
+    state character varying(32) NOT NULL,
+    authorization_epoch bigint NOT NULL,
+    created_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    tool_id character varying(256),
+    package_id character varying(128),
+    package_digest character(71),
+    pool_id character varying(128),
+    runtime_digest character(71),
+    effect_safety character varying(16),
+    requires_execution_ledger boolean,
+    lease_holder character varying(256),
+    lease_expires_at bigint,
+    cancel_requested_at bigint,
+    not_started boolean DEFAULT false NOT NULL,
+    task_id character varying(64),
+    task_state character varying(32),
+    task_owner_digest character(64),
+    task_retain_until bigint,
+    task_input_deadline_at bigint,
+    task_last_polled_at bigint,
+    task_document text,
+    insights_fact_seq bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT control_enterprise_invocations_cancel_requested_at_check CHECK (((cancel_requested_at >= 0) AND (cancel_requested_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_enterprise_invocations_effect_safety_check CHECK (((effect_safety)::text = ANY ((ARRAY['READ_ONLY'::character varying, 'IDEMPOTENT'::character varying, 'NON_IDEMPOTENT'::character varying, 'UNKNOWN'::character varying])::text[]))),
+    CONSTRAINT control_enterprise_invocations_insights_fact_seq_check CHECK ((insights_fact_seq >= 0)),
+    CONSTRAINT control_enterprise_invocations_lease_expires_at_check CHECK (((lease_expires_at >= 0) AND (lease_expires_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_enterprise_invocations_package_digest_check CHECK ((package_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_enterprise_invocations_runtime_digest_check CHECK ((runtime_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_enterprise_invocations_task_document_check CHECK ((octet_length(task_document) <= 32768)),
+    CONSTRAINT control_enterprise_invocations_task_id_check CHECK (((task_id)::text ~ '^[A-Za-z0-9_-]{22,64}$'::text)),
+    CONSTRAINT control_enterprise_invocations_task_input_deadline_at_check CHECK (((task_input_deadline_at >= 0) AND (task_input_deadline_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_enterprise_invocations_task_last_polled_at_check CHECK (((task_last_polled_at >= 0) AND (task_last_polled_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_enterprise_invocations_task_owner_digest_check CHECK ((task_owner_digest ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_enterprise_invocations_task_retain_until_check CHECK (((task_retain_until >= 0) AND (task_retain_until <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_cancel_shape CHECK (((((task_state)::text IS DISTINCT FROM 'CANCEL_REQUESTED'::text) OR (cancel_requested_at IS NOT NULL)) AND ((NOT not_started) OR ((state)::text = 'FAILED'::text)))),
+    CONSTRAINT control_invocation_lease_shape CHECK ((((lease_holder IS NULL) = (lease_expires_at IS NULL)) AND ((lease_holder IS NULL) OR ((state)::text <> ALL ((ARRAY['PENDING_APPROVAL'::character varying, 'QUEUED'::character varying, 'RESERVED'::character varying, 'DISPATCHED'::character varying])::text[]))))),
+    CONSTRAINT control_invocation_task_projection CHECK (((task_state IS NULL) OR (((state)::text = 'PENDING_APPROVAL'::text) AND ((task_state)::text = 'AWAITING_APPROVAL'::text)) OR (((state)::text = 'QUEUED'::text) AND ((task_state)::text = 'QUEUED'::text)) OR (((state)::text = ANY ((ARRAY['RESERVED'::character varying, 'DISPATCHED'::character varying])::text[])) AND ((task_state)::text = ANY ((ARRAY['DISPATCHED'::character varying, 'CANCEL_REQUESTED'::character varying])::text[]))) OR (((state)::text = 'EXECUTING'::text) AND ((task_state)::text = ANY ((ARRAY['RUNNING'::character varying, 'INPUT_REQUIRED'::character varying, 'CANCEL_REQUESTED'::character varying])::text[]))) OR (((state)::text = 'SUCCEEDED'::text) AND ((task_state)::text = 'COMPLETED'::text)) OR (((state)::text = ANY ((ARRAY['FAILED'::character varying, 'PARTIAL'::character varying])::text[])) AND ((task_state)::text = 'FAILED'::text)) OR (((state)::text = 'CANCELLED'::text) AND ((task_state)::text = ANY ((ARRAY['CANCELLED'::character varying, 'REJECTED'::character varying])::text[]))) OR (((state)::text = 'EXPIRED'::text) AND ((task_state)::text = 'EXPIRED'::text)) OR (((state)::text = 'OUTCOME_UNKNOWN'::text) AND ((task_state)::text = 'OUTCOME_UNKNOWN'::text)))),
+    CONSTRAINT control_invocation_task_shape CHECK ((((task_id IS NULL) = (task_state IS NULL)) AND ((task_id IS NULL) = (task_owner_digest IS NULL)) AND ((task_id IS NULL) = (task_retain_until IS NULL)) AND ((task_id IS NULL) = (task_document IS NULL)) AND ((task_id IS NULL) OR (requires_execution_ledger IS NOT NULL)))),
+    CONSTRAINT control_invocation_v2_class CHECK (((requires_execution_ledger IS NULL) OR ((tool_id IS NOT NULL) AND (package_digest IS NOT NULL) AND (effect_safety IS NOT NULL) AND (requires_execution_ledger = ((effect_safety)::text = ANY ((ARRAY['NON_IDEMPOTENT'::character varying, 'UNKNOWN'::character varying])::text[]))))))
+);
+
+ALTER TABLE ONLY public.control_enterprise_invocations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_enterprise_nonces (
+    tenant_id character varying(128) NOT NULL,
+    nonce character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    evaluation_digest character(64) NOT NULL,
+    authorization_epoch bigint NOT NULL,
+    issued_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    consumed_at bigint,
+    purpose text DEFAULT 'LEGACY'::text NOT NULL,
+    CONSTRAINT control_enterprise_nonces_purpose_check CHECK ((purpose = ANY (ARRAY['LEGACY'::text, 'EXECUTION'::text, 'SERVICE'::text])))
+);
+
+ALTER TABLE ONLY public.control_enterprise_nonces FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_execution_budgets (
+    tenant_id character varying(128) NOT NULL,
+    budget_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    created_at bigint NOT NULL
+);
+
+ALTER TABLE ONLY public.control_execution_budgets FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_execution_evidence (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    fencing_token character varying(128) NOT NULL,
+    report_digest character(64) NOT NULL,
+    document text NOT NULL,
+    recorded_at bigint NOT NULL,
+    qualified_report boolean DEFAULT false NOT NULL,
+    CONSTRAINT control_execution_evidence_document_check CHECK ((octet_length(document) <= 5242880)),
+    CONSTRAINT control_execution_evidence_recorded_at_check CHECK ((recorded_at >= 0)),
+    CONSTRAINT control_execution_evidence_report_digest_check CHECK ((report_digest ~ '^[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_execution_evidence FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_execution_leases (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    fencing_token character varying(128) NOT NULL,
+    device_id character varying(128) NOT NULL,
+    expires_at bigint NOT NULL,
+    CONSTRAINT control_execution_leases_expires_at_check CHECK (((expires_at >= 0) AND (expires_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_execution_leases FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_fleet (
+    tenant_id text NOT NULL,
+    kind text NOT NULL,
+    record_id text NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_fleet_document_check CHECK ((octet_length(document) <= 131072)),
+    CONSTRAINT control_fleet_kind_check CHECK ((kind = ANY (ARRAY['RELEASE'::text, 'DESIRED'::text, 'ROLLOUT'::text]))),
+    CONSTRAINT control_fleet_revision_check CHECK (((revision > 0) AND (revision <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_fleet FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_idempotency (
+    tenant_id character varying(128) NOT NULL,
+    actor_id character(64) NOT NULL,
+    key character varying(128) NOT NULL,
+    request_digest character(64) NOT NULL,
+    status integer NOT NULL,
+    body text NOT NULL,
+    revision bigint NOT NULL,
+    expires_at timestamp with time zone DEFAULT (clock_timestamp() + '7 days'::interval) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_idempotency FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_admissions (
+    tenant_id character varying(128) NOT NULL,
+    bucket_start bigint NOT NULL,
+    tool_id character varying(256) NOT NULL,
+    category character varying(32) NOT NULL,
+    count bigint NOT NULL,
+    CONSTRAINT control_insights_admissions_count_check CHECK ((count >= 0))
+);
+
+ALTER TABLE ONLY public.control_insights_admissions FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_attempts (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    attempt_number integer NOT NULL,
+    execution_id character(35),
+    executor_id character varying(128),
+    started_at bigint,
+    ended_at bigint,
+    outcome character varying(32),
+    duration_ms bigint,
+    CONSTRAINT control_insights_attempts_attempt_number_check CHECK (((attempt_number >= 1) AND (attempt_number <= 64))),
+    CONSTRAINT control_insights_attempts_execution_id_check CHECK ((execution_id ~ '^ex-[0-9a-f]{32}$'::text))
+);
+
+ALTER TABLE ONLY public.control_insights_attempts FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_cells (
+    tenant_id character varying(128) NOT NULL,
+    series character varying(8) NOT NULL,
+    granularity character varying(8) NOT NULL,
+    bucket_start bigint NOT NULL,
+    dim character varying(256) NOT NULL,
+    outcome character varying(32) NOT NULL,
+    calls bigint NOT NULL,
+    duration_count bigint NOT NULL,
+    duration_sum bigint NOT NULL,
+    histogram text NOT NULL,
+    CONSTRAINT control_insights_cells_calls_check CHECK ((calls >= 0)),
+    CONSTRAINT control_insights_cells_duration_count_check CHECK ((duration_count >= 0)),
+    CONSTRAINT control_insights_cells_duration_sum_check CHECK ((duration_sum >= 0)),
+    CONSTRAINT control_insights_cells_granularity_check CHECK (((granularity)::text = ANY ((ARRAY['MINUTE'::character varying, 'HOUR'::character varying, 'DAY'::character varying])::text[]))),
+    CONSTRAINT control_insights_cells_histogram_check CHECK ((octet_length(histogram) <= 1024)),
+    CONSTRAINT control_insights_cells_series_check CHECK (((series)::text = ANY ((ARRAY['TOOL'::character varying, 'CLIENT'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_insights_cells FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_checkpoints (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    last_fact_seq bigint NOT NULL,
+    contribution text NOT NULL,
+    final_at bigint,
+    CONSTRAINT control_insights_checkpoints_contribution_check CHECK ((octet_length(contribution) <= 8192)),
+    CONSTRAINT control_insights_checkpoints_last_fact_seq_check CHECK ((last_fact_seq >= 0))
+);
+
+ALTER TABLE ONLY public.control_insights_checkpoints FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_facts (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    fact_seq bigint NOT NULL,
+    revision bigint NOT NULL,
+    from_state character varying(32),
+    to_state character varying(32) NOT NULL,
+    occurred_at bigint NOT NULL,
+    execution_id character(35),
+    detail text NOT NULL,
+    projected_at bigint,
+    CONSTRAINT control_insights_facts_detail_check CHECK ((octet_length(detail) <= 8192)),
+    CONSTRAINT control_insights_facts_execution_id_check CHECK ((execution_id ~ '^ex-[0-9a-f]{32}$'::text)),
+    CONSTRAINT control_insights_facts_fact_seq_check CHECK (((fact_seq >= 1) AND (fact_seq <= '9007199254740991'::bigint))),
+    CONSTRAINT control_insights_facts_occurred_at_check CHECK (((occurred_at >= 0) AND (occurred_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_insights_facts FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_gateway_epochs (
+    tenant_id character varying(128) NOT NULL,
+    gateway_id character varying(128) NOT NULL,
+    epoch character varying(128) NOT NULL,
+    last_sequence bigint NOT NULL,
+    missing bigint NOT NULL,
+    dropped bigint NOT NULL,
+    final boolean NOT NULL,
+    last_seen bigint NOT NULL,
+    CONSTRAINT control_insights_gateway_epochs_dropped_check CHECK ((dropped >= 0)),
+    CONSTRAINT control_insights_gateway_epochs_last_sequence_check CHECK ((last_sequence >= 0)),
+    CONSTRAINT control_insights_gateway_epochs_missing_check CHECK ((missing >= 0))
+);
+
+ALTER TABLE ONLY public.control_insights_gateway_epochs FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_invocations (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    tool_id character varying(256) NOT NULL,
+    action character varying(256) NOT NULL,
+    client_id character varying(128),
+    user_id character varying(128),
+    agent_id character varying(128),
+    tool_call_id character varying(128),
+    session_id character varying(128),
+    agent_run_id character varying(128),
+    parent_invocation_id character varying(128),
+    outcome character varying(32) NOT NULL,
+    error_category character varying(32),
+    attempts integer NOT NULL,
+    accepted_at bigint NOT NULL,
+    approval_requested_at bigint,
+    approval_resolved_at bigint,
+    queued_at bigint,
+    first_started_at bigint,
+    terminal_at bigint,
+    approval_ms bigint,
+    queue_ms bigint,
+    execution_ms bigint,
+    end_to_end_ms bigint,
+    partial_coverage boolean NOT NULL,
+    span_state character varying(16),
+    CONSTRAINT control_insights_invocations_attempts_check CHECK (((attempts >= 0) AND (attempts <= 64))),
+    CONSTRAINT control_insights_invocations_span_state_check CHECK (((span_state)::text = ANY ((ARRAY['RETAINED'::character varying, 'SAMPLED_OUT'::character varying, 'DROPPED'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_insights_invocations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_spans (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    span_id character(16) NOT NULL,
+    trace_id character(32) NOT NULL,
+    parent_span_id character(16),
+    name character varying(32) NOT NULL,
+    source character varying(16) NOT NULL,
+    execution_id character(35),
+    start_at bigint NOT NULL,
+    duration_ms bigint NOT NULL,
+    status character varying(8) NOT NULL,
+    route_id character varying(128),
+    http_status integer,
+    error_code character varying(64),
+    stored_at bigint NOT NULL,
+    CONSTRAINT control_insights_spans_duration_ms_check CHECK (((duration_ms >= 0) AND (duration_ms <= 86400000))),
+    CONSTRAINT control_insights_spans_execution_id_check CHECK ((execution_id ~ '^ex-[0-9a-f]{32}$'::text)),
+    CONSTRAINT control_insights_spans_http_status_check CHECK (((http_status >= 100) AND (http_status <= 599))),
+    CONSTRAINT control_insights_spans_parent_span_id_check CHECK ((parent_span_id ~ '^[0-9a-f]{16}$'::text)),
+    CONSTRAINT control_insights_spans_source_check CHECK (((source)::text = ANY ((ARRAY['GATEWAY'::character varying, 'TOOL_HOST'::character varying, 'CLIENT'::character varying])::text[]))),
+    CONSTRAINT control_insights_spans_span_id_check CHECK ((span_id ~ '^[0-9a-f]{16}$'::text)),
+    CONSTRAINT control_insights_spans_status_check CHECK (((status)::text = ANY ((ARRAY['OK'::character varying, 'ERROR'::character varying])::text[]))),
+    CONSTRAINT control_insights_spans_trace_id_check CHECK ((trace_id ~ '^[0-9a-f]{32}$'::text))
+);
+
+ALTER TABLE ONLY public.control_insights_spans FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_insights_tenant_state (
+    tenant_id character varying(128) NOT NULL,
+    collecting_since bigint NOT NULL,
+    summaries_suspended_since bigint,
+    summary_rows bigint DEFAULT 0 NOT NULL,
+    metrics_exported_through bigint,
+    CONSTRAINT control_insights_tenant_state_summary_rows_check CHECK ((summary_rows >= 0))
+);
+
+ALTER TABLE ONLY public.control_insights_tenant_state FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_invocation_authority (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    expires_at bigint NOT NULL
+);
+
+ALTER TABLE ONLY public.control_invocation_authority FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_invocation_event_streams (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    last_cursor bigint NOT NULL,
+    event_count integer NOT NULL,
+    byte_count bigint NOT NULL,
+    dropped_frames bigint NOT NULL,
+    refused_frames bigint NOT NULL,
+    retain_until bigint NOT NULL,
+    purged_at bigint,
+    CONSTRAINT control_invocation_event_streams_byte_count_check CHECK ((byte_count >= 0)),
+    CONSTRAINT control_invocation_event_streams_dropped_frames_check CHECK ((dropped_frames >= 0)),
+    CONSTRAINT control_invocation_event_streams_event_count_check CHECK ((event_count >= 0)),
+    CONSTRAINT control_invocation_event_streams_last_cursor_check CHECK (((last_cursor >= 0) AND (last_cursor <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_event_streams_purged_at_check CHECK (((purged_at >= 0) AND (purged_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_event_streams_refused_frames_check CHECK ((refused_frames >= 0)),
+    CONSTRAINT control_invocation_event_streams_retain_until_check CHECK (((retain_until >= 0) AND (retain_until <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_invocation_event_streams FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_invocation_events (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    event_cursor bigint NOT NULL,
+    source character varying(16) NOT NULL,
+    kind character varying(16) NOT NULL,
+    attempt integer,
+    fencing_token character varying(128),
+    sequence integer,
+    recorded_at bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_invocation_events_attempt_check CHECK (((attempt >= 1) AND (attempt <= 16))),
+    CONSTRAINT control_invocation_events_check CHECK ((((source)::text = 'EXECUTOR'::text) = ((fencing_token IS NOT NULL) AND (attempt IS NOT NULL)))),
+    CONSTRAINT control_invocation_events_check1 CHECK (((sequence IS NULL) OR ((source)::text = 'EXECUTOR'::text))),
+    CONSTRAINT control_invocation_events_document_check CHECK ((octet_length(document) <= 131072)),
+    CONSTRAINT control_invocation_events_event_cursor_check CHECK (((event_cursor >= 1) AND (event_cursor <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_events_kind_check CHECK (((kind)::text = ANY ((ARRAY['LOG'::character varying, 'PROGRESS'::character varying, 'INPUT_REQUEST'::character varying, 'STATE'::character varying, 'RESULT'::character varying])::text[]))),
+    CONSTRAINT control_invocation_events_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_events_sequence_check CHECK (((sequence >= 1) AND (sequence <= 2147483647))),
+    CONSTRAINT control_invocation_events_source_check CHECK (((source)::text = ANY ((ARRAY['EXECUTOR'::character varying, 'PLATFORM'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_invocation_events FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_invocation_results (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    fencing_nonce character varying(128) NOT NULL,
+    result_digest character(71) NOT NULL,
+    byte_length integer NOT NULL,
+    payload bytea,
+    created_at bigint NOT NULL,
+    retain_until bigint NOT NULL,
+    purged_at bigint,
+    CONSTRAINT control_invocation_results_byte_length_check CHECK (((byte_length >= 0) AND (byte_length <= 4194304))),
+    CONSTRAINT control_invocation_results_check CHECK (((payload IS NULL) = (purged_at IS NOT NULL))),
+    CONSTRAINT control_invocation_results_check1 CHECK (((payload IS NULL) OR (octet_length(payload) = byte_length))),
+    CONSTRAINT control_invocation_results_check2 CHECK ((retain_until >= created_at)),
+    CONSTRAINT control_invocation_results_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_results_purged_at_check CHECK (((purged_at >= 0) AND (purged_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_invocation_results_result_digest_check CHECK ((result_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_invocation_results_retain_until_check CHECK (((retain_until >= 0) AND (retain_until <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_invocation_results FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_mcp_approvals (
+    tenant_id character varying(128) NOT NULL,
+    slug character varying(31) NOT NULL,
+    sequence bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_mcp_approvals_document_check CHECK ((octet_length(document) <= 1048576)),
+    CONSTRAINT control_mcp_approvals_sequence_check CHECK (((sequence >= 1) AND (sequence <= '9007199254740991'::bigint))),
+    CONSTRAINT control_mcp_approvals_slug_check CHECK (((slug)::text ~ '^[a-z][a-z0-9-]{1,30}$'::text))
+);
+
+ALTER TABLE ONLY public.control_mcp_approvals FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_mcp_requests (
+    tenant_id character varying(128) NOT NULL,
+    request_id character varying(128) NOT NULL,
+    device_id character varying(128) NOT NULL,
+    state character varying(32) NOT NULL,
+    received_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    record text NOT NULL,
+    task text NOT NULL,
+    result text,
+    CONSTRAINT control_mcp_requests_record_check CHECK ((octet_length(record) <= 8192)),
+    CONSTRAINT control_mcp_requests_result_check CHECK ((octet_length(result) <= 65536)),
+    CONSTRAINT control_mcp_requests_state_check CHECK (((state)::text = ANY ((ARRAY['RECEIVED'::character varying, 'WAITING_FOR_POLL'::character varying, 'SUBMITTED'::character varying, 'RESPONSE_RECEIVED'::character varying, 'DONE'::character varying, 'FAILED'::character varying, 'EXPIRED'::character varying])::text[]))),
+    CONSTRAINT control_mcp_requests_task_check CHECK ((octet_length(task) <= 16384))
+);
+
+ALTER TABLE ONLY public.control_mcp_requests FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_mcp_scans (
+    tenant_id character varying(128) NOT NULL,
+    scan_id character varying(128) NOT NULL,
+    slug character varying(31) NOT NULL,
+    host_id character varying(128) NOT NULL,
+    state character varying(16) NOT NULL,
+    deadline bigint NOT NULL,
+    created_at bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_mcp_scans_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_mcp_scans_deadline_check CHECK (((deadline >= 0) AND (deadline <= '9007199254740991'::bigint))),
+    CONSTRAINT control_mcp_scans_document_check CHECK ((octet_length(document) <= 65536)),
+    CONSTRAINT control_mcp_scans_slug_check CHECK (((slug)::text ~ '^[a-z][a-z0-9-]{1,30}$'::text)),
+    CONSTRAINT control_mcp_scans_state_check CHECK (((state)::text = ANY ((ARRAY['QUEUED'::character varying, 'CLAIMED'::character varying, 'ADMITTED'::character varying, 'FINISHED'::character varying, 'FAILED'::character varying, 'EXPIRED'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_mcp_scans FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_mcp_servers (
+    tenant_id character varying(128) NOT NULL,
+    slug character varying(31) NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_mcp_servers_document_check CHECK ((octet_length(document) <= 65536)),
+    CONSTRAINT control_mcp_servers_revision_check CHECK (((revision >= 1) AND (revision <= '9007199254740991'::bigint))),
+    CONSTRAINT control_mcp_servers_slug_check CHECK (((slug)::text ~ '^[a-z][a-z0-9-]{1,30}$'::text))
+);
+
+ALTER TABLE ONLY public.control_mcp_servers FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_mcp_snapshots (
+    tenant_id character varying(128) NOT NULL,
+    slug character varying(31) NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_mcp_snapshots_document_check CHECK ((octet_length(document) <= 8388608)),
+    CONSTRAINT control_mcp_snapshots_revision_check CHECK (((revision >= 1) AND (revision <= '9007199254740991'::bigint))),
+    CONSTRAINT control_mcp_snapshots_slug_check CHECK (((slug)::text ~ '^[a-z][a-z0-9-]{1,30}$'::text))
+);
+
+ALTER TABLE ONLY public.control_mcp_snapshots FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_operation_attempts (
+    tenant_id character varying(128) NOT NULL,
+    attempt_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    evaluation_digest text NOT NULL,
+    authorization_epoch bigint NOT NULL,
+    issued_at bigint NOT NULL,
+    expires_at bigint NOT NULL,
+    CONSTRAINT control_operation_attempts_check CHECK ((expires_at > issued_at)),
+    CONSTRAINT control_operation_attempts_issued_at_check CHECK ((issued_at >= 0))
+);
+
+ALTER TABLE ONLY public.control_operation_attempts FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_operation_cancellations (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_operation_cancellations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_operation_outcomes (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    invocation_revision bigint NOT NULL,
+    state text NOT NULL,
+    source_digest text NOT NULL,
+    recorded_at bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_operation_outcomes_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_operation_outcomes_invocation_revision_check CHECK ((invocation_revision >= 1)),
+    CONSTRAINT control_operation_outcomes_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_operation_outcomes_revision_check CHECK ((revision >= 1)),
+    CONSTRAINT control_operation_outcomes_source_digest_check CHECK ((source_digest ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_operation_outcomes_state_check CHECK ((state = ANY (ARRAY['RUNNING'::text, 'OUTCOME_UNKNOWN'::text, 'RECONCILIATION_REQUIRED'::text, 'SUCCEEDED'::text, 'PARTIAL'::text, 'FAILED'::text])))
+);
+
+ALTER TABLE ONLY public.control_operation_outcomes FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_operation_recoveries (
+    tenant_id text NOT NULL,
+    operation_id text NOT NULL,
+    from_revision bigint NOT NULL,
+    to_revision bigint NOT NULL,
+    operation_revision bigint NOT NULL,
+    previous_nonce text,
+    original_deadline bigint NOT NULL,
+    proof text NOT NULL,
+    attempt_ids text NOT NULL,
+    created_at bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_operation_recoveries_attempt_ids_check CHECK (((octet_length(attempt_ids) <= 32768) AND (jsonb_typeof((attempt_ids)::jsonb) = 'array'::text))),
+    CONSTRAINT control_operation_recoveries_check CHECK ((to_revision = (from_revision + 1))),
+    CONSTRAINT control_operation_recoveries_check1 CHECK ((original_deadline > created_at)),
+    CONSTRAINT control_operation_recoveries_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_operation_recoveries_document_check CHECK ((octet_length(document) <= 33554432)),
+    CONSTRAINT control_operation_recoveries_from_revision_check CHECK ((from_revision >= 1)),
+    CONSTRAINT control_operation_recoveries_operation_revision_check CHECK ((operation_revision >= 1)),
+    CONSTRAINT control_operation_recoveries_proof_check CHECK ((proof = ANY (ARRAY['NEVER_CONSUMED'::text, 'QUALIFIED_BROKER_NO_WRITE'::text, 'TARGET_DEDUPLICATION'::text])))
+);
+
+ALTER TABLE ONLY public.control_operation_recoveries FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_operation_review_owners (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    directory_revision bigint NOT NULL,
+    source_digest text NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_operation_review_owners_directory_revision_check CHECK ((directory_revision >= 0)),
+    CONSTRAINT control_operation_review_owners_document_check CHECK (((octet_length(document) <= 16384) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_operation_review_owners_source_digest_check CHECK ((source_digest ~ '^[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_operation_review_owners FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_operations (
+    tenant_id character varying(128) NOT NULL,
+    operation_id character varying(128) NOT NULL,
+    request_digest text NOT NULL,
+    state text NOT NULL,
+    legacy boolean NOT NULL,
+    revision bigint NOT NULL,
+    created_at bigint NOT NULL,
+    CONSTRAINT control_operations_created_at_check CHECK ((created_at >= 0)),
+    CONSTRAINT control_operations_revision_check CHECK ((revision >= 1)),
+    CONSTRAINT control_operations_state_check CHECK ((state = ANY (ARRAY['RUNNING'::text, 'OUTCOME_UNKNOWN'::text, 'FAILED'::text])))
+);
+
+ALTER TABLE ONLY public.control_operations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_outcome_reconciliations (
+    tenant_id character varying(128) NOT NULL,
+    reconciliation_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL
+);
+
+ALTER TABLE ONLY public.control_outcome_reconciliations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_package_provisioning (
+    tenant_id character varying(128) NOT NULL,
+    profile_id character varying(128) NOT NULL,
+    generation bigint NOT NULL,
+    profile_digest character(71) NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_package_provisioning_document_check CHECK ((octet_length(document) <= 262144)),
+    CONSTRAINT control_package_provisioning_generation_check CHECK (((generation >= 1) AND (generation <= '9007199254740991'::bigint))),
+    CONSTRAINT control_package_provisioning_profile_digest_check CHECK ((profile_digest ~ '^sha256:[a-f0-9]{64}$'::text))
+);
+
+ALTER TABLE ONLY public.control_package_provisioning FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_policy_bundles (
+    tenant_id character varying(128) NOT NULL,
+    sequence bigint NOT NULL,
+    directory_revision bigint NOT NULL,
+    document text NOT NULL,
+    policy text NOT NULL,
+    published_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT control_policy_bundles_directory_revision_check CHECK (((directory_revision >= 0) AND (directory_revision <= '9007199254740991'::bigint))),
+    CONSTRAINT control_policy_bundles_document_check CHECK ((octet_length(document) <= 2000100)),
+    CONSTRAINT control_policy_bundles_policy_check CHECK ((octet_length(policy) <= 1048576)),
+    CONSTRAINT control_policy_bundles_sequence_check CHECK (((sequence >= 1) AND (sequence <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_policy_bundles FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_queued_authority (
+    tenant_id character varying(128) NOT NULL,
+    kind character varying(32) NOT NULL,
+    record_id character varying(128) NOT NULL,
+    creator_user_id character varying(128) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_queued_authority FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_record_ids (
+    tenant_id character varying(128) NOT NULL,
+    kind character varying(32) NOT NULL,
+    record_id character varying(128) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_record_ids FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_records (
+    tenant_id character varying(128) NOT NULL,
+    kind character varying(32) NOT NULL,
+    record_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    document jsonb NOT NULL,
+    CONSTRAINT control_records_check CHECK ((((document ->> 'id'::text) = (record_id)::text) AND (((document ->> 'revision'::text))::bigint = revision))),
+    CONSTRAINT control_records_document_check CHECK ((jsonb_typeof(document) = 'object'::text)),
+    CONSTRAINT control_records_kind_check CHECK (((kind)::text = ANY ((ARRAY['USER'::character varying, 'TEAM'::character varying, 'AGENT'::character varying, 'TOOL'::character varying, 'POLICY'::character varying, 'DEVICE'::character varying, 'ROLE'::character varying, 'DEVICE_GROUP'::character varying, 'AGENT_GROUP'::character varying, 'TOOL_GROUP'::character varying, 'GRANT'::character varying, 'DELEGATION'::character varying, 'AGENT_DELEGATION'::character varying, 'BINDING'::character varying, 'EXTRACTOR'::character varying, 'WORKLOAD_BINDING'::character varying, 'IDENTITY_BINDING'::character varying, 'DEVICE_EVIDENCE'::character varying])::text[]))),
+    CONSTRAINT control_records_revision_check CHECK (((revision >= 1) AND (revision <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_records FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_recovery_floors (
+    tenant_id character varying(128) NOT NULL,
+    snapshot_sequence bigint NOT NULL,
+    CONSTRAINT control_recovery_floors_snapshot_sequence_check CHECK ((snapshot_sequence >= 0))
+);
+
+ALTER TABLE ONLY public.control_recovery_floors FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_reviewed_recovery (
+    tenant_id character varying(128) NOT NULL,
+    review_digest character(64) NOT NULL
+);
+
+ALTER TABLE ONLY public.control_reviewed_recovery FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_secrets (
+    tenant_id character varying(128) NOT NULL,
+    name character varying(128) NOT NULL,
+    tool_group_id character varying(128) NOT NULL,
+    device_group_id character varying(128) NOT NULL,
+    version bigint NOT NULL,
+    key_version bigint NOT NULL,
+    cipher text NOT NULL,
+    CONSTRAINT control_secrets_cipher_check CHECK ((octet_length(cipher) <= 65536)),
+    CONSTRAINT control_secrets_version_check CHECK (((version >= 1) AND (version <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_secrets FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_server_deployments (
+    tenant_id character varying(128) NOT NULL,
+    package_id character varying(127) NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_server_deployments_document_check CHECK ((octet_length(document) <= 65536))
+);
+
+ALTER TABLE ONLY public.control_server_deployments FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_server_documents (
+    tenant_id character varying(128) NOT NULL,
+    digest character(71) NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_server_documents_digest_check CHECK ((digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_server_documents_document_check CHECK ((octet_length(document) <= 1048576))
+);
+
+ALTER TABLE ONLY public.control_server_documents FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_server_packages (
+    tenant_id character varying(128) NOT NULL,
+    package_digest character(71) NOT NULL,
+    package_id character varying(127) NOT NULL,
+    version character varying(128) NOT NULL,
+    uploaded_at bigint NOT NULL,
+    document text NOT NULL,
+    content bytea NOT NULL,
+    CONSTRAINT control_server_packages_content_check CHECK ((octet_length(content) <= 67108864)),
+    CONSTRAINT control_server_packages_document_check CHECK ((octet_length(document) <= 4194304)),
+    CONSTRAINT control_server_packages_package_digest_check CHECK ((package_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_server_packages_uploaded_at_check CHECK (((uploaded_at >= 0) AND (uploaded_at <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_server_packages FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_server_settings (
+    tenant_id character varying(128) NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_server_settings_document_check CHECK ((octet_length(document) <= 16384)),
+    CONSTRAINT control_server_settings_revision_check CHECK (((revision >= 1) AND (revision <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_server_settings FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenant_authority (
+    tenant_id character varying(128) NOT NULL,
+    revision bigint DEFAULT 0 NOT NULL,
+    authorization_epoch bigint DEFAULT 0 NOT NULL,
+    directory_cache_generation bigint DEFAULT 0 NOT NULL,
+    CONSTRAINT control_tenant_authority_authorization_epoch_check CHECK (((authorization_epoch >= 0) AND (authorization_epoch <= '9007199254740991'::bigint))),
+    CONSTRAINT control_tenant_authority_directory_cache_generation_check CHECK ((directory_cache_generation >= 0)),
+    CONSTRAINT control_tenant_authority_revision_check CHECK (((revision >= 0) AND (revision <= '9007199254740991'::bigint)))
+);
+
+ALTER TABLE ONLY public.control_tenant_authority FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenant_capacity (
+    tenant_id character varying(128) NOT NULL,
+    stored_bytes bigint DEFAULT 0 NOT NULL,
+    stored_rows bigint DEFAULT 0 NOT NULL,
+    queued_rows bigint DEFAULT 0 NOT NULL,
+    max_stored_bytes bigint DEFAULT 1073741824 NOT NULL,
+    max_stored_rows bigint DEFAULT 100000 NOT NULL,
+    max_queued_rows bigint DEFAULT 256 NOT NULL,
+    CONSTRAINT control_tenant_capacity_check CHECK (((stored_rows <= max_stored_rows) AND (queued_rows <= max_queued_rows) AND ((stored_bytes + (queued_rows * 16777216)) <= max_stored_bytes))),
+    CONSTRAINT control_tenant_capacity_max_queued_rows_check CHECK (((max_queued_rows >= 1) AND (max_queued_rows <= 100000))),
+    CONSTRAINT control_tenant_capacity_max_stored_bytes_check CHECK (((max_stored_bytes >= 4096) AND (max_stored_bytes <= '1099511627776'::bigint))),
+    CONSTRAINT control_tenant_capacity_max_stored_rows_check CHECK (((max_stored_rows >= 1) AND (max_stored_rows <= 1000000))),
+    CONSTRAINT control_tenant_capacity_queued_rows_check CHECK ((queued_rows >= 0)),
+    CONSTRAINT control_tenant_capacity_stored_bytes_check CHECK ((stored_bytes >= 0)),
+    CONSTRAINT control_tenant_capacity_stored_rows_check CHECK ((stored_rows >= 0))
+);
+
+ALTER TABLE ONLY public.control_tenant_capacity FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenant_hosts (
+    hostname character varying(253) NOT NULL,
+    tenant_id character varying(128) NOT NULL,
+    CONSTRAINT control_tenant_hosts_hostname_check CHECK ((((hostname)::text = lower((hostname)::text)) AND (length((hostname)::text) > 0)))
+);
+
+CREATE TABLE public.control_tenant_identity_keys (
+    tenant_id character varying(128) NOT NULL,
+    purpose character varying(16) NOT NULL,
+    key_id character varying(128) NOT NULL,
+    state character varying(16) NOT NULL,
+    provider_reference character varying(512) NOT NULL,
+    public_material text NOT NULL,
+    key_fingerprint character varying(64) NOT NULL,
+    generation bigint NOT NULL,
+    CONSTRAINT control_tenant_identity_keys_generation_check CHECK (((generation >= 1) AND (generation <= '9007199254740991'::bigint))),
+    CONSTRAINT control_tenant_identity_keys_key_fingerprint_check CHECK (((key_fingerprint)::text ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_tenant_identity_keys_key_id_check CHECK (((length((key_id)::text) >= 1) AND (length((key_id)::text) <= 128))),
+    CONSTRAINT control_tenant_identity_keys_public_material_check CHECK ((octet_length(public_material) <= 16384)),
+    CONSTRAINT control_tenant_identity_keys_purpose_check CHECK (((purpose)::text = ANY ((ARRAY['DISCOVERY'::character varying, 'DEVICE_CA'::character varying])::text[]))),
+    CONSTRAINT control_tenant_identity_keys_state_check CHECK (((state)::text = ANY ((ARRAY['ACTIVE'::character varying, 'READ_ONLY'::character varying, 'RETIRED'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_tenant_identity_keys FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenant_initializations (
+    tenant_id character varying(128) NOT NULL,
+    version integer NOT NULL,
+    effective_digest character(64) NOT NULL,
+    provenance text NOT NULL,
+    completed_at bigint NOT NULL,
+    CONSTRAINT control_tenant_initializations_completed_at_check CHECK ((completed_at >= 0)),
+    CONSTRAINT control_tenant_initializations_effective_digest_check CHECK ((effective_digest ~ '^[a-f0-9]{64}$'::text)),
+    CONSTRAINT control_tenant_initializations_provenance_check CHECK ((octet_length(provenance) <= 65536)),
+    CONSTRAINT control_tenant_initializations_version_check CHECK ((version = 1))
+);
+
+ALTER TABLE ONLY public.control_tenant_initializations FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenant_runtime_profiles (
+    tenant_id character varying(128) NOT NULL,
+    server_id character varying(128) NOT NULL,
+    organization text NOT NULL,
+    control_url text NOT NULL,
+    gateway_url text NOT NULL,
+    CONSTRAINT control_tenant_runtime_profiles_control_url_check CHECK ((octet_length(control_url) <= 2048)),
+    CONSTRAINT control_tenant_runtime_profiles_gateway_url_check CHECK ((octet_length(gateway_url) <= 2048)),
+    CONSTRAINT control_tenant_runtime_profiles_organization_check CHECK (((length(organization) >= 1) AND (length(organization) <= 256)))
+);
+
+ALTER TABLE ONLY public.control_tenant_runtime_profiles FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenant_vault_keys (
+    tenant_id character varying(128) NOT NULL,
+    version bigint NOT NULL,
+    state character varying(16) NOT NULL,
+    provider_reference character varying(128) NOT NULL,
+    wrapped_encryption_key text NOT NULL,
+    wrapped_retry_key text NOT NULL,
+    CONSTRAINT control_tenant_vault_keys_state_check CHECK (((state)::text = ANY ((ARRAY['ACTIVE'::character varying, 'READ_ONLY'::character varying, 'RETIRED'::character varying])::text[]))),
+    CONSTRAINT control_tenant_vault_keys_version_check CHECK (((version >= 1) AND (version <= 1024))),
+    CONSTRAINT control_tenant_vault_keys_wrapped_encryption_key_check CHECK ((octet_length(wrapped_encryption_key) <= 1024)),
+    CONSTRAINT control_tenant_vault_keys_wrapped_retry_key_check CHECK ((octet_length(wrapped_retry_key) <= 1024))
+);
+
+ALTER TABLE ONLY public.control_tenant_vault_keys FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tenants (
+    tenant_id character varying(128) NOT NULL,
+    alias character varying(63) NOT NULL,
+    display_name text NOT NULL,
+    status character varying(16) NOT NULL,
+    created_at bigint NOT NULL,
+    updated_at bigint NOT NULL,
+    initialization_failure_code character varying(32),
+    initialization_failed_at bigint,
+    CONSTRAINT control_tenants_alias_check CHECK (((alias)::text ~ '^[a-z0-9][a-z0-9-]{0,62}$'::text)),
+    CONSTRAINT control_tenants_check CHECK ((updated_at >= created_at)),
+    CONSTRAINT control_tenants_check1 CHECK (((initialization_failure_code IS NULL) = (initialization_failed_at IS NULL))),
+    CONSTRAINT control_tenants_check2 CHECK ((((status)::text = 'PROVISIONING'::text) OR (initialization_failure_code IS NULL))),
+    CONSTRAINT control_tenants_created_at_check CHECK ((created_at >= 0)),
+    CONSTRAINT control_tenants_display_name_check CHECK (((length(display_name) >= 1) AND (length(display_name) <= 256))),
+    CONSTRAINT control_tenants_initialization_failed_at_check CHECK ((initialization_failed_at >= 0)),
+    CONSTRAINT control_tenants_initialization_failure_code_check CHECK (((initialization_failure_code)::text = 'INITIALIZATION_FAILED'::text)),
+    CONSTRAINT control_tenants_status_check CHECK (((status)::text = ANY ((ARRAY['PROVISIONING'::character varying, 'ACTIVE'::character varying, 'SUSPENDED'::character varying])::text[]))),
+    CONSTRAINT control_tenants_tenant_id_check CHECK (((tenant_id)::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::text))
+);
+
+CREATE TABLE public.control_tool_host_dispatches (
+    tenant_id character varying(128) NOT NULL,
+    invocation_id character varying(128) NOT NULL,
+    host_id character varying(128) NOT NULL,
+    state character varying(16) NOT NULL,
+    expires_at bigint NOT NULL,
+    created_at bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_tool_host_dispatches_created_at_check CHECK (((created_at >= 0) AND (created_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_tool_host_dispatches_document_check CHECK ((octet_length(document) <= 16777216)),
+    CONSTRAINT control_tool_host_dispatches_expires_at_check CHECK (((expires_at >= 0) AND (expires_at <= '9007199254740991'::bigint))),
+    CONSTRAINT control_tool_host_dispatches_state_check CHECK (((state)::text = ANY ((ARRAY['QUEUED'::character varying, 'CLAIMED'::character varying, 'ADMITTED'::character varying, 'REFUSED'::character varying, 'FINISHED'::character varying, 'EXPIRED'::character varying])::text[])))
+);
+
+ALTER TABLE ONLY public.control_tool_host_dispatches FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_tool_hosts (
+    tenant_id character varying(128) NOT NULL,
+    device_id character varying(128) NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_tool_hosts_document_check CHECK ((octet_length(document) <= 16384))
+);
+
+ALTER TABLE ONLY public.control_tool_hosts FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE ONLY public.control_approval_clocks
+    ADD CONSTRAINT control_approval_clocks_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_effects
+    ADD CONSTRAINT control_attempt_effects_pkey PRIMARY KEY (tenant_id, operation_id, attempt_id, effect_id);
+
+ALTER TABLE ONLY public.control_attempt_manifest_seals
+    ADD CONSTRAINT control_attempt_manifest_seals_pkey PRIMARY KEY (tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_recovery_scopes
+    ADD CONSTRAINT control_attempt_recovery_scopes_pkey PRIMARY KEY (tenant_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_reviews
+    ADD CONSTRAINT control_attempt_reviews_pkey PRIMARY KEY (tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_settlements
+    ADD CONSTRAINT control_attempt_settlements_pkey PRIMARY KEY (tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_snapshots
+    ADD CONSTRAINT control_attempt_snapshots_pkey PRIMARY KEY (tenant_id, attempt_id, revision);
+
+ALTER TABLE ONLY public.control_audit
+    ADD CONSTRAINT control_audit_pkey PRIMARY KEY (sequence);
+
+ALTER TABLE ONLY public.control_authorization_outbox
+    ADD CONSTRAINT control_authorization_outbox_pkey PRIMARY KEY (tenant_id, revision);
+
+ALTER TABLE ONLY public.control_bootstrap_admins
+    ADD CONSTRAINT control_bootstrap_admins_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_builder
+    ADD CONSTRAINT control_builder_pkey PRIMARY KEY (tenant_id, kind, record_id);
+
+ALTER TABLE ONLY public.control_business_key_history
+    ADD CONSTRAINT control_business_key_history_pkey PRIMARY KEY (tenant_id, tool_id, namespace, namespace_identity, business_key_hash, invocation_id);
+
+ALTER TABLE ONLY public.control_business_keys
+    ADD CONSTRAINT control_business_keys_pkey PRIMARY KEY (tenant_id, tool_id, namespace, namespace_identity, business_key_hash);
+
+ALTER TABLE ONLY public.control_configuration_changes
+    ADD CONSTRAINT control_configuration_changes_pkey PRIMARY KEY (tenant_id, change_id);
+
+ALTER TABLE ONLY public.control_console_devices
+    ADD CONSTRAINT control_console_devices_pkey PRIMARY KEY (tenant_id, session_id);
+
+ALTER TABLE ONLY public.control_credential_history
+    ADD CONSTRAINT control_credential_history_pkey PRIMARY KEY (tenant_id, credential_sha256);
+
+ALTER TABLE ONLY public.control_effect_consent_approvals
+    ADD CONSTRAINT control_effect_consent_approvals_pkey PRIMARY KEY (tenant_id, consent_id);
+
+ALTER TABLE ONLY public.control_effect_consent_revocations
+    ADD CONSTRAINT control_effect_consent_revocations_pkey PRIMARY KEY (tenant_id, consent_id);
+
+ALTER TABLE ONLY public.control_effect_consent_slots
+    ADD CONSTRAINT control_effect_consent_slots_pkey PRIMARY KEY (tenant_id, consent_id, slot_index);
+
+ALTER TABLE ONLY public.control_effect_consent_uses
+    ADD CONSTRAINT control_effect_consent_uses_pkey PRIMARY KEY (tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effect_consents
+    ADD CONSTRAINT control_effect_consents_pkey PRIMARY KEY (tenant_id, consent_id);
+
+ALTER TABLE ONLY public.control_effect_consents
+    ADD CONSTRAINT control_effect_consents_tenant_id_operation_id_key UNIQUE (tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_effect_evidence
+    ADD CONSTRAINT control_effect_evidence_pkey PRIMARY KEY (tenant_id, effect_id, generation, evidence_digest);
+
+ALTER TABLE ONLY public.control_effect_generations
+    ADD CONSTRAINT control_effect_generations_pkey PRIMARY KEY (tenant_id, effect_id, generation);
+
+ALTER TABLE ONLY public.control_effect_generations
+    ADD CONSTRAINT control_effect_generations_tenant_id_auth_nonce_key UNIQUE (tenant_id, auth_nonce);
+
+ALTER TABLE ONLY public.control_effect_intents
+    ADD CONSTRAINT control_effect_intents_pkey PRIMARY KEY (tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effect_target_bindings
+    ADD CONSTRAINT control_effect_target_bindings_pkey PRIMARY KEY (tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effects
+    ADD CONSTRAINT control_effects_pkey PRIMARY KEY (tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effects
+    ADD CONSTRAINT control_effects_tenant_id_operation_id_effect_id_key UNIQUE (tenant_id, operation_id, effect_id);
+
+ALTER TABLE ONLY public.control_endpoint_configurations
+    ADD CONSTRAINT control_endpoint_configurations_pkey PRIMARY KEY (tenant_id, device_id);
+
+ALTER TABLE ONLY public.control_endpoints
+    ADD CONSTRAINT control_endpoints_pkey PRIMARY KEY (tenant_id, device_id);
+
+ALTER TABLE ONLY public.control_endpoints
+    ADD CONSTRAINT control_endpoints_tenant_id_key_fingerprint_key UNIQUE (tenant_id, key_fingerprint);
+
+ALTER TABLE ONLY public.control_enrollments
+    ADD CONSTRAINT control_enrollments_pkey PRIMARY KEY (tenant_id, enrollment_id);
+
+ALTER TABLE ONLY public.control_enrollments
+    ADD CONSTRAINT control_enrollments_tenant_id_code_digest_key UNIQUE (tenant_id, code_digest);
+
+ALTER TABLE ONLY public.control_enterprise_adoptions
+    ADD CONSTRAINT control_enterprise_adoptions_pkey PRIMARY KEY (tenant_id, actor_type, actor_id);
+
+ALTER TABLE ONLY public.control_enterprise_approvals
+    ADD CONSTRAINT control_enterprise_approvals_pkey PRIMARY KEY (tenant_id, approval_id);
+
+ALTER TABLE ONLY public.control_enterprise_invocations
+    ADD CONSTRAINT control_enterprise_invocations_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_enterprise_nonces
+    ADD CONSTRAINT control_enterprise_nonces_pkey PRIMARY KEY (tenant_id, nonce);
+
+ALTER TABLE ONLY public.control_execution_budgets
+    ADD CONSTRAINT control_execution_budgets_pkey PRIMARY KEY (tenant_id, budget_id, invocation_id);
+
+ALTER TABLE ONLY public.control_execution_evidence
+    ADD CONSTRAINT control_execution_evidence_pkey PRIMARY KEY (tenant_id, invocation_id, fencing_token, report_digest);
+
+ALTER TABLE ONLY public.control_execution_leases
+    ADD CONSTRAINT control_execution_leases_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_fleet
+    ADD CONSTRAINT control_fleet_pkey PRIMARY KEY (tenant_id, kind, record_id);
+
+ALTER TABLE ONLY public.control_idempotency
+    ADD CONSTRAINT control_idempotency_pkey PRIMARY KEY (tenant_id, actor_id, key);
+
+ALTER TABLE ONLY public.control_insights_admissions
+    ADD CONSTRAINT control_insights_admissions_pkey PRIMARY KEY (tenant_id, bucket_start, tool_id, category);
+
+ALTER TABLE ONLY public.control_insights_attempts
+    ADD CONSTRAINT control_insights_attempts_pkey PRIMARY KEY (tenant_id, invocation_id, attempt_number);
+
+ALTER TABLE ONLY public.control_insights_cells
+    ADD CONSTRAINT control_insights_cells_pkey PRIMARY KEY (tenant_id, series, granularity, bucket_start, dim, outcome);
+
+ALTER TABLE ONLY public.control_insights_checkpoints
+    ADD CONSTRAINT control_insights_checkpoints_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_insights_facts
+    ADD CONSTRAINT control_insights_facts_pkey PRIMARY KEY (tenant_id, invocation_id, fact_seq);
+
+ALTER TABLE ONLY public.control_insights_gateway_epochs
+    ADD CONSTRAINT control_insights_gateway_epochs_pkey PRIMARY KEY (tenant_id, gateway_id, epoch);
+
+ALTER TABLE ONLY public.control_insights_invocations
+    ADD CONSTRAINT control_insights_invocations_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_insights_spans
+    ADD CONSTRAINT control_insights_spans_pkey PRIMARY KEY (tenant_id, invocation_id, span_id);
+
+ALTER TABLE ONLY public.control_insights_tenant_state
+    ADD CONSTRAINT control_insights_tenant_state_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_invocation_authority
+    ADD CONSTRAINT control_invocation_authority_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_invocation_event_streams
+    ADD CONSTRAINT control_invocation_event_streams_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_invocation_events
+    ADD CONSTRAINT control_invocation_events_pkey PRIMARY KEY (tenant_id, invocation_id, event_cursor);
+
+ALTER TABLE ONLY public.control_invocation_results
+    ADD CONSTRAINT control_invocation_results_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_mcp_approvals
+    ADD CONSTRAINT control_mcp_approvals_pkey PRIMARY KEY (tenant_id, slug, sequence);
+
+ALTER TABLE ONLY public.control_mcp_requests
+    ADD CONSTRAINT control_mcp_requests_pkey PRIMARY KEY (tenant_id, request_id);
+
+ALTER TABLE ONLY public.control_mcp_scans
+    ADD CONSTRAINT control_mcp_scans_pkey PRIMARY KEY (tenant_id, scan_id);
+
+ALTER TABLE ONLY public.control_mcp_servers
+    ADD CONSTRAINT control_mcp_servers_pkey PRIMARY KEY (tenant_id, slug);
+
+ALTER TABLE ONLY public.control_mcp_snapshots
+    ADD CONSTRAINT control_mcp_snapshots_pkey PRIMARY KEY (tenant_id, slug, revision);
+
+ALTER TABLE ONLY public.control_operation_attempts
+    ADD CONSTRAINT control_operation_attempts_pkey PRIMARY KEY (tenant_id, attempt_id);
+
+ALTER TABLE ONLY public.control_operation_attempts
+    ADD CONSTRAINT control_operation_attempts_tenant_id_operation_id_attempt_i_key UNIQUE (tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_operation_cancellations
+    ADD CONSTRAINT control_operation_cancellations_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_operation_outcomes
+    ADD CONSTRAINT control_operation_outcomes_pkey PRIMARY KEY (tenant_id, operation_id, revision);
+
+ALTER TABLE ONLY public.control_operation_recoveries
+    ADD CONSTRAINT control_operation_recoveries_pkey PRIMARY KEY (tenant_id, operation_id, from_revision);
+
+ALTER TABLE ONLY public.control_operation_recoveries
+    ADD CONSTRAINT control_operation_recoveries_tenant_id_operation_id_to_revi_key UNIQUE (tenant_id, operation_id, to_revision);
+
+ALTER TABLE ONLY public.control_operation_review_owners
+    ADD CONSTRAINT control_operation_review_owners_pkey PRIMARY KEY (tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_operations
+    ADD CONSTRAINT control_operations_pkey PRIMARY KEY (tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_outcome_reconciliations
+    ADD CONSTRAINT control_outcome_reconciliations_pkey PRIMARY KEY (tenant_id, reconciliation_id);
+
+ALTER TABLE ONLY public.control_package_provisioning
+    ADD CONSTRAINT control_package_provisioning_pkey PRIMARY KEY (tenant_id, profile_id);
+
+ALTER TABLE ONLY public.control_policy_bundles
+    ADD CONSTRAINT control_policy_bundles_pkey PRIMARY KEY (tenant_id, sequence);
+
+ALTER TABLE ONLY public.control_queued_authority
+    ADD CONSTRAINT control_queued_authority_pkey PRIMARY KEY (tenant_id, kind, record_id);
+
+ALTER TABLE ONLY public.control_record_ids
+    ADD CONSTRAINT control_record_ids_pkey PRIMARY KEY (tenant_id, kind, record_id);
+
+ALTER TABLE ONLY public.control_records
+    ADD CONSTRAINT control_records_pkey PRIMARY KEY (tenant_id, kind, record_id);
+
+ALTER TABLE ONLY public.control_recovery_floors
+    ADD CONSTRAINT control_recovery_floors_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_reviewed_recovery
+    ADD CONSTRAINT control_reviewed_recovery_pkey PRIMARY KEY (tenant_id, review_digest);
+
+ALTER TABLE ONLY public.control_secrets
+    ADD CONSTRAINT control_secrets_pkey PRIMARY KEY (tenant_id, name);
+
+ALTER TABLE ONLY public.control_server_deployments
+    ADD CONSTRAINT control_server_deployments_pkey PRIMARY KEY (tenant_id, package_id);
+
+ALTER TABLE ONLY public.control_server_documents
+    ADD CONSTRAINT control_server_documents_pkey PRIMARY KEY (tenant_id, digest);
+
+ALTER TABLE ONLY public.control_server_packages
+    ADD CONSTRAINT control_server_packages_pkey PRIMARY KEY (tenant_id, package_digest);
+
+ALTER TABLE ONLY public.control_server_settings
+    ADD CONSTRAINT control_server_settings_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_authority
+    ADD CONSTRAINT control_tenant_authority_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_capacity
+    ADD CONSTRAINT control_tenant_capacity_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_hosts
+    ADD CONSTRAINT control_tenant_hosts_pkey PRIMARY KEY (hostname);
+
+ALTER TABLE ONLY public.control_tenant_identity_keys
+    ADD CONSTRAINT control_tenant_identity_keys_key_fingerprint_key UNIQUE (key_fingerprint);
+
+ALTER TABLE ONLY public.control_tenant_identity_keys
+    ADD CONSTRAINT control_tenant_identity_keys_pkey PRIMARY KEY (tenant_id, purpose, key_id);
+
+ALTER TABLE ONLY public.control_tenant_initializations
+    ADD CONSTRAINT control_tenant_initializations_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_runtime_profiles
+    ADD CONSTRAINT control_tenant_runtime_profiles_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_vault_keys
+    ADD CONSTRAINT control_tenant_vault_keys_pkey PRIMARY KEY (tenant_id, version);
+
+ALTER TABLE ONLY public.control_tenants
+    ADD CONSTRAINT control_tenants_alias_key UNIQUE (alias);
+
+ALTER TABLE ONLY public.control_tenants
+    ADD CONSTRAINT control_tenants_pkey PRIMARY KEY (tenant_id);
+
+ALTER TABLE ONLY public.control_tool_host_dispatches
+    ADD CONSTRAINT control_tool_host_dispatches_pkey PRIMARY KEY (tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_tool_hosts
+    ADD CONSTRAINT control_tool_hosts_pkey PRIMARY KEY (tenant_id, device_id);
+
+CREATE INDEX control_audit_tenant_cursor ON public.control_audit USING btree (tenant_id, sequence);
+
+CREATE INDEX control_budget_window ON public.control_execution_budgets USING btree (tenant_id, budget_id, created_at);
+
+CREATE INDEX control_business_key_invocation ON public.control_business_keys USING btree (tenant_id, invocation_id);
+
+CREATE INDEX control_business_key_retention ON public.control_business_keys USING btree (tenant_id, retain_until) WHERE (tombstoned_at IS NULL);
+
+CREATE INDEX control_console_devices_expiry ON public.control_console_devices USING btree (tenant_id, expires_at);
+
+CREATE INDEX control_effect_expiry ON public.control_effect_generations USING btree (tenant_id, state, expires_at, outcome_deadline);
+
+CREATE INDEX control_enrollment_expiry ON public.control_enrollments USING btree (tenant_id, expires_at);
+
+CREATE INDEX control_enterprise_invocation_window ON public.control_enterprise_invocations USING btree (tenant_id, created_at);
+
+CREATE INDEX control_idempotency_expiry ON public.control_idempotency USING btree (tenant_id, expires_at);
+
+CREATE INDEX control_insights_attempts_execution ON public.control_insights_attempts USING btree (tenant_id, execution_id) WHERE (execution_id IS NOT NULL);
+
+CREATE INDEX control_insights_facts_unprojected ON public.control_insights_facts USING btree (tenant_id, invocation_id, fact_seq) WHERE (projected_at IS NULL);
+
+CREATE INDEX control_insights_invocations_accepted ON public.control_insights_invocations USING btree (tenant_id, accepted_at);
+
+CREATE INDEX control_insights_invocations_parent ON public.control_insights_invocations USING btree (tenant_id, parent_invocation_id) WHERE (parent_invocation_id IS NOT NULL);
+
+CREATE INDEX control_insights_invocations_run ON public.control_insights_invocations USING btree (tenant_id, agent_run_id) WHERE (agent_run_id IS NOT NULL);
+
+CREATE INDEX control_insights_invocations_session ON public.control_insights_invocations USING btree (tenant_id, session_id) WHERE (session_id IS NOT NULL);
+
+CREATE INDEX control_insights_invocations_tool_call ON public.control_insights_invocations USING btree (tenant_id, tool_call_id) WHERE (tool_call_id IS NOT NULL);
+
+CREATE INDEX control_insights_spans_stored ON public.control_insights_spans USING btree (tenant_id, stored_at);
+
+CREATE INDEX control_invocation_active_package ON public.control_enterprise_invocations USING btree (tenant_id, package_digest) WHERE ((state)::text = ANY ((ARRAY['PENDING_APPROVAL'::character varying, 'QUEUED'::character varying, 'RESERVED'::character varying, 'DISPATCHED'::character varying, 'EXECUTING'::character varying])::text[]));
+
+CREATE INDEX control_invocation_active_tool ON public.control_enterprise_invocations USING btree (tenant_id, tool_id) WHERE ((state)::text = ANY ((ARRAY['PENDING_APPROVAL'::character varying, 'QUEUED'::character varying, 'RESERVED'::character varying, 'DISPATCHED'::character varying, 'EXECUTING'::character varying])::text[]));
+
+CREATE UNIQUE INDEX control_invocation_event_identity ON public.control_invocation_events USING btree (tenant_id, invocation_id, fencing_token, sequence) WHERE (sequence IS NOT NULL);
+
+CREATE INDEX control_invocation_event_stream_retention ON public.control_invocation_event_streams USING btree (tenant_id, retain_until) WHERE (purged_at IS NULL);
+
+CREATE INDEX control_invocation_input_deadline ON public.control_enterprise_invocations USING btree (tenant_id, task_input_deadline_at) WHERE ((task_state)::text = ANY ((ARRAY['AWAITING_APPROVAL'::character varying, 'INPUT_REQUIRED'::character varying])::text[]));
+
+CREATE INDEX control_invocation_lease ON public.control_enterprise_invocations USING btree (tenant_id, lease_expires_at) WHERE ((state)::text = 'EXECUTING'::text);
+
+CREATE INDEX control_invocation_result_retention ON public.control_invocation_results USING btree (tenant_id, retain_until) WHERE (purged_at IS NULL);
+
+CREATE UNIQUE INDEX control_invocation_task ON public.control_enterprise_invocations USING btree (tenant_id, task_id) WHERE (task_id IS NOT NULL);
+
+CREATE INDEX control_invocation_task_retention ON public.control_enterprise_invocations USING btree (tenant_id, task_retain_until) WHERE (task_id IS NOT NULL);
+
+CREATE INDEX control_mcp_pending ON public.control_mcp_requests USING btree (tenant_id, device_id, state, received_at);
+
+CREATE INDEX control_mcp_scans_queue ON public.control_mcp_scans USING btree (tenant_id, host_id, state, created_at);
+
+CREATE INDEX control_mcp_scans_server ON public.control_mcp_scans USING btree (tenant_id, slug, state);
+
+CREATE INDEX control_nonce_operation_purpose ON public.control_enterprise_nonces USING btree (tenant_id, invocation_id, purpose);
+
+CREATE UNIQUE INDEX control_one_live_effect_generation ON public.control_effect_generations USING btree (tenant_id, effect_id) WHERE (state = ANY (ARRAY['AUTHORIZED'::text, 'SENDING'::text, 'CONSUMED'::text]));
+
+CREATE INDEX control_tenant_hosts_owner ON public.control_tenant_hosts USING btree (tenant_id);
+
+CREATE UNIQUE INDEX control_tenant_identity_keys_active ON public.control_tenant_identity_keys USING btree (tenant_id, purpose) WHERE ((state)::text = 'ACTIVE'::text);
+
+CREATE UNIQUE INDEX control_tenant_vault_keys_current ON public.control_tenant_vault_keys USING btree (tenant_id) WHERE ((state)::text = 'ACTIVE'::text);
+
+CREATE INDEX control_tool_host_dispatches_queue ON public.control_tool_host_dispatches USING btree (tenant_id, host_id, state, created_at);
+
+CREATE TRIGGER attempt_binding_guard BEFORE INSERT ON public.control_operation_attempts FOR EACH ROW EXECUTE FUNCTION public.control_attempt_binding_guard();
+
+CREATE TRIGGER attempt_effect_guard BEFORE INSERT ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_effect_guard();
+
+CREATE TRIGGER attempt_effects_capacity AFTER INSERT ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_effects_capacity();
+
+CREATE TRIGGER attempt_effects_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER attempt_immutable BEFORE DELETE OR UPDATE ON public.control_operation_attempts FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER attempt_manifest_seal_guard BEFORE INSERT ON public.control_attempt_manifest_seals FOR EACH ROW EXECUTE FUNCTION public.control_attempt_manifest_seal_guard();
+
+CREATE TRIGGER attempt_manifest_seals_capacity AFTER INSERT ON public.control_attempt_manifest_seals FOR EACH ROW EXECUTE FUNCTION public.control_attempt_manifest_seals_capacity();
+
+CREATE TRIGGER attempt_manifest_seals_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_manifest_seals FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER attempt_reservation_guard BEFORE INSERT ON public.control_enterprise_nonces FOR EACH ROW EXECUTE FUNCTION public.control_attempt_reservation_guard();
+
+CREATE TRIGGER attempt_review_capacity AFTER INSERT ON public.control_attempt_reviews FOR EACH ROW EXECUTE FUNCTION public.control_attempt_review_capacity();
+
+CREATE TRIGGER attempt_review_guard BEFORE INSERT ON public.control_attempt_reviews FOR EACH ROW EXECUTE FUNCTION public.control_attempt_review_guard();
+
+CREATE TRIGGER attempt_review_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_reviews FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER attempt_settlement_capacity AFTER INSERT ON public.control_attempt_settlements FOR EACH ROW EXECUTE FUNCTION public.control_attempt_settlement_capacity();
+
+CREATE TRIGGER attempt_settlement_guard BEFORE INSERT ON public.control_attempt_settlements FOR EACH ROW EXECUTE FUNCTION public.control_attempt_settlement_guard();
+
+CREATE TRIGGER attempt_settlement_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_settlements FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CREATE TRIGGER consent_approval_guard BEFORE INSERT ON public.control_effect_consent_approvals FOR EACH ROW EXECUTE FUNCTION public.consent_approval_guard();
+
+CREATE TRIGGER consent_approvals_capacity AFTER INSERT ON public.control_effect_consent_approvals FOR EACH ROW EXECUTE FUNCTION public.consent_approvals_capacity();
+
+CREATE TRIGGER consent_approvals_immutable BEFORE DELETE OR UPDATE ON public.control_effect_consent_approvals FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER consent_revocations_capacity AFTER INSERT ON public.control_effect_consent_revocations FOR EACH ROW EXECUTE FUNCTION public.consent_revocations_capacity();
+
+CREATE TRIGGER consent_revocations_immutable BEFORE DELETE OR UPDATE ON public.control_effect_consent_revocations FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER consent_slots_capacity AFTER INSERT ON public.control_effect_consent_slots FOR EACH ROW EXECUTE FUNCTION public.consent_slots_capacity();
+
+CREATE TRIGGER consent_slots_immutable BEFORE DELETE OR UPDATE ON public.control_effect_consent_slots FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER consent_use_guard BEFORE INSERT ON public.control_effect_consent_uses FOR EACH ROW EXECUTE FUNCTION public.consent_use_guard();
+
+CREATE TRIGGER consent_uses_capacity AFTER INSERT ON public.control_effect_consent_uses FOR EACH ROW EXECUTE FUNCTION public.consent_uses_capacity();
+
+CREATE TRIGGER consent_uses_immutable BEFORE DELETE OR UPDATE ON public.control_effect_consent_uses FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER consents_capacity AFTER INSERT ON public.control_effect_consents FOR EACH ROW EXECUTE FUNCTION public.consents_capacity();
+
+CREATE TRIGGER consents_immutable BEFORE DELETE OR UPDATE ON public.control_effect_consents FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER control_builder_guard BEFORE DELETE OR UPDATE ON public.control_builder FOR EACH ROW EXECUTE FUNCTION public.control_builder_guard();
+
+CREATE TRIGGER control_business_key_guard BEFORE DELETE OR UPDATE ON public.control_business_keys FOR EACH ROW EXECUTE FUNCTION public.control_business_key_guard();
+
+CREATE TRIGGER control_business_key_history_immutable BEFORE DELETE OR UPDATE ON public.control_business_key_history FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER control_business_key_history_insert BEFORE INSERT ON public.control_business_key_history FOR EACH ROW EXECUTE FUNCTION public.control_business_key_history_insert_guard();
+
+
+
+CREATE TRIGGER control_credential_history_immutable BEFORE DELETE OR UPDATE ON public.control_credential_history FOR EACH ROW EXECUTE FUNCTION public.control_credential_immutable();
+
+CREATE TRIGGER control_epoch_guard BEFORE UPDATE ON public.control_tenant_authority FOR EACH ROW EXECUTE FUNCTION public.control_epoch_guard();
+
+CREATE TRIGGER control_fleet_guard BEFORE DELETE OR UPDATE ON public.control_fleet FOR EACH ROW EXECUTE FUNCTION public.control_fleet_guard();
+
+CREATE TRIGGER control_invocation_result_guard BEFORE DELETE OR UPDATE ON public.control_invocation_results FOR EACH ROW EXECUTE FUNCTION public.control_invocation_result_guard();
+
+CREATE TRIGGER control_operation_cancellations_immutable BEFORE DELETE OR UPDATE ON public.control_operation_cancellations FOR EACH ROW EXECUTE FUNCTION public.control_credential_immutable();
+
+CREATE TRIGGER control_records_cache_generation AFTER INSERT OR DELETE OR UPDATE ON public.control_records FOR EACH ROW EXECUTE FUNCTION public.control_invalidate_directory_cache();
+
+CREATE TRIGGER control_reviewed_recovery_immutable BEFORE DELETE OR UPDATE ON public.control_reviewed_recovery FOR EACH ROW EXECUTE FUNCTION public.control_credential_immutable();
+
+CREATE TRIGGER control_secret_version_guard BEFORE UPDATE ON public.control_secrets FOR EACH ROW EXECUTE FUNCTION public.control_secret_version_guard();
+
+CREATE TRIGGER control_settings_cache_generation AFTER INSERT OR DELETE OR UPDATE ON public.control_server_settings FOR EACH ROW EXECUTE FUNCTION public.control_invalidate_directory_cache();
+
+CREATE TRIGGER control_tenant_identity_guard BEFORE DELETE OR UPDATE ON public.control_tenants FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER control_tenant_identity_key_guard BEFORE DELETE OR UPDATE ON public.control_tenant_identity_keys FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_key_guard();
+
+CREATE TRIGGER control_tenant_initializations_immutable BEFORE DELETE OR UPDATE ON public.control_tenant_initializations FOR EACH ROW EXECUTE FUNCTION public.control_credential_immutable();
+
+CREATE TRIGGER control_tenant_lifecycle_guard BEFORE UPDATE ON public.control_tenants FOR EACH ROW EXECUTE FUNCTION public.control_tenant_lifecycle_guard();
+
+CREATE TRIGGER control_vault_key_guard BEFORE DELETE OR UPDATE ON public.control_tenant_vault_keys FOR EACH ROW EXECUTE FUNCTION public.control_vault_key_guard();
+
+CREATE TRIGGER effect_evidence_immutable BEFORE DELETE OR UPDATE ON public.control_effect_evidence FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER effect_family_insert_guard BEFORE INSERT ON public.control_effects FOR EACH ROW EXECUTE FUNCTION public.control_effect_family_insert_guard();
+
+CREATE TRIGGER effect_generation_guard BEFORE DELETE OR UPDATE ON public.control_effect_generations FOR EACH ROW EXECUTE FUNCTION public.control_effect_generation_guard();
+
+CREATE TRIGGER effect_identity_guard BEFORE DELETE OR UPDATE ON public.control_effects FOR EACH ROW EXECUTE FUNCTION public.control_effect_identity_guard();
+
+CREATE TRIGGER effect_insert_guard BEFORE INSERT ON public.control_effect_generations FOR EACH ROW EXECUTE FUNCTION public.control_effect_insert_guard();
+
+CREATE TRIGGER effect_intent_capacity AFTER INSERT ON public.control_effect_intents FOR EACH ROW EXECUTE FUNCTION public.control_effect_intent_capacity();
+
+CREATE TRIGGER effect_intent_guard BEFORE INSERT ON public.control_effect_intents FOR EACH ROW EXECUTE FUNCTION public.control_effect_intent_guard();
+
+CREATE TRIGGER effect_intent_immutable BEFORE DELETE OR UPDATE ON public.control_effect_intents FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER effect_manifest_guard BEFORE INSERT ON public.control_effect_generations FOR EACH ROW EXECUTE FUNCTION public.control_effect_manifest_guard();
+
+CREATE TRIGGER effect_manifest_member AFTER INSERT ON public.control_effect_generations FOR EACH ROW EXECUTE FUNCTION public.control_effect_manifest_member();
+
+CREATE TRIGGER effect_manifest_transition_guard BEFORE UPDATE ON public.control_effect_generations FOR EACH ROW EXECUTE FUNCTION public.control_effect_manifest_transition_guard();
+
+CREATE TRIGGER effect_target_binding_capacity AFTER INSERT ON public.control_effect_target_bindings FOR EACH ROW EXECUTE FUNCTION public.effect_target_binding_capacity();
+
+CREATE TRIGGER effect_target_binding_guard BEFORE INSERT ON public.control_effect_target_bindings FOR EACH ROW EXECUTE FUNCTION public.control_effect_target_binding_guard();
+
+CREATE TRIGGER effect_target_binding_immutable BEFORE DELETE OR UPDATE ON public.control_effect_target_bindings FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER execution_evidence_immutable BEFORE DELETE OR UPDATE ON public.control_execution_evidence FOR EACH ROW EXECUTE FUNCTION public.control_execution_evidence_guard();
+
+CREATE TRIGGER execution_identity BEFORE UPDATE ON public.control_execution_leases FOR EACH ROW EXECUTE FUNCTION public.control_execution_identity_guard();
+
+CREATE TRIGGER execution_reconciliation_guard BEFORE INSERT OR UPDATE ON public.control_enterprise_nonces FOR EACH ROW EXECUTE FUNCTION public.control_execution_reconciliation_guard();
+
+CREATE TRIGGER execution_report_qualification_guard BEFORE INSERT ON public.control_execution_evidence FOR EACH ROW EXECUTE FUNCTION public.control_execution_report_qualification_guard();
+
+CREATE TRIGGER invocation_recovery_guard BEFORE UPDATE ON public.control_enterprise_invocations FOR EACH ROW EXECUTE FUNCTION public.control_invocation_recovery_guard();
+
+CREATE TRIGGER nonce_identity_guard BEFORE UPDATE ON public.control_enterprise_nonces FOR EACH ROW EXECUTE FUNCTION public.control_nonce_identity_guard();
+
+CREATE TRIGGER operation_guard BEFORE DELETE OR UPDATE ON public.control_operations FOR EACH ROW EXECUTE FUNCTION public.control_operation_guard();
+
+CREATE TRIGGER operation_outcome_capacity AFTER INSERT ON public.control_operation_outcomes FOR EACH ROW EXECUTE FUNCTION public.control_operation_outcome_capacity();
+
+CREATE TRIGGER operation_outcome_guard BEFORE INSERT ON public.control_operation_outcomes FOR EACH ROW EXECUTE FUNCTION public.control_operation_outcome_guard();
+
+CREATE TRIGGER operation_outcome_immutable BEFORE DELETE OR UPDATE ON public.control_operation_outcomes FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER operation_recovery_capacity AFTER INSERT ON public.control_operation_recoveries FOR EACH ROW EXECUTE FUNCTION public.control_operation_recovery_capacity();
+
+CREATE TRIGGER operation_recovery_guard BEFORE INSERT OR DELETE OR UPDATE ON public.control_operation_recoveries FOR EACH ROW EXECUTE FUNCTION public.control_operation_recovery_guard();
+
+CREATE TRIGGER original_deadline_guard BEFORE UPDATE ON public.control_enterprise_invocations FOR EACH ROW EXECUTE FUNCTION public.control_original_deadline_guard();
+
+CREATE TRIGGER reconciliation_history_guard BEFORE INSERT OR DELETE OR UPDATE ON public.control_outcome_reconciliations FOR EACH ROW EXECUTE FUNCTION public.control_reconciliation_history_guard();
+
+CREATE TRIGGER recovery_scope_capacity AFTER INSERT ON public.control_attempt_recovery_scopes FOR EACH ROW EXECUTE FUNCTION public.control_recovery_scope_capacity();
+
+CREATE TRIGGER recovery_scope_guard BEFORE INSERT OR DELETE OR UPDATE ON public.control_attempt_recovery_scopes FOR EACH ROW EXECUTE FUNCTION public.control_recovery_scope_guard();
+
+CREATE TRIGGER review_owners_capacity AFTER INSERT ON public.control_operation_review_owners FOR EACH ROW EXECUTE FUNCTION public.control_review_owners_capacity();
+
+CREATE TRIGGER review_owners_guard BEFORE INSERT ON public.control_operation_review_owners FOR EACH ROW EXECUTE FUNCTION public.control_review_owners_guard();
+
+CREATE TRIGGER review_owners_immutable BEFORE DELETE OR UPDATE ON public.control_operation_review_owners FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER snapshot_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_snapshots FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
+
+CREATE TRIGGER snapshot_transition_guard BEFORE INSERT ON public.control_attempt_snapshots FOR EACH ROW EXECUTE FUNCTION public.control_snapshot_transition_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_approval_clocks FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_authorization_outbox FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_bootstrap_admins FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_builder FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_business_keys FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_configuration_changes FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_console_devices FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_credential_history FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_endpoint_configurations FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_endpoints FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_enrollments FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_enterprise_adoptions FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_enterprise_approvals FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_enterprise_invocations FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_enterprise_nonces FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_execution_budgets FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_execution_leases FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_fleet FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_idempotency FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_admissions FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_attempts FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_cells FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_checkpoints FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_facts FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_gateway_epochs FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_invocations FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_spans FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_insights_tenant_state FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_invocation_authority FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_invocation_event_streams FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_invocation_events FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_invocation_results FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_mcp_approvals FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_mcp_requests FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_mcp_scans FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_mcp_servers FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_mcp_snapshots FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_operation_cancellations FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_outcome_reconciliations FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_package_provisioning FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_policy_bundles FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_queued_authority FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_record_ids FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_records FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_recovery_floors FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_reviewed_recovery FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_secrets FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_server_deployments FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_server_documents FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_server_packages FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_server_settings FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tenant_authority FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tenant_capacity FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tenant_identity_keys FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tenant_initializations FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tenant_runtime_profiles FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tenant_vault_keys FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tool_host_dispatches FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_tool_hosts FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+
+ALTER TABLE ONLY public.control_approval_clocks
+    ADD CONSTRAINT control_approval_clocks_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_effects
+    ADD CONSTRAINT control_attempt_effects_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_effects
+    ADD CONSTRAINT control_attempt_effects_tenant_id_operation_id_attempt_id_fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_operation_attempts(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_effects
+    ADD CONSTRAINT control_attempt_effects_tenant_id_operation_id_effect_id_fkey FOREIGN KEY (tenant_id, operation_id, effect_id) REFERENCES public.control_effects(tenant_id, operation_id, effect_id);
+
+ALTER TABLE ONLY public.control_attempt_manifest_seals
+    ADD CONSTRAINT control_attempt_manifest_seal_tenant_id_operation_id_attem_fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_operation_attempts(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_manifest_seals
+    ADD CONSTRAINT control_attempt_manifest_seals_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_recovery_scopes
+    ADD CONSTRAINT control_attempt_recovery_scop_tenant_id_operation_id_attem_fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_operation_attempts(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_recovery_scopes
+    ADD CONSTRAINT control_attempt_recovery_scopes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_reviews
+    ADD CONSTRAINT control_attempt_reviews_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_reviews
+    ADD CONSTRAINT control_attempt_reviews_tenant_id_operation_id_attempt_id_fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_attempt_manifest_seals(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_reviews
+    ADD CONSTRAINT control_attempt_reviews_tenant_id_operation_id_expected_ou_fkey FOREIGN KEY (tenant_id, operation_id, expected_outcome_revision) REFERENCES public.control_operation_outcomes(tenant_id, operation_id, revision);
+
+ALTER TABLE ONLY public.control_attempt_reviews
+    ADD CONSTRAINT control_attempt_reviews_tenant_id_reconciliation_id_fkey FOREIGN KEY (tenant_id, reconciliation_id) REFERENCES public.control_outcome_reconciliations(tenant_id, reconciliation_id);
+
+ALTER TABLE ONLY public.control_attempt_settlements
+    ADD CONSTRAINT control_attempt_settlements_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_settlements
+    ADD CONSTRAINT control_attempt_settlements_tenant_id_operation_id_attempt_fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_attempt_manifest_seals(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_attempt_snapshots
+    ADD CONSTRAINT control_attempt_snapshots_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_attempt_snapshots
+    ADD CONSTRAINT control_attempt_snapshots_tenant_id_operation_id_attempt_i_fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_operation_attempts(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_audit
+    ADD CONSTRAINT control_audit_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_authorization_outbox
+    ADD CONSTRAINT control_authorization_outbox_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_bootstrap_admins
+    ADD CONSTRAINT control_bootstrap_admins_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_builder
+    ADD CONSTRAINT control_builder_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_business_key_history
+    ADD CONSTRAINT control_business_key_history_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_business_key_history
+    ADD CONSTRAINT control_business_key_history_tenant_id_invocation_id_fkey FOREIGN KEY (tenant_id, invocation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_business_keys
+    ADD CONSTRAINT control_business_keys_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_configuration_changes
+    ADD CONSTRAINT control_configuration_changes_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_console_devices
+    ADD CONSTRAINT control_console_devices_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_credential_history
+    ADD CONSTRAINT control_credential_history_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_consent_approvals
+    ADD CONSTRAINT control_effect_consent_approvals_tenant_id_consent_id_fkey FOREIGN KEY (tenant_id, consent_id) REFERENCES public.control_effect_consents(tenant_id, consent_id);
+
+ALTER TABLE ONLY public.control_effect_consent_approvals
+    ADD CONSTRAINT control_effect_consent_approvals_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_consent_revocations
+    ADD CONSTRAINT control_effect_consent_revocations_tenant_id_consent_id_fkey FOREIGN KEY (tenant_id, consent_id) REFERENCES public.control_effect_consents(tenant_id, consent_id);
+
+ALTER TABLE ONLY public.control_effect_consent_revocations
+    ADD CONSTRAINT control_effect_consent_revocations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_consent_slots
+    ADD CONSTRAINT control_effect_consent_slots_tenant_id_consent_id_fkey FOREIGN KEY (tenant_id, consent_id) REFERENCES public.control_effect_consents(tenant_id, consent_id);
+
+ALTER TABLE ONLY public.control_effect_consent_slots
+    ADD CONSTRAINT control_effect_consent_slots_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_consent_uses
+    ADD CONSTRAINT control_effect_consent_uses_tenant_id_consent_id_slot_inde_fkey FOREIGN KEY (tenant_id, consent_id, slot_index) REFERENCES public.control_effect_consent_slots(tenant_id, consent_id, slot_index);
+
+ALTER TABLE ONLY public.control_effect_consent_uses
+    ADD CONSTRAINT control_effect_consent_uses_tenant_id_effect_id_fkey FOREIGN KEY (tenant_id, effect_id) REFERENCES public.control_effects(tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effect_consent_uses
+    ADD CONSTRAINT control_effect_consent_uses_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_consents
+    ADD CONSTRAINT control_effect_consents_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_consents
+    ADD CONSTRAINT control_effect_consents_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_enterprise_invocations(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_effect_evidence
+    ADD CONSTRAINT control_effect_evidence_tenant_id_effect_id_generation_fkey FOREIGN KEY (tenant_id, effect_id, generation) REFERENCES public.control_effect_generations(tenant_id, effect_id, generation);
+
+ALTER TABLE ONLY public.control_effect_evidence
+    ADD CONSTRAINT control_effect_evidence_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_generations
+    ADD CONSTRAINT control_effect_generations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_generations
+    ADD CONSTRAINT control_effect_generations_tenant_id_operation_id_attempt__fkey FOREIGN KEY (tenant_id, operation_id, attempt_id) REFERENCES public.control_operation_attempts(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_effect_generations
+    ADD CONSTRAINT control_effect_generations_tenant_id_operation_id_effect_i_fkey FOREIGN KEY (tenant_id, operation_id, effect_id) REFERENCES public.control_effects(tenant_id, operation_id, effect_id);
+
+ALTER TABLE ONLY public.control_effect_intents
+    ADD CONSTRAINT control_effect_intents_tenant_id_effect_id_fkey FOREIGN KEY (tenant_id, effect_id) REFERENCES public.control_effects(tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effect_intents
+    ADD CONSTRAINT control_effect_intents_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_target_bindings
+    ADD CONSTRAINT control_effect_target_bindings_tenant_id_effect_id_fkey FOREIGN KEY (tenant_id, effect_id) REFERENCES public.control_effects(tenant_id, effect_id);
+
+ALTER TABLE ONLY public.control_effect_target_bindings
+    ADD CONSTRAINT control_effect_target_bindings_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effect_target_bindings
+    ADD CONSTRAINT control_effect_target_bindings_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_effects
+    ADD CONSTRAINT control_effects_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_effects
+    ADD CONSTRAINT control_effects_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_endpoint_configurations
+    ADD CONSTRAINT control_endpoint_configurations_tenant_id_device_id_fkey FOREIGN KEY (tenant_id, device_id) REFERENCES public.control_endpoints(tenant_id, device_id);
+
+ALTER TABLE ONLY public.control_endpoint_configurations
+    ADD CONSTRAINT control_endpoint_configurations_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_endpoints
+    ADD CONSTRAINT control_endpoints_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_enrollments
+    ADD CONSTRAINT control_enrollments_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_enterprise_adoptions
+    ADD CONSTRAINT control_enterprise_adoptions_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_enterprise_approvals
+    ADD CONSTRAINT control_enterprise_approvals_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_enterprise_invocations
+    ADD CONSTRAINT control_enterprise_invocations_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_enterprise_nonces
+    ADD CONSTRAINT control_enterprise_nonces_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_execution_budgets
+    ADD CONSTRAINT control_execution_budgets_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_execution_evidence
+    ADD CONSTRAINT control_execution_evidence_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_execution_evidence
+    ADD CONSTRAINT control_execution_evidence_tenant_id_invocation_id_fkey FOREIGN KEY (tenant_id, invocation_id) REFERENCES public.control_enterprise_invocations(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_execution_leases
+    ADD CONSTRAINT control_execution_leases_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_execution_leases
+    ADD CONSTRAINT control_execution_leases_tenant_id_invocation_id_fkey FOREIGN KEY (tenant_id, invocation_id) REFERENCES public.control_enterprise_invocations(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_fleet
+    ADD CONSTRAINT control_fleet_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_idempotency
+    ADD CONSTRAINT control_idempotency_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_admissions
+    ADD CONSTRAINT control_insights_admissions_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_attempts
+    ADD CONSTRAINT control_insights_attempts_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_cells
+    ADD CONSTRAINT control_insights_cells_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_checkpoints
+    ADD CONSTRAINT control_insights_checkpoints_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_facts
+    ADD CONSTRAINT control_insights_facts_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_gateway_epochs
+    ADD CONSTRAINT control_insights_gateway_epochs_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_invocations
+    ADD CONSTRAINT control_insights_invocations_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_spans
+    ADD CONSTRAINT control_insights_spans_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_insights_tenant_state
+    ADD CONSTRAINT control_insights_tenant_state_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_invocation_authority
+    ADD CONSTRAINT control_invocation_authority_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_invocation_event_streams
+    ADD CONSTRAINT control_invocation_event_streams_tenant_id_invocation_id_fkey FOREIGN KEY (tenant_id, invocation_id) REFERENCES public.control_enterprise_invocations(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_invocation_event_streams
+    ADD CONSTRAINT control_invocation_event_streams_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_invocation_events
+    ADD CONSTRAINT control_invocation_events_tenant_id_invocation_id_fkey FOREIGN KEY (tenant_id, invocation_id) REFERENCES public.control_invocation_event_streams(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_invocation_events
+    ADD CONSTRAINT control_invocation_events_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_invocation_results
+    ADD CONSTRAINT control_invocation_results_tenant_id_invocation_id_fkey FOREIGN KEY (tenant_id, invocation_id) REFERENCES public.control_enterprise_invocations(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_invocation_results
+    ADD CONSTRAINT control_invocation_results_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_mcp_approvals
+    ADD CONSTRAINT control_mcp_approvals_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_mcp_requests
+    ADD CONSTRAINT control_mcp_requests_tenant_id_device_id_fkey FOREIGN KEY (tenant_id, device_id) REFERENCES public.control_endpoints(tenant_id, device_id);
+
+ALTER TABLE ONLY public.control_mcp_requests
+    ADD CONSTRAINT control_mcp_requests_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_mcp_scans
+    ADD CONSTRAINT control_mcp_scans_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_mcp_servers
+    ADD CONSTRAINT control_mcp_servers_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_mcp_snapshots
+    ADD CONSTRAINT control_mcp_snapshots_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operation_attempts
+    ADD CONSTRAINT control_operation_attempts_tenant_id_attempt_id_fkey FOREIGN KEY (tenant_id, attempt_id) REFERENCES public.control_enterprise_nonces(tenant_id, nonce);
+
+ALTER TABLE ONLY public.control_operation_attempts
+    ADD CONSTRAINT control_operation_attempts_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operation_attempts
+    ADD CONSTRAINT control_operation_attempts_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_operation_cancellations
+    ADD CONSTRAINT control_operation_cancellations_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operation_outcomes
+    ADD CONSTRAINT control_operation_outcomes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operation_outcomes
+    ADD CONSTRAINT control_operation_outcomes_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_operation_recoveries
+    ADD CONSTRAINT control_operation_recoveries_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operation_recoveries
+    ADD CONSTRAINT control_operation_recoveries_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_operation_recoveries
+    ADD CONSTRAINT control_operation_recoveries_tenant_id_operation_id_previo_fkey FOREIGN KEY (tenant_id, operation_id, previous_nonce) REFERENCES public.control_operation_attempts(tenant_id, operation_id, attempt_id);
+
+ALTER TABLE ONLY public.control_operation_review_owners
+    ADD CONSTRAINT control_operation_review_owners_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operation_review_owners
+    ADD CONSTRAINT control_operation_review_owners_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_operations(tenant_id, operation_id);
+
+ALTER TABLE ONLY public.control_operations
+    ADD CONSTRAINT control_operations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_operations
+    ADD CONSTRAINT control_operations_tenant_id_operation_id_fkey FOREIGN KEY (tenant_id, operation_id) REFERENCES public.control_enterprise_invocations(tenant_id, invocation_id);
+
+ALTER TABLE ONLY public.control_outcome_reconciliations
+    ADD CONSTRAINT control_outcome_reconciliations_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_package_provisioning
+    ADD CONSTRAINT control_package_provisioning_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_policy_bundles
+    ADD CONSTRAINT control_policy_bundles_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_queued_authority
+    ADD CONSTRAINT control_queued_authority_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_record_ids
+    ADD CONSTRAINT control_record_ids_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_records
+    ADD CONSTRAINT control_records_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_recovery_floors
+    ADD CONSTRAINT control_recovery_floors_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_reviewed_recovery
+    ADD CONSTRAINT control_reviewed_recovery_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_secrets
+    ADD CONSTRAINT control_secrets_tenant_id_key_version_fkey FOREIGN KEY (tenant_id, key_version) REFERENCES public.control_tenant_vault_keys(tenant_id, version);
+
+ALTER TABLE ONLY public.control_secrets
+    ADD CONSTRAINT control_secrets_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_server_deployments
+    ADD CONSTRAINT control_server_deployments_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_server_documents
+    ADD CONSTRAINT control_server_documents_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_server_packages
+    ADD CONSTRAINT control_server_packages_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_server_settings
+    ADD CONSTRAINT control_server_settings_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_authority
+    ADD CONSTRAINT control_tenant_authority_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_capacity
+    ADD CONSTRAINT control_tenant_capacity_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_hosts
+    ADD CONSTRAINT control_tenant_hosts_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_identity_keys
+    ADD CONSTRAINT control_tenant_identity_keys_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_initializations
+    ADD CONSTRAINT control_tenant_initializations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_runtime_profiles
+    ADD CONSTRAINT control_tenant_runtime_profiles_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tenant_vault_keys
+    ADD CONSTRAINT control_tenant_vault_keys_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tool_host_dispatches
+    ADD CONSTRAINT control_tool_host_dispatches_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE ONLY public.control_tool_hosts
+    ADD CONSTRAINT control_tool_hosts_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
+ALTER TABLE public.control_approval_clocks ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_attempt_effects ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_attempt_manifest_seals ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_attempt_recovery_scopes ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_attempt_reviews ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_attempt_settlements ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_attempt_snapshots ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_audit ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_authorization_outbox ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_bootstrap_admins ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_builder ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_business_key_history ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_business_keys ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_configuration_changes ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_console_devices ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_credential_history ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_consent_approvals ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_consent_revocations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_consent_slots ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_consent_uses ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_consents ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_evidence ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_generations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_intents ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effect_target_bindings ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_effects ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_endpoint_configurations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_endpoints ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_enrollments ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_enterprise_adoptions ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_enterprise_approvals ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_enterprise_invocations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_enterprise_nonces ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_execution_budgets ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_execution_evidence ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_execution_leases ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_fleet ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_idempotency ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_admissions ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_attempts ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_cells ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_checkpoints ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_facts ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_gateway_epochs ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_invocations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_spans ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_insights_tenant_state ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_invocation_authority ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_invocation_event_streams ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_invocation_events ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_invocation_results ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_mcp_approvals ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_mcp_requests ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_mcp_scans ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_mcp_servers ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_mcp_snapshots ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_operation_attempts ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_operation_cancellations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_operation_outcomes ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_operation_recoveries ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_operation_review_owners ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_operations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_outcome_reconciliations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_package_provisioning ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_policy_bundles ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_queued_authority ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_record_ids ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_records ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_recovery_floors ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_reviewed_recovery ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_secrets ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_server_deployments ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_server_documents ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_server_packages ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_server_settings ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tenant_authority ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tenant_capacity ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tenant_identity_keys ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tenant_initializations ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tenant_runtime_profiles ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tenant_vault_keys ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tool_host_dispatches ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.control_tool_hosts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_access ON public.control_approval_clocks USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_attempt_effects USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_attempt_manifest_seals USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_attempt_recovery_scopes USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_attempt_reviews USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_attempt_settlements USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_attempt_snapshots USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_audit USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_authorization_outbox USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_bootstrap_admins USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_builder USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_business_key_history USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_business_keys USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_configuration_changes USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_console_devices USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_credential_history USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_consent_approvals USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_consent_revocations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_consent_slots USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_consent_uses USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_consents USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_evidence USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_generations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_intents USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effect_target_bindings USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_effects USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_endpoint_configurations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_endpoints USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_enrollments USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_enterprise_adoptions USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_enterprise_approvals USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_enterprise_invocations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_enterprise_nonces USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_execution_budgets USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_execution_evidence USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_execution_leases USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_fleet USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_idempotency USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_admissions USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_attempts USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_cells USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_checkpoints USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_facts USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_gateway_epochs USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_invocations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_spans USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_insights_tenant_state USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_invocation_authority USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_invocation_event_streams USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_invocation_events USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_invocation_results USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_mcp_approvals USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_mcp_requests USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_mcp_scans USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_mcp_servers USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_mcp_snapshots USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_operation_attempts USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_operation_cancellations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_operation_outcomes USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_operation_recoveries USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_operation_review_owners USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_operations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_outcome_reconciliations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_package_provisioning USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_policy_bundles USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_queued_authority USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_record_ids USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_records USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_recovery_floors USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_reviewed_recovery USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_secrets USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_server_deployments USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_server_documents USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_server_packages USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_server_settings USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tenant_authority USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tenant_capacity USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tenant_identity_keys USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tenant_initializations USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tenant_runtime_profiles USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tenant_vault_keys USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tool_host_dispatches USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_access ON public.control_tool_hosts USING (true) WITH CHECK (true);
+
+CREATE POLICY tenant_fence ON public.control_approval_clocks AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_attempt_effects AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_attempt_manifest_seals AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_attempt_recovery_scopes AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_attempt_reviews AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_attempt_settlements AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_attempt_snapshots AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_audit AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_authorization_outbox AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_bootstrap_admins AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_builder AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_business_key_history AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_business_keys AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_configuration_changes AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_console_devices AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_credential_history AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_consent_approvals AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_consent_revocations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_consent_slots AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_consent_uses AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_consents AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_evidence AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_generations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_intents AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effect_target_bindings AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_effects AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_endpoint_configurations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_endpoints AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_enrollments AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_enterprise_adoptions AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_enterprise_approvals AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_enterprise_invocations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_enterprise_nonces AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_execution_budgets AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_execution_evidence AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_execution_leases AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_fleet AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_idempotency AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_admissions AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_attempts AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_cells AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_checkpoints AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_facts AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_gateway_epochs AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_invocations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_spans AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_insights_tenant_state AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_invocation_authority AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_invocation_event_streams AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_invocation_events AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_invocation_results AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_mcp_approvals AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_mcp_requests AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_mcp_scans AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_mcp_servers AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_mcp_snapshots AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_operation_attempts AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_operation_cancellations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_operation_outcomes AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_operation_recoveries AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_operation_review_owners AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_operations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_outcome_reconciliations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_package_provisioning AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_policy_bundles AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_queued_authority AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_record_ids AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_records AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_recovery_floors AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_reviewed_recovery AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_secrets AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_server_deployments AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_server_documents AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_server_packages AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_server_settings AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tenant_authority AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tenant_capacity AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tenant_identity_keys AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tenant_initializations AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tenant_runtime_profiles AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tenant_vault_keys AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tool_host_dispatches AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_tool_hosts AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+GRANT USAGE ON SCHEMA public TO toolgate_control_runtime;
+GRANT USAGE ON SCHEMA public TO toolgate_control_platform;
+
+REVOKE ALL ON FUNCTION public.consent_approvals_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.consent_revocations_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.consent_slots_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.consent_uses_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.consents_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.control_attempt_effects_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.control_attempt_manifest_seals_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.control_attempt_review_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.control_attempt_settlement_capacity() FROM PUBLIC;
+
+
+
+
+
+REVOKE ALL ON FUNCTION public.control_effect_intent_capacity() FROM PUBLIC;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+REVOKE ALL ON FUNCTION public.control_operation_outcome_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.control_operation_recovery_capacity() FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION public.control_recovery_scope_capacity() FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION public.control_review_owners_capacity() FROM PUBLIC;
+
+
+
+
+
+
+
+REVOKE ALL ON FUNCTION public.control_tenant_access(write_lock boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.control_tenant_access(write_lock boolean) TO toolgate_control_runtime;
+GRANT ALL ON FUNCTION public.control_tenant_access(write_lock boolean) TO toolgate_control_platform;
+
+REVOKE ALL ON FUNCTION public.control_tenant_admit(tenant text, write_lock boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.control_tenant_admit(tenant text, write_lock boolean) TO toolgate_control_runtime;
+GRANT ALL ON FUNCTION public.control_tenant_admit(tenant text, write_lock boolean) TO toolgate_control_platform;
+
+
+
+REVOKE ALL ON FUNCTION public.effect_target_binding_capacity() FROM PUBLIC;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_approval_clocks TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_approval_clocks TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_attempt_effects TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_attempt_effects TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_attempt_manifest_seals TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_attempt_manifest_seals TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_attempt_recovery_scopes TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_attempt_recovery_scopes TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_attempt_reviews TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_attempt_reviews TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_attempt_settlements TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_attempt_settlements TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_attempt_snapshots TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_attempt_snapshots TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_audit TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_audit TO toolgate_control_platform;
+
+GRANT USAGE ON SEQUENCE public.control_audit_sequence_seq TO toolgate_control_runtime;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_authorization_outbox TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_authorization_outbox TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_bootstrap_admins TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_bootstrap_admins TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_builder TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_builder TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_business_key_history TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_business_key_history TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_business_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_business_keys TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_configuration_changes TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_configuration_changes TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_console_devices TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_console_devices TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_credential_history TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_credential_history TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_approvals TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_approvals TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_revocations TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_revocations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_slots TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_slots TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_uses TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_consent_uses TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_consents TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_consents TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_evidence TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_evidence TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_effect_generations TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_effect_generations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_intents TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_intents TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_effect_target_bindings TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_effect_target_bindings TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_effects TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_effects TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_endpoint_configurations TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_endpoint_configurations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_endpoints TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_endpoints TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_enrollments TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_enrollments TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_adoptions TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_adoptions TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_approvals TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_approvals TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_invocations TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_invocations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_nonces TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_enterprise_nonces TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_execution_budgets TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_execution_budgets TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_execution_evidence TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_execution_evidence TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_execution_leases TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_execution_leases TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_fleet TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_fleet TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE ON TABLE public.control_idempotency TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE ON TABLE public.control_idempotency TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_admissions TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_admissions TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_attempts TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_attempts TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_cells TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_cells TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_checkpoints TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_checkpoints TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_facts TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_facts TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_gateway_epochs TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_gateway_epochs TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_invocations TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_invocations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_spans TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_spans TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_tenant_state TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_insights_tenant_state TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_invocation_authority TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_invocation_authority TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_invocation_event_streams TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_invocation_event_streams TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_invocation_events TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_invocation_events TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_invocation_results TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_invocation_results TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_mcp_approvals TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_mcp_approvals TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_mcp_requests TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_mcp_requests TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_mcp_scans TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_mcp_scans TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_mcp_servers TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_mcp_servers TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE ON TABLE public.control_mcp_snapshots TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE ON TABLE public.control_mcp_snapshots TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_operation_attempts TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_operation_attempts TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_operation_cancellations TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_operation_cancellations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_operation_outcomes TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_operation_outcomes TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_operation_recoveries TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_operation_recoveries TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_operation_review_owners TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_operation_review_owners TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_operations TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_operations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_outcome_reconciliations TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_outcome_reconciliations TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_package_provisioning TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_package_provisioning TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_policy_bundles TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_policy_bundles TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_queued_authority TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_queued_authority TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_record_ids TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_record_ids TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_records TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_records TO toolgate_control_platform;
+
+GRANT SELECT ON TABLE public.control_recovery_floors TO toolgate_control_runtime;
+GRANT SELECT ON TABLE public.control_recovery_floors TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_reviewed_recovery TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_reviewed_recovery TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_secrets TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_secrets TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_server_deployments TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_server_deployments TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_server_documents TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_server_documents TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_server_packages TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_server_packages TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_server_settings TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_server_settings TO toolgate_control_platform;
+
+GRANT SELECT,UPDATE ON TABLE public.control_tenant_authority TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_tenant_authority TO toolgate_control_platform;
+
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_tenant_hosts TO toolgate_control_platform;
+
+GRANT SELECT ON TABLE public.control_tenant_identity_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_tenant_identity_keys TO toolgate_control_platform;
+
+GRANT SELECT ON TABLE public.control_tenant_initializations TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_tenant_initializations TO toolgate_control_platform;
+
+GRANT SELECT ON TABLE public.control_tenant_runtime_profiles TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_tenant_runtime_profiles TO toolgate_control_platform;
+
+GRANT SELECT ON TABLE public.control_tenant_vault_keys TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_tenant_vault_keys TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_tenants TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_tool_host_dispatches TO toolgate_control_runtime;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.control_tool_host_dispatches TO toolgate_control_platform;
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_tool_hosts TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_tool_hosts TO toolgate_control_platform;
+SELECT pg_catalog.set_config('search_path', 'public', false);
+SET check_function_bodies = true;
+
+
+-- Current read-only lookup witnesses are append-only effect evidence, never execution authority.
+CREATE FUNCTION public.control_lookup_witness_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF substr(NEW.source,1,14)='TARGET_LOOKUP:' AND (
+ length(NEW.source)<>78 OR NEW.source !~ '^TARGET_LOOKUP:[a-f0-9]{64}$'
+ OR NOT EXISTS(SELECT 1 FROM control_effect_generations g
+ JOIN control_effect_target_bindings b ON b.tenant_id=g.tenant_id AND b.effect_id=g.effect_id
+ JOIN control_enterprise_invocations i ON i.tenant_id=g.tenant_id AND i.invocation_id=g.operation_id
+ WHERE g.tenant_id=NEW.tenant_id AND g.effect_id=NEW.effect_id AND g.generation=NEW.generation AND g.state='AMBIGUOUS'
+ AND i.state='OUTCOME_UNKNOWN' AND b.document::jsonb->>'statusRouteId' IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM control_effect_generations active WHERE active.tenant_id=g.tenant_id AND active.effect_id=g.effect_id
+ AND active.state NOT IN('AMBIGUOUS','RELEASED')))
+ OR ((SELECT count(*) FROM control_effect_evidence w WHERE w.tenant_id=NEW.tenant_id AND w.effect_id=NEW.effect_id
+ AND w.generation=NEW.generation AND substr(w.source,1,14)='TARGET_LOOKUP:')>=8
+ AND NOT EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=NEW.tenant_id AND w.effect_id=NEW.effect_id
+ AND w.generation=NEW.generation AND w.evidence_digest=NEW.evidence_digest))
+ ) THEN RAISE EXCEPTION 'invalid target lookup witness'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER control_lookup_witness_guard BEFORE INSERT ON public.control_effect_evidence
+FOR EACH ROW EXECUTE FUNCTION public.control_lookup_witness_guard();
+
+CREATE FUNCTION public.control_lookup_resend_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=OLD.tenant_id AND w.effect_id=OLD.effect_id
+ AND substr(w.source,1,14)='TARGET_LOOKUP:') THEN RAISE EXCEPTION 'witnessed target outcome fences resend'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER control_lookup_resend_fence BEFORE UPDATE ON public.control_effects
+FOR EACH ROW WHEN (NEW.current_generation<>OLD.current_generation) EXECUTE FUNCTION public.control_lookup_resend_fence();
+
+CREATE FUNCTION public.control_lookup_recovery_fence() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.proof='TARGET_DEDUPLICATION' AND EXISTS(
+ SELECT 1 FROM control_effect_generations g JOIN control_effect_evidence w ON w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id
+ WHERE g.tenant_id=NEW.tenant_id AND g.operation_id=NEW.operation_id AND substr(w.source,1,14)='TARGET_LOOKUP:'
+ ) THEN RAISE EXCEPTION 'witnessed target outcome fences recovery'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER control_lookup_recovery_fence BEFORE INSERT ON public.control_operation_recoveries
+FOR EACH ROW EXECUTE FUNCTION public.control_lookup_recovery_fence();
+
 -- BEGIN TENANT CAPACITY
-CREATE TABLE control_tenant_capacity(
- tenant_id varchar(128) NOT NULL PRIMARY KEY,
- stored_bytes bigint NOT NULL DEFAULT 0 CHECK(stored_bytes>=0),
- stored_rows bigint NOT NULL DEFAULT 0 CHECK(stored_rows>=0),
- queued_rows bigint NOT NULL DEFAULT 0 CHECK(queued_rows>=0),
- max_stored_bytes bigint NOT NULL DEFAULT 1073741824 CHECK(max_stored_bytes BETWEEN 4096 AND 1099511627776),
- max_stored_rows bigint NOT NULL DEFAULT 100000 CHECK(max_stored_rows BETWEEN 1 AND 1000000),
- max_queued_rows bigint NOT NULL DEFAULT 256 CHECK(max_queued_rows BETWEEN 1 AND 100000),
- CHECK(stored_rows<=max_stored_rows AND queued_rows<=max_queued_rows AND stored_bytes+queued_rows*16777216<=max_stored_bytes));
-
 GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
 
 GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_capacity TO toolgate_control_platform;
@@ -946,81 +4308,3 @@ END;$$;
 REVOKE ALL ON FUNCTION control_policy_bundles_capacity() FROM PUBLIC;
 CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_policy_bundles FOR EACH ROW EXECUTE FUNCTION control_policy_bundles_capacity();
 -- END TENANT CAPACITY
-
-DO $tenant_policies$
-DECLARE
-    tenant_table text;
-    operation text;
-BEGIN
-    FOREACH tenant_table IN ARRAY ARRAY[
-        'control_approval_clocks',
-        'control_audit',
-        'control_authorization_outbox',
-        'control_bootstrap_admins',
-        'control_builder',
-        'control_business_keys',
-        'control_configuration_changes',
-        'control_console_devices',
-        'control_credential_history',
-        'control_operation_cancellations',
-        'control_invocation_authority',
-        'control_endpoint_configurations',
-        'control_endpoints',
-        'control_enrollments',
-        'control_enterprise_adoptions',
-        'control_enterprise_approvals',
-        'control_enterprise_invocations',
-        'control_enterprise_nonces',
-        'control_execution_budgets',
-        'control_fleet',
-        'control_idempotency',
-        'control_invocation_event_streams',
-        'control_invocation_events',
-        'control_insights_facts','control_insights_checkpoints','control_insights_invocations','control_insights_attempts',
-        'control_insights_cells','control_insights_admissions','control_insights_gateway_epochs','control_insights_tenant_state','control_insights_spans',
-        'control_invocation_results',
-        'control_mcp_approvals',
-        'control_mcp_requests',
-        'control_mcp_scans',
-        'control_mcp_servers',
-        'control_mcp_snapshots',
-        'control_outcome_reconciliations',
-        'control_package_provisioning',
-        'control_policy_bundles',
-        'control_queued_authority',
-        'control_record_ids',
-        'control_records',
-        'control_recovery_floors',
-        'control_reviewed_recovery',
-        'control_secrets',
-        'control_server_deployments',
-        'control_server_documents',
-        'control_server_packages',
-        'control_server_settings',
-        'control_tool_host_dispatches',
-        'control_tool_hosts'
-        ,'control_tenant_authority'
-        ,'control_tenant_initializations'
-        ,'control_tenant_vault_keys'
-        ,'control_tenant_runtime_profiles'
-        ,'control_tenant_identity_keys'
-        ,'control_tenant_capacity'
-    ] LOOP
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tenant_table);
-        EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', tenant_table);
-        IF tenant_table NOT IN ('control_tenant_authority','control_tenant_initializations') THEN
-            EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id)', tenant_table,tenant_table || '_tenant_owner');
-        END IF;
-        EXECUTE format('CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.%I FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard()',tenant_table);
-        -- Table GRANTs still control the available operations. The restrictive
-        -- fence cannot be widened by an additional permissive policy.
-        EXECUTE format('CREATE POLICY tenant_access ON public.%I AS PERMISSIVE FOR ALL TO PUBLIC USING (true) WITH CHECK (true)', tenant_table);
-        EXECUTE format('CREATE POLICY tenant_fence ON public.%I AS RESTRICTIVE FOR ALL TO PUBLIC USING (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''') AND public.control_tenant_access(false)) WITH CHECK (tenant_id = NULLIF(current_setting(''app.tenant_id'', true), '''') AND public.control_tenant_access(true))', tenant_table);
-        FOREACH operation IN ARRAY ARRAY['SELECT','INSERT','UPDATE','DELETE'] LOOP
-            IF has_table_privilege('toolgate_control_runtime',format('public.%I',tenant_table),operation) THEN
-                EXECUTE format('GRANT %s ON public.%I TO toolgate_control_platform',operation,tenant_table);
-            END IF;
-        END LOOP;
-    END LOOP;
-END;
-$tenant_policies$;

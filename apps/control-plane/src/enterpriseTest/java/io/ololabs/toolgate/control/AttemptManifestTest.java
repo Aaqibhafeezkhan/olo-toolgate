@@ -35,7 +35,7 @@ final class AttemptManifestTest {
         assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().manifestSeal(i.id(),i.reservedNonce())));
         var failed=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.FAILED,
                 i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),List.of(),
-                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation());
+                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation(), null);
         assertThrows(Failure.class,()->rig.store.transaction(rig.gateway.tenant(),true,tx->{
             tx.enterprise().saveInvocation(failed,ledger.now(),i.revision());
             assertNotNull(tx.enterprise().manifestSeal(i.id(),i.reservedNonce()));
@@ -94,7 +94,7 @@ final class AttemptManifestTest {
         var rig=rig();var reserved=rig.reserve(rig.submit("never-consumed"));var i=reserved.invocation();
         var failed=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.FAILED,
                 i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),List.of(),
-                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation());
+                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation(), null);
         rig.store.transaction(rig.gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(failed,ledger.now(),i.revision());return null;});
         assertThrows(Failure.class,()->rig.store.transaction(rig.gateway.tenant(),true,tx->tx.enterprise().settleAttempt(
                 i.id(),i.reservedNonce(),EnterpriseStore.SettlementProof.NEVER_CONSUMED,ledger.now())));

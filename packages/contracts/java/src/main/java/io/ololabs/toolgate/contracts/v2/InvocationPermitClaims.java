@@ -107,6 +107,4 @@ public record InvocationPermitClaims(
         approvalIds = approvalIds == null ? null : java.util.List.copyOf(approvalIds);
         java.util.Objects.requireNonNull(deadlineUnixMs, "deadlineUnixMs");
     }
-    /** Construct legacy metadata without the new effect authority fields. */
-    public InvocationPermitClaims(String jti, String iss, String aud, Long iat, Long nbf, Long exp, String nonce, String invocationId, Long attempt, String taskId, PermitIdentity identity, PermitTarget target, String catalogRevision, String argumentsDigest, String action, java.util.List<java.util.Map<String, com.fasterxml.jackson.databind.JsonNode>> resources, EffectSafety effectSafety, Boolean requiresExecutionLedger, String businessKeyHash, KeyNamespace businessKeyNamespace, java.util.List<String> approvalIds, Long deadlineUnixMs, McpPermitVerification mcpVerification) { this(jti, iss, aud, iat, nbf, exp, nonce, invocationId, attempt, taskId, identity, target, catalogRevision, argumentsDigest, action, resources, effectSafety, requiresExecutionLedger, businessKeyHash, businessKeyNamespace, approvalIds, deadlineUnixMs, mcpVerification, null); }
 }

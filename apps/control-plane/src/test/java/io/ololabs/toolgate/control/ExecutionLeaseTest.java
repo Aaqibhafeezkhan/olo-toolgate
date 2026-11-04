@@ -64,7 +64,7 @@ final class ExecutionLeaseTest {
             tx.enterprise().consumeNonce("fence-1",NOW-900);
             tx.packages().saveToolHost("host-1","{}");return null;
         });
-        String report="{\"invocationId\":\"inv-1\",\"fencingToken\":\"fence-1\",\"outcome\":\"OUTCOME_UNKNOWN\"}";
+        String report="{\"invocationId\":\"inv-1\",\"fencingToken\":\"fence-1\",\"outcome\":\"OUTCOME_UNKNOWN\",\"executionTier\":\"HOST_NATIVE\"}";
         assertEquals(403,assertThrows(Failure.class,()->r.operations.reportInvocation(r.tenant,tx->"host-2",report,"fence-1")).status());
         assertEquals(200,r.operations.reportInvocation(r.tenant,tx->"host-1",report,"fence-1").status());
         assertEquals(200,r.operations.reportInvocation(r.tenant,tx->"host-1",report,"fence-1").status());

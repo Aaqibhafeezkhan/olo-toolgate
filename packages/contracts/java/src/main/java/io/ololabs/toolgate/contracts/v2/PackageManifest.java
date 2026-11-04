@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** Package manifest v2. v1 manifests stay readable and are upgraded on read.
+/** Current package manifest. Earlier formats are rejected without conversion.
  *
  * @param schemaVersion canonical schemaVersion value
  * @param kind canonical kind value

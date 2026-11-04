@@ -295,6 +295,14 @@
         "outcome": "FAILED",
         "notStarted": "CRASHED"
       }
+    },
+    {
+      "case": "old incomplete format without executionTier",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "outcome": "OUTCOME_UNKNOWN"
+      }
     }
   ],
   "InvocationSubmission": [
@@ -3128,6 +3136,13 @@
         "upstreamName": "get_order",
         "name": "Get Order"
       }
+    },
+    {
+      "case": "old incomplete format without effectPolicy",
+      "value": {
+        "upstreamName": "get_order",
+        "name": "get-order"
+      }
     }
   ],
   "ResultProvenance": [
@@ -3411,6 +3426,70 @@
       "value": {
         "previewDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "expectedRevision": 0
+      }
+    }
+  ],
+  "EffectKey": [
+    {
+      "case": "empty",
+      "value": ""
+    },
+    {
+      "case": "unbounded",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "case": "ambiguous whitespace",
+      "value": " charge"
+    },
+    {
+      "case": "path delimiter",
+      "value": "charge/7"
+    }
+  ],
+  "TargetDedupeGuarantee": [
+    {
+      "case": "no retention default",
+      "value": {
+        "documentationUrl": "https://target.example.test/contracts/idempotency",
+        "scope": "GLOBAL",
+        "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "differentBody": "REJECT",
+        "reviewExpiresAtUnixMs": 1893456000000,
+        "header": "idempotency-key"
+      }
+    },
+    {
+      "case": "no effective window",
+      "value": {
+        "documentationUrl": "https://target.example.test/contracts/idempotency",
+        "retentionMs": 3600000,
+        "scope": "GLOBAL",
+        "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "differentBody": "REJECT",
+        "reviewExpiresAtUnixMs": 1893456000000,
+        "header": "idempotency-key"
+      }
+    },
+    {
+      "case": "no review deadline",
+      "value": {
+        "documentationUrl": "https://target.example.test/contracts/idempotency",
+        "retentionMs": 86400000,
+        "scope": "GLOBAL",
+        "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "differentBody": "REJECT",
+        "header": "idempotency-key"
+      }
+    }
+  ],
+  "McpApprovedTool": [
+    {
+      "case": "old incomplete format without effectPolicy",
+      "value": {
+        "toolId": "mcp.orders/get-order",
+        "upstreamName": "get_order",
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     }
   ]

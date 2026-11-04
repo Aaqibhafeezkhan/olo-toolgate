@@ -641,7 +641,8 @@
       },
       "required": [
         "upstreamName",
-        "name"
+        "name",
+        "effectPolicy"
       ]
     },
     "McpApprovalRequest": {
@@ -689,7 +690,8 @@
       "required": [
         "toolId",
         "upstreamName",
-        "definitionDigest"
+        "definitionDigest",
+        "effectPolicy"
       ]
     },
     "McpApproval": {

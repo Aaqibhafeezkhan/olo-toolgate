@@ -37,6 +37,4 @@ public record EnterpriseReconciliationRequest(
         completedResources = completedResources == null ? null : java.util.List.copyOf(completedResources);
         java.util.Objects.requireNonNull(evidenceDigest, "evidenceDigest");
     }
-    /** Construct a resource-only reconciliation without attempt scope attestation. */
-    public EnterpriseReconciliationRequest(Long expectedRevision, EnterpriseReconciledState state, java.util.List<ResourceDescriptor> completedResources, String evidenceDigest, String resultDigest) { this(expectedRevision, state, completedResources, evidenceDigest, resultDigest, null); }
 }

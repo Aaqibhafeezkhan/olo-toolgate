@@ -25,12 +25,13 @@ final readonly class EffectGrantClaims implements \JsonSerializable {
         public string $httpRequestDigest,
         public string $profileDigest,
         public string $routeId,
-        public EffectClassification $classification
+        public EffectClassification $classification,
+        public ?DownstreamEffectKey $downstreamKey = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification']) || array_diff(['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification', 'downstreamKey']) || array_diff(['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -51,7 +52,8 @@ final readonly class EffectGrantClaims implements \JsonSerializable {
             $data['httpRequestDigest'],
             $data['profileDigest'],
             $data['routeId'],
-            EffectClassification::from($data['classification'])
+            EffectClassification::from($data['classification']),
+            array_key_exists('downstreamKey', $data) ? DownstreamEffectKey::fromArray($data['downstreamKey']) : null
         );
     }
 

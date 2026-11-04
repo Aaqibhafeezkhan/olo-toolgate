@@ -32,6 +32,8 @@ pub struct Policy {
     pub deadline_unix_ms: u64,
     pub profile_id: String,
     pub profile_digest: String,
+    #[serde(default)]
+    pub effect_key_headers: BTreeMap<String, String>,
     pub broker_instance_id: String,
     pub invocation_permit: SignedInvocationPermit,
     pub routes: Vec<RouteDeclaration>,
@@ -101,6 +103,18 @@ impl Policy {
         {
             return Err("invalid broker policy");
         }
+        if self.effect_key_headers.len() > 256
+            || self.effect_key_headers.iter().any(|(route, header)| {
+                !self.routes.iter().any(|r| &r.id == route)
+                    || header.is_empty()
+                    || header.len() > 64
+                    || !header
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            })
+        {
+            return Err("invalid target effect header policy");
+        }
         let routes: HashSet<_> = self.routes.iter().map(|r| &r.id).collect();
         let destinations: HashSet<_> = self.destinations.iter().map(|d| &d.id).collect();
         let auths: HashSet<_> = self.auths.iter().map(|a| &a.id).collect();
@@ -128,6 +142,8 @@ impl Policy {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BufferedRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_key: Option<String>,
     pub handler_id: String,
     pub manifest: PreparedHttpRequestManifest,
     pub digest: String,
@@ -147,6 +163,13 @@ pub struct FrozenTransport {
     prepared: crate::request_binding::PreparedRequest,
 }
 impl FrozenTransport {
+    pub(crate) fn with_downstream_key(
+        mut self,
+        key: Option<&olo_toolgate_contracts::v2::DownstreamEffectKey>,
+    ) -> Result<Self, String> {
+        self.prepared = self.prepared.with_downstream_key(key)?;
+        Ok(self)
+    }
     pub fn body_len(&self) -> usize {
         self.prepared.body_len()
     }
@@ -286,6 +309,7 @@ pub fn freeze_request(
         return Err("broker manifest does not match request");
     }
     Ok(BufferedRequest {
+        effect_key: None,
         handler_id: handler.into(),
         manifest: manifest.clone(),
         digest: prepared.digest().into(),
@@ -384,7 +408,9 @@ pub fn rebuild_request(
         .map_err(|_| "invalid broker transport request")?;
     let mut prepared =
         crate::request_binding::PreparedRequest::new(client, request, metadata(&wire.manifest)?)
-            .map_err(|_| "invalid reconstructed broker request")?;
+            .map_err(|_| "invalid reconstructed broker request")?
+            .with_effect_key(wire.effect_key.as_deref())
+            .map_err(|_| "invalid logical effect key")?;
     if prepared.manifest()
         != &serde_json::to_value(&wire.manifest).map_err(|_| "invalid broker manifest")?
         || prepared.digest() != wire.digest
@@ -411,6 +437,8 @@ pub enum AuthorityRequest {
         name: String,
     },
     Issue {
+        #[serde(default, rename = "effectKey", skip_serializing_if = "Option::is_none")]
+        effect_key: Option<String>,
         audience: ServiceAudience,
         manifest: PreparedHttpRequestManifest,
         digest: String,
@@ -534,6 +562,7 @@ impl Delegate for ParentAuthority {
                     Err(error) => authority_error(error),
                 },
                 AuthorityRequest::Issue {
+                    effect_key,
                     audience,
                     manifest,
                     digest,
@@ -543,11 +572,12 @@ impl Delegate for ParentAuthority {
                         invocation_id: self.policy.invocation_id.clone(),
                         fencing_token: self.policy.fencing_token.clone(),
                         audience: audience.clone(),
-                        http_request_digest: Some(digest.clone()),
-                        http_request_manifest: Some(manifest.clone()),
-                        invocation_permit: Some(self.policy.invocation_permit.clone()),
-                        broker_instance_id: Some(self.policy.broker_instance_id.clone()),
-                        handler_id: Some(handler_id.clone()),
+                        http_request_digest: digest.clone(),
+                        http_request_manifest: manifest.clone(),
+                        invocation_permit: self.policy.invocation_permit.clone(),
+                        broker_instance_id: self.policy.broker_instance_id.clone(),
+                        handler_id: handler_id.clone(),
+                        effect_key: effect_key.clone(),
                     };
                     match self.port.service_permit(&issue).await {
                         Ok(permit) => AuthorityReply::Permit { permit },
@@ -1110,26 +1140,17 @@ impl<R: AsyncBufRead + Unpin + Send + 'static, W: AsyncWrite + Unpin + Send + 's
         Box::pin(async move {
             if request.invocation_id != self.policy.invocation_id
                 || request.fencing_token != self.policy.fencing_token
-                || request.broker_instance_id.as_deref()
-                    != Some(self.policy.broker_instance_id.as_str())
-                || request.invocation_permit.as_ref() != Some(&self.policy.invocation_permit)
+                || request.broker_instance_id != self.policy.broker_instance_id
+                || request.invocation_permit != self.policy.invocation_permit
             {
                 return Err(crate::control::ControlError::Refused(403));
             }
             let message = AuthorityRequest::Issue {
+                effect_key: request.effect_key.clone(),
                 audience: request.audience.clone(),
-                manifest: request
-                    .http_request_manifest
-                    .clone()
-                    .ok_or(crate::control::ControlError::Refused(403))?,
-                digest: request
-                    .http_request_digest
-                    .clone()
-                    .ok_or(crate::control::ControlError::Refused(403))?,
-                handler_id: request
-                    .handler_id
-                    .clone()
-                    .ok_or(crate::control::ControlError::Refused(403))?,
+                manifest: request.http_request_manifest.clone(),
+                digest: request.http_request_digest.clone(),
+                handler_id: request.handler_id.clone(),
             };
             match self.rpc(message).await? {
                 AuthorityReply::Permit { permit }
@@ -1600,6 +1621,7 @@ mod tests {
             route.max_response_bytes = route.max_response_bytes.min(MAX_BODY as u64);
         }
         Policy {
+            effect_key_headers: BTreeMap::new(),
             invocation_id: "operation".into(),
             fencing_token: "fence".into(),
             deadline_unix_ms: 1000,

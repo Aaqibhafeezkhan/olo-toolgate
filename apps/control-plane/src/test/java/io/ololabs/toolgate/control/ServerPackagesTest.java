@@ -31,14 +31,17 @@ final class ServerPackagesTest {
     static Map<String, byte[]> files(boolean split, String kind) throws Exception { return files(split, kind, null); }
     /** authorization: the descriptor's OLO M3.7 declaration, or null. */
     static Map<String, byte[]> files(boolean split, String kind, String authorization) throws Exception {
+        return files(split,kind,authorization,false);
+    }
+    static Map<String, byte[]> files(boolean split,String kind,String authorization,boolean brokerOnly) throws Exception {
         var descriptor = (ObjectNode) JSON.readTree("""
             {"descriptorGeneration":1,"toolId":"acme.orders/items.get","mcpName":"orders.items.get","kind":"SERVER","title":"Get item",
              "description":"Gets one item.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
-             "errors":[],"effect":{"safety":"READ_ONLY","destructive":false,"openWorld":true},"businessKey":{"required":false},
-             "execution":{"mode":"SYNC"},"routes":[{"id":"items.get","destination":"items-api","method":"GET","path":"/items/{id}",
+             "errors":[],"effect":{"safety":"READ_ONLY","destructive":false,"openWorld":true},"businessKey":{"required":false,"namespace":"AGENT"},
+             "execution":{"async":false,"maxDurationMs":60000,"stateless":true,"cancelIfAbandoned":true},"routes":[{"id":"items.get","destination":"items-api","method":"GET","path":"/items/{id}",
              "query":[],"headers":[],"requestContentTypes":[],"maxRequestBytes":0,"maxResponseBytes":65536,"streaming":"NONE","timeoutMs":5000}],
              "destinations":[{"id":"items-api","hostSetting":"ItemsApiHost","port":443,"spkiPins":[]}],"httpAuth":[],"tcp":[],
-             "variables":{"globals":[{"name":"Greeting","type":"STRING","required":true,"sensitive":false,"default":"Hello"}],"secrets":[{"name":"ApiKey","type":"STRING","scope":"TENANT"}],"claims":[]},
+             "variables":{"globals":[{"name":"Greeting","type":"STRING","required":true,"sensitive":false,"default":"Hello"}],"secrets":[{"name":"ApiKey","type":"STRING","scope":"GROUP"}],"claims":[]},
              "permissions":["HTTP_ROUTE"],"toolsets":[]}""");
         descriptor.put("kind", kind);
         if (authorization != null) descriptor.set("authorization", JSON.readTree(authorization));
@@ -46,6 +49,13 @@ final class ServerPackagesTest {
             for (var field : List.of("routes", "destinations", "httpAuth", "tcp", "permissions")) descriptor.putArray(field);
             var variables = descriptor.putObject("variables");
             variables.putArray("globals"); variables.putArray("secrets"); variables.putArray("claims");
+        }
+        if(brokerOnly){
+            ((ObjectNode)descriptor.path("variables")).putArray("secrets");
+            ((ObjectNode)descriptor.path("routes").get(0)).put("auth","broker-key");
+            var auths=descriptor.putArray("httpAuth");
+            auths.addObject().put("id","broker-key").put("type","API_KEY").put("header","X-Api-Key").put("secret","AUTH_ONLY").putArray("scopes");
+            auths.addObject().put("id","unused-key").put("type","API_KEY").put("header","X-Other-Key").put("secret","UNUSED_AUTH").putArray("scopes");
         }
         byte[] canonical = Canonical.bytes(descriptor), jar = "jar bytes".getBytes(StandardCharsets.UTF_8);
         String digest = Canonical.sha256(canonical);
@@ -202,6 +212,41 @@ final class ServerPackagesTest {
     }
 
     /** OLO M3.7: a declared permission and locator template replace invoke on tool://. */
+
+    @Test void obsoleteDescriptorExecutionFormatsAreRejectedWithoutConversion()throws Exception{
+        var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(
+            SqliteState.open(directory.resolve("obsolete-package.sqlite"))),codec);
+        var actor=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");
+        var files=new TreeMap<>(files());files.remove("CHECKSUMS.sha256");
+        var manifest=(ObjectNode)JSON.readTree(files.get("toolgate-package.json"));
+        var tool=(ObjectNode)manifest.path("tools").get(0);var descriptor=(ObjectNode)tool.path("descriptor");
+        descriptor.putObject("execution").put("mode","SYNC").put("maxDurationMs",60000);
+        byte[] canonical=Canonical.bytes(descriptor);String digest=Canonical.sha256(canonical);
+        tool.put("toolDescriptorDigest",digest);
+        var set=JSON.createArrayNode();set.addObject().put("toolId",descriptor.path("toolId").asText()).put("toolDescriptorDigest",digest);
+        manifest.put("descriptorSetDigest",Canonical.digest(set));
+        files.put("tools/items.get.json",canonical);files.put("toolgate-package.json",JSON.writeValueAsBytes(manifest));
+        var checksums=new StringBuilder();
+        for(var e:files.entrySet())checksums.append(Canonical.sha256(e.getValue()).substring(7)).append("  ").append(e.getKey()).append('\n');
+        files.put("CHECKSUMS.sha256",checksums.toString().getBytes(StandardCharsets.UTF_8));
+        var packages=new ServerPackages(store,codec,null,java.time.Clock.systemUTC());
+        assertThrows(io.ololabs.toolgate.control.application.Failure.class,()->packages.upload(actor,zip(files),"old-format"));
+    }
+    @Test void onlyReachableBrokerAuthReferencesBecomeAdmissionResourcesWithoutWorkerSecrets()throws Exception{
+        var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(
+            SqliteState.open(directory.resolve("broker-auth-only.sqlite"))),codec);
+        var tenant=io.ololabs.toolgate.control.fixtures.Tenants.id("tenant");var actor=TestSupport.seed(store,codec,tenant,"root");
+        var packages=new ServerPackages(store,codec,null,java.time.Clock.systemUTC());
+        String digest=node(packages.upload(actor,zip(files(false,"SERVER",null,true)),"broker-auth-upload").body()).path("packageDigest").asText();
+        packages.deploy(actor,codec.json(Map.of("packageDigest",digest,"globals",Map.of("ItemsApiHost","items.example.com"))),"broker-auth-deploy");
+        var tool=codec.model(store.transaction(tenant,false,tx->tx.load().entries().get(Ids.Kind.TOOL.id("acme.orders/items.get"))).document(),ControlTool.class);
+        var extractor=codec.model(store.transaction(tenant,false,tx->tx.load().entries().get(Ids.Kind.EXTRACTOR.id(tool.extractorId()))).document(),ControlResourceExtractor.class);
+        assertEquals(List.of("tool://acme.orders/items.get","secret://AUTH_ONLY"),extractor.fixedResources().stream().map(ResourceDescriptor::locator).toList());
+        var version=store.transaction(tenant,false,tx->tx.packages().version(digest));
+        var descriptor=node(version.document()).path("manifest").path("tools").get(0).path("descriptor");
+        assertTrue(descriptor.path("variables").path("secrets").isEmpty());
+        assertEquals("AUTH_ONLY",descriptor.path("httpAuth").get(0).path("secret").asText());
+    }
     @Test void declaredAuthorizationBecomesTheToolsActionAndResources() throws Exception {
         var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("authorized.sqlite"))), codec);
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
@@ -464,7 +509,7 @@ final class ServerPackagesTest {
                 io.ololabs.toolgate.contracts.v2.CredentialKind.STATIC_TOKEN,null,null,"agent","workload",
                 List.of(),null,1L,null,null,"binding","a".repeat(64));
         var request=new EnterpriseInvocationRequest(context,new AuthorizationRequest("acme.orders/items.get","invoke",
-                Map.of("id",JSON.getNodeFactory().textNode("123"))),"a".repeat(64),digest.substring(7),null,null);
+                Map.of("id",JSON.getNodeFactory().textNode("123"))),"a".repeat(64),digest.substring(7),null,null, null);
         String document=codec.json(request);
         assertEquals(400,assertThrows(Failure.class,()->operations.submit(gateway,document)).status());
         for(boolean remove:List.of(true,false)) {

@@ -99,3 +99,25 @@ Resolved previews contain outbound business values. The requester and eligible
 scoped reviewers can read them; operation metadata-read access alone does not
 grant access to full preview payloads. Audit refusals retain digests and reason
 codes rather than those values.
+
+### Current per-effect keys (S20 work in progress)
+
+Each logical write requires an explicit stable effectKey (ASCII letters, digits,
+dot, underscore, colon or hyphen; 1–128 characters). The same tenant, operation,
+route and key identify the same effect across attempts. Missing keys are
+rejected for writes. The literal keys default and service-write are ordinary
+distinct keys, with no historical aliases. Keys never supply consent or
+execution authority; each distinct effect consumes its own approved consent use.
+
+Java RouteCall.effectKey and Python effect_key feed this broker metadata.
+Standalone direct-network paths refuse explicit keys. The trusted native MCP
+adapter supplies its fixed mcp-call key and requires explicit reviewed effect
+policy; upstream read-only/idempotency hints grant no authority. Current OLO
+service permits require the prepared HTTP manifest, signed invocation proof
+and broker/handler owner. Reads also bind exact transport facts. Writes require
+the durable target-claim consumption workflow.
+
+Current-only initialization rejects older databases and incomplete contracts
+without migration. Reviewed target guarantees, stable downstream key injection
+and history-aware resend are under qualification; reconciliation adapters and
+complete S20 gates remain outstanding.

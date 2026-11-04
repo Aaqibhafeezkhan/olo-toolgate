@@ -37,20 +37,18 @@ public final class ControlServiceAuthorization {
         this.audience=Objects.requireNonNull(audience);this.credential=Objects.requireNonNull(credential);this.clock=Objects.requireNonNull(clock);
         base=origin.resolve("/api/control/v1/access/service-permits/"+audience.name().replace('_','-')+"/");
     }
-    /** Call inside the storage transaction for writes and again before releasing read results. */
+    /** Authorize reads again immediately before releasing results. Writes require durable claim consumption. */
     public synchronized ServicePermitVerifier.Authorization authorize(ServicePermit permit,
             ServicePermitVerifier.Request request, SSLSession executor) {
         if(!tenant.equals(request.tenant()))throw denied();
         refresh();
-        return withFreshEpoch(()->new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null,
-            (a,c)->consume(c)).authorize(permit,request,executor),()->{refreshedAt=-1;refresh();});
+        return withFreshEpoch(()->new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null).authorize(permit,request,executor),()->{refreshedAt=-1;refresh();});
     }
     /** Verify accepted write facts without consuming a grant or granting permission to commit. */
     public synchronized ServicePermitVerifier.VerifiedWrite verifyWrite(ServicePermit permit,
             ServicePermitVerifier.Request request,SSLSession executor){
         if(!tenant.equals(request.tenant()))throw denied();refresh();
-        return new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null,
-            (a,c)->{throw denied();}).verifyWrite(permit,request,executor);
+        return new ServicePermitVerifier(issuer,audience,keys,clock,t->tenant.equals(t)?epoch:null).verifyWrite(permit,request,executor);
     }
     /** The target must commit its local claim first and still win beginApply before acting. */
     public ServicePermitVerifier.Authorization consumeClaim(ServicePermitVerifier.VerifiedWrite verified,
@@ -90,9 +88,6 @@ public final class ControlServiceAuthorization {
     static <T> T withFreshEpoch(Supplier<T> authorize,Runnable refresh) {
         try{return authorize.get();}
         catch(ServicePermitVerifier.StaleReadEpoch stale){refresh.run();return authorize.get();}
-    }
-    private boolean consume(ServicePermitConsumption request) {
-        return exchange("consume",request).path("authorized").asBoolean(false);
     }
     private void refresh() {
         long now=clock.millis();

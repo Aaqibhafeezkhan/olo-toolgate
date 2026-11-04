@@ -545,6 +545,19 @@ async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         host.config.development_loopback_http,
         host.control.clone(),
     );
+    invocation.effect_key_headers = prepared
+        .profile
+        .effect_reviews
+        .iter()
+        .flatten()
+        .filter_map(|review| {
+            review
+                .policy
+                .target_dedupe_guarantee
+                .as_ref()
+                .map(|g| (review.policy.route_id.clone(), g.header.clone()))
+        })
+        .collect();
     invocation.invocation_permit = Some(dispatch.permit.clone());
     // The arguments were already checked against the signed admission above.
     if invocation
@@ -810,7 +823,7 @@ fn admission_intent(
         outcome: InvocationOutcome::OutcomeUnknown,
         result: None,
         not_started: None,
-        execution_tier: Some(tier),
+        execution_tier: tier,
     }
 }
 
@@ -829,7 +842,7 @@ async fn finish(
         outcome: outcome.clone(),
         result: Some(result.clone()),
         not_started,
-        execution_tier: Some(host.execution_tier()),
+        execution_tier: host.execution_tier(),
     };
     match host.outbox.enqueue(&report) {
         Ok(path) => {
