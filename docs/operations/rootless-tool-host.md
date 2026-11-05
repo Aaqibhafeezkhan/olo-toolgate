@@ -68,8 +68,16 @@ Add a `sandbox` object to the existing Tool Host configuration:
 }
 ```
 
-Replace `ioDevice` with the actual major:minor block device backing the service
-user's container storage. The example is not a device-discovery mechanism. Each
+Set `ioDevice` to the whole major:minor block device backing the service user's
+actual rootless container storage. Linux rejects partition IDs for cgroup I/O
+limits; the example is not device discovery. The qualification runners inspect
+local rootless Podman `graphRoot` as that service account and resolve a filesystem
+partition to its parent whole block device through sysfs. They do not infer
+storage from the home directory or guess a device number. Missing/virtual
+filesystem mappings fail closed; overlay or stacked storage needs an explicitly
+verified whole-device `--io-device` override. An explicit partition ID is rejected.
+The selected store and device are included in qualification evidence.
+ Each
 worker gets one CPU, 32 PIDs, no swap, the invocation's capped memory, and separate
 scratch-size caps on `/tmp` and `/work`. Image environment defaults are cleared.
 The verified `.pyz` is copied into the stopped container and its root is mounted
@@ -81,10 +89,12 @@ The host advertises only `OCI_SANDBOX` after live qualification. It refuses
 unqualified execution, missing or mismatched image pins and unsupported languages.
 Control rejects incompatible package/registered-tier deployments and rechecks
 that compatibility before issuing a Tool Host permit.
-Native hosts refuse image-bound runtimes. Existing packages without an image pin
-continue to require an explicitly native host; they are not silently upgraded or
-used as a fallback. Upgrade Control/contracts before the host: result evidence
-now has an optional, executor-reported `executionTier` field.
+Native hosts refuse image-bound runtimes. Native execution requires an explicitly
+native host and current runtime metadata. Deploy matching current Control,
+contracts and host artifacts on fresh stores; no older-format upgrade or runtime
+fallback is supported. Result evidence includes the required `executionTier`
+field; registered-tier checks and qualified scope remain independent Control
+decisions.
 
 ## Teardown and recovery
 

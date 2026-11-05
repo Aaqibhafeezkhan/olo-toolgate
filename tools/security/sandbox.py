@@ -17,6 +17,8 @@ import subprocess
 import sys
 import uuid
 
+from block_device import container_storage_path, io_device_for_storage
+
 ROOT = Path(__file__).resolve().parents[2]
 GIT = ['git', '-c', 'safe.directory=' + str(ROOT)]
 
@@ -38,7 +40,7 @@ def main():
     parser.add_argument('--broker-image-evidence', required=True, type=Path, help='owned current-source broker_image.py report')
     parser.add_argument('--service-user', help='root launches this unprivileged service user; otherwise use the user manager')
     parser.add_argument('--cargo', default=shutil.which('cargo'))
-    parser.add_argument('--io-device', help='major:minor backing container storage; defaults to the service home device')
+    parser.add_argument('--io-device', help='whole-block major:minor; defaults to the actual rootless container storage device')
     args = parser.parse_args()
     if sys.platform != 'linux':
         parser.error('Linux with systemd, rootless Podman/crun and cgroup v2 is required')
@@ -52,10 +54,12 @@ def main():
         parser.error('a fully qualified immutable broker image reference is required')
     if not args.cargo or not Path(args.cargo).is_absolute():
         parser.error('an absolute cargo executable is required')
-    device = os.stat(account.pw_dir).st_dev
-    io_device = args.io_device or f'{os.major(device)}:{os.minor(device)}'
-    if not re.fullmatch(r'[0-9]+:[0-9]+', io_device) or io_device.startswith('0:'):
-        parser.error('a real backing block device is required; supply --io-device for overlay filesystems')
+    try:
+        storage = container_storage_path(account)
+        io_device = io_device_for_storage(storage, args.io_device)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    print(f"Rootless container storage: {storage}; whole I/O device: {io_device}", flush=True)
     unit = 'toolgate-sandbox-test-' + uuid.uuid4().hex[:12]
     command = ['systemd-run', '--collect', '--wait', '--pipe', '--unit=' + unit,
                '--property=Delegate=yes', '--property=DelegateSubgroup=supervisor',
@@ -113,7 +117,7 @@ def main():
                and len(passed) == len(set(passed)) and before == source_digest())
     report = {'revision': subprocess.check_output(GIT + ['rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
               'sourceSha256': before, 'image': args.image, 'brokerImage': args.broker_image,
-              'brokerBinarySha256': evidence['binarySha256'], 'ioDevice': io_device,
+              'brokerBinarySha256': evidence['binarySha256'], 'ioDevice': io_device, 'containerStoragePath': str(storage),
               'tier': 'OCI_SANDBOX', 'architecture': platform.machine(), 'passed': success, 'executedTests': passed,
               'scope': 'Python rootless worker and per-invocation broker identity/namespace separation with paired lifecycle; no generalized per-effect authorization or compromised-kernel guarantee'}
     (output / 'conformance.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')

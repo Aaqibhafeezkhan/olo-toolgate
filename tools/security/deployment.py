@@ -18,6 +18,7 @@ import time
 import uuid
 
 from sandbox import ROOT, GIT, source_digest
+from block_device import container_storage_path, io_device_for_storage
 
 
 def run(command, **kwargs):
@@ -64,7 +65,7 @@ def main():
     parser.add_argument("--image", required=True)
     parser.add_argument("--broker-image", required=True)
     parser.add_argument("--broker-image-evidence", type=Path, required=True)
-    parser.add_argument("--io-device")
+    parser.add_argument("--io-device", help="whole-block major:minor backing rootless container storage")
     parser.add_argument("--iterations", type=int, default=3)
     parser.add_argument("--output", type=Path, default=ROOT / "build/security/deployment")
     args = parser.parse_args()
@@ -77,10 +78,12 @@ def main():
     for reference in (args.image, args.broker_image):
         if not re.fullmatch(r"[A-Za-z0-9./_:-]+@sha256:[a-f0-9]{64}", reference):
             parser.error("prepared immutable image references required")
-    device = os.stat(account.pw_dir).st_dev
-    io_device = args.io_device or f"{os.major(device)}:{os.minor(device)}"
-    if not re.fullmatch(r"[0-9]+:[0-9]+", io_device) or io_device.startswith("0:"):
-        parser.error("a real backing block device is required")
+    try:
+        storage = container_storage_path(account)
+        io_device = io_device_for_storage(storage, args.io_device)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    print(f"Rootless container storage: {storage}; whole I/O device: {io_device}", flush=True)
     before = source_digest()
     revision = run(GIT + ["rev-parse", "HEAD"], cwd=ROOT).strip()
     evidence = read_json(args.broker_image_evidence)
@@ -289,6 +292,7 @@ def main():
     passed = before == source_digest() and len(observations) == args.iterations + 2 and not cleanup_issues
     report = {"revision": revision, "sourceSha256": before, "workerImage": args.image,
               "brokerImage": args.broker_image, "brokerBinarySha256": evidence["binarySha256"],
+              "ioDevice": io_device, "containerStoragePath": str(storage),
               "architecture": platform.machine(), "kernel": platform.release(),
               "systemdVersion": run(["systemctl", "--version"]).splitlines()[0], "pollIntervalMs": 25,
               "passed": passed, "securityAccepted": False, "productionSloAccepted": False,

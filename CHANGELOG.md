@@ -395,6 +395,10 @@ The project follows semantic versioning once stable versioning begins.
   startup diagnostics when mandatory OCI qualification fails. Run current
   Quickstart security/restore tests through the shared local/CI Python gate,
   with gate-selection checks and no duplicate workflow step.
+- Resolve mandatory OCI I/O limits from the service account's actual rootless
+  container storage and its whole block device. Reject explicit partition IDs,
+  unresolved storage and remote/rootful engines; retain storage/device evidence
+  in containment and managed-deployment qualification.
 
 - Add immutable exact-effect previews, authenticated review and atomic consent
   slots for financial/destructive generic HTTP and native MCP calls. Preserve
