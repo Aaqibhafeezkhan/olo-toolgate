@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Patch the independent Ubuntu device base and LangChain package builder for
+  CVE-2026-109518; require the fixed APT/libapt floor before secured-device
+  package installation and inventory every production Noble root in CI.
+
 - Wait for the first durable current Tool Host check-in within the existing
   image smoke readiness budget, avoiding an enrollment/profile startup race.
 

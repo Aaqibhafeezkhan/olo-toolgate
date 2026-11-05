@@ -3,7 +3,8 @@
 Quickstart runs Control, Gateway, the console and a real native executor in one non-HA local evaluation image. SQLite is the default; external PostgreSQL uses separate initialization, runtime and protected platform principals. All execution requires current Control. There is no local policy ALLOW or Redis authorization fallback. See [multitenant deployment and qualification](multitenant.md) for UUID initialization, shared subdomains and release gates.
 
 The Control base build patches APT and libapt-pkg to at least Ubuntu Noble
-2.8.4ubuntu0.1 before composing Quickstart/device images. Initial APT operations
+2.8.4ubuntu0.1 before composing Quickstart. The device image has an independent
+Ubuntu base and applies the same fix separately. Initial APT operations
 disable download retries while installing the fix for
 [CVE-2026-109518](https://ubuntu.com/security/CVE-2026-109518).
 Image builds reject an older package candidate; the HIGH/CRITICAL vulnerability
