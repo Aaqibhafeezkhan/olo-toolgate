@@ -9,7 +9,11 @@ capabilities and no new privileges. Private Unix socket pairs are allowed for
 Python's event loop; socket/bind/connect/listen/accept remain denied.
 Their image and artifact are read-only. Scratch is disposable bounded tmpfs;
 memory, swap, CPU, PID and block-I/O limits are checked by an actual worker
-before the host becomes ready or registers its tier.
+before the host becomes ready or registers its tier. Supervisor comparison uses
+its proc identity and namespace witnesses; host-root cgroup files are not
+container limit witnesses. Each worker and broker must supply all required
+resource files from its private cgroup mount. Missing files refuse readiness
+and identify the unavailable probe path.
 
 ## Prepare the service
 

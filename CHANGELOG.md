@@ -6,6 +6,8 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Separate OCI supervisor identity witnesses from mandatory worker/broker resource probes, fixing qualification on hosts whose root cgroup has no limit files.
+
 - Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.tgpkg`
   (each tool's name, description, `useWhen`, effect, parameters with types, defaults, enums and bounds, and the
   input and output schemas), merging optional phrasing hints from the project's `training/annotations.json`.

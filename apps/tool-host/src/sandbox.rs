@@ -456,7 +456,11 @@ impl Sandbox {
                 .await
                 .map_err(|error| format!("broker isolation {error}"))?;
             validate_probe(&broker, &self.config)?;
-            validate_pair(&worker, &broker, &isolation_probe()?)?;
+            validate_pair(
+                &worker,
+                &broker,
+                &isolation_identity(Path::new("/proc/self"))?,
+            )?;
             Ok::<(), String>(())
         }
         .await;
@@ -851,14 +855,19 @@ except PermissionError: denied=True
 print(json.dumps(dict(uid=os.getuid(),gid=os.getgid(),pid=os.getpid(),uidMap=rd("/proc/self/uid_map"),gidMap=rd("/proc/self/gid_map"),netns=os.readlink("/proc/self/ns/net"),userns=os.readlink("/proc/self/ns/user"),status=status,networkDenied=denied,memory=rd('/sys/fs/cgroup/memory.max'),swap=rd('/sys/fs/cgroup/memory.swap.max'),pids=rd('/sys/fs/cgroup/pids.max'),cpu=rd('/sys/fs/cgroup/cpu.max'),io=rd('/sys/fs/cgroup/io.max'))),flush=True)
 input()
 "#;
-/// Trusted image qualification only; no policy, credential or Control endpoint.
-pub fn isolation_probe() -> Result<Value, String> {
-    fn rd(path: &str) -> Result<String, String> {
-        std::fs::read_to_string(path)
-            .map(|s| s.trim().to_string())
-            .map_err(|_| "isolation probe file unavailable".into())
-    }
-    let status = rd("/proc/self/status")?;
+fn probe_read(path: &Path) -> Result<String, String> {
+    std::fs::read_to_string(path)
+        .map(|s| s.trim().to_string())
+        .map_err(|error| {
+            format!(
+                "isolation probe file {} unavailable: {error}",
+                path.display()
+            )
+        })
+}
+// Supervisor identity does not require resource files at the host cgroup root.
+fn isolation_identity(proc_self: &Path) -> Result<Value, String> {
+    let status = probe_read(&proc_self.join("status"))?;
     let number = |key: &str| -> Result<u64, String> {
         status
             .lines()
@@ -868,22 +877,41 @@ pub fn isolation_probe() -> Result<Value, String> {
             .ok_or("isolation probe identity unavailable".into())
     };
     let namespace = |name: &str| {
-        std::fs::read_link(format!("/proc/self/ns/{name}"))
+        std::fs::read_link(proc_self.join("ns").join(name))
             .map(|p| p.to_string_lossy().into_owned())
             .map_err(|_| "isolation namespace unavailable".to_string())
     };
-    // The broker never needs a socket syscall. This probe checks the exact
-    // deployed syscall filter rather than opening any network connection.
-    let network_denied =
-        std::net::TcpListener::bind("127.0.0.1:0").is_err_and(|e| e.raw_os_error() == Some(1));
     Ok(json!({
         "uid": number("Uid:")?, "gid": number("Gid:")?, "pid": std::process::id(),
-        "uidMap": rd("/proc/self/uid_map")?, "gidMap": rd("/proc/self/gid_map")?,
-        "netns": namespace("net")?, "userns": namespace("user")?, "status": status,
-        "networkDenied": network_denied,
-        "memory": rd("/sys/fs/cgroup/memory.max")?, "swap": rd("/sys/fs/cgroup/memory.swap.max")?,
-        "pids": rd("/sys/fs/cgroup/pids.max")?, "cpu": rd("/sys/fs/cgroup/cpu.max")?, "io": rd("/sys/fs/cgroup/io.max")?
+        "uidMap": probe_read(&proc_self.join("uid_map"))?,
+        "gidMap": probe_read(&proc_self.join("gid_map"))?,
+        "netns": namespace("net")?, "userns": namespace("user")?, "status": status
     }))
+}
+fn isolation_limits(cgroup: &Path) -> Result<Value, String> {
+    Ok(json!({
+        "memory": probe_read(&cgroup.join("memory.max"))?,
+        "swap": probe_read(&cgroup.join("memory.swap.max"))?,
+        "pids": probe_read(&cgroup.join("pids.max"))?,
+        "cpu": probe_read(&cgroup.join("cpu.max"))?,
+        "io": probe_read(&cgroup.join("io.max"))?
+    }))
+}
+/// Trusted image qualification only; no policy, credential or Control endpoint.
+pub fn isolation_probe() -> Result<Value, String> {
+    let mut probe = isolation_identity(Path::new("/proc/self"))?;
+    // Workers and brokers have private mounts rooted at their own cgroup.
+    // Every resource witness remains mandatory for qualification.
+    let limits = isolation_limits(Path::new("/sys/fs/cgroup"))?;
+    probe
+        .as_object_mut()
+        .expect("identity object")
+        .extend(limits.as_object().expect("limit object").clone());
+    // Check the deployed filter without opening a network connection.
+    probe["networkDenied"] = json!(
+        std::net::TcpListener::bind("127.0.0.1:0").is_err_and(|e| e.raw_os_error() == Some(1))
+    );
+    Ok(probe)
 }
 fn validate_pair(worker: &Value, broker: &Value, supervisor: &Value) -> Result<(), String> {
     for key in ["uidMap", "gidMap", "netns", "userns"] {
@@ -1058,6 +1086,52 @@ mod tests {
             missing.as_object_mut().unwrap().remove(key);
             assert!(validate_pair(&worker, &missing, &supervisor).is_err());
         }
+    }
+    #[test]
+    fn supervisor_identity_requires_proc_witnesses_without_cgroup_limits() {
+        let root = std::env::temp_dir().join(format!("tg-identity-{}", crate::random_hex(16)));
+        std::fs::create_dir_all(root.join("ns")).unwrap();
+        std::fs::write(root.join("status"), "Uid:\t1000\nGid:\t1000\n").unwrap();
+        for name in ["uid_map", "gid_map"] {
+            std::fs::write(root.join(name), "0 0 4294967295").unwrap();
+        }
+        for name in ["net", "user"] {
+            std::os::unix::fs::symlink(format!("{name}:[123]"), root.join("ns").join(name))
+                .unwrap();
+        }
+        let identity = isolation_identity(&root).unwrap();
+        assert_eq!(identity["uid"], 1000);
+        assert_eq!(identity["netns"], "net:[123]");
+        for key in ["memory", "swap", "pids", "cpu", "io", "networkDenied"] {
+            assert!(identity.get(key).is_none());
+        }
+        std::fs::remove_file(root.join("uid_map")).unwrap();
+        assert!(isolation_identity(&root).unwrap_err().contains("uid_map"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn contained_probe_requires_every_resource_file_without_defaults() {
+        let root = std::env::temp_dir().join(format!("tg-limits-{}", crate::random_hex(16)));
+        std::fs::create_dir_all(&root).unwrap();
+        let files = [
+            ("memory.max", "134217728"),
+            ("memory.swap.max", "0"),
+            ("pids.max", "32"),
+            ("cpu.max", "100000 100000"),
+            ("io.max", "8:0 rbps=67108864 wbps=67108864"),
+        ];
+        for (name, value) in files {
+            std::fs::write(root.join(name), value).unwrap();
+        }
+        let limits = isolation_limits(&root).unwrap();
+        assert_eq!(limits["memory"], "134217728");
+        assert_eq!(limits["io"], files[4].1);
+        for (name, value) in files {
+            std::fs::remove_file(root.join(name)).unwrap();
+            assert!(isolation_limits(&root).unwrap_err().contains(name));
+            std::fs::write(root.join(name), value).unwrap();
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
     #[tokio::test]
     async fn failed_probe_retains_bounded_startup_error_and_engine_status() {
