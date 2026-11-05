@@ -6,6 +6,9 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Configure fresh CI rootless stores with fuse-overlayfs before pulling pinned
+  images, avoiding cold native-overlay UID-map copies within bounded create.
+
 - Keep qualification's attached probe clients alive through container removal;
   preserve engine-operation errors and retained-journal fencing on uncertainty.
 - Recover one partial Rust component-conflict installation only inside owned CI

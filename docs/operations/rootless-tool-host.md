@@ -46,6 +46,27 @@ such as `docker.io/library/python@sha256:<manifest digest>`, then explicitly pul
 that exact reference. The backend never pulls an image during admission or
 execution, and never uses a remote engine or Docker/Podman API socket.
 
+On a fresh service account, configure rootless storage before pulling images.
+For large images and explicit per-worker UID/GID maps, use fuse-overlayfs to
+avoid native overlay's first-use full-image remap copy:
+
+```toml
+# ~/.config/containers/storage.conf for the dedicated service user
+[storage]
+driver = "overlay"
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+```
+
+Install fuse-overlayfs on the host. It runs as part of the trusted container
+engine; workers receive no FUSE device or extra syscall privilege. Do not change
+an existing store in place or reset another account's containers. Provision a
+fresh dedicated account/store if its storage configuration is unsuitable.
+[Podman's performance guide](https://github.com/podman-container-tools/podman/blob/main/docs/tutorials/performance.md)
+describes the native-overlay first-use cost. The host still refuses readiness
+on an engine operation exceeding its five-second deadline. Qualification must
+run against the actual configured backend.
+
 ## Bind packages and hosts
 
 Add this to a Python project's existing `[tool.toolgate]` table:

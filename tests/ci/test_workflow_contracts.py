@@ -30,6 +30,21 @@ class EarlyGateTests(unittest.TestCase):
         self.assertNotIn('continue-on-error',foundation['jobs']['python'])
         # Execution and the scoped import path are covered by FoundationGateSelectionTests.
 
+    def test_oci_uses_fresh_fuse_storage_before_pulling_or_qualifying(self):
+        jobs = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())['jobs']
+        gate = next(step for step in jobs['rust']['steps']
+                    if step.get('name') == 'Rootless OCI worker containment')
+        script = gate['run']
+        self.assertIn('test ! -e "$HOME/.config/containers/storage.conf"', script)
+        self.assertIn('mount_program = "/usr/bin/fuse-overlayfs"', script)
+        self.assertLess(script.index('mount_program ='), script.index('podman pull'))
+        self.assertLess(script.index('podman pull'), script.index('tools/security/sandbox.py'))
+        self.assertNotIn('system reset', script)
+        self.assertNotIn('continue-on-error', gate)
+        self.assertNotIn('if', gate)
+        self.assertIn('tools/security/containment.py', str(jobs['rust']['steps']))
+        self.assertIn('tools/security/deployment.py', str(jobs['rust']['steps']))
+
     def test_manual_ci_reuses_all_unified_stages_after_bypassing_admission(self):
         manual = yaml.load((ROOT/'.github/workflows/ci-manual.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(manual['name'], 'ToolGate CI - Manual')
