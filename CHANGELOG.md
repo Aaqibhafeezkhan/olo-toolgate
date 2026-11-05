@@ -389,6 +389,12 @@ The project follows semantic versioning once stable versioning begins.
   request values with redacted diagnostics, and bounded retry for macOS installer
   disk-image service contention. Keep actual dialect SQL checks and map Oracle
   analysis only to Oracle file suffixes.
+- Use native TEXT declarations and typed byte-length namespace guards in fresh
+  SQLite schemas. Preserve strict tenant identity and immutable archive checks
+  across empty, Unicode, NUL and binary inputs. Retain bounded worker/broker
+  startup diagnostics when mandatory OCI qualification fails. Run current
+  Quickstart security/restore tests through the shared local/CI Python gate,
+  with gate-selection checks and no duplicate workflow step.
 
 - Add immutable exact-effect previews, authenticated review and atomic consent
   slots for financial/destructive generic HTTP and native MCP calls. Preserve

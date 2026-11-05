@@ -443,12 +443,18 @@ impl Sandbox {
             let mut args = self.create_args(&name, 0, 128 * 1024 * 1024, 30_000);
             args.extend(strings(&["-I", "-c", PROBE]));
             self.cli(&args).await?;
-            let (_worker_process, worker) = self.live_probe(&name).await?;
+            let (_worker_process, worker) = self
+                .live_probe(&name)
+                .await
+                .map_err(|error| format!("worker isolation {error}"))?;
             validate_probe(&worker, &self.config)?;
             let mut args = self.broker_args(&broker_name, 0, 30_000);
             *args.last_mut().expect("broker mode") = "--isolation-probe".into();
             self.cli(&args).await?;
-            let (_broker_process, broker) = self.live_probe(&broker_name).await?;
+            let (_broker_process, broker) = self
+                .live_probe(&broker_name)
+                .await
+                .map_err(|error| format!("broker isolation {error}"))?;
             validate_probe(&broker, &self.config)?;
             validate_pair(&worker, &broker, &isolation_probe()?)?;
             Ok::<(), String>(())
@@ -466,7 +472,7 @@ impl Sandbox {
             .args(["start", "--attach", "--interactive", name])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null());
+            .stderr(std::process::Stdio::piped());
         let mut child = command.spawn().map_err(|_| "probe process unavailable")?;
         let output = child.stdout.take().ok_or("probe output unavailable")?;
         let mut reader = tokio::io::BufReader::new(output).take(64 * 1024);
@@ -476,7 +482,7 @@ impl Sandbox {
             .map_err(|_| "probe output timeout")?
             .map_err(|_| "probe output unavailable")?;
         if frame.last() != Some(&b'\n') {
-            return Err("probe frame missing or oversized".into());
+            return Err(failed_probe(&mut child, "probe frame missing or oversized").await);
         }
         let value = serde_json::from_slice(&frame).map_err(|_| "probe frame invalid")?;
         // stdin stays owned by the child, keeping both probes alive while
@@ -811,6 +817,30 @@ fn sync(path: &Path) -> Result<(), String> {
     let _ = path;
     Ok(())
 }
+// Probes carry no workload arguments, credentials or permits. Bound startup
+// diagnostics without changing the frame deadline or accepting a failed probe.
+async fn failed_probe(child: &mut tokio::process::Child, reason: &str) -> String {
+    use tokio::io::AsyncReadExt;
+    let status = child.try_wait().ok().flatten();
+    let mut bytes = Vec::new();
+    if let Some(stderr) = child.stderr.take() {
+        let _ = tokio::time::timeout(
+            Duration::from_millis(250),
+            stderr.take(4096).read_to_end(&mut bytes),
+        )
+        .await;
+    }
+    let detail: String = String::from_utf8_lossy(&bytes)
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .take(1024)
+        .collect();
+    format!(
+        "{reason} (engine exit {:?}): {detail}",
+        status.and_then(|s| s.code())
+    )
+}
+
 const PROBE: &str = r#"import os,json,socket
 def rd(p):
  return open(p).read().strip()
@@ -1029,6 +1059,35 @@ mod tests {
             assert!(validate_pair(&worker, &missing, &supervisor).is_err());
         }
     }
+    #[tokio::test]
+    async fn failed_probe_retains_bounded_startup_error_and_engine_status() {
+        let mut child = tokio::process::Command::new("/bin/sh")
+            .args(["-c", "printf 'fixture startup failure' >&2; exit 17"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        child.wait().await.unwrap();
+        let detail = failed_probe(&mut child, "probe frame missing or oversized").await;
+        assert!(detail.contains("engine exit Some(17)"));
+        assert!(detail.contains("fixture startup failure"));
+        let mut child = tokio::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%02048d' 1 >&2; exit 23"])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        child.wait().await.unwrap();
+        let detail = failed_probe(&mut child, "missing").await;
+        assert!(detail.contains("engine exit Some(23)"));
+        assert!(
+            detail.len() <= 1100,
+            "startup diagnostic must remain bounded"
+        );
+    }
+
     #[tokio::test]
     #[ignore = "requires the delegated OCI conformance service"]
     async fn restart_reconciles_an_owned_running_container_before_reopening_the_pool() {

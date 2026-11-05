@@ -24,6 +24,46 @@ class OperationAttemptStorageTest(unittest.TestCase):
         for table in ('control_attempt_snapshots','control_operation_attempts','control_operations'):
             self.assertFalse(db.run('DELETE FROM '+table))
 
+    def test_current_namespace_identity_is_text_and_only_tenant_uses_empty_identity(self):
+        for namespace, identity, accepted in [
+            ('TENANT', '', True), ('AGENT', 'agent-a', True),
+            ('DELEGATED_USER', 'user-a', True), ('AGENT', 42, True),
+            ('TENANT', 'agent-a', False), ('AGENT', '', False),
+            ('DELEGATED_USER', '', False), ('TENANT', b'', False),
+            ('AGENT', b'agent-a', False), ('DELEGATED_USER', b'user-a', False),
+            ('TENANT', None, False), ('AGENT', None, False),
+            ('TENANT', '\0agent', False), ('AGENT', '\0agent', True),
+            ('AGENT', 'é', True),
+        ]:
+            with self.subTest(namespace=namespace, identity=identity):
+                db=SqliteRun(versions(QUICKSTART,'V*.sql'))
+                self.assertTrue(db.run(invocation('op', state='FAILED')))
+                db.db.execute("INSERT INTO control_operations VALUES(?,?,?,'FAILED',0,1,1000)",
+                              (TENANT,'op','c'*64))
+                insert="""INSERT INTO control_business_keys
+                    (tenant_id,tool_id,namespace,namespace_identity,business_key_hash,source,
+                     fingerprint,caller_agent_id,invocation_id,created_at,dedupe_expires_at,
+                     retain_until,outcome)
+                    VALUES(?,?,?,?,?,'DEDUPE_WINDOW',?,'agent-a','op',1000,2000,5000,'FAILED')"""
+                values=(TENANT,'acme.orders-lookup',namespace,identity,'a'*64,'sha256:'+'b'*64)
+                if not accepted:
+                    with self.assertRaises(sqlite3.IntegrityError):
+                        db.db.execute(insert,values)
+                    self.assertEqual(0,db.db.execute('SELECT count(*) FROM control_business_keys').fetchone()[0])
+                    db.db.close()
+                    continue
+                db.db.execute(insert,values)
+                self.assertEqual('text',db.db.execute('SELECT typeof(namespace_identity) FROM control_business_keys').fetchone()[0])
+                db.db.execute("""INSERT INTO control_business_key_history
+                    SELECT tenant_id,tool_id,namespace,namespace_identity,business_key_hash,
+                           invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,
+                           dedupe_expires_at,retain_until,outcome,tombstoned_at,2000
+                    FROM control_business_keys""")
+                self.assertEqual(1,db.db.execute('SELECT count(*) FROM control_business_key_history').fetchone()[0])
+                with self.assertRaises(sqlite3.IntegrityError):
+                    db.db.execute("UPDATE control_business_key_history SET namespace_identity='other'")
+                db.db.close()
+
     def test_live_or_unbound_predecessors_cannot_create_retry_authority(self):
         db = SqliteRun(versions(QUICKSTART,'V*.sql'))
         self.assertTrue(db.run(invocation('op')))
