@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Wait for the first durable current Tool Host check-in within the existing
+  image smoke readiness budget, avoiding an enrollment/profile startup race.
+
+- Patch APT/libapt-pkg in the pinned Ubuntu Control builder and runtime base,
+  fixing CVE-2026-109518 in composed images; disable retries during bootstrap
+  and refuse package versions below the fixed release.
+
 - Configure fresh CI rootless stores with fuse-overlayfs before pulling pinned
   images, avoiding cold native-overlay UID-map copies within bounded create.
 

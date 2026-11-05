@@ -299,8 +299,8 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             return {t['toolId'] for t in ok(api('/api/control/v1/access/human/catalog',token or human,target,'POST'))['tools']}
         assert catalog()==set()
         for identity_dir in ('tool-host','tool-host-remote'):
-            journal=json.loads(exec_text('cat','/data/state/'+identity_dir+'/device.json'))
-            assert journal['formatVersion']==3 and journal['sequence']>0
+            journal=wait_checked_in_journal(
+                lambda:json.loads(exec_text('cat','/data/state/'+identity_dir+'/device.json')),deadline)
             assert journal['tenantId']==journal['identity']['tenantId']==snapshot['tenantId']
             assert journal['manifest']['protocolVersion']==2
             assert journal['discoveryTrust']['tenantId']==snapshot['tenantId']
@@ -715,6 +715,18 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
     finally:
         for container in reversed(containers):subprocess.run(['docker','rm','-f',container],capture_output=True)
         subprocess.run(['docker','volume','rm',volume],capture_output=True)
+
+def wait_checked_in_journal(read, deadline):
+    """Enrollment/profile readiness can precede the first durable host check-in."""
+    while True:
+        journal=read()
+        assert journal['formatVersion']==3, 'Current Tool Host journal required'
+        sequence=journal['sequence']
+        assert type(sequence) is int and sequence>=0, 'Invalid Tool Host check-in sequence'
+        if sequence>0:return journal
+        assert time.monotonic()<deadline, 'Tool Host first check-in did not complete'
+        time.sleep(.5)
+
 
 def build_images(image='olo-toolgate-quickstart:enterprise-validation',client_assets=None,prebuilt_ui=False):
     assets=[]

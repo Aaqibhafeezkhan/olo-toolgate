@@ -41,7 +41,12 @@ FROM ${ADMIN_UI_SOURCE} AS console
 
 FROM eclipse-temurin:21-jdk-noble@sha256:70898f0f893a6b772a0f29834d8b022e3ac20b6a0c33a922973cf66342ef56be AS build
 WORKDIR /workspace
-RUN apt-get update && apt-get install -y --no-install-recommends unzip python3 && rm -rf /var/lib/apt/lists/*
+# Patch APT before other installs; zero retries mitigates CVE-2026-109518 during bootstrap.
+RUN apt-get -o Acquire::Retries=0 update && \
+    apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0t64 && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 2.8.4ubuntu0.1 && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg6.0t64)" ge 2.8.4ubuntu0.1 && \
+    apt-get install -y --no-install-recommends unzip python3 && rm -rf /var/lib/apt/lists/*
 COPY gradlew gradlew.bat settings.gradle.kts build.gradle.kts gradle.properties VERSION ./
 COPY gradle/ gradle/
 COPY packages/contracts/ packages/contracts/
@@ -70,8 +75,13 @@ LABEL org.opencontainers.image.title="OLO ToolGate Control Plane" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$REVISION
-# The pinned base predates the Ubuntu fix for CVE-2026-111497; images built on Control inherit it.
-RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade libbrotli1 && rm -rf /var/lib/apt/lists/*
+# Control and its composed images inherit fixes absent from the pinned base.
+# Disable retries until APT itself is patched (CVE-2026-109518).
+RUN apt-get -o Acquire::Retries=0 update && \
+    apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0t64 libbrotli1 && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 2.8.4ubuntu0.1 && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg6.0t64)" ge 2.8.4ubuntu0.1 && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ARG CLIENT_ASSETS_DIR=deploy/client-assets/empty
 ARG CLIENT_DOWNLOADS_DIRECTORY=""
