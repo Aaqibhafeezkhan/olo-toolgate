@@ -134,5 +134,5 @@ Reading an undeclared name, or reading with the wrong type, is a compile-time er
 
 ## Related Docs
 
-- [http.md](http.md), [errors.md](errors.md), [execution.md](execution.md)
+- [http.md](http.md), [errors.md](errors.md), [execution.md](execution.md), [training.md](training.md) (training hints)
 - [Runtime modes](../runtime-modes.md)

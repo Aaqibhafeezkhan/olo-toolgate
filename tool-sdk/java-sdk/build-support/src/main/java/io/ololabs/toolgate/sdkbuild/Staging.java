@@ -54,6 +54,12 @@ public final class Staging {
             "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?"
                     + "(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
     public static final String TOOL_JAR = "artifacts/tool.jar";
+    /** The training hints the processor wrote into the tool jar, from {@code @Training} and {@code @TrainingValues}. */
+    public static final String TRAINING_RESOURCE = "META-INF/toolgate/training/annotations.json";
+    /** Where the staging directory carries them; {@code toolgate pack} folds them into the tool schema. */
+    public static final String TRAINING_FILE = "training/annotations.json";
+    /** Marks the file as generated: {@code toolgate pack} refuses a hand-written one. */
+    public static final String GENERATOR = "toolgate-sdk-java";
     /** A fixed date for every zip entry, so the same jars give the same bytes. */
     private static final java.time.LocalDateTime ZIP_TIME = java.time.LocalDateTime.of(1980, 1, 2, 0, 0);
 
@@ -72,8 +78,10 @@ public final class Staging {
             throw new IllegalArgumentException("the package version must be SemVer 2.0.0, not " + version);
         }
         ObjectNode index;
+        JsonNode training = null;
         List<JsonNode> descriptors = new ArrayList<>();
         try (ZipFile jar = new ZipFile(appJar.toFile())) {
+            if (jar.getEntry(TRAINING_RESOURCE) != null) training = read(jar, TRAINING_RESOURCE, TRAINING_RESOURCE);
             index = (ObjectNode) read(jar, "META-INF/toolgate/package.json", appJar
                     + " has no META-INF/toolgate/package.json; compile with the ToolGate processor and -Atoolgate.descriptorGeneration=1");
             for (JsonNode tool : index.path("tools")) {
@@ -86,6 +94,13 @@ public final class Staging {
         delete(out);
         Files.createDirectories(out.resolve("artifacts"));
         writeFatJar(appJar, libraries, out.resolve(TOOL_JAR));
+        if (training != null) {
+            // Beside the manifest, never inside the package: a changed phrasing must not change a digest.
+            Files.createDirectories(out.resolve(TRAINING_FILE).getParent());
+            ObjectNode marked = JSON.createObjectNode().put("generatedBy", GENERATOR);
+            marked.set("tools", training.path("tools"));
+            Files.write(out.resolve(TRAINING_FILE), JSON.writeValueAsBytes(marked));
+        }
 
         Properties sdk = sdkProperties();
         ObjectNode m = JSON.createObjectNode();
@@ -230,6 +245,7 @@ public final class Staging {
         String upper = name.toUpperCase(java.util.Locale.ROOT);
         if (upper.equals("META-INF/MANIFEST.MF") || upper.equals("META-INF/INDEX.LIST")) return true;
         if (name.equals("module-info.class") || name.endsWith("/module-info.class")) return true;
+        if (name.equals(TRAINING_RESOURCE)) return true;
         if (upper.startsWith("META-INF/") && upper.indexOf('/', 9) < 0
                 && (upper.endsWith(".SF") || upper.endsWith(".RSA") || upper.endsWith(".DSA") || upper.endsWith(".EC") || upper.startsWith("META-INF/SIG-"))) {
             return true;

@@ -50,7 +50,7 @@ The same inputs give the same bytes in any directory or machine.
 
 ## Tool schema
 
-After packing, `pack` writes `<package>.tool-schema.json` beside the `.tgpkg` ([src/tool_schema.rs](src/tool_schema.rs)). It holds what a training pipeline needs to teach a model to call the tools: per tool, `toolId`, `name`, `mcpName`, `kind`, `title`, `description`, `useWhen`, `effect`, a flat `parameters` list (`name`, `type`, `description`, `required`, `default`, `enum`, `sensitive`, `constraints`), the full `inputSchema` and `outputSchema`, and `annotations`. Annotations come from `training/annotations.json` in the project (or staging) directory, keyed by tool local name; a key that names no tool is refused. The file is not packaged, so no digest changes.
+After packing, `pack` writes `<package>.tool-schema.json` beside the `.tgpkg` ([src/tool_schema.rs](src/tool_schema.rs)). It holds what a training pipeline needs to teach a model to call the tools: per tool, `toolId`, `name`, `mcpName`, `kind`, `title`, `description`, `useWhen`, `effect`, a flat `parameters` list (`name`, `type`, `description`, `required`, `default`, `enum`, `sensitive`, `constraints`), the full `inputSchema` and `outputSchema`, and `annotations`. Annotations are declared on the tools (`@Training`, `training(...)`, a `"training"` block; see [../spec/authoring/training.md](../spec/authoring/training.md)); the SDK build generates `training/annotations.json` in the staging directory, keyed by tool local name, and `pack` also writes it beside the `.tgpkg`. A key that names no tool is refused, and so is a file without the `generatedBy` mark or a `training/annotations.json` in a tool project: hints are never written by hand. The file is not packaged, so no digest changes.
 
 ## Archive rules
 

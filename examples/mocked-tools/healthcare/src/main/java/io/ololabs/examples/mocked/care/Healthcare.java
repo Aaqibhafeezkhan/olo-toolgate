@@ -9,6 +9,11 @@ import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -118,6 +123,34 @@ public class Healthcare {
             effect = EffectSafety.READ_ONLY,
             errors = @ErrorDecl(code = "PATIENT_NOT_FOUND", description = "No patient has that record number."))
     @Example(arguments = "{\"mrn\":\"MRN-0000\"}", expectedError = "PATIENT_NOT_FOUND")
+    @Training(
+            phrasings = {
+                "Show me patient {mrn}",
+                "Summary for {mrn}",
+                "What allergies does {mrn} have?",
+                "Who is the care provider for {mrn}?",
+                "Active problems and plan for patient {mrn}",
+                "Pull up the chart of {mrn}"
+            },
+            negatives = {
+                "What is a medical record number?",
+                "What are common penicillin allergy symptoms?"
+            },
+            parameters = @TrainingValues(name = "mrn",
+                    examples = {
+                        "MRN-1001",
+                        "MRN-1002",
+                        "MRN-1007",
+                        "MRN-1015"
+                    }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "pull up the chart summary for MRN-1004", arguments = "{\"mrn\":\"MRN-1004\"}"),
+                @TrainingPrompt(prompt = "Who is MRN-1009's care provider and what allergies do they have?", arguments = "{\"mrn\":\"MRN-1009\"}")
+            },
+            negatives = {
+                "What should a patient summary include?"
+            })
     public Patient patient(@Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn, ToolContext context) {
         return find(Data.PATIENTS, mrn);
     }
@@ -129,6 +162,29 @@ public class Healthcare {
             errors = @ErrorDecl(code = "PATIENT_NOT_FOUND", description = "No patient has that record number."))
     @Example(arguments = "{\"mrn\":\"MRN-1003\"}", expectedOutput = "{\"medications\":[{\"drug\":\"sertraline\",\"dose\":\"100 mg\","
             + "\"frequency\":\"once daily\",\"since\":\"2024-02-20\"}]}")
+    @Training(
+            phrasings = {
+                "What medications is {mrn} on?",
+                "List {mrn}'s active meds",
+                "Current prescriptions for {mrn}?",
+                "What dose of each drug does {mrn} take?"
+            },
+            negatives = "What is metformin used for?",
+            parameters = @TrainingValues(name = "mrn",
+                    examples = {
+                        "MRN-1001",
+                        "MRN-1002",
+                        "MRN-1007",
+                        "MRN-1015"
+                    }))
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "what meds is MRN-1006 on?", arguments = "{\"mrn\":\"MRN-1006\"}"),
+                @TrainingPrompt(prompt = "Current prescriptions for MRN-1001", arguments = "{\"mrn\":\"MRN-1001\"}")
+            },
+            negatives = {
+                "What is the usual dose of paracetamol?"
+            })
     public Medications medications(@Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn, ToolContext context) {
         return new Medications(find(Data.MEDICATIONS, mrn));
     }
@@ -141,6 +197,45 @@ public class Healthcare {
             description = "Returns a patient's recent lab results with reference ranges and HIGH/LOW flags.",
             effect = EffectSafety.READ_ONLY,
             errors = @ErrorDecl(code = "PATIENT_NOT_FOUND", description = "No patient has that record number."))
+    @Training(
+            phrasings = {
+                "Recent labs for {mrn}",
+                "What's the latest {test} for {mrn}?",
+                "Any abnormal lab results for {mrn}?",
+                "Show {mrn}'s {test} results",
+                "Lab results for patient {mrn}"
+            },
+            defaultPhrasings = "Show the labs for {mrn}",
+            negatives = {
+                "What is a normal HbA1c?",
+                "What does a high LDL mean?"
+            },
+            parameters = {
+                @TrainingValues(name = "mrn",
+                    examples = {
+                        "MRN-1001",
+                        "MRN-1002",
+                        "MRN-1007",
+                        "MRN-1015"
+                    }),
+                @TrainingValues(name = "test",
+                    examples = {
+                        "HbA1c",
+                        "LDL",
+                        "eGFR",
+                        "potassium",
+                        "TSH",
+                        "creatinine"
+                    })
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "latest bloodwork for MRN-1002", arguments = "{\"mrn\":\"MRN-1002\"}"),
+                @TrainingPrompt(prompt = "Was MRN-1005's HbA1c high?", arguments = "{\"mrn\":\"MRN-1005\",\"test\":\"HbA1c\"}")
+            },
+            negatives = {
+                "Out of curiosity, what is a normal HbA1c?"
+            })
     public Labs labs(
             @Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn,
             @Param(description = "Only this test, such as HbA1c", required = false, maxLength = 60) String test,
@@ -176,6 +271,54 @@ public class Healthcare {
                     + "\"drugB\":\"aspirin\",\"severity\":\"MAJOR\",\"effect\":\"Higher risk of serious bleeding.\","
                     + "\"advice\":\"Avoid unless directed by a specialist; monitor for bleeding.\"}],\"allergyAlerts\":[],"
                     + "\"disclaimer\":\"Mocked data for demonstration; not medical advice.\"}")
+    @Training(
+            phrasings = {
+                "Do {drugs} interact?",
+                "Check interactions between {drugs}",
+                "Is it safe to give {drugs} to {mrn}?",
+                "Can {mrn} take {drugs} with their current meds?",
+                "Interaction check for {drugs}",
+                "Do {drugs} interact with each other?",
+                "Can {drugs} be taken together?",
+                "Any interactions between {drugs}?"
+            },
+            defaultPhrasings = "Check {drugs} for interactions",
+            negatives = {
+                "What is a drug interaction?",
+                "Can I drink coffee with paracetamol?"
+            },
+            parameters = {
+                @TrainingValues(name = "drugs",
+                    examples = {
+                        "[\"ibuprofen\",\"lisinopril\"]",
+                        "[\"warfarin\",\"aspirin\"]",
+                        "[\"metformin\",\"lisinopril\"]",
+                        "[\"sertraline\",\"tramadol\"]",
+                        "[\"amoxicillin\",\"methotrexate\"]",
+                        "[\"simvastatin\",\"clarithromycin\"]",
+                        "[\"warfarin\",\"ibuprofen\",\"omeprazole\"]"
+                    }),
+                @TrainingValues(name = "mrn",
+                    examples = {
+                        "MRN-1001",
+                        "MRN-1002",
+                        "MRN-1007",
+                        "MRN-1015"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Do warfarin, aspirin interact with each other?", arguments = "{\"drugs\":[\"warfarin\",\"aspirin\"]}"),
+                @TrainingPrompt(prompt = "Is it safe to give simvastatin, clarithromycin to MRN-1007?", arguments = "{\"drugs\":[\"simvastatin\",\"clarithromycin\"],\"mrn\":\"MRN-1007\"}"),
+                @TrainingPrompt(prompt = "Can ibuprofen and lisinopril be taken together?", arguments = "{\"drugs\":[\"ibuprofen\",\"lisinopril\"]}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "ok to combine metformin with alcohol-free cough syrup dextromethorphan?", arguments = "{\"drugs\":[\"metformin\",\"dextromethorphan\"]}"),
+                @TrainingPrompt(prompt = "Check sertraline + tramadol for MRN-1003", arguments = "{\"drugs\":[\"sertraline\",\"tramadol\"],\"mrn\":\"MRN-1003\"}")
+            },
+            negatives = {
+                "Out of curiosity, what is a drug interaction?"
+            })
     public InteractionCheck interactions(
             @Param(description = "Drug names, generic, such as [\"ibuprofen\"]") List<String> drugs,
             @Param(description = "Also include this patient's medications and allergies", required = false, maxLength = 20,
@@ -214,6 +357,78 @@ public class Healthcare {
     @Example(arguments = "{\"specialty\":\"CARDIOLOGY\",\"from\":\"2026-10-20\"}",
             expectedOutput = "{\"slots\":[{\"slotId\":\"S-302\",\"specialty\":\"CARDIOLOGY\",\"clinician\":\"Dr. Ines Ferreira\","
                     + "\"start\":\"2026-10-21T14:00\",\"minutes\":40}]}")
+    @Training(
+            phrasings = {
+                "Any {specialty} appointments available?",
+                "Open {specialty} slots from {from}",
+                "When can I see {clinician} in {specialty}?",
+                "Free {specialty} slots with {clinician} after {from}",
+                "Find a {specialty} appointment",
+                "Any free {specialty} slots?",
+                "Next free {specialty} appointment",
+                "Book-able {specialty} times from {from}?"
+            },
+            defaultPhrasings = "Open {specialty} slots?",
+            negatives = {
+                "What does an endocrinologist treat?",
+                "How do I prepare for a cardiology visit?"
+            },
+            parameters = {
+                @TrainingValues(name = "specialty",
+                    phrasings = {
+                        @ValuePhrasing(value = "PRIMARY_CARE", phrasings = {
+                            "primary care",
+                            "GP",
+                            "family doctor"
+                        }),
+                        @ValuePhrasing(value = "CARDIOLOGY", phrasings = {
+                            "cardiology",
+                            "heart specialist"
+                        }),
+                        @ValuePhrasing(value = "ENDOCRINOLOGY", phrasings = {
+                            "endocrinology",
+                            "diabetes clinic"
+                        }),
+                        @ValuePhrasing(value = "PSYCHIATRY", phrasings = {
+                            "psychiatry",
+                            "mental health"
+                        })
+                    }),
+                @TrainingValues(name = "clinician",
+                    examples = {
+                        "Dr. Patel",
+                        "Dr. Okafor",
+                        "Dr. Lindqvist",
+                        "Dr. Moreau"
+                    }),
+                @TrainingValues(name = "from",
+                    examples = {
+                        "2026-11-03",
+                        "2026-11-10",
+                        "2026-12-01",
+                        "2026-11-17",
+                        "2026-12-21"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Any free GP slots?", arguments = "{\"specialty\":\"PRIMARY_CARE\"}"),
+                @TrainingPrompt(prompt = "Next free GP appointment", arguments = "{\"specialty\":\"PRIMARY_CARE\"}"),
+                @TrainingPrompt(prompt = "Find appointment slots with a GP", arguments = "{\"specialty\":\"PRIMARY_CARE\"}"),
+                @TrainingPrompt(prompt = "Free GP slots with Dr. Patel after 2026-12-01", arguments = "{\"specialty\":\"PRIMARY_CARE\",\"clinician\":\"Dr. Patel\",\"from\":\"2026-12-01\"}"),
+                @TrainingPrompt(prompt = "Any mental health appointments available?", arguments = "{\"specialty\":\"PSYCHIATRY\"}"),
+                @TrainingPrompt(prompt = "When can I see Dr. Lindqvist in heart specialist?", arguments = "{\"specialty\":\"CARDIOLOGY\",\"clinician\":\"Dr. Lindqvist\"}"),
+                @TrainingPrompt(prompt = "Diabetes clinic openings from 2026-11-17", arguments = "{\"specialty\":\"ENDOCRINOLOGY\",\"from\":\"2026-11-17\"}"),
+                @TrainingPrompt(prompt = "Any primary care appointments available?", arguments = "{\"specialty\":\"PRIMARY_CARE\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "can i get in with a family doctor next week? from 2026-11-09", arguments = "{\"specialty\":\"PRIMARY_CARE\",\"from\":\"2026-11-09\"}"),
+                @TrainingPrompt(prompt = "openings at cardiology?", arguments = "{\"specialty\":\"CARDIOLOGY\"}"),
+                @TrainingPrompt(prompt = "When is the psychiatrist Dr. Okafor free?", arguments = "{\"specialty\":\"PSYCHIATRY\",\"clinician\":\"Dr. Okafor\"}")
+            },
+            negatives = {
+                "How long is a typical GP visit?"
+            })
     public Slots slots(
             @Param(description = "Specialty", enumValues = {"PRIMARY_CARE", "CARDIOLOGY", "ENDOCRINOLOGY", "PSYCHIATRY"}) String specialty,
             @Param(description = "Clinician name contains", required = false, maxLength = 60) String clinician,
@@ -242,6 +457,55 @@ public class Healthcare {
                 @ErrorDecl(code = "SLOT_NOT_AVAILABLE", description = "No open slot has that id.")}, reconciliation = Reconciliation.MANUAL)
     @Example(arguments = "{\"mrn\":\"MRN-1002\",\"slotId\":\"S-999\",\"reason\":\"BP review\",\"reference\":\"r-1\"}",
             expectedError = "SLOT_NOT_AVAILABLE")
+    @Training(
+            phrasings = {
+                "Book slot {slotId} for {mrn}, reason {reason}, request {reference}",
+                "Schedule {mrn} into {slotId} for {reason} (ref {reference})",
+                "Book {mrn} in {slotId}: {reason}. Reference {reference}",
+                "Reserve slot {slotId} for patient {mrn} because of {reason}, id {reference}"
+            },
+            negatives = "How far ahead should I book a specialist?",
+            parameters = {
+                @TrainingValues(name = "mrn",
+                    examples = {
+                        "MRN-1001",
+                        "MRN-1002",
+                        "MRN-1007",
+                        "MRN-1015"
+                    }),
+                @TrainingValues(name = "slotId",
+                    examples = {
+                        "S-101",
+                        "S-102",
+                        "S-205",
+                        "S-310",
+                        "S-418"
+                    }),
+                @TrainingValues(name = "reason",
+                    examples = {
+                        "diabetes follow-up",
+                        "chest pain review",
+                        "medication review",
+                        "annual check-up",
+                        "anxiety follow-up"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "case-4471",
+                        "req-20261031-01",
+                        "conv-88213",
+                        "ticket-flow-17",
+                        "chat-5520",
+                        "REQ-3307"
+                    })
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "book slot S-204 for MRN-1002, reason knee pain, ref chat-881", arguments = "{\"slotId\":\"S-204\",\"mrn\":\"MRN-1002\",\"reason\":\"knee pain\",\"reference\":\"chat-881\"}")
+            },
+            negatives = {
+                "How far ahead can I book a GP appointment?"
+            })
     public Booking book(
             @Param(description = MRN_HELP, maxLength = 20, sensitive = true) String mrn,
             @Param(description = "Slot id from care.slots", maxLength = 20) String slotId,

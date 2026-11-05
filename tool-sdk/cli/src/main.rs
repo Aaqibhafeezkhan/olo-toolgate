@@ -265,9 +265,12 @@ fn run(args: &[String]) -> Result<(), Failure> {
                 };
                 std::fs::write(&output, &data)?;
                 println!("wrote {}", output.display());
-                write_tool_schema(&output, &data, tool_schema::annotations_in(dir)?)?;
+                let annotations = tool_schema::annotations_in(dir)?;
+                write_tool_schema(&output, &data, annotations.clone())?;
+                write_annotations(&output, annotations.as_ref())?;
                 print_report(&report);
             } else {
+                tool_schema::refuse_in_project(dir)?;
                 let built = project_run(dir, &p)?.package()?;
                 let report = project::validate_package(&built)?;
                 let written = match output {
@@ -275,11 +278,15 @@ fn run(args: &[String]) -> Result<(), Failure> {
                         std::fs::copy(&built, &file)?;
                         file
                     }
-                    None => built,
+                    None => built.clone(),
                 };
                 println!("wrote {}", written.display());
                 let data = std::fs::read(&written)?;
-                write_tool_schema(&written, &data, tool_schema::annotations_in(dir)?)?;
+                // The SDK build packed its staging directory, so the hints the tool declarations generated are
+                // beside the package it wrote.
+                let annotations = tool_schema::generated_at(&tool_schema::beside(&built))?;
+                write_tool_schema(&written, &data, annotations.clone())?;
+                write_annotations(&written, annotations.as_ref())?;
                 print_report(&report);
             }
         }
@@ -295,7 +302,8 @@ fn run(args: &[String]) -> Result<(), Failure> {
                 (manifest, target.join("tool-schema.json"), annotations)
             } else {
                 let manifest = package::verify(&std::fs::read(target)?)?.manifest;
-                (manifest, tool_schema::path_for(target), None)
+                let annotations = tool_schema::generated_at(&tool_schema::beside(target))?;
+                (manifest, tool_schema::path_for(target), annotations)
             };
             let annotations = match p.option(&["--annotations"]) {
                 Some(file) => Some(tool_schema::read_annotations(Path::new(file))?),
@@ -353,6 +361,17 @@ fn write_tool_schema(
     let path = tool_schema::path_for(package);
     tool_schema::write(&path, &manifest, annotations.as_ref())?;
     println!("wrote {}", path.display());
+    Ok(())
+}
+
+/// Writes `training/annotations.json` beside a package that was just built, for the dataset builder.
+fn write_annotations(
+    package: &Path,
+    annotations: Option<&serde_json::Value>,
+) -> Result<(), Failure> {
+    if let Some(path) = tool_schema::write_beside(package, annotations)? {
+        println!("wrote {}", path.display());
+    }
     Ok(())
 }
 

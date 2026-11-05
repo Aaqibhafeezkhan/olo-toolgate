@@ -161,6 +161,16 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 guard(() -> register((ExecutableElement) e));
             }
             for (Element e : round.getElementsAnnotatedWith(Reconcile.class)) guard(() -> reconciler((ExecutableElement) e));
+            for (Element e : round.getElementsAnnotatedWith(io.ololabs.toolgate.sdk.annotations.Training.class)) {
+                guard(() -> {
+                    if (toolName((ExecutableElement) e) == null) throw new Problem(e, "@Training belongs on a @ServerTool or @ClientTool handler");
+                });
+            }
+            for (Element e : round.getElementsAnnotatedWith(io.ololabs.toolgate.sdk.annotations.ModelValidation.class)) {
+                guard(() -> {
+                    if (toolName((ExecutableElement) e) == null) throw new Problem(e, "@ModelValidation belongs on a @ServerTool or @ClientTool handler");
+                });
+            }
             if (failed) return;
             Map<String, Object> descriptors = new TreeMap<>();
             Map<String, ExecutableElement> handlers = new TreeMap<>();
@@ -610,6 +620,8 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 exampleEntries.add(entry);
             }
             examplesByTool.put(name, exampleEntries);
+            Map<String, Object> hints = TrainingHints.of(name, method, properties, required);
+            if (hints != null) trainingByTool.put(name, hints);
             parametersByTool.put(name, parameters);
             Map<String, String> inputTypes = new TreeMap<>();
             for (Map.Entry<String, Object> p : properties.entrySet()) {
@@ -629,6 +641,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
         private final Map<String, SourceAnalysis.Facts> facts = new HashMap<>();
         private final Map<String, Map<String, Object>> dataSchemasByTool = new HashMap<>();
         private final Map<String, List<Object>> examplesByTool = new HashMap<>();
+        private final Map<String, Object> trainingByTool = new TreeMap<>();
 
         private void inputs(ExecutableElement method, ToolVariables grouped, Schemas schemas, Map<String, Object> properties,
                 List<String> required, List<String> parameters) {
@@ -894,6 +907,14 @@ public final class DescriptorProcessor extends AbstractProcessor {
                         .createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/toolgate/package.json", packageType)
                         .openOutputStream()) {
                     out.write(Jcs.bytes(manifest));
+                }
+                if (!trainingByTool.isEmpty()) {
+                    // Training hints are not part of any descriptor or digest; the package build moves them out of the jar.
+                    try (OutputStream out = processingEnv.getFiler()
+                            .createResource(StandardLocation.CLASS_OUTPUT, "", TrainingHints.RESOURCE, handlers.values().toArray(new Element[0]))
+                            .openOutputStream()) {
+                        out.write(Jcs.bytes(Map.of("tools", trainingByTool)));
+                    }
                 }
             } catch (IOException | IllegalArgumentException e) {
                 throw new Problem(packageType, "cannot write descriptors: " + e.getMessage());

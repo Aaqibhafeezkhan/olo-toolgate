@@ -9,6 +9,9 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -60,6 +63,54 @@ public class SystemHealth {
             useWhen = "Use it first when asked whether a server is healthy, slow or running out of resources.",
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{}")
+    @Training(
+            phrasings = {
+                "How healthy is this machine?",
+                "Give me a health snapshot of the server",
+                "Check memory, swap and disk on this box",
+                "Is the server OK?",
+                "Is anything critical on this machine?",
+                "How much memory is free?",
+                "Run a system health check",
+                "Overall status of this machine: CPU, RAM and disk",
+                "Health check this machine",
+                "Is the server healthy?",
+                "How's the box doing?",
+                "Check RAM and swap",
+                "Is memory running low on this server?",
+                "Any warnings on this machine?",
+                "Give me the system status",
+                "Is the host OK or critical?",
+                "System health snapshot please",
+                "How much swap is in use?",
+                "Is this machine under pressure?",
+                "Quick health report for the server",
+                "Check CPU, memory and disk all at once",
+                "Is anything WARN or CRITICAL here?",
+                "What's the overall state of this computer?",
+                "health?",
+                "Run diagnostics on the server",
+                "Before I deploy, is the machine healthy?",
+                "How's memory and disk looking?",
+                "Status of this server's resources"
+            },
+            negatives = {
+                "How much RAM does a laptop need?",
+                "What is swap space?",
+                "How do I keep a server healthy?"
+            },
+            defaultPhrasings = {
+                "Is this machine healthy?",
+                "Health check please"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "give me a quick health snapshot of the box", arguments = "{}"),
+                @TrainingPrompt(prompt = "is anything red on this server?", arguments = "{}")
+            },
+            negatives = {
+                "What are signs of a healthy diet?"
+            })
     public Health system(ToolContext context) {
         var values = context.global();
         int cpuWarn = values.getIntValue("CpuWarnPercent");

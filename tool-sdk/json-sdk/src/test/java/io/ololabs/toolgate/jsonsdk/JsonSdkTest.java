@@ -142,4 +142,69 @@ class JsonSdkTest {
         var project = JsonProject.parse(example());
         assertArrayEquals(project.source(), JsonProject.parse(project.source()).source());
     }
+
+    private byte[] withTraining(String phrasing) throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) JsonProject.JSON.readTree(example());
+        var tool = (com.fasterxml.jackson.databind.node.ObjectNode) root.path("tools").get(1);
+        tool.set("training", JsonProject.JSON.readTree("{\"phrasings\":[\"" + phrasing + "\"],\"negatives\":[\"What does hello world mean?\"],"
+                + "\"examples\":[{\"prompt\":\"Say hi to Lin\",\"arguments\":{\"text\":\"Lin\"}}]}"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) tool.path("inputs").path("text"))
+                .set("training", JsonProject.JSON.readTree("{\"examples\":[\"Grace\",\"the ops team\"],\"phrasings\":{\"World\":[\"everyone\"]}}"));
+        return JsonProject.JSON.writeValueAsBytes(root);
+    }
+
+    @Test void trainingBlocksBecomeAnnotationsBesideThePackageNotInIt() throws Exception {
+        var build = JsonSdk.stage(withTraining("Greet {text} from the server"), directory.resolve("training"));
+        var notes = JsonProject.JSON.readTree(Files.readAllBytes(build.staging().resolve("training/annotations.json")));
+        var greet = notes.path("tools").path("server_greet");
+        assertEquals("Greet {text} from the server", greet.path("phrasings").get(0).asText());
+        assertEquals("What does hello world mean?", greet.path("negatives").get(0).asText());
+        assertEquals("Lin", greet.path("examples").get(0).path("arguments").path("text").asText());
+        assertEquals("the ops team", greet.path("parameters").path("text").path("examples").get(1).asText());
+        assertEquals("everyone", greet.path("parameters").path("text").path("phrasings").path("World").get(0).asText());
+        assertTrue(notes.path("tools").path("client_greet").isMissingNode());
+        try (var jar = new java.util.zip.ZipFile(build.staging().resolve("artifacts/tool.jar").toFile())) {
+            assertNull(jar.getEntry("META-INF/toolgate/training/annotations.json"));
+        }
+        // Editing a hint changes neither the tool jar nor the manifest, so no digest moves.
+        var edited = JsonSdk.stage(withTraining("Please greet {text}"), directory.resolve("edited"));
+        assertArrayEquals(Files.readAllBytes(build.staging().resolve("artifacts/tool.jar")), Files.readAllBytes(edited.staging().resolve("artifacts/tool.jar")));
+        assertArrayEquals(Files.readAllBytes(build.staging().resolve("toolgate-package.json")), Files.readAllBytes(edited.staging().resolve("toolgate-package.json")));
+        assertFalse(Files.exists(JsonSdk.stage(example(), directory.resolve("plain")).staging().resolve("training")));
+    }
+
+    @Test void trainingHintsAreCheckedAgainstTheInputs() throws Exception {
+        var failure = assertThrows(IllegalArgumentException.class, () -> JsonSdk.stage(withTraining("Greet {name}"), directory.resolve("bad")));
+        assertTrue(failure.getMessage().contains("names {name}, which is not an input"), failure.getMessage());
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) JsonProject.JSON.readTree(example());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("tools").get(0)).set("training", JsonProject.JSON.readTree("{\"unknown\":[]}"));
+        assertThrows(IllegalArgumentException.class, () -> JsonProject.parse(JsonProject.JSON.writeValueAsBytes(root)));
+    }
+
+    private byte[] withValidation(String validation) throws Exception {
+        var root = (com.fasterxml.jackson.databind.node.ObjectNode) JsonProject.JSON.readTree(withTraining("Greet {text} from the server"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("tools").get(1)).set("modelValidation", JsonProject.JSON.readTree(validation));
+        return JsonProject.JSON.writeValueAsBytes(root);
+    }
+
+    @Test void modelValidationBlocksGoBesideTheTrainingHints() throws Exception {
+        var build = JsonSdk.stage(withValidation("{\"prompts\":[{\"prompt\":\"Have the server welcome Ada\",\"arguments\":{\"text\":\"Ada\"}}],"
+                + "\"negatives\":[\"Who wrote the first hello world program?\"]}"), directory.resolve("validation"));
+        var notes = JsonProject.JSON.readTree(Files.readAllBytes(build.staging().resolve("training/annotations.json")));
+        var validation = notes.path("tools").path("server_greet").path("modelValidation");
+        assertEquals("Have the server welcome Ada", validation.path("prompts").get(0).path("prompt").asText());
+        assertEquals("Ada", validation.path("prompts").get(0).path("arguments").path("text").asText());
+        assertEquals("Who wrote the first hello world program?", validation.path("negatives").get(0).asText());
+        assertEquals("Greet {text} from the server", notes.path("tools").path("server_greet").path("phrasings").get(0).asText());
+    }
+
+    @Test void modelValidationPromptsMustBeNewValidCalls() throws Exception {
+        var repeated = assertThrows(IllegalArgumentException.class, () -> JsonSdk.stage(withValidation(
+                "{\"prompts\":[{\"prompt\":\"Say hi to Lin\",\"arguments\":{\"text\":\"Lin\"}}]}"), directory.resolve("repeated")));
+        assertTrue(repeated.getMessage().contains("is also a training hint"), repeated.getMessage());
+        var unknown = assertThrows(IllegalArgumentException.class, () -> JsonSdk.stage(withValidation(
+                "{\"prompts\":[{\"prompt\":\"Welcome Ada\",\"arguments\":{\"name\":\"Ada\"}}]}"), directory.resolve("unknown")));
+        assertTrue(unknown.getMessage().contains("passes name, which is not an input"), unknown.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> JsonProject.parse(withValidation("{\"examples\":[]}")));
+    }
 }
