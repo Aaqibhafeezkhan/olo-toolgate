@@ -197,8 +197,16 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 .filter(|v| !v.is_empty() && v.len() <= 128)
             {
                 let mut cancellation = context;
-                cancellation.request_id =
-                    crate::http::invocation_id(&cancellation, &json!(operation).to_string());
+                cancellation.request_id = if operation.strip_prefix("op-").is_some_and(|hash| {
+                    hash.len() == 64
+                        && hash
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                }) {
+                    operation.to_owned()
+                } else {
+                    crate::http::invocation_id(&cancellation, &json!(operation).to_string())
+                };
                 s.gateway
                     .authority
                     .cancel(&cancellation)
@@ -216,6 +224,12 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
             }
         }
         "tools/call" => {
+            if meta
+                .get("io.ololabs.toolgate/businessKey")
+                .is_some_and(|value| !value.is_string())
+            {
+                return error(ErrorCode::Validation, &correlation.request_id);
+            }
             let (traceparent, tracestate) = forwarded_trace(&correlation, meta);
             let trace = Trace {
                 traceparent,
@@ -233,17 +247,21 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
                 params,
                 trace,
             )
-            .await
-            .map(|result| with_invocation_reference(result, &invocation_id));
+            .await;
             // The request span is the Gateway's own span, the parent its executors see.
             if request_span.len() == 55 {
+                let actual_id = result
+                    .as_ref()
+                    .ok()
+                    .and_then(|value| value["_meta"][INVOCATION_REFERENCE].as_str())
+                    .unwrap_or(&invocation_id);
                 let ok = result.as_ref().is_ok_and(|r| r["isError"] != json!(true));
                 s.spans.record(
                     olo_toolgate_contracts::v2::InsightsSpanName::GatewayRequest,
                     &request_span,
                     request_span[36..52].to_owned(),
                     None,
-                    &invocation_id,
+                    actual_id,
                     started,
                     unix_ms().unwrap_or(started),
                     ok,
@@ -270,7 +288,13 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
 async fn tools_list(s: &AppState, context: &RequestContext, id: &Value) -> Result<Value, Response> {
     match s.gateway.authority.catalog(context).await {
         Ok(catalog) => Ok(
-            json!({"tools":catalog.tools.iter().filter(|tool|tool.enabled).map(|tool|json!({"name":tool.tool_id,"description":tool.description,"inputSchema":tool.input_schema})).collect::<Vec<_>>(),"ttlMs":0,"cacheScope":"private"}),
+            json!({"tools":catalog.tools.iter().filter(|tool|tool.enabled).map(|tool|{
+                let mut value=json!({"name":tool.tool_id,"description":tool.description,"inputSchema":tool.input_schema});
+                if let Some(policy)=&tool.business_key_policy {
+                    value["_meta"]=json!({"io.ololabs.toolgate/businessKeyPolicy":policy});
+                }
+                value
+            }).collect::<Vec<_>>(),"ttlMs":0,"cacheScope":"private"}),
         ),
         Err(code) => Err(rpc_error(
             status(&code),
@@ -490,7 +514,12 @@ async fn tools_call(
     let authorizing = unix_ms().unwrap_or(0);
     let authorized = s
         .gateway
-        .authorize_with(request.clone(), context.clone(), trace.context.clone())
+        .authorize_business(
+            request.clone(),
+            context.clone(),
+            trace.context.clone(),
+            params["_meta"]["io.ololabs.toolgate/businessKey"].as_str(),
+        )
         .await;
     let gateway_span =
         (trace.traceparent.len() == 55).then(|| trace.traceparent[36..52].to_owned());
@@ -515,6 +544,9 @@ async fn tools_call(
             json!({"code":code}),
         )
     })?;
+    let canonical_id = outcome.invocation.id.clone();
+    context.request_id = canonical_id.clone();
+    let result = async {
     if outcome.invocation.state == EnterpriseInvocationState::PendingApproval {
         if let Some(now) = unix_ms() {
             s.admissions.record(
@@ -693,6 +725,44 @@ async fn tools_call(
             )
         })?;
     }
+    }.await;
+    let value = result?;
+    // A host's result is reported content. Only an authorized Control projection
+    // supplies the independently graded business outcome.
+    let invocation = relay.read_invocation(&context).await.map_err(|code| rpc_error(
+        status(&code), id.clone(), -32000, "Operation outcome unavailable",
+        json!({"code":code,"requestId":canonical_id,"state":"OUTCOME_UNKNOWN","retryable":false}),
+    ))?;
+    let operation = invocation.operation_outcome.as_ref().filter(|_|
+        crate::application::invocation_matches(&invocation,&context)
+    ).ok_or_else(|| rpc_error(
+        StatusCode::SERVICE_UNAVAILABLE, id.clone(), -32000, "Operation outcome unavailable",
+        json!({"code":ErrorCode::DependencyUnavailable,"requestId":canonical_id,"state":"OUTCOME_UNKNOWN","retryable":false}),
+    ))?;
+    Ok(with_invocation_reference(
+        with_operation_outcome(value, operation),
+        &canonical_id,
+    ))
+}
+
+/// Reserved Gateway metadata is populated from authenticated Control, never worker content.
+const OPERATION_OUTCOME: &str = "io.ololabs.toolgate/operationOutcome";
+fn with_operation_outcome(
+    mut result: Value,
+    operation: &olo_toolgate_contracts::EnterpriseOperationOutcome,
+) -> Value {
+    if !result.get("_meta").is_some_and(Value::is_object) {
+        result["_meta"] = json!({});
+    }
+    result["_meta"][OPERATION_OUTCOME] = json!(operation);
+    if !matches!(
+        operation.state,
+        olo_toolgate_contracts::EnterpriseOperationState::Succeeded
+            | olo_toolgate_contracts::EnterpriseOperationState::Running
+    ) {
+        result["isError"] = json!(true);
+    }
+    result
 }
 
 /// Pull mode: hands the dispatch to Control, where the Tool Host fetches it, and waits for the
@@ -859,6 +929,55 @@ mod tests {
             let result = finished(provenance);
             assert!(result["_meta"].get(UNTRUSTED_UPSTREAM).is_none());
             assert!(result["_meta"]["io.modelcontextprotocol/serverInfo"].is_object());
+        }
+    }
+
+    #[test]
+    fn operation_metadata_overrides_worker_forgery_and_unknown_is_an_error() {
+        let operation = serde_json::from_value::<olo_toolgate_contracts::EnterpriseOperationOutcome>(json!({
+            "operationId":"op-1","state":"OUTCOME_UNKNOWN","revision":3,"grade":"REPORTED",
+            "journalComplete":true,"attemptCount":1,"effectCount":1,
+            "unresolvedEffectCount":1,"unsettledAttemptCount":1,
+            "finalized":false,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
+        })).unwrap();
+        let result = with_operation_outcome(
+            json!({
+                "content":[],"isError":false,"structuredContent":{"operationOutcome":{"state":"SUCCEEDED"}},
+                "_meta":{"io.ololabs.toolgate/operationOutcome":{"state":"SUCCEEDED","retryable":true}}
+            }),
+            &operation,
+        );
+        assert_eq!(
+            result["_meta"][OPERATION_OUTCOME]["state"],
+            "OUTCOME_UNKNOWN"
+        );
+        assert_eq!(result["_meta"][OPERATION_OUTCOME]["retryable"], false);
+        assert_eq!(result["isError"], true);
+        assert_eq!(
+            result["structuredContent"]["operationOutcome"]["state"],
+            "SUCCEEDED"
+        );
+    }
+
+    #[test]
+    fn verified_success_preserves_reported_error_and_other_metadata() {
+        let operation = serde_json::from_value::<olo_toolgate_contracts::EnterpriseOperationOutcome>(json!({
+            "operationId":"op-1","state":"SUCCEEDED","revision":3,"grade":"TARGET_CONFIRMED",
+            "journalComplete":true,"attemptCount":1,"effectCount":1,
+            "unresolvedEffectCount":0,"unsettledAttemptCount":0,
+            "finalized":true,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
+        })).unwrap();
+        for is_error in [false, true] {
+            let result = with_operation_outcome(
+                json!({"isError":is_error,"_meta":{"other":"retained"}}),
+                &operation,
+            );
+            assert_eq!(result["isError"], is_error);
+            assert_eq!(result["_meta"]["other"], "retained");
+            assert_eq!(
+                result["_meta"][OPERATION_OUTCOME]["grade"],
+                "TARGET_CONFIRMED"
+            );
         }
     }
 

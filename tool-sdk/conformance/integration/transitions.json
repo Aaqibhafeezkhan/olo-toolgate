@@ -5,14 +5,15 @@
   "title": "Invocation state transitions",
   "sources": [
     "docs/control-plane/invocation-state-v2.md",
-    "platform-requirements.md §12.2"
+    "platform-requirements.md \u00a712.2",
+    "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
   ],
   "cases": [
     {
       "id": "transitions/t01-create",
       "title": "T1 creates the invocation with its rows in one commit",
       "requirements": [
-        "invocation-state-v2.md §3 T1"
+        "invocation-state-v2.md \u00a73 T1"
       ],
       "level": "integration",
       "targets": [
@@ -31,7 +32,7 @@
       "id": "transitions/t02-approve",
       "title": "T2 approval queues the invocation in one transaction",
       "requirements": [
-        "invocation-state-v2.md §3 T2"
+        "invocation-state-v2.md \u00a73 T2"
       ],
       "level": "integration",
       "targets": [
@@ -49,7 +50,7 @@
       "id": "transitions/t03-deny",
       "title": "T3 deny cancels and rejects the key",
       "requirements": [
-        "invocation-state-v2.md §3 T3"
+        "invocation-state-v2.md \u00a73 T3"
       ],
       "level": "integration",
       "targets": [
@@ -67,7 +68,7 @@
       "id": "transitions/t04-reserve",
       "title": "T4 reserve consumes the approval once and mints the permit",
       "requirements": [
-        "invocation-state-v2.md §3 T4"
+        "invocation-state-v2.md \u00a73 T4"
       ],
       "level": "integration",
       "targets": [
@@ -85,7 +86,7 @@
       "id": "transitions/t05-consume",
       "title": "T5 consume starts the lease and returns the fencing token",
       "requirements": [
-        "invocation-state-v2.md §3 T5"
+        "invocation-state-v2.md \u00a73 T5"
       ],
       "level": "integration",
       "targets": [
@@ -103,7 +104,7 @@
       "id": "transitions/t06-heartbeat",
       "title": "T6 heartbeats renew the lease within the deadline",
       "requirements": [
-        "invocation-state-v2.md §3 T6"
+        "invocation-state-v2.md \u00a73 T6"
       ],
       "level": "integration",
       "targets": [
@@ -122,7 +123,7 @@
       "id": "transitions/t07-input-required",
       "title": "T7 enters and leaves INPUT_REQUIRED",
       "requirements": [
-        "invocation-state-v2.md §3 T7"
+        "invocation-state-v2.md \u00a73 T7"
       ],
       "level": "integration",
       "targets": [
@@ -141,7 +142,7 @@
       "id": "transitions/t08-cancel",
       "title": "T8 cancel invalidates the fencing token",
       "requirements": [
-        "invocation-state-v2.md §3 T8"
+        "invocation-state-v2.md \u00a73 T8"
       ],
       "level": "integration",
       "targets": [
@@ -160,7 +161,7 @@
       "id": "transitions/t09-result",
       "title": "T9 result commits terminal state, result, key outcome and outbox",
       "requirements": [
-        "invocation-state-v2.md §3 T9"
+        "invocation-state-v2.md \u00a73 T9"
       ],
       "level": "integration",
       "targets": [
@@ -177,9 +178,10 @@
     },
     {
       "id": "transitions/t10-not-started",
-      "title": "T10 FAILED notStarted allows rebinding",
+      "title": "T10 executor notStarted cannot authorize rebinding",
       "requirements": [
-        "invocation-state-v2.md §3 T10"
+        "invocation-state-v2.md \u00a73 T10",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -187,17 +189,19 @@
         "control",
         "tool-host"
       ],
-      "when": "The host reports FAILED with notStarted after a spool failure",
+      "when": "The host reports FAILED with notStarted after a spool failure, with and without an independently complete Control no-write journal",
       "then": [
-        "not_started true; the business key may be rebound"
+        "The worker flag is retained only as reported evidence and supplies no recovery proof",
+        "Rebinding requires current authority, the original operation deadline and Control's complete never-consumed or independently qualified broker-no-write proof; ambiguous work remains fenced"
       ],
       "status": "authored"
     },
     {
       "id": "transitions/t11-lease-expiry",
-      "title": "T11 lease expiry by effect class",
+      "title": "T11 lease expiry preserves consumed ambiguity",
       "requirements": [
-        "invocation-state-v2.md §3 T11"
+        "invocation-state-v2.md \u00a73 T11",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -205,11 +209,10 @@
         "control",
         "tool-host"
       ],
-      "when": "Leases expire for a ledger tool, a non-ledger task at attempt 1 and at attempt 3",
+      "when": "Leases expire for consumed and never-consumed attempts, including tools labelled idempotent or non-ledger",
       "then": [
-        "Ledger: OUTCOME_UNKNOWN",
-        "Non-ledger attempt 1: QUEUED with a new attempt",
-        "Attempt 3: FAILED; lease columns kept"
+        "Consumed work remains OUTCOME_UNKNOWN unless independent scope and every effect generation establish a resolved outcome",
+        "Tool labels and attempt counts alone do not permit re-execution; positive no-write recovery retains the operation identity and original deadline"
       ],
       "status": "authored"
     },
@@ -217,7 +220,7 @@
       "id": "transitions/t12-expiry",
       "title": "T12 expiry before consumption",
       "requirements": [
-        "invocation-state-v2.md §3 T12"
+        "invocation-state-v2.md \u00a73 T12"
       ],
       "level": "integration",
       "targets": [
@@ -233,9 +236,10 @@
     },
     {
       "id": "transitions/t13-late-result",
-      "title": "T13 a late result or reconcile resolves OUTCOME_UNKNOWN once",
+      "title": "T13 late evidence contributes without overwriting another attempt",
       "requirements": [
-        "invocation-state-v2.md §3 T13"
+        "invocation-state-v2.md \u00a73 T13",
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
       ],
       "level": "integration",
       "targets": [
@@ -243,10 +247,10 @@
         "control",
         "tool-host"
       ],
-      "when": "A late report arrives with the old token, then a second contradicting one",
+      "when": "A qualified late successful report arrives after expiry, then independent contradictory target evidence arrives",
       "then": [
-        "First moves to SUCCEEDED, FAILED or PARTIAL with evidence",
-        "Second is evidence only; never back to OUTCOME_UNKNOWN"
+        "The executor/current-dispatch record is preserved; business finalization waits for all attempts, closed authority and resolved effects",
+        "Independent contradiction moves a final business outcome to RECONCILIATION_REQUIRED and fences new effects; no automatic retry"
       ],
       "status": "authored"
     },
@@ -254,7 +258,7 @@
       "id": "transitions/t14-purge",
       "title": "T14 purge tombstones results without changing state",
       "requirements": [
-        "invocation-state-v2.md §3 T14"
+        "invocation-state-v2.md \u00a73 T14"
       ],
       "level": "integration",
       "targets": [
@@ -272,7 +276,7 @@
       "id": "transitions/undefined-refused",
       "title": "A transition not in the table gets 409",
       "requirements": [
-        "invocation-state-v2.md §3 "
+        "invocation-state-v2.md \u00a73 "
       ],
       "level": "component",
       "targets": [
@@ -288,7 +292,7 @@
       "id": "transitions/control-idempotency",
       "title": "Control calls replay on Idempotency-Key",
       "requirements": [
-        "invocation-state-v2.md §3 retries"
+        "invocation-state-v2.md \u00a73 retries"
       ],
       "level": "component",
       "targets": [
@@ -297,6 +301,101 @@
       "when": "Each caller endpoint is called twice with the same Idempotency-Key and the response is dropped the first time",
       "then": [
         "The second call replays the first response; nothing is applied twice"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/all-generations",
+      "title": "All recovery generations precede final success",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A qualified attempt releases one generation, recovers, completes its replacement and closes",
+      "then": [
+        "RUNNING persists until worker closure; both attempts and generations remain in bounded history; a contradictory target report requires reconciliation"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/RecoveryAdmissionIntegrationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/pending-late-success",
+      "title": "A late successful report cannot resolve a pending write",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A qualified consumed attempt expires and reports success before its target outcome arrives",
+      "then": [
+        "The operation stays unknown until the target witness; closure never reissues execution; history retains the old executor state separately"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/RecoveryAdmissionIntegrationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/reported-success",
+      "title": "Unqualified reported success is not business success",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "An unqualified worker reports success and a qualified worker leaves a sent effect unresolved",
+      "then": [
+        "Both operations remain OUTCOME_UNKNOWN"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/RecoveryAdmissionIntegrationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/partial-error",
+      "title": "A transport completion with an error is partial after a witnessed write",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "A target confirms a write but the worker reports COMPLETED with an error result",
+      "then": [
+        "The executor state is FAILED and the business outcome is PARTIAL"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/RecoveryAdmissionIntegrationTest.java"
+      ],
+      "status": "authored"
+    },
+    {
+      "id": "operation/current-caller-metadata",
+      "title": "Fresh caller metadata reads do not extend execution",
+      "requirements": [
+        "docs/plans/zero-trust-tool-execution.md \u00a74.6.4"
+      ],
+      "level": "component",
+      "targets": [
+        "control"
+      ],
+      "when": "The execution deadline expires and the same currently authorized caller reads status and history",
+      "then": [
+        "Retained failed metadata is readable with the original deadline; there is no recovery or replacement authority"
+      ],
+      "fixtures": [
+        "apps/control-plane/src/enterpriseTest/java/io/ololabs/toolgate/control/EnterpriseOperationTest.java"
       ],
       "status": "authored"
     }

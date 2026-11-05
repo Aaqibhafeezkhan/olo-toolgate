@@ -119,6 +119,7 @@ configurations[enterpriseTests.implementationConfigurationName].extendsFrom(conf
 configurations[enterpriseTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 tasks.register<Test>("enterpriseTest") {
     description = "Runs enterprise group graph and authorization conformance tests"
+    systemProperty("toolgate.fixtures", rootProject.file("tests/fixtures/contracts/v1/valid.json").absolutePath)
     testClassesDirs = enterpriseTests.output.classesDirs
     classpath = enterpriseTests.runtimeClasspath
     useJUnitPlatform()

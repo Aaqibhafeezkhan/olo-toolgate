@@ -1,10 +1,27 @@
 # Threat model: Tool Host, broker, egress and secrets
 
+## Adopted scope and current qualification
+
+The [A1–A9 attacker matrix and C1–C8 requirements](../zero-trust-boundaries.md)
+extend this model; E1–E7 identifiers below are preserved. The
+[live inventory](../zero-trust-execution-status.md#security-claim-inventory)
+records available scope and executed evidence. The architecture diagram and
+mitigation tables below describe the required design, not a passing release
+scorecard. A named D3 case is not evidence that it has executed.
+
+Qualified Python OCI workers are isolated from host files and raw network;
+native workers are not contained. The broker's separate OS/network identity in
+the diagram is still pending. Bound OLO writes have exact-request grants, a
+single-dispatch owner gate and target-owned shared SQL claims/outcomes, including
+actual memory/RAG replica/crash tests and a real development-stack settlement
+gate. Other routes do not inherit generalized per-effect authorization, consent,
+target deduplication or production revocation SLOs.
+
 ## Purpose
 
 This is the reviewed threat model behind design gate D2. It covers the server-side execution path of platform-requirements.md §11 and §13: the Tool Host supervisor, its sandboxes, the request broker, the egress proxy, the release-1 transport matrix, the Tool Host's workload identity, and secret delivery to server tools.
 
-It extends the platform [threat model](../threat-model.md) and does not repeat it. Client tools keep their existing model in [endpoint enforcement](../endpoint-enforcement.md). Decisions made here are recorded in ADR 013. Every threat below has a conformance case to be authored at gate D3, named in its last column.
+It extends the platform [threat model](../threat-model.md) and does not repeat it. Client tools keep their existing model in [endpoint enforcement](../endpoint-enforcement.md). Decisions made here are recorded in ADR 013. Each threat names required D3 coverage in its last column; consult the live inventory for executed cases and remaining work.
 
 ## 1. System and trust boundaries
 
@@ -22,7 +39,7 @@ It extends the platform [threat model](../threat-model.md) and does not repeat i
                                                   │ (B4) the invocation's own stdio
                                                   ▼
                                    broker / egress proxy  ◄── credentials (memory only)
-                                   (own netns, NetworkPolicy)
+                                   (separate netns/identity planned)
                                           │ (B6) TLS to approved destinations only
                                           ▼
                                    upstream APIs, approved TCP destinations
@@ -67,17 +84,17 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 | Id | Threat (adversary) | Mitigation | Residual risk | D3 case |
 |---|---|---|---|---|
 | T-AD-1 | Forged or altered permit (E5, E4) | Control signs every permit (RS256, `typ: toolgate-invocation-permit+jws`, pinned `kid` set; ADR 013). The Tool Host verifies the signature, `aud` = its own host id, the window, and every digest against what it will execute (platform-requirements.md §11.3). | Theft of Control's effect key, which is out of scope here and covered in [key management](../key-management.md) | `admission/forged-permit`, `admission/wrong-aud` |
-| T-AD-2 | Replay of a valid permit on the same or another host (E5) | Per-host `jti` cache; `aud` binding; Control consumes the single-use nonce in `RESERVED → EXECUTING` ([invocation-state-v2.md](../../control-plane/invocation-state-v2.md) T5). The `exp` window is seconds long. | None for ledger tools. A non-ledger tool may run twice across a host crash, by design (platform-requirements.md §11.4). | `admission/replay-same-host`, `admission/replay-other-host` |
+| T-AD-2 | Replay of a valid permit on the same or another host (E5) | Per-host `jti` cache; `aud` binding; Control consumes the single-use nonce in `RESERVED → EXECUTING` ([invocation-state-v2.md](../../control-plane/invocation-state-v2.md) T5). The `exp` window is seconds long. | Single-use admission is not external-effect deduplication. Ambiguous operations/effects remain fenced; generalized target-deduplicated resend is pending. | `admission/replay-same-host`, `admission/replay-other-host` |
 | T-AD-3 | Gateway swaps the arguments or the package after the permit (E5) | The permit binds the canonical arguments digest, `toolDescriptorDigest`, package, artifact, runtime, globals, service profile and deployment binding digests. The host recomputes the arguments digest and refuses a mismatch. | None | `admission/args-swap`, `admission/digest-swap` |
 | T-AD-4 | Double execution of a non-idempotent tool after an ambiguous dispatch (E4 drops packets) | Ledger CAS before `ADMITTED`. The Gateway never retries elsewhere after a send without an answer, and asks Control instead (platform-requirements.md §11.4). | External effect duplication by the upstream itself. That is out of ToolGate's control and stated in platform-requirements.md §11.7. | `ledger/ambiguous-dispatch`, `ledger/crash-after-admitted` |
-| T-AD-5 | Work continues after cancel or kill (E1 ignores signals) | The fencing token is invalidated at Control. Secret delivery, the broker and the lease refuse it. The supervisor kills the sandbox's cgroup, and the broker and proxy drop its connections ([kill-switch.md](../../control-plane/kill-switch.md) §5). | A partitioned host runs to the deadline, unless `selfTerminateOnControlLoss` is set | `kill/terminate-running`, `kill/partitioned-host` |
+| T-AD-5 | Work continues after cancel or kill (E1 ignores signals) | The fencing token is invalidated at Control. Secret delivery, the broker and the lease refuse it. The supervisor kills the sandbox's cgroup, and the broker and proxy drop its connections ([kill-switch.md](../../control-plane/kill-switch.md) §5). | Healthy enforcement cannot renew through Control loss and stops at its current lease/deadline; production class bounds need qualification. A root-compromised supervisor can ignore its watchdog. | `kill/terminate-running`, `kill/partitioned-host` |
 | T-AD-6 | Tool runs without audit (E6 fills the disk; E1 floods logs) | Fail-closed spool with reserved headroom, then the `FENCED` state (platform-requirements.md §12.7 row 11). Tool log frames count against the invocation's byte cap. | Effects already sent before `FENCED` are reported `OUTCOME_UNKNOWN` | `audit/spool-full`, `audit/fenced` |
 
 ### 4.2 Sandbox and supervisor (B2)
 
 | Id | Threat | Mitigation | Residual risk | D3 case |
 |---|---|---|---|---|
-| T-SB-1 | Sandbox escape to the node (E1) | `OCI_SANDBOX` tier: the ADR 009 boundary (user namespace, no capabilities, seccomp default-deny, read-only root, no host mounts other than the two sockets), plus cgroup limits from §13.5. There is never a fallback to a weaker tier (platform-requirements.md §13.4). | Kernel zero-days. Operators may choose a VM-backed runtime class for sensitive pools. | `sandbox/escape-probes` (the existing ADR 009 suite run on the Tool Host) |
+| T-SB-1 | Sandbox escape to the node (E1) | `OCI_SANDBOX` tier: the ADR 009 boundary (user namespace, no capabilities, seccomp default-deny, read-only root, no host mounts, invocation-owned stdio broker channel), plus cgroup limits from §13.5. There is never a fallback to a weaker tier (platform-requirements.md §13.4). | Kernel zero-days. Operators may choose a VM-backed runtime class for sensitive pools. | `sandbox/escape-probes` (the existing ADR 009 suite run on the Tool Host) |
 | T-SB-2 | Cross-invocation leakage through a reused sandbox (E1) | Single-use by default. Reuse only for `stateless` tools, within one tenant and identity class, capped by count and age. Secrets are never cached, and scratch space is wiped (platform-requirements.md §11.5). | Side channels within a reuse pool of the same identity, which is accepted | `sandbox/reuse-isolation` |
 | T-SB-3 | Cross-tenant pool sharing (E7) | Pools are keyed by tenant and never shared. The supervisor refuses a permit whose tenant isn't the pool's. | None | `sandbox/cross-tenant-permit` |
 | T-SB-4 | Malformed or oversized frames crash or confuse the supervisor (E1) | Strict frame schema (`protocol.schema.json`), byte and count caps, and unknown fields rejected. The supervisor is Rust and parses before acting. | Supervisor parser bugs, covered by fuzzing in M2 | `protocol/frame-fuzz`, `protocol/oversize` |
@@ -92,7 +109,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 | T-BR-3 | Credential theft through the broker (E1) | The broker injects credentials last and strips client `Authorization`, `Cookie`, `Proxy-Authorization`, `Host` and `X-Forwarded-*`. It filters `Set-Cookie` and auth challenges from responses, and never returns credentials. | An upstream that echoes the credential in a response body. Review checks routes against known echo endpoints. | `broker/credential-echo-filter`, `broker/auth-header-refused` |
 | T-BR-4 | Another sandbox's broker is used (E1, E6) | There is no socket or capability to steal: each invocation's broker reads only that process's stdout and answers on its stdin, for the permit, fencing token and profile of that invocation, until it ends | E6 controls every live invocation on its host | `broker/foreign-capability` |
 | T-BR-5 | Redirect or DNS rebinding to a blocked address (E3) | Every resolved address is checked at connect time; link-local, metadata, loopback and cluster CIDRs are always blocked. Redirects are followed only within approved routes, and never for ledger tools (platform-requirements.md §11.6). | None | `egress/rebinding`, `egress/redirect-out` |
-| T-BR-6 | Upstream TLS interception (E4) | The broker verifies the upstream certificate against the system store or an admin-pinned CA or SPKI | A compromised public CA, which pinning mitigates | `egress/bad-cert` |
+| T-BR-6 | Upstream TLS interception (E4) | The broker verifies the upstream certificate against the system store or an explicit admin CA bundle, plus any configured verified-leaf SPKI pins | A compromised public CA, which pinning mitigates | `egress/bad-cert` |
 
 ### 4.4 Egress proxy and the transport matrix (B6)
 
@@ -146,6 +163,20 @@ All recorded in ADR 013:
 
 ## 6. Accepted residual risks
 
-- A compromised Tool Host node (E6) can act for the invocations running on it until their leases or certificates expire. It can't mint permits, consume another host's permits, or reach other pools' credentials.
+- A compromised Tool Host node (E6/A4) can disable the watchdog and retain
+  credentials already delivered. Lease/certificate expiry does not stop root
+  using those credentials at unfenced targets. It cannot mint Control signatures
+  or consume another host's permits; disable/revocation prevents new authority at
+  Control, and qualified fenced targets independently consume there. It can
+  fabricate or omit host reports. Broker OS/network separation remains pending.
 - Tools granted tunnel destinations or `CREDENTIALS_IN_SANDBOX` can misuse what they were granted, inside those grants. Review is the control.
-- Upstream services are outside ToolGate. ToolGate guarantees at most one execution per ledger invocation, not exactly-once effects (platform-requirements.md §11.7).
+- Upstream services are outside ToolGate. Single-use admission and conservative
+  ambiguous-send handling do not establish exactly-once external effects.
+  Consumed is pending, target status replay grants no new execution, and an
+  APPLYING target owner cannot be declared not-started. Generalized resend,
+  reconciliation and operation-wide finalization remain outstanding.
+- Control/identity roots/kernel/runtime are trusted; arbitrary compromise of
+  those components invalidates their corresponding guarantees. Audit durability
+  does not yet detect rewriting by the Control database owner.
+- A Gateway has no signing key but still has the OLO HUMAN-context residual
+  documented in the [OLO integration model](olo-integration.md#5-gaps-against-current-code).

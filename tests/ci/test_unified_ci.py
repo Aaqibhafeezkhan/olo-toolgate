@@ -109,7 +109,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
 
     def test_main_calls_one_shared_stage_and_one_platform_matrix(self):
         jobs = workflow('ci.yml')['jobs']
-        self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images','coverage'})
+        self.assertEqual(set(jobs), {'admission','preflight','foundation','clients','images','coverage','zero-trust-diagnostics'})
         for name in ('preflight','clients'):
             self.assertTrue(jobs[name]['with']['shared_checks'])
         self.assertEqual(set(jobs['images']['needs']), {'foundation','clients'})
@@ -152,7 +152,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
             self.assertEqual(scripts.count(gate), 1, gate)
         self.assertEqual(scripts.count('--prebuilt-ui'), 2)
         self.assertIn('--postgresql --no-browser', scripts)
-        self.assertIn('agent --target linux --smoke', scripts)
+        self.assertIn('agent --target linux --verify-native-boundary', scripts)
         for image in ('quickstart','control','gateway','device','linux-secured-device'):
             self.assertIn(f'--severity HIGH,CRITICAL olo-toolgate-{image}:', scripts)
         self.assertNotIn('tools/check.py', scripts)

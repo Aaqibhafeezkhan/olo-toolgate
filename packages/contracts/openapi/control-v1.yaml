@@ -7400,6 +7400,201 @@ paths:
         required: true
         schema:
           $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+  /api/control/v1/access/invocations/{id}/effect-consent:
+    get:
+      operationId: getEffectConsent
+      description: Read the scoped immutable exact-effect preview.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Current immutable preview and review state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentView
+        '403':
+          description: Current authority or original consent validity refused
+        '404':
+          description: Unknown operation or no exact consent preview
+        '409':
+          description: Stale revision or changed preview digest
+  /api/control/v1/access/invocations/{id}/effect-consent/approve:
+    post:
+      operationId: approveEffectConsent
+      description: Approve the exact preview digest and revision using authenticated human authority. Policy ASK obligations remain separate.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentApprovalRequest
+      responses:
+        '200':
+          description: Current immutable preview and review state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentView
+        '403':
+          description: Current authority or original consent validity refused
+        '404':
+          description: Unknown operation or no exact consent preview
+        '409':
+          description: Stale revision or changed preview digest
+  /api/control/v1/access/invocations/{id}/effect-consent/revoke:
+    post:
+      operationId: revokeEffectConsent
+      description: Revoke exact consent without freeing consumed slots or extending validity.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentApprovalRequest
+      responses:
+        '200':
+          description: Current immutable preview and review state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectConsentView
+        '403':
+          description: Current authority or original consent validity refused
+        '404':
+          description: Unknown operation or no exact consent preview
+        '409':
+          description: Stale revision or changed preview digest
+  /api/control/v1/access/invocations/{id}/status:
+    post:
+      operationId: readCallerOperation
+      description: Gateway service only. Recheck the authenticated current caller context against the original owner and current grants. Metadata only; no reservation, resend or deadline extension.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
+      responses:
+        '200':
+          description: Retained executor state and separate current derived business outcome
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseInvocation
+        '403':
+          description: Current credential or grant denied
+        '404':
+          description: Unknown or unowned operation
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+  /api/control/v1/access/invocations/{id}/history:
+    get:
+      operationId: getEnterpriseOperationHistory
+      description: Authorized bounded attempt and effect metadata, pinned to one derived evidence revision. Never supplies execution authority.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Current derived outcome and bounded history
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/operation.schema.json#/$defs/EnterpriseOperationHistoryPage
+        '400':
+          description: Invalid cursor or limit
+        '403':
+          description: Current access denied
+        '409':
+          description: Evidence changed; start again without a cursor
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 512
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+    post:
+      operationId: readCallerOperationHistory
+      description: Gateway service only. Bounded metadata with current caller ownership and grant checks; never execution authority.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
+      responses:
+        '200':
+          description: Current derived outcome and bounded attempt/effect history
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/operation.schema.json#/$defs/EnterpriseOperationHistoryPage
+        '403':
+          description: Current credential or grant denied
+        '404':
+          description: Unknown or unowned operation
+        '409':
+          description: Evidence changed; restart pagination
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 512
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
   /api/control/v1/access/invocations/{id}/cancel:
     post:
       operationId: cancelEnterpriseInvocation
@@ -7522,6 +7717,84 @@ paths:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseInvocation
         '403':
           description: Another target device or inactive certificate
+  /api/control/v1/access/invocations/{id}/heartbeat:
+    post:
+      operationId: renewExecutionLease
+      description: Renew a running Tool Host lease against current authority. Expired leases cannot be resurrected. Progress and input requests are currently refused.
+      security:
+      - deviceCertificate: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/permit.schema.json#/$defs/LeaseHeartbeat
+      responses:
+        '200':
+          description: Renewed lease or cancellation; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/permit.schema.json#/$defs/LeaseRenewal
+        '400':
+          description: Invalid heartbeat or unsupported progress/input fields
+        '403':
+          description: Wrong device or fencing token
+        '503':
+          description: Authority unavailable; existing expiry remains binding
+  /api/control/v1/access/effects/authorize:
+    post:
+      operationId: issueEffectGrant
+      description: Fresh current authority, reviewed intent reconstructed from signed admission arguments, durable intent and unique owner. No implicit resend.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Explicit authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrant
+        '403':
+          description: Authentication, review, scope or current authority refused
+        '409':
+          description: Existing or already dispatched effect; no replay authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrantIssue
+  /api/control/v1/access/effects/sending:
+    post:
+      operationId: beginEffectGrantDispatch
+      description: One owner-bound AUTHORIZED-to-SENDING CAS. Lost replies never authorize a retry.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Explicit authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrantDispatchAllowed
+        '403':
+          description: Authentication, review, scope or current authority refused
+        '409':
+          description: Existing or already dispatched effect; no replay authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/EffectGrantDispatch
   /api/control/v1/access/effects/report:
     post:
       operationId: reportEnterpriseEffect
@@ -7897,6 +8170,103 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseAuthorityStatus
+  /api/control/v1/recovery-eligibility:
+    get:
+      operationId: listRecoveryEligibility
+      description: Return current configured recovery readiness. Operation-specific proof and current authority remain required before any resend.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 2048
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: Current readiness without credentials, target keys or business receipts.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/RecoveryPreflightPage
+        '403':
+          description: Current scoped authority required.
+        '409':
+          description: Directory changed; restart pagination.
+        '503':
+          description: Current readiness could not be determined.
+  /insights/v1/recovery-eligibility:
+    get:
+      operationId: listOperatorRecoveryEligibility
+      description: Return current configured recovery readiness. Operation-specific proof and current authority remain required before any resend.
+      security:
+      - operatorCertificate: []
+      parameters:
+      - name: tenant
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 2048
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      responses:
+        '200':
+          description: Current readiness without credentials, target keys or business receipts.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/RecoveryPreflightPage
+        '403':
+          description: Current scoped authority required.
+        '409':
+          description: Directory changed; restart pagination.
+        '503':
+          description: Current readiness could not be determined.
+  /api/control/v1/access/invocations/{id}/effects/{effect}/lookup:
+    post:
+      operationId: lookupTargetEffectStatus
+      description: Run the pinned read-only target adapter under current scoped operation read and approval authority. No business resend is authorized.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: effect
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Observed effect status; whole-operation completion remains independently derived.
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/TargetEffectLookupResult
+        '403':
+          description: Current scoped authority or independent target review denied.
+        '409':
+          description: No supported current adapter, changed generation/profile/credential, or incompatible evidence.
+        '503':
+          description: Target lookup unavailable or refused; no execution authority granted.
   /api/control/v1/access/invocations/{id}/reconciliation:
     post:
       operationId: proposeOutcomeReconciliation
@@ -9156,6 +9526,29 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitIssue
+  /api/control/v1/access/service-permits/sending:
+    post:
+      operationId: beginServicePermitDispatch
+      description: Direct device mTLS, signed service grant, current authority and recorded owner required; exactly one send CAS succeeds.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Authorized result
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitDispatchAllowed
+        '409':
+          description: The dispatch was already started, expired or fenced; no replay authority
+        '403':
+          description: Authentication, scope, expiry or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitDispatch
   /api/control/v1/access/service-permits/{audience}/consume:
     post:
       operationId: consumeServicePermit
@@ -9184,6 +9577,90 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitConsumption
+  /api/control/v1/access/service-permits/{audience}/claims/consume:
+    post:
+      operationId: consumeServicePermitClaim
+      description: Dedicated audience service role; first consumption checks current authority. Replays return status only; local target claim ownership controls execution.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimConsumption
+  /api/control/v1/access/service-permits/{audience}/claims/status:
+    post:
+      operationId: servicePermitClaimStatus
+      description: Dedicated audience service role; recorded claim status after expiry or termination. Never renews execution authority.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimReference
+  /api/control/v1/access/service-permits/{audience}/claims/outcome:
+    post:
+      operationId: reportServicePermitTargetOutcome
+      description: Dedicated audience service role; append late target outcome evidence for the recorded claim. Never renews execution authority.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: audience
+        required: true
+        schema:
+          type: string
+          enum: [olo-memory, olo-rag]
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitTargetOutcome
   /api/control/v1/access/service-permits/{audience}/epoch:
     get:
       operationId: serviceAuthorizationEpoch
@@ -9241,6 +9718,9 @@ components:
       bearerFormat: JWT
       description: RS256 token with verified issuer/audience/expiry and signed tenant_id/groups.
         Not a Gateway runtime credential.
+    operatorCertificate:
+      type: mutualTLS
+      description: Direct operator identity verified by the dedicated operator CA on the Insights listener.
     deviceCertificate:
       type: mutualTLS
       description: Direct verified device TLS identity; forwarded identity headers

@@ -1,9 +1,13 @@
 # Threat model: OLO platform integration
 
-**Status: proposed, for review; partly implemented.** This model describes ToolGate's side of the OLO integration
+**Status: adopted threat model; scoped implementation, full acceptance pending.** This model describes ToolGate's side of the OLO integration
 contracts (olo-labs/olo-mono `docs/toolgate-integration/m2`). User credentials, the reserved service principal,
 wildcard refusal and the executor principal are implemented (see
-[OLO user credentials](../../control-plane/olo-user-credentials.md)). Section 5 lists what is still missing.
+[OLO user credentials](../../control-plane/olo-user-credentials.md)). Section 5 retains historical integration evidence and remaining gaps.
+The [A1–A9 matrix and C1–C8 requirements](../zero-trust-boundaries.md) apply.
+The [live inventory](../zero-trust-execution-status.md#security-claim-inventory)
+controls current qualification. Mitigation rows below are requirements, not
+blanket claims of available deployment guarantees.
 
 ## Purpose
 
@@ -86,11 +90,11 @@ This model extends the platform [threat model](../threat-model.md) and the
 | Id | Threat (adversary) | Mitigation | Residual risk | Conformance case |
 |---|---|---|---|---|
 | T-OS-1 | An executor sends a scope it wasn't granted (E-O4) | A Control-signed service permit (RS256, `typ: olo-service-permit+jws`) binds `aud`, `tenantId`, `sub`, `operation`, `resources`, `requestFingerprint` and `exp`. The service verifies every claim against the request it received. | None | `olo/permit-scope-mismatch` |
-| T-OS-2 | The body is swapped after the permit was issued (E-O4) | `requestFingerprint` is the sha256 of the canonical body, and the service recomputes it | None | `olo/permit-body-mismatch` |
+| T-OS-2 | The body is swapped after the permit was issued (E-O4) | `requestFingerprint` is the sha256 of the canonical body, and the service recomputes it; bound writes additionally sign and recompute the exact prepared/accepted HTTP request fingerprint and profile/route binding | None | `olo/permit-body-mismatch` |
 | T-OS-3 | A permit is replayed to another service (E-O4, E-O6) | `aud` names one service | None | `olo/permit-wrong-audience` |
-| T-OS-4 | A permit is used after revocation (E-O5) | Writes: the service consumes the nonce at Control inside its transaction, before commit; Control's `fresh()` re-checks `authorizationEpoch` and re-decides. Reads: permit lifetime of 15 s or less, plus a revocation feed, and permits older than the latest epoch are refused. | Reads within at most the revocation bound (30 s) | `olo/revoked-before-commit`, `olo/read-after-epoch-bump` |
+| T-OS-4 | A permit is used after revocation (E-O5) | Bound writes: the service commits a unique shared claim, consumes with that claim at Control, and enters APPLYING before acting; completion and its outcome outbox commit with business SQL. Consumption is not a distributed transaction with Control; Control's `fresh()` re-checks `authorizationEpoch` and re-decides. Reads: permit lifetime of 15 s or less, plus a revocation feed, and permits older than the latest epoch are refused. | Reads within at most the revocation bound (30 s) | `olo/revoked-before-commit`, `olo/read-after-epoch-bump` |
 | T-OS-5 | A permit is held across a queue, an approval or a long job (E-O5) | Permits are issued at dispatch only. Long jobs consume per chunk, and a revocation stops the next chunk. | None | `olo/revoked-while-queued`, `olo/revoked-mid-index` |
-| T-OS-6 | A service is reached without ToolGate (E-O6, E-O3) | Services accept only mTLS from executor identities, and NetworkPolicy blocks the OLO worker and backend. A permit is required even with a valid mTLS identity. | Compromise of the executor's CA | `olo/direct-service-call` |
+| T-OS-6 | A service is reached without ToolGate (E-O6, E-O3) | Actual qualified memory/RAG listeners accept verified mTLS peers and grants. Production NetworkPolicy must separately block the OLO worker/backend; the development fixture does not qualify that policy. A permit is required even with a valid mTLS identity. | Compromise of the executor's CA | `olo/direct-service-call` |
 
 ### 4.4 Effect integrity
 
@@ -119,7 +123,7 @@ Each item is evidence from the source, and none is a design claim. Details are i
 | T-OI-4 | ~~No reserved, non-delegable service principal~~ **Closed** | `toolgate.control.olo.reserved-agents`: such agents have only `SERVICE` workload bindings, and `DELEGATED` submissions naming them as agent or chain hop are refused (`OloProtections`). |
 | T-OR-1 | ~~Resource extraction for package tools~~ **Closed** | Package tools declare an action and locator templates; Control builds `olo://{verified tenant}/…` resources from opaque-id arguments, so a substituted id stays in its tenant and kind, and the service checks ownership. |
 | T-OR-3 | ~~Wildcard grants~~ **Closed** | `toolgate.control.olo.protected-tool-groups` refuses `allActions` and `match: ANY` in grants and delegations reaching those groups, including through the tool-group wildcard. |
-| T-OS-1 – T-OS-5 | **Implemented and locally qualified (M4.5–M4.6)** | Control-derived downstream permits, Tool Host key-bound mTLS, service request verification, single-use online write consumption, authenticated tenant epoch snapshots, and credential-deadline caps. See [service bridge qualification](../../control-plane/olo-service-permits.md). Application service qualification remains M6/M8. |
+| T-OS-1 – T-OS-5 | **Implemented and locally qualified (M4.5–M4.6)** | Control-derived downstream permits, Tool Host key-bound mTLS, service request verification, single-use online write consumption, authenticated tenant epoch snapshots, and credential-deadline caps. See [service bridge qualification](../../control-plane/olo-service-permits.md). Actual memory/RAG TLS/vector/PostgreSQL qualification now includes shared claims, JVM replica/crash cases and real Control/Gateway development-stack outcome settlement. These results do not establish production network policy, full stack crash/partition handling or the general roadmap. |
 | T-OE-1, T-OE-2 | ~~Conflict on a fingerprint mismatch, and atomic create~~ **Closed** | The dedup key is tenant, mode, subject, agent and chain plus the caller's key; credential digests, epochs and expiry are not part of it, nor of the request fingerprint, so renewal and rotation replay the same invocation, with the current epochs rechecked. A changed fingerprint is a 409 and never runs; concurrent submissions insert one invocation and the others get it. Invocations are never purged, which exceeds the 37-day minimum; a future purge must keep tombstones. |
 | T-OA-1 | ~~Audit fields~~ **Closed** | Invocation audit rows carry `ControlAuditEvidence` (subject, actor, chain, workload, tool, operation, resources, decision, state, authorization epoch, policy revision), and the Tool Host admission record the same identity facts. |
 | Executor context | ~~The SDK `Invocation` has no tenant or resource~~ **Closed** | The Tool Host passes the permit's principal as the reserved `toolgate` claim. The Java and Python SDKs expose tenant, user, agent, chain, operation and resources, and `requireUser()` / `require_user()` refuse without a verified user, including standalone runs. The session epoch stays with Control. |
@@ -131,5 +135,17 @@ registry of issued credential digests would remove the residual and is a follow-
 
 ## 6. Conformance
 
-The `olo/*` cases above are to be written with the implementation. They run against a real Gateway, Control, Tool
-Host and stub OLO services, and are listed in the OLO plan's M3, M4 and M8 acceptance criteria.
+The `olo/*` names above identify required integration coverage, not a
+passing scorecard. Existing bridge tests, actual memory/RAG component TLS/vector
+tests and the owned real Control/Gateway development fixture cover different
+scopes. See [verification](../../testing/README.md#actual-knowledge-target-qualification)
+and the live inventory for source-bound evidence. Complete partition/crash
+qualification, production connectivity-class SLOs and deployment network policy
+remain outstanding.
+
+Bound OLO writes additionally require independently checked pinned route/profile
+manifests, signed HTTP facts and effect/generation metadata, a one-use owner-bound
+SENDING gate, shared target claim ownership and authenticated late outcomes.
+Status replay cannot authorize another action; APPLYING is not not-started.
+A completed target outcome does not by itself establish whole-operation success.
+Generalized effect slots/consent and history-aware replacement remain pending.

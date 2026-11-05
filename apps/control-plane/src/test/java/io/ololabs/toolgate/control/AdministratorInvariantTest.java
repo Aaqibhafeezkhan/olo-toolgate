@@ -28,7 +28,7 @@ final class AdministratorInvariantTest {
         store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());edit.accept(entries);tx.save(before,new Directory(before.revision()+1,entries));return null;});
     }
     private void second(PostgresStore store){change(store,entries->{
-        TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("second","Second administrator",true,1L));
+        TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("second","Second administrator",true,1L, null, null, null));
         GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"second");
         TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("second-admins","Other administrators",true,1L,List.of("second"),List.of("test-recovery-role")));
     });}
@@ -37,7 +37,7 @@ final class AdministratorInvariantTest {
     @Test void protectedLoginCannotBeDeletedDisabledOrLoseAuthorityEvenWithAnotherAdmin(){
         var store=store(true);second(store);
         denied(()->change(store,e->e.remove(Ids.Kind.USER.id("setup"))));
-        denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.USER,new ControlUser("setup","Setup",false,2L))));
+        denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.USER,new ControlUser("setup","Setup",false,2L, null, null, null))));
         denied(()->change(store,e->e.remove(Ids.Kind.TEAM.id("test-recovery-team"))));
         denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.TEAM,new ControlTeam("test-recovery-team","Disabled",false,2L,List.of("setup"),List.of("test-recovery-role")))));
         denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.ROLE,new ControlRole("test-recovery-role","Demoted",true,2L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of()))));
@@ -52,7 +52,7 @@ final class AdministratorInvariantTest {
     }
     @Test void renamingAndRestartDoNotRemoveSetupProtection(){
         var store=store(true);
-        change(store,e->TestSupport.put(e,codec,Ids.Kind.USER,new ControlUser("setup","Renamed administrator",true,2L)));
+        change(store,e->TestSupport.put(e,codec,Ids.Kind.USER,new ControlUser("setup","Renamed administrator",true,2L, null, null, null)));
         assertEquals("setup",store.transaction(tenant,false,Store.Session::bootstrapAdminUserId));
         denied(()->change(store,e->e.remove(Ids.Kind.USER.id("setup"))));
         store.transaction(tenant,true,tx->{assertThrows(Failure.class,()->tx.protectBootstrapAdmin("second"));return null;});

@@ -194,7 +194,7 @@ final class McpServersTest {
             // Authority over the Tool Group and over another Device Group, not over the binding's pool.
             var rules = List.of(new EnterpriseManagementRule(actions, EnterpriseGroupType.TOOL_GROUP, all, List.of(), conditions, null),
                 new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, new GroupSelection(List.of("other"), false), List.of(), conditions, null));
-            TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("limited", "Limited registrar", true, 1L)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "limited");
+            TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("limited", "Limited registrar", true, 1L, null, null, null)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "limited");
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("limited-role", "Limited", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, rules));
             TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("limited-team", "Limited", true, 1L, List.of("limited"), List.of("limited-role")));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null;
@@ -212,7 +212,7 @@ final class McpServersTest {
     }
     private static String approval(long revision, String... mappings) {
         var tools = new StringBuilder();
-        for (int i = 0; i < mappings.length; i += 2) tools.append(i == 0 ? "" : ",").append("{\"upstreamName\":\"").append(mappings[i]).append("\",\"name\":\"").append(mappings[i + 1]).append("\"}");
+        for (int i = 0; i < mappings.length; i += 2) tools.append(i == 0 ? "" : ",").append("{\"upstreamName\":\"").append(mappings[i]).append("\",\"name\":\"").append(mappings[i + 1]).append("\",\"effectPolicy\":{\"classification\":\"READ\",\"consentRequired\":false,\"acknowledgedUnfencedRisk\":false}}");
         return "{\"snapshotRevision\":" + revision + ",\"tools\":[" + tools + "]}";
     }
     private Directory.Entry entry(Fixture f, Ids.TenantId tenant, Ids.Kind kind, String id) { return f.store.transaction(tenant, false, tx -> tx.load().entries().get(kind.id(id))); }
@@ -421,4 +421,150 @@ final class McpServersTest {
         assertEquals(202, f.servers.refreshRequested(tenant, tx -> device(tenant, "host-a"), request).status());
         assertEquals(1, open(f, tenant).size());
     }
+    @Test void sqliteExplicitEffectReviewIsStampedAndReapprovalChangesImmutableAuthority()throws Exception{
+        explicitEffectReview(fixture(false));
+    }
+    @Test void postgresExplicitEffectReviewIsStampedAndReapprovalChangesImmutableAuthority()throws Exception{
+        explicitEffectReview(fixture(true));
+    }
+    private void explicitEffectReview(Fixture f)throws Exception{
+        var actor=tenant(f,"tenant-a","host-a");
+        f.servers.register(actor,registration("orders","orders/mcp-token"),"native-register","r");
+        long revision=snapshot(f,actor,"orders","native-scan",tool("send","Send one order."));
+        var request=(com.fasterxml.jackson.databind.node.ObjectNode)node(approval(revision,"send","send"));
+        var entry=(com.fasterxml.jackson.databind.node.ObjectNode)request.path("tools").get(0);
+        var policy=entry.putObject("effectPolicy").put("classification","WRITE").put("consentRequired",false).put("acknowledgedUnfencedRisk",false);
+        var first=node(f.servers.approve(actor,"orders",request.toString(),"native-approve","r").body());
+        assertEquals(policy,first.path("tools").get(0).path("effectPolicy"));
+        var profile=f.store.transaction(actor.tenant(),false,tx->{
+            var deployment=(JsonNode)codec.value(tx.packages().deployment("mcp.orders"));
+            return (JsonNode)codec.value(tx.packages().document(deployment.path("serviceProfileDigest").asText()));
+        });
+        var stamp=profile.path("nativeMcpEffects").get(0);
+        assertEquals(actor.id(),stamp.path("reviewedBy").asText());assertEquals(f.clock.now,stamp.path("reviewedAtUnixMs").asLong());
+        assertEquals("mcp.orders/send",stamp.path("toolId").asText());assertEquals(policy,stamp.path("policy"));
+        var version=f.store.transaction(actor.tenant(),false,tx->(JsonNode)codec.value(tx.packages().version(first.path("packageDigest").asText()).document()));
+        assertEquals("UNKNOWN",version.path("manifest").path("tools").get(0).path("descriptor").path("effect").path("safety").asText());
+        policy.put("reviewedBy","forged");assertEquals(400,status(()->f.servers.approve(actor,"orders",request.toString(),"native-forged","r")));
+        policy.remove("reviewedBy");policy.put("classification","FINANCIAL");
+        assertEquals(400,status(()->f.servers.approve(actor,"orders",request.toString(),"native-unacknowledged","r")));
+        policy.put("acknowledgedUnfencedRisk",true);
+        var changed=node(f.servers.approve(actor,"orders",request.toString(),"native-reapproved","r").body());
+        assertEquals(first.path("sequence").asLong()+1,changed.path("sequence").asLong());
+        assertNotEquals(first.path("packageDigest"),changed.path("packageDigest"));
+        // Old profile/review remains immutable even though a new approval becomes current.
+        assertEquals("WRITE",stamp.path("policy").path("classification").asText());
+    }
+
+    @Test void sqliteNativeMcpUsesActualAdmissionArtifactAndDurableSingleSend()throws Exception{
+        nativeMcpGrant(fixture(false));
+    }
+    @Test void postgresNativeMcpUsesActualAdmissionArtifactAndDurableSingleSend()throws Exception{
+        nativeMcpGrant(fixture(true));
+    }
+    @Test void sqliteNativeMcpHighRiskConsentBindsActualAdmissionAndSingleSend()throws Exception{
+        for(String classification:List.of("FINANCIAL","DESTRUCTIVE"))nativeMcpGrant(fixture(false),classification);
+    }
+    @Test void postgresNativeMcpHighRiskConsentBindsActualAdmissionAndSingleSend()throws Exception{
+        for(String classification:List.of("FINANCIAL","DESTRUCTIVE"))nativeMcpGrant(fixture(true),classification);
+    }
+    private void nativeMcpGrant(Fixture f)throws Exception{nativeMcpGrant(f,"WRITE");}
+    private void nativeMcpGrant(Fixture f,String classification)throws Exception{
+        var actor=tenant(f,"tenant-a","host-a");
+        f.servers.register(actor,registration("orders","orders/mcp-token"),"grant-register","r");
+        long revision=snapshot(f,actor,"orders","grant-scan",tool("send","Send an order."));
+        var approvalRequest=(com.fasterxml.jackson.databind.node.ObjectNode)node(approval(revision,"send","send"));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)approvalRequest.path("tools").get(0)).putObject("effectPolicy")
+            .put("classification",classification).put("consentRequired",false).put("acknowledgedUnfencedRisk",!classification.equals("WRITE"));
+        var approved=node(f.servers.approve(actor,"orders",approvalRequest.toString(),"grant-approve","r").body());
+        enable(f,actor.tenant(),"mcp.orders/send");
+        f.store.transaction(actor.tenant(),true,tx->{
+            var before=tx.load();var entries=new HashMap<>(before.entries());
+            TestSupport.put(entries,codec,Ids.Kind.BINDING,new ControlExecutionBinding("mcp-binding","MCP",true,2L,
+                "default-tools","pool",List.of("invoke"),List.of(approved.path("packageDigest").asText().substring(7)),true,false));
+            var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
+            var scope=new EnterpriseScope(new GroupSelection(List.of("default-tools"),false),
+                new GroupSelection(List.of("pool"),false),List.of("invoke"),false,
+                Arrays.stream(ResourceKind.values()).map(kind->new EnterpriseResourceRule(kind,"",EnterpriseResourceMatch.ANY)).toList(),conditions);
+            TestSupport.put(entries,codec,Ids.Kind.GRANT,new ControlAccessGrant("native-human","Native human",true,1L,
+                EnterpriseSourceType.TEAM,"test-recovery-team",EnterpriseGrantPurpose.HUMAN,scope));
+            TestSupport.put(entries,codec,Ids.Kind.GRANT,new ControlAccessGrant("native-secret","Native secret",true,1L,
+                EnterpriseSourceType.TEAM,"test-recovery-team",EnterpriseGrantPurpose.SECRET,scope));
+            TestSupport.put(entries,codec,Ids.Kind.IDENTITY_BINDING,new ControlIdentityBinding("native-root","Reviewed root",true,1L,
+                "root","https://identity.example","root",1L,f.clock.now,f.clock.now,1L,"REVIEWED",0L));
+            tx.save(before,new Directory(before.revision()+1,entries));
+            var online=new EndpointDeviceRecord("host-a",actor.tenant().value(),"root","f".repeat(64),EndpointState.ACTIVE,
+                1L,f.clock.now,1L,null,null,true,1L,null,null);
+            tx.saveEndpoint(new Store.EndpointRecord("host-a","f".repeat(64),codec.json(online),"public","0".repeat(64),"{}"));
+            return null;
+        });
+        var operations=new EnterpriseOperations(f.store,codec,f.signer,f.clock,"control","toolgate-client",60000,100);
+        var packages=new ServerPackages(f.store,codec,operations,f.clock);
+        String toolDigest=f.store.transaction(actor.tenant(),false,tx->new EnterpriseEvaluator(codec).toolDigest(tx.load(),
+            codec.model(tx.load().entries().get(Ids.Kind.TOOL.id("mcp.orders/send")).document(),ControlTool.class)));
+        var args=Map.<String,JsonNode>of("id",JSON.getNodeFactory().textNode("order-1"));
+        var context=new io.ololabs.toolgate.contracts.v2.RequestContext("native-grant-operation",actor.tenant().value(),
+            io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN,io.ololabs.toolgate.contracts.v2.CredentialKind.STATIC_TOKEN,
+            null,"root",null,null,List.of(),1L,null,null,f.clock.now+15000,"mcp-binding",null);
+        f.store.transaction(actor.tenant(),false,tx->{
+            var evaluation=new RuntimeAccess(codec).evaluation(actor.tenant(),tx.load(),context,"host-a",
+                new AuthorizationRequest("mcp.orders/send","invoke",args),toolDigest,approved.path("packageDigest").asText().substring(7),f.clock.now);
+            var decision=new EnterpriseEvaluator(codec).evaluate(actor.tenant(),tx.load(),evaluation);
+            assertEquals(Decision.ALLOW,decision.decision(),decision.reason().name());
+            return null;
+        });
+        var invocation=codec.model(operations.submitHuman(actor,new EnterpriseInvocationRequest(context,
+            new AuthorizationRequest("mcp.orders/send","invoke",args),toolDigest,approved.path("packageDigest").asText().substring(7),null,null, null),
+            "host-a").body(),EnterpriseInvocation.class);
+        var gateway=new DirectoryService.Actor(actor.tenant(),"b".repeat(64),false);
+        long reservationRevision=invocation.revision();
+        if(!classification.equals("WRITE")){
+            assertEquals(EnterpriseInvocationState.PENDING_APPROVAL,invocation.state());
+            var blocked=codec.json(new io.ololabs.toolgate.contracts.v2.PermitReservationRequest(invocation.id(),"host-a",invocation.revision(),args));
+            assertEquals(403,status(()->packages.permit(gateway,blocked,"native-unapproved")));
+            var consent=codec.model(operations.effectConsent(actor,invocation.id()).body(),io.ololabs.toolgate.contracts.v2.EffectConsentView.class);
+            assertEquals("order-1",consent.preview().slots().getFirst().request().body().path("params").path("arguments").path("id").asText());
+            assertEquals(classification,consent.preview().slots().getFirst().request().classification().name());
+            operations.decideEffectConsent(actor,invocation.id(),codec.json(new io.ololabs.toolgate.contracts.v2.EffectConsentApprovalRequest(
+                consent.previewDigest(),consent.revision())),false);
+            reservationRevision=codec.model(operations.get(actor,invocation.id()).body(),EnterpriseInvocation.class).revision();
+        }
+        var proof=codec.model(packages.permit(gateway,codec.json(new io.ololabs.toolgate.contracts.v2.PermitReservationRequest(
+            invocation.id(),"host-a",reservationRevision,args)),"native-permit").body(),io.ololabs.toolgate.contracts.v2.SignedInvocationPermit.class);
+        var claims=f.signer.verifyInvocation(proof);
+        assertEquals(!classification.equals("WRITE"),claims.effectConsent()!=null);
+        operations.consumeInvocation(actor.tenant(),tx->"host-a",codec.json(new io.ololabs.toolgate.contracts.v2.PermitConsumption(
+            invocation.id(),proof,claims.argumentsDigest(),claims.target().toolDescriptorDigest(),claims.target().packageDigest(),claims.target().artifactDigest())));
+        var body=JSON.createObjectNode().put("jsonrpc","2.0").put("id","native-handler").put("method","tools/call");
+        body.putObject("params").put("name","send").set("arguments",JSON.valueToTree(args));
+        var profile=f.store.transaction(actor.tenant(),false,tx->(JsonNode)codec.value(tx.packages().document(claims.target().serviceProfileDigest())));
+        var manifest=JSON.createObjectNode().put("version","toolgate-http-request-v1").put("profileId",profile.path("profileId").asText())
+            .put("profileDigest",claims.target().serviceProfileDigest()).put("routeId",McpEffectValidation.route("mcp.orders/send"))
+            .put("scheme","https").put("host","mcp.example.com").put("port",443).put("method","POST").put("path","/mcp").put("query","")
+            .put("contentType","application/json").put("bodyDigest",Canonical.arguments(body)).put("authDeclarationId","toolgate-mcp-upstream:orders");
+        manifest.putArray("credentialHeaders").add("authorization");
+        var headers=manifest.putObject("headers");headers.putArray("accept").add("application/json, text/event-stream");
+        headers.putArray("mcp-protocol-version").add("2025-11-25");headers.putArray("mcp-session-id").add("opaque-from-upstream");
+        var issue=new io.ololabs.toolgate.contracts.v2.EffectGrantIssue(invocation.id(),claims.nonce(),proof,"native-broker","native-handler",
+            args,Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class), "mcp-call");
+        var grants=new EffectGrants(f.store,codec,operations);
+        var changed=(com.fasterxml.jackson.databind.node.ObjectNode)node(codec.json(issue));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("httpRequestManifest")).put("bodyDigest","sha256:"+"a".repeat(64));
+        changed.put("httpRequestDigest",Canonical.arguments(changed.path("httpRequestManifest")));
+        var mismatch=assertThrows(Failure.class,()->grants.issue(actor.tenant(),tx->"host-a",changed.toString()));
+        assertEquals(403,mismatch.status());
+        if(!classification.equals("WRITE"))assertEquals(ControlErrorDetailCode.EFFECT_CONSENT_MISMATCH,mismatch.detail());
+        var granted=codec.model(grants.issue(actor.tenant(),tx->"host-a",codec.json(issue)).body(),io.ololabs.toolgate.contracts.v2.EffectGrant.class);
+        var grantClaims=f.signer.verifyEffect(granted.grant());
+        assertEquals(io.ololabs.toolgate.contracts.v2.EffectClassification.valueOf(classification),grantClaims.classification());
+        var retained=f.store.transaction(actor.tenant(),false,tx->tx.effects().intent(grantClaims.effectId()));
+        assertNotNull(retained);assertEquals(issue.httpRequestDigest(),retained.requestDigest());
+        assertEquals(403,status(()->grants.sending(actor.tenant(),tx->"host-a",codec.json(
+            new io.ololabs.toolgate.contracts.v2.EffectGrantDispatch(granted.grant(),"native-broker","another-handler")))));
+        var send=codec.json(new io.ololabs.toolgate.contracts.v2.EffectGrantDispatch(granted.grant(),"native-broker","native-handler"));
+        assertEquals(200,grants.sending(actor.tenant(),tx->"host-a",send).status());
+        assertEquals(409,status(()->grants.sending(actor.tenant(),tx->"host-a",send)));
+        assertEquals(409,status(()->grants.issue(actor.tenant(),tx->"host-a",codec.json(issue))));
+    }
+
 }

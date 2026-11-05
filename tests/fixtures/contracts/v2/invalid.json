@@ -295,6 +295,14 @@
         "outcome": "FAILED",
         "notStarted": "CRASHED"
       }
+    },
+    {
+      "case": "old incomplete format without executionTier",
+      "value": {
+        "invocationId": "inv-5",
+        "fencingToken": "nonce-77",
+        "outcome": "OUTCOME_UNKNOWN"
+      }
     }
   ],
   "InvocationSubmission": [
@@ -3128,6 +3136,13 @@
         "upstreamName": "get_order",
         "name": "Get Order"
       }
+    },
+    {
+      "case": "old incomplete format without effectPolicy",
+      "value": {
+        "upstreamName": "get_order",
+        "name": "get-order"
+      }
     }
   ],
   "ResultProvenance": [
@@ -3201,6 +3216,281 @@
     {
       "case": "unsupported retry policy",
       "value": "RETRY_ALWAYS"
+    }
+  ],
+  "EffectClassification": [
+    {
+      "case": "unreviewed classification",
+      "value": "SAFE"
+    }
+  ],
+  "EffectBodyMode": [
+    {
+      "case": "unprovable dynamic body",
+      "value": "DYNAMIC"
+    }
+  ],
+  "EffectGrant": [
+    {
+      "case": "window exceeds two seconds",
+      "value": {
+        "grant": {
+          "jws": "a.b.c"
+        },
+        "validForMs": 2001
+      }
+    },
+    {
+      "case": "expired window",
+      "value": {
+        "grant": {
+          "jws": "a.b.c"
+        },
+        "validForMs": 0
+      }
+    }
+  ],
+  "EffectGrantDispatchAllowed": [
+    {
+      "case": "ambiguous allowed value",
+      "value": {
+        "authorized": "true"
+      }
+    }
+  ],
+  "RouteEffectPolicy": [
+    {
+      "case": "publisher cannot stamp review",
+      "value": {
+        "routeId": "send",
+        "classification": "FINANCIAL",
+        "consentRequired": false,
+        "acknowledgedUnfencedRisk": true,
+        "intent": {
+          "path": "/send",
+          "query": {},
+          "headers": {},
+          "contentType": "application/json",
+          "bodyMode": "CANONICAL_JSON",
+          "body": {
+            "recipient": {
+              "$arg": "/recipient"
+            },
+            "amount": {
+              "$arg": "/amount"
+            }
+          }
+        },
+        "reviewedBy": "publisher"
+      }
+    }
+  ],
+  "EffectConsentSlot": [
+    {
+      "case": "zero allowance",
+      "value": {
+        "slotIndex": 0,
+        "request": {
+          "kind": "MAPPED_HTTP",
+          "routeId": "payment",
+          "classification": "FINANCIAL",
+          "scheme": "https",
+          "host": "api.example.test",
+          "port": 443,
+          "method": "POST",
+          "path": "/pay",
+          "query": "",
+          "headers": {
+            "accept": [
+              "application/json"
+            ]
+          },
+          "contentType": "application/json",
+          "bodyMode": "CANONICAL_JSON",
+          "body": {
+            "recipient": "alice",
+            "amount": 5000,
+            "currency": "USD"
+          }
+        },
+        "permittedCount": 0
+      }
+    },
+    {
+      "case": "unbounded allowance",
+      "value": {
+        "slotIndex": 0,
+        "request": {
+          "kind": "MAPPED_HTTP",
+          "routeId": "payment",
+          "classification": "FINANCIAL",
+          "scheme": "https",
+          "host": "api.example.test",
+          "port": 443,
+          "method": "POST",
+          "path": "/pay",
+          "query": "",
+          "headers": {
+            "accept": [
+              "application/json"
+            ]
+          },
+          "contentType": "application/json",
+          "bodyMode": "CANONICAL_JSON",
+          "body": {
+            "recipient": "alice",
+            "amount": 5000,
+            "currency": "USD"
+          }
+        },
+        "permittedCount": 65
+      }
+    }
+  ],
+  "EffectConsentMappedRequest": [
+    {
+      "case": "insecure target",
+      "value": {
+        "kind": "MAPPED_HTTP",
+        "routeId": "payment",
+        "classification": "FINANCIAL",
+        "scheme": "http",
+        "host": "api.example.test",
+        "port": 443,
+        "method": "POST",
+        "path": "/pay",
+        "query": "",
+        "headers": {
+          "accept": [
+            "application/json"
+          ]
+        },
+        "contentType": "application/json",
+        "bodyMode": "CANONICAL_JSON",
+        "body": {
+          "recipient": "alice",
+          "amount": 5000,
+          "currency": "USD"
+        }
+      }
+    },
+    {
+      "case": "invalid target port",
+      "value": {
+        "kind": "MAPPED_HTTP",
+        "routeId": "payment",
+        "classification": "FINANCIAL",
+        "scheme": "https",
+        "host": "api.example.test",
+        "port": 0,
+        "method": "POST",
+        "path": "/pay",
+        "query": "",
+        "headers": {
+          "accept": [
+            "application/json"
+          ]
+        },
+        "contentType": "application/json",
+        "bodyMode": "CANONICAL_JSON",
+        "body": {
+          "recipient": "alice",
+          "amount": 5000,
+          "currency": "USD"
+        }
+      }
+    }
+  ],
+  "EffectConsentPreview": [
+    {
+      "case": "empty effect scope",
+      "value": {
+        "consentId": "consent-1",
+        "tenantId": "tenant-1",
+        "operationId": "operation-1",
+        "runId": "run-1",
+        "toolId": "example.payments/pay",
+        "action": "pay",
+        "argumentsDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "resources": [],
+        "profileDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "notBeforeUnixMs": 1000,
+        "expiresAtUnixMs": 2000,
+        "slots": []
+      }
+    }
+  ],
+  "EffectConsentApprovalRequest": [
+    {
+      "case": "missing revision authority",
+      "value": {
+        "previewDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "expectedRevision": 0
+      }
+    }
+  ],
+  "EffectKey": [
+    {
+      "case": "empty",
+      "value": ""
+    },
+    {
+      "case": "unbounded",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "case": "ambiguous whitespace",
+      "value": " charge"
+    },
+    {
+      "case": "path delimiter",
+      "value": "charge/7"
+    }
+  ],
+  "TargetDedupeGuarantee": [
+    {
+      "case": "no retention default",
+      "value": {
+        "documentationUrl": "https://target.example.test/contracts/idempotency",
+        "scope": "GLOBAL",
+        "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "differentBody": "REJECT",
+        "reviewExpiresAtUnixMs": 1893456000000,
+        "header": "idempotency-key"
+      }
+    },
+    {
+      "case": "no effective window",
+      "value": {
+        "documentationUrl": "https://target.example.test/contracts/idempotency",
+        "retentionMs": 3600000,
+        "scope": "GLOBAL",
+        "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "differentBody": "REJECT",
+        "reviewExpiresAtUnixMs": 1893456000000,
+        "header": "idempotency-key"
+      }
+    },
+    {
+      "case": "no review deadline",
+      "value": {
+        "documentationUrl": "https://target.example.test/contracts/idempotency",
+        "retentionMs": 86400000,
+        "scope": "GLOBAL",
+        "scopeBindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "differentBody": "REJECT",
+        "header": "idempotency-key"
+      }
+    }
+  ],
+  "McpApprovedTool": [
+    {
+      "case": "old incomplete format without effectPolicy",
+      "value": {
+        "toolId": "mcp.orders/get-order",
+        "upstreamName": "get_order",
+        "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
     }
   ]
 }

@@ -28,6 +28,6 @@ final readonly class EffectiveValue implements \JsonSerializable {
     }
 
     public function jsonSerialize(): object {
-        return (object) array_filter(get_object_vars($this), static fn ($v) => $v !== null);
+        return (object) array_filter(get_object_vars($this), static fn ($v, $k) => $v !== null || in_array($k, ['value'], true), ARRAY_FILTER_USE_BOTH);
     }
 }

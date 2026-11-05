@@ -617,11 +617,8 @@ class _Builder:
         d["tcp"] = tcp_list
 
         variables = self.variables(h, group, list(properties), is_client)
-        for auth_id in sorted(auth_ids, key=utf16_key):
-            a = self.auths[auth_id]
-            if a.secret and not any(s.name == a.secret for s in variables.secrets):
-                raise Problem(site, "auth " + auth_id + " uses secret " + a.secret + ", which tool " + name
-                              + " does not declare")
+        # Auth-only vault references are broker-owned; raw worker access requires
+        # a separate explicit Secret declaration.
         if is_client and self.auth_next_to(h):
             raise Problem(site, "client tool " + name + " cannot be declared next to http_auth")
         d["variables"] = variables.to_json()

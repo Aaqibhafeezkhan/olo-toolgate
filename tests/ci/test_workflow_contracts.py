@@ -21,10 +21,39 @@ class EarlyGateTests(unittest.TestCase):
     def test_quickstart_restore_and_security_fixtures_run_before_image_builds(self):
         foundation = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
         steps = foundation['jobs']['python']['steps']
-        gate = next(step for step in steps if 'tests/quickstart' in step.get('run', ''))
-        self.assertEqual('apps/quickstart', gate['env']['PYTHONPATH'])
+        gates = [step for step in steps if 'tools/check.py --ci-common --ci-part python' in step.get('run', '')]
+        self.assertEqual(1,len(gates))
+        gate=gates[0]
+        self.assertNotIn('--contracts-only',gate['run'])
         self.assertNotIn('if', gate)
         self.assertNotIn('continue-on-error', gate)
+        self.assertNotIn('continue-on-error',foundation['jobs']['python'])
+        # Execution and the scoped import path are covered by FoundationGateSelectionTests.
+
+    def test_oci_uses_fresh_fuse_storage_before_pulling_or_qualifying(self):
+        jobs = yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())['jobs']
+        gate = next(step for step in jobs['rust']['steps']
+                    if step.get('name') == 'Rootless OCI worker containment')
+        script = gate['run']
+        self.assertIn('test ! -e "$HOME/.config/containers/storage.conf"', script)
+        self.assertIn('mount_program = "/usr/bin/fuse-overlayfs"', script)
+        self.assertLess(script.index('mount_program ='), script.index('podman pull'))
+        self.assertLess(script.index('podman pull'), script.index('tools/security/sandbox.py'))
+        self.assertNotIn('system reset', script)
+        self.assertNotIn('continue-on-error', gate)
+        self.assertNotIn('if', gate)
+        self.assertIn('tools/security/containment.py', str(jobs['rust']['steps']))
+        self.assertIn('tools/security/deployment.py', str(jobs['rust']['steps']))
+
+    def test_langchain_gate_verifies_current_unqualified_native_refusal(self):
+        jobs=yaml.safe_load((ROOT/'.github/workflows/images.yml').read_text())['jobs']
+        gate=next(step for step in jobs['langchain']['steps']
+                  if '--verify-native-boundary' in step.get('run',''))
+        self.assertNotIn('--smoke',gate['run'])
+        self.assertIn('test_agent.py',gate['run'])
+        self.assertIn('manage.py setup',gate['run'])
+        self.assertNotIn('continue-on-error',gate)
+        self.assertNotIn('continue-on-error',jobs['langchain'])
 
     def test_manual_ci_reuses_all_unified_stages_after_bypassing_admission(self):
         manual = yaml.load((ROOT/'.github/workflows/ci-manual.yml').read_text(), Loader=yaml.BaseLoader)
@@ -59,7 +88,7 @@ class EarlyGateTests(unittest.TestCase):
         self.assertEqual(jobs['foundation']['uses'], './.github/workflows/foundation.yml')
         self.assertEqual(jobs['clients']['uses'], './.github/workflows/client.yml')
         self.assert_preflight_dependencies(jobs, set(jobs)-{'admission','preflight'})
-        # Compatibility callers still require their own metadata gate. Shared
+        # Component callers still require their own metadata gate. Shared
         # foundation/client bodies are gated by the unified caller above.
         targets = {
             'gateway': ['policy-compatibility', 'container-and-replicas'],

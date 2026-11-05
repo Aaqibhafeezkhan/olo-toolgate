@@ -5,21 +5,32 @@
 //! profile and globals the permit pins, with every route call going through its broker.
 
 pub mod broker;
+mod broker_authority;
+pub mod broker_process;
 pub mod config;
 pub mod control;
 pub mod device;
 pub mod digest;
+mod effect_dispatch;
 pub mod egress;
 pub mod events;
+pub mod lease;
 pub mod mcp;
 pub mod mcp_call;
+mod mcp_effect;
 pub mod mcp_scan;
+pub mod outbox;
 pub mod permit;
+mod request_binding;
 pub mod runner;
+pub mod sandbox;
+#[cfg(unix)]
+mod send_window;
 pub mod server;
 pub mod store;
 pub mod stream;
 pub mod trace;
+mod worker_protocol;
 mod workload_identity;
 
 /// Milliseconds since the Unix epoch.

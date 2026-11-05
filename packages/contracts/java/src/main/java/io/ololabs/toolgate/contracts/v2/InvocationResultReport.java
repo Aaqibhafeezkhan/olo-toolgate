@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param outcome canonical outcome value
  * @param result canonical result value
  * @param notStarted canonical notStarted value
+ * @param executionTier canonical executionTier value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record InvocationResultReport(
@@ -17,7 +18,8 @@ public record InvocationResultReport(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "fencingToken", required = true) String fencingToken,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "outcome", required = true) InvocationOutcome outcome,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "result", required = false) ResultFrame result,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "notStarted", required = false) RefusalReason notStarted
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "notStarted", required = false) RefusalReason notStarted,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionTier", required = true) RuntimeTier executionTier
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,10 +28,12 @@ public record InvocationResultReport(
      * @param outcome canonical outcome value
      * @param result canonical result value
      * @param notStarted canonical notStarted value
+     * @param executionTier canonical executionTier value
      */
     public InvocationResultReport {
         java.util.Objects.requireNonNull(invocationId, "invocationId");
         java.util.Objects.requireNonNull(fencingToken, "fencingToken");
         java.util.Objects.requireNonNull(outcome, "outcome");
+        java.util.Objects.requireNonNull(executionTier, "executionTier");
     }
 }

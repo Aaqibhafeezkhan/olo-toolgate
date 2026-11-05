@@ -138,6 +138,8 @@ public final class ClientReleases {
             definition.putArray("actions").addObject().put("name", authorization.action()).putArray("resourceKinds").add("CUSTOM");
             String reconciliation = PackageReconciliation.of(d);
             if (reconciliation != null) definition.put("reconciliation", reconciliation);
+            var businessKeyPolicy=BusinessKeyPolicies.packaged(d);
+            if(businessKeyPolicy!=null)definition.set("businessKeyPolicy",node(codec.json(businessKeyPolicy)));
             definition.set("inputSchema", d.get("inputSchema")); definition.set("outputSchema", d.get("outputSchema"));
             var controlTool = JSON.objectNode().put("id", toolId).put("name", toolId).put("enabled", true).put("revision", 1);
             controlTool.set("definition", definition); controlTool.put("extractorId", extractorId).put("version", version).put("packageDigest", managed);

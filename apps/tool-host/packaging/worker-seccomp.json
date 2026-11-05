@@ -1,0 +1,15 @@
+{
+  "_comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0. Allow runtime threads, reject child processes and kernel/namespace escape calls.",
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "defaultErrnoRet": 1,
+  "syscalls": [
+    {
+      "names": ["read", "write", "readv", "writev", "pread64", "pwrite64", "preadv", "pwritev", "preadv2", "pwritev2", "close", "close_range", "open", "openat", "openat2", "creat", "stat", "fstat", "lstat", "statx", "newfstatat", "statfs", "fstatfs", "lseek", "access", "faccessat", "faccessat2", "readlink", "readlinkat", "getdents", "getdents64", "getcwd", "chdir", "fchdir", "fcntl", "ioctl", "dup", "dup2", "dup3", "pipe", "pipe2", "poll", "ppoll", "select", "pselect6", "epoll_create", "epoll_create1", "epoll_ctl", "epoll_wait", "epoll_pwait", "epoll_pwait2", "eventfd", "eventfd2", "timerfd_create", "timerfd_settime", "timerfd_gettime", "mmap", "mprotect", "munmap", "mremap", "madvise", "brk", "msync", "mincore", "mlock", "munlock", "memfd_create", "ftruncate", "truncate", "fallocate", "fsync", "fdatasync", "sync_file_range", "mkdir", "mkdirat", "rmdir", "unlink", "unlinkat", "rename", "renameat", "renameat2", "link", "linkat", "symlink", "symlinkat", "chmod", "fchmod", "fchmodat", "umask", "utime", "utimes", "futimesat", "utimensat", "execve", "execveat", "exit", "exit_group", "getpid", "getppid", "gettid", "getuid", "geteuid", "getgid", "getegid", "getresuid", "getresgid", "getgroups", "getpgid", "getpgrp", "getsid", "kill", "tgkill", "tkill", "rt_sigaction", "rt_sigprocmask", "rt_sigreturn", "rt_sigpending", "rt_sigtimedwait", "rt_sigsuspend", "sigaltstack", "signalfd", "signalfd4", "futex", "futex_waitv", "set_tid_address", "set_robust_list", "get_robust_list", "rseq", "arch_prctl", "prctl", "clock_gettime", "clock_getres", "clock_nanosleep", "gettimeofday", "time", "nanosleep", "getrandom", "uname", "sysinfo", "getrlimit", "setrlimit", "prlimit64", "getrusage", "times", "sched_getaffinity", "sched_setaffinity", "sched_yield", "sched_getparam", "sched_getscheduler", "sched_get_priority_max", "sched_get_priority_min", "sched_rr_get_interval", "getcpu", "getpriority", "setpriority", "wait4", "waitid", "restart_syscall", "membarrier", "capget"],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {"names": ["clone"], "action": "SCMP_ACT_ALLOW", "args": [{"index": 0, "value": 2114142208, "valueTwo": 65536, "op": "SCMP_CMP_MASKED_EQ"}]},
+    {"names": ["clone3"], "action": "SCMP_ACT_ERRNO", "errnoRet": 38},
+    {"names": ["socketpair"], "action": "SCMP_ACT_ALLOW", "args": [{"index": 0, "value": 1, "op": "SCMP_CMP_EQ"}, {"index": 2, "value": 0, "op": "SCMP_CMP_EQ"}]},
+    {"names": ["getsockname", "getpeername", "getsockopt", "setsockopt", "sendto", "recvfrom", "shutdown"], "action": "SCMP_ACT_ALLOW"}
+  ]
+}

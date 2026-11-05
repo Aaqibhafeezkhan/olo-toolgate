@@ -31,11 +31,4 @@ public record AdminSession(
         permissions = permissions == null ? null : java.util.List.copyOf(permissions);
         java.util.Objects.requireNonNull(role, "role");
     }
-    /** Construct a record without optional installation metadata.
-     *
-     * @param role canonical role value
-     */
-    public AdminSession(UserRole role) { this(null, role, null, null, null); }
-    /** Construct a session without an optional tenant display name. */
-    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }
 }

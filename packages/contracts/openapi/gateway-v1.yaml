@@ -59,6 +59,76 @@ paths:
           minLength: 1
           maxLength: 128
           pattern: ^[a-zA-Z0-9._-]+$
+  /access/invocations/{id}:
+    get:
+      operationId: getCallerOperation
+      description: Read owned retained metadata using current credentials and Control grants. Never reserves, renews or resends execution.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: https://schemas.ololabs.io/toolgate/v1/identifiers.schema.json#/$defs/Identifier
+      responses:
+        '200':
+          description: Authorized metadata; no-store
+          content:
+            application/json:
+              schema:
+                $ref: https://schemas.ololabs.io/toolgate/v1/enterprise.schema.json#/$defs/EnterpriseInvocation
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /access/invocations/{id}/history:
+    get:
+      operationId: getCallerOperationHistory
+      description: Read owned retained metadata using current credentials and Control grants. Never reserves, renews or resends execution.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          $ref: https://schemas.ololabs.io/toolgate/v1/identifiers.schema.json#/$defs/Identifier
+      - name: cursor
+        in: query
+        schema:
+          type: string
+          maxLength: 512
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      responses:
+        '200':
+          description: Authorized metadata; no-store
+          content:
+            application/json:
+              schema:
+                $ref: https://schemas.ololabs.io/toolgate/v1/operation.schema.json#/$defs/EnterpriseOperationHistoryPage
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
   /mcp:
     post:
       operationId: mcpIngress

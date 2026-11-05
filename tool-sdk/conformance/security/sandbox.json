@@ -16,16 +16,17 @@
         "T-SB-1",
         "ADR 009"
       ],
-      "level": "system",
+      "level": "integration",
       "targets": [
         "tool-host"
       ],
-      "when": "The existing ADR 009 escape-probe tool (mount, ptrace, raw socket, device access, capability use, host path writes, kernel keyring) runs as a server tool",
+      "when": "A Python server artifact attempts mount, ptrace, raw sockets, device access, namespace creation, host path reads/writes and kernel keyring calls in a qualified rootless OCI worker",
       "then": [
         "Every probe is denied",
         "The host node shows no changes outside the sandbox scratch space"
       ],
-      "status": "authored"
+      "status": "passing",
+      "evidence": "tools/security/sandbox.py: rootless_workers_deny_ambient_authority_and_preserve_the_stdio_protocol; revision/source/image and executed tests in build/security/sandbox/conformance.json"
     },
     {
       "id": "sandbox/no-weaker-tier",

@@ -1,6 +1,23 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # LangChain with signed client packages
 
+On the fresh zero-trust feature build, native HotFolder business finality is
+not qualified. Positive smoke and live model runs stop on Control's
+OUTCOME_UNKNOWN result; reported output is not a successful business outcome.
+Use the current boundary check after setup:
+
+```sh
+docker compose run --rm -T agent --target linux --verify-native-boundary
+```
+
+It requires current signed-tool discovery and an authenticated non-retryable
+OUTCOME_UNKNOWN/REPORTED result. It submits no write, retry or model call.
+This is the release gate for the unqualified native boundary, not qualification
+of native file-operation completion. Native finality remains outstanding in the
+[execution status](../../docs/security/zero-trust-execution-status.md).
+Do not retry an unknown operation to make the positive smoke test pass.
+
+
 The example builds the real `examples.hotfolder` Java SDK package, uploads it to
 Control, requests a signed client release and assigns it to an enrolled device.
 A LangChain agent discovers its granted package tools through the Gateway and

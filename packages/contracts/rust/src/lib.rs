@@ -4,7 +4,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 use serde::{Deserialize, Serialize};
 
-/// Contract set v2 models, side by side with v1 during migration.
+/// Current execution models and current transport model namespaces.
 pub mod v2;
 /// Server-verified administrator portal session.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,6 +56,31 @@ pub struct BundlePublishRequest {
     pub grace_policy_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rollback_of: Option<u64>,
+}
+/// Canonical BusinessKeyNamespace wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BusinessKeyNamespace {
+    #[serde(rename = "AGENT")]
+    Agent,
+    #[serde(rename = "DELEGATED_USER")]
+    DelegatedUser,
+    #[serde(rename = "TENANT")]
+    Tenant,
+}
+/// Reviewed admission key policy. Missing policy retains conservative legacy explicit-key behavior.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BusinessKeyPolicy {
+    pub required: bool,
+    pub namespace: BusinessKeyNamespace,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub argument: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dedupe_window_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_idempotency_window_ms: Option<u64>,
 }
 /// Durable caller-scoped cancellation acknowledgement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -625,6 +650,14 @@ pub enum ControlErrorDetailCode {
     RequiredReviewsChange,
     #[serde(rename = "RATE_LIMITED")]
     RateLimited,
+    #[serde(rename = "BOUND_SERVICE_EFFECT_REQUIRED")]
+    BoundServiceEffectRequired,
+    #[serde(rename = "EFFECT_CONSENT_REQUIRED")]
+    EffectConsentRequired,
+    #[serde(rename = "EFFECT_CONSENT_MISMATCH")]
+    EffectConsentMismatch,
+    #[serde(rename = "EFFECT_CONSENT_EXHAUSTED")]
+    EffectConsentExhausted,
 }
 /// Explicit Tool Group to Device Group binding; one binding is selected per invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1425,6 +1458,45 @@ pub enum EnterpriseApprovalType {
     #[serde(rename = "CONFIGURATION")]
     Configuration,
 }
+/// Canonical EnterpriseAttemptEffectScope wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseAttemptEffectScope {
+    #[serde(rename = "ADMISSION_ONLY")]
+    AdmissionOnly,
+    #[serde(rename = "QUALIFIED_BROKER_ONLY")]
+    QualifiedBrokerOnly,
+    #[serde(rename = "REVIEWER_WITNESSED")]
+    ReviewerWitnessed,
+    #[serde(rename = "LEGACY_UNKNOWN")]
+    LegacyUnknown,
+}
+/// Bounded attempt metadata; no bearer capabilities, raw input or target claim tokens.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseAttemptHistory {
+    pub attempt_id: String,
+    pub ordinal: u64,
+    pub state: EnterpriseInvocationState,
+    pub consumed: bool,
+    pub issued_at_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    pub evidence_count: u64,
+    pub scope: EnterpriseAttemptEffectScope,
+    pub manifest_sealed: bool,
+    pub manifest_effect_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_digest: Option<String>,
+    pub settled: bool,
+    pub grade: EnterpriseOutcomeGrade,
+}
+/// Exact closed-attempt scope attestation for independent maker/checker review; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseAttemptSettlementReview {
+    pub expected_outcome_revision: u64,
+    pub attempt_ids: Vec<String>,
+    pub no_further_effects: bool,
+}
 /// Saved authority, explicitly published signed snapshot and independently acknowledged device adoption are distinct states.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1654,6 +1726,41 @@ pub enum EnterpriseDecisionReason {
     #[serde(rename = "MANAGEMENT_DENIED")]
     ManagementDenied,
 }
+/// Canonical EnterpriseEffectGenerationState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseEffectGenerationState {
+    #[serde(rename = "AUTHORIZED")]
+    Authorized,
+    #[serde(rename = "RELEASED")]
+    Released,
+    #[serde(rename = "SENDING")]
+    Sending,
+    #[serde(rename = "CONSUMED")]
+    Consumed,
+    #[serde(rename = "AMBIGUOUS")]
+    Ambiguous,
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "CONFLICT")]
+    Conflict,
+}
+/// One immutable authorization-generation identity and its current evidence-derived state; response digests do not prove business-receipt equivalence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseEffectHistory {
+    pub effect_id: String,
+    pub generation: u64,
+    pub attempt_id: String,
+    pub route_id: String,
+    pub request_digest: String,
+    pub state: EnterpriseEffectGenerationState,
+    pub grade: EnterpriseOutcomeGrade,
+    pub evidence_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_digest: Option<String>,
+}
 /// Device-bound durable effect outcome and completed resource subset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1777,7 +1884,7 @@ pub struct EnterpriseHumanTarget {
     pub binding_id: String,
     pub device_id: String,
 }
-/// Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry.
+/// Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseInvocation {
@@ -1798,6 +1905,8 @@ pub struct EnterpriseInvocation {
     pub diagnostic_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reconciliation: Option<ReconciliationMethod>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_outcome: Option<EnterpriseOperationOutcome>,
 }
 /// Scoped durable effect states. A cursor does not disclose hidden rows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1819,6 +1928,8 @@ pub struct EnterpriseInvocationRequest {
     pub downstream_idempotency_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_context: Option<v2::ExecutionContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_key_hash: Option<String>,
 }
 /// Canonical EnterpriseInvocationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1870,6 +1981,51 @@ pub enum EnterpriseMemberType {
     #[serde(rename = "DEVICE")]
     Device,
 }
+/// Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseOperationHistoryPage {
+    pub operation: EnterpriseOperationOutcome,
+    pub attempts: Vec<EnterpriseAttemptHistory>,
+    pub effects: Vec<EnterpriseEffectHistory>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    pub truncated: bool,
+}
+/// Control-derived business outcome; metadata never grants execution authority or automatic retry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseOperationOutcome {
+    pub operation_id: String,
+    pub state: EnterpriseOperationState,
+    pub revision: u64,
+    pub grade: EnterpriseOutcomeGrade,
+    pub journal_complete: bool,
+    pub attempt_count: u64,
+    pub effect_count: u64,
+    pub unresolved_effect_count: u64,
+    pub unsettled_attempt_count: u64,
+    pub finalized: bool,
+    pub retryable: bool,
+    pub deduplication_assumed: bool,
+    pub updated_at_unix_ms: u64,
+}
+/// Canonical EnterpriseOperationState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseOperationState {
+    #[serde(rename = "RUNNING")]
+    Running,
+    #[serde(rename = "OUTCOME_UNKNOWN")]
+    OutcomeUnknown,
+    #[serde(rename = "RECONCILIATION_REQUIRED")]
+    ReconciliationRequired,
+    #[serde(rename = "SUCCEEDED")]
+    Succeeded,
+    #[serde(rename = "PARTIAL")]
+    Partial,
+    #[serde(rename = "FAILED")]
+    Failed,
+}
 /// Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1882,6 +2038,20 @@ pub struct EnterpriseOperationalStatus {
     pub clock_skew_ms: u64,
     pub authority_cache_grace_ms: u64,
     pub ready_probe_freshness_ms: u64,
+}
+/// Canonical EnterpriseOutcomeGrade wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseOutcomeGrade {
+    #[serde(rename = "REPORTED")]
+    Reported,
+    #[serde(rename = "CONTROL_PROVEN")]
+    ControlProven,
+    #[serde(rename = "TARGET_CONFIRMED")]
+    TargetConfirmed,
+    #[serde(rename = "REVIEWER_CONFIRMED")]
+    ReviewerConfirmed,
+    #[serde(rename = "TARGET_DEDUPLICATION_ASSUMED")]
+    TargetDeduplicationAssumed,
 }
 /// Short-lived audience-bound permit for one exact invocation and target.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1963,6 +2133,8 @@ pub struct EnterpriseReconciliationRequest {
     pub evidence_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_settlement: Option<EnterpriseAttemptSettlementReview>,
 }
 /// Canonical EnterpriseReconciliationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2547,6 +2719,8 @@ pub struct LocalToolInfo {
     pub input_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub tool_digest: String,
     pub package_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_key_policy: Option<BusinessKeyPolicy>,
 }
 /// One JSON stdin document; arguments never become process command strings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2664,6 +2838,26 @@ pub enum PackageState {
     #[serde(rename = "REVOKED")]
     Revoked,
 }
+/// Credential-free toolgate-http-request-v1 manifest of the exact prepared wire request. Never conveys authority on its own.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreparedHttpRequestManifest {
+    pub version: String,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub route_id: String,
+    pub scheme: String,
+    pub host: String,
+    pub port: u64,
+    pub method: String,
+    pub path: String,
+    pub query: String,
+    pub content_type: String,
+    pub body_digest: String,
+    pub headers: std::collections::BTreeMap<String, serde_json::Value>,
+    pub auth_declaration_id: serde_json::Value,
+    pub credential_headers: Vec<String>,
+}
 /// Canonical ReconciliationMethod wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReconciliationMethod {
@@ -2723,13 +2917,15 @@ pub struct RemoteToolRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorCode>,
 }
-/// Gateway-private queued request/result response.
+/// Authorized queued executor report/result. operationOutcome separately records the Control-derived business outcome; reported DONE alone does not prove completion.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RemoteToolResponse {
     pub record: RemoteToolRecord,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<RemoteToolResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_outcome: Option<EnterpriseOperationOutcome>,
 }
 /// Exact leased execution response. Failed execution carries a sanitized error code.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2957,6 +3153,44 @@ pub struct ServiceAuthorizationEpoch {
 pub struct ServicePermit {
     pub jws: String,
 }
+/// Target-owned claim consumption. Replies are status only; local ownership controls execution.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaimConsumption {
+    pub request: ServicePermitConsumption,
+    pub claim_token: String,
+}
+/// Recorded target claim reference; not an execution capability.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaimReference {
+    pub auth_nonce: String,
+    pub claim_token: String,
+}
+/// Status only. Never grants execution authority; the target must own its shared local claim.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitClaimResult {
+    pub effect_id: String,
+    pub authorization_generation: u64,
+    pub status: ServicePermitClaimState,
+}
+/// Canonical ServicePermitClaimState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServicePermitClaimState {
+    #[serde(rename = "CONSUMED")]
+    Consumed,
+    #[serde(rename = "CONSUMED_BY_OTHER_CLAIM")]
+    ConsumedByOtherClaim,
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "AMBIGUOUS")]
+    Ambiguous,
+    #[serde(rename = "CONFLICT")]
+    Conflict,
+}
 /// Control-issued exact-request authorization for a downstream service; times are Unix milliseconds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2978,6 +3212,11 @@ pub struct ServicePermitClaims {
     pub iat: u64,
     pub exp: u64,
     pub execution_nonce: String,
+    pub http_request_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization_generation: Option<u64>,
 }
 /// Single-use downstream write permit was consumed under current authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2994,6 +3233,21 @@ pub struct ServicePermitConsumption {
     pub resources: Vec<ResourceDescriptor>,
     pub request_fingerprint: String,
     pub executor_key_sha256: String,
+    pub http_request_digest: String,
+}
+/// Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitDispatch {
+    pub permit: ServicePermit,
+    pub broker_instance_id: String,
+    pub handler_id: String,
+}
+/// This owner won the single send transition; a lost response cannot be replayed into new authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitDispatchAllowed {
+    pub authorized: bool,
 }
 /// Executor request for downstream authorization; scope comes exclusively from the admitted invocation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3002,6 +3256,29 @@ pub struct ServicePermitIssue {
     pub invocation_id: String,
     pub fencing_token: String,
     pub audience: ServiceAudience,
+    pub http_request_digest: String,
+    pub http_request_manifest: PreparedHttpRequestManifest,
+    pub invocation_permit: v2::SignedInvocationPermit,
+    pub broker_instance_id: String,
+    pub handler_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_key: Option<String>,
+}
+/// Authenticated target evidence, accepted after grant expiry without renewing authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ServicePermitTargetOutcome {
+    pub claim: ServicePermitClaimReference,
+    pub outcome: ServicePermitTargetOutcomeKind,
+    pub result_digest: String,
+}
+/// Canonical ServicePermitTargetOutcomeKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServicePermitTargetOutcomeKind {
+    #[serde(rename = "COMPLETED")]
+    Completed,
+    #[serde(rename = "FAILED")]
+    Failed,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3035,6 +3312,10 @@ pub struct ToolDefinition {
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reconciliation: Option<ReconciliationMethod>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub business_key_policy: Option<BusinessKeyPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_dedupe_guarantees: Option<Vec<v2::RouteDedupeConfiguration>>,
 }
 /// Canonical UserRole wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3106,6 +3387,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v1/local-tools.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v1/operation.schema.json",
+        include_str!("../schemas/v1/operation.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v1/package.schema.json",
         include_str!("../schemas/v1/package.schema.json"),
     ),
@@ -3148,6 +3433,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/discovery.schema.json",
         include_str!("../schemas/v2/discovery.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/effect-authorization.schema.json",
+        include_str!("../schemas/v2/effect-authorization.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/identifiers.schema.json",

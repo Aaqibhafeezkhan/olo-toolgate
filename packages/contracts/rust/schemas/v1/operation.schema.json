@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v1/operation.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Derived operation outcome and bounded history",
+  "$ref": "#/$defs/EnterpriseOperationOutcome",
+  "$defs": {
+    "EnterpriseOperationState": {
+      "type": "string",
+      "description": "Derived business state across all attempts and effects; executor-reported success alone is insufficient.",
+      "enum": [
+        "RUNNING",
+        "OUTCOME_UNKNOWN",
+        "RECONCILIATION_REQUIRED",
+        "SUCCEEDED",
+        "PARTIAL",
+        "FAILED"
+      ]
+    },
+    "EnterpriseOutcomeGrade": {
+      "type": "string",
+      "description": "Evidence source/limitation, independent of executor-reported state. A response digest is not a business receipt.",
+      "enum": [
+        "REPORTED",
+        "CONTROL_PROVEN",
+        "TARGET_CONFIRMED",
+        "REVIEWER_CONFIRMED",
+        "TARGET_DEDUPLICATION_ASSUMED"
+      ]
+    },
+    "EnterpriseEffectGenerationState": {
+      "type": "string",
+      "enum": [
+        "AUTHORIZED",
+        "RELEASED",
+        "SENDING",
+        "CONSUMED",
+        "AMBIGUOUS",
+        "COMPLETED",
+        "FAILED",
+        "CONFLICT"
+      ]
+    },
+    "EnterpriseAttemptEffectScope": {
+      "type": "string",
+      "description": "Admission/reconciliation scope, not attestation of a full security claim.",
+      "enum": [
+        "ADMISSION_ONLY",
+        "QUALIFIED_BROKER_ONLY",
+        "REVIEWER_WITNESSED",
+        "LEGACY_UNKNOWN"
+      ]
+    },
+    "EnterpriseOperationOutcome": {
+      "type": "object",
+      "description": "Control-derived business outcome; metadata never grants execution authority or automatic retry.",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOperationState"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "grade": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOutcomeGrade"
+        },
+        "journalComplete": {
+          "type": "boolean",
+          "description": "Whether the bounded Control journal projection is complete; false means unresolved/unsettled counts may be incomplete."
+        },
+        "attemptCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "effectCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unresolvedEffectCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "unsettledAttemptCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "finalized": {
+          "type": "boolean",
+          "description": "True only for a derived SUCCEEDED/PARTIAL/FAILED outcome with complete closed/resolved history; enforced by Control's domain policy."
+        },
+        "retryable": {
+          "type": "boolean",
+          "const": false
+        },
+        "deduplicationAssumed": {
+          "type": "boolean"
+        },
+        "updatedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "operationId",
+        "state",
+        "revision",
+        "grade",
+        "journalComplete",
+        "attemptCount",
+        "effectCount",
+        "unresolvedEffectCount",
+        "unsettledAttemptCount",
+        "finalized",
+        "retryable",
+        "deduplicationAssumed",
+        "updatedAtUnixMs"
+      ]
+    },
+    "EnterpriseAttemptHistory": {
+      "type": "object",
+      "description": "Bounded attempt metadata; no bearer capabilities, raw input or target claim tokens.",
+      "additionalProperties": false,
+      "properties": {
+        "attemptId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "state": {
+          "$ref": "enterprise.schema.json#/$defs/EnterpriseInvocationState"
+        },
+        "consumed": {
+          "type": "boolean"
+        },
+        "issuedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "evidenceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "scope": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseAttemptEffectScope"
+        },
+        "manifestSealed": {
+          "type": "boolean"
+        },
+        "manifestEffectCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "manifestDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "settled": {
+          "type": "boolean"
+        },
+        "grade": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOutcomeGrade"
+        }
+      },
+      "required": [
+        "attemptId",
+        "ordinal",
+        "state",
+        "consumed",
+        "issuedAtUnixMs",
+        "expiresAtUnixMs",
+        "evidenceCount",
+        "scope",
+        "manifestSealed",
+        "manifestEffectCount",
+        "settled",
+        "grade"
+      ]
+    },
+    "EnterpriseEffectHistory": {
+      "type": "object",
+      "description": "One immutable authorization-generation identity and its current evidence-derived state; response digests do not prove business-receipt equivalence.",
+      "additionalProperties": false,
+      "properties": {
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "attemptId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "requestDigest": {
+          "$ref": "../v2/identifiers.schema.json#/$defs/Digest"
+        },
+        "state": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseEffectGenerationState"
+        },
+        "grade": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOutcomeGrade"
+        },
+        "evidenceCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "receiptDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Sha256"
+        }
+      },
+      "required": [
+        "effectId",
+        "generation",
+        "attemptId",
+        "routeId",
+        "requestDigest",
+        "state",
+        "grade",
+        "evidenceCount"
+      ]
+    },
+    "EnterpriseOperationHistoryPage": {
+      "type": "object",
+      "description": "Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots.",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOperationOutcome"
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "operation.schema.json#/$defs/EnterpriseAttemptHistory"
+          },
+          "maxItems": 64
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "operation.schema.json#/$defs/EnterpriseEffectHistory"
+          },
+          "maxItems": 100
+        },
+        "next": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operation",
+        "attempts",
+        "effects",
+        "truncated"
+      ]
+    },
+    "EnterpriseAttemptSettlementReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Exact closed-attempt scope attestation for independent maker/checker review; never execution authority.",
+      "properties": {
+        "expectedOutcomeRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "attemptIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          }
+        },
+        "noFurtherEffects": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "expectedOutcomeRevision",
+        "attemptIds",
+        "noFurtherEffects"
+      ]
+    }
+  }
+}

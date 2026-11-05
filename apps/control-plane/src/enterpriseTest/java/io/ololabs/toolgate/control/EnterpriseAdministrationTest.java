@@ -50,7 +50,7 @@ class EnterpriseAdministrationTest {
     }
     void retainIndependentAdministrator(){
         store.transaction(administrator.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
-            var records=List.of(graph.codec.entry(Kind.USER,graph.codec.json(new ControlUser("custodian","Independent administrator",true,1L))),
+            var records=List.of(graph.codec.entry(Kind.USER,graph.codec.json(new ControlUser("custodian","Independent administrator",true,1L, null, null, null))),
                 graph.codec.entry(Kind.ROLE,graph.codec.json(new ControlRole("custodian-role","Independent administrator",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()))),
                 graph.codec.entry(Kind.TEAM,graph.codec.json(new ControlTeam("custodian-team","Independent administration",true,1L,List.of("custodian"),List.of("custodian-role")))));
             for(var entry:records)entries.put(entry.id(),entry);GroupGraph.addDefault(entries,graph.codec,Kind.USER,"custodian");
@@ -61,12 +61,12 @@ class EnterpriseAdministrationTest {
         for(var kind:GroupGraph.DEFAULTS.keySet()) {var id=GroupGraph.DEFAULTS.get(kind);assertThrows(Failure.class,()->directory.mutate(administrator,kind,id,"DELETE",null,1,"delete-"+id,"request"));var entry=store.transaction(administrator.tenant(),false,tx->tx.load().entries().get(kind.id(id)));var node=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(entry.document());node.put("enabled",false);assertThrows(Failure.class,()->directory.mutate(administrator,kind,id,"UPDATE",graph.codec.json(node),1,"disable-"+id,"request"));}
     }
     @Test void newIndividualsJoinDefaultsAtomically() {
-        var reply=directory.mutate(administrator,Kind.USER,"new-user","CREATE",graph.codec.json(new ControlUser("new-user","Pending review",false,1L)),0,"new-user-key","request");assertEquals(201,reply.status());
+        var reply=directory.mutate(administrator,Kind.USER,"new-user","CREATE",graph.codec.json(new ControlUser("new-user","Pending review",false,1L, null, null, null)),0,"new-user-key","request");assertEquals(201,reply.status());
         store.transaction(administrator.tenant(),false,tx->{assertEquals(List.of("team-default"),GroupGraph.memberships(tx.load(),graph.codec,Kind.USER,"new-user",false));return null;});
     }
     @Test void everyIndividualCreationAndGroupDeletionKeepsMandatoryMembership(){
         var tool=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.entries.get(Kind.TOOL.id("tool")).document());tool.put("id","new-tool");tool.put("enabled",false);((com.fasterxml.jackson.databind.node.ObjectNode)tool.get("definition")).put("id","new-tool");
-        var records=Map.of(Kind.USER,graph.codec.json(new ControlUser("created-user","Created",false,1L)),Kind.AGENT,graph.codec.json(new ControlAgent("created-agent","Created",null,false,1L,"bob")),Kind.DEVICE,graph.codec.json(new ControlDevice("created-device","Created",false,1L,"bob")));
+        var records=Map.of(Kind.USER,graph.codec.json(new ControlUser("created-user","Created",false,1L, null, null, null)),Kind.AGENT,graph.codec.json(new ControlAgent("created-agent","Created",null,false,1L,"bob")),Kind.DEVICE,graph.codec.json(new ControlDevice("created-device","Created",false,1L,"bob")));
         var defaults=Map.of(Kind.USER,"team-default",Kind.AGENT,"default-agents",Kind.DEVICE,"default-devices");
         // Tools come only from installed packages (ADR 027): the directory API refuses to create one.
         assertEquals(422,assertThrows(Failure.class,()->directory.mutate(administrator,Kind.TOOL,"new-tool","CREATE",graph.codec.json(tool),0,"create-new-tool","request")).status());
@@ -93,17 +93,17 @@ class EnterpriseAdministrationTest {
         store.transaction(administrator.tenant(),false,tx->{graph.codec.validatePolicies(tx.load());return null;});
     }
     @Test void recoveryAdministratorCannotBeDisabledOrLoseRecoveryMembership() {
-        assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"admin","UPDATE",graph.codec.json(new ControlUser("admin","Administrator",false,1L)),1,"disable-last","request"));
+        assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"admin","UPDATE",graph.codec.json(new ControlUser("admin","Administrator",false,1L, null, null, null)),1,"disable-last","request"));
         var membership=new GroupMembership(EnterpriseMemberType.USER,"admin",List.of("team-default"),7L);assertThrows(Failure.class,()->directory.setMemberships(administrator,Kind.USER,"admin",graph.codec.json(membership),7,"remove-recovery","request"));
     }
-    @Test void externalRoleClaimWithoutBoundManagementMembershipDoesNotAuthorize() {var claim=new DirectoryService.Actor(administrator.tenant(),"b".repeat(64),true,true);assertThrows(Failure.class,()->directory.requirePortal(claim,null));assertThrows(Failure.class,()->directory.mutate(claim,Kind.USER,"new","CREATE",graph.codec.json(new ControlUser("new","New",false,1L)),0,"key","request"));}
+    @Test void externalRoleClaimWithoutBoundManagementMembershipDoesNotAuthorize() {var claim=new DirectoryService.Actor(administrator.tenant(),"b".repeat(64),true,true);assertThrows(Failure.class,()->directory.requirePortal(claim,null));assertThrows(Failure.class,()->directory.mutate(claim,Kind.USER,"new","CREATE",graph.codec.json(new ControlUser("new","New",false,1L, null, null, null)),0,"key","request"));}
     @Test void managementCeilingRejectsAccessExpansionAndDirectRuntimeRoles() {
         var narrow=graph.scope("tools-a","devices-a");var wide=graph.scope("tools-a","devices-b");assertFalse(ManagementAccess.contains(narrow,wide));assertTrue(ManagementAccess.contains(narrow,narrow));
         assertThrows(Failure.class,()->directory.requirePortal(administrator,"alice"));
     }
     @Test void mutationReplayStillRequiresCurrentAuthority() {
         retainIndependentAdministrator();
-        var body=graph.codec.json(new ControlUser("new-user","Pending",false,1L));var original=directory.mutate(administrator,Kind.USER,"new-user","CREATE",body,0,"stable-retry","request");assertEquals(original,directory.mutate(administrator,Kind.USER,"new-user","CREATE",body,0,"stable-retry","request"));
+        var body=graph.codec.json(new ControlUser("new-user","Pending",false,1L, null, null, null));var original=directory.mutate(administrator,Kind.USER,"new-user","CREATE",body,0,"stable-retry","request");assertEquals(original,directory.mutate(administrator,Kind.USER,"new-user","CREATE",body,0,"stable-retry","request"));
         store.transaction(administrator.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var role=graph.codec.model(entries.get(Kind.ROLE.id("recovery-role")).document(),ControlRole.class);entries.put(Kind.ROLE.id(role.id()),graph.codec.entry(Kind.ROLE,graph.codec.json(new ControlRole(role.id(),role.name(),false,2L,role.portalRole(),role.roleType(),role.managementRules()))));tx.save(before,new Directory(before.revision()+1,entries));return null;});
         assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"new-user","CREATE",body,0,"stable-retry","request"));
     }
@@ -112,7 +112,7 @@ class EnterpriseAdministrationTest {
     }
     @Test void superAdministratorWithoutScopeRulesRetainsManagementAuthority(){
         store.transaction(administrator.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.put(Kind.ROLE.id("recovery-role"),graph.codec.entry(Kind.ROLE,graph.codec.json(new ControlRole("recovery-role","Super Admin",true,2L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()))));tx.save(before,new Directory(before.revision()+1,entries));return null;});
-        directory.requirePortal(administrator,"admin");assertEquals(201,directory.mutate(administrator,Kind.USER,"exceptional-user","CREATE",graph.codec.json(new ControlUser("exceptional-user","Pending review",false,1L)),0,"exceptional-user-key","request").status());assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"admin","UPDATE",graph.codec.json(new ControlUser("admin","Admin",false,1L)),1,"disable-super","request"));
+        directory.requirePortal(administrator,"admin");assertEquals(201,directory.mutate(administrator,Kind.USER,"exceptional-user","CREATE",graph.codec.json(new ControlUser("exceptional-user","Pending review",false,1L, null, null, null)),0,"exceptional-user-key","request").status());assertThrows(Failure.class,()->directory.mutate(administrator,Kind.USER,"admin","UPDATE",graph.codec.json(new ControlUser("admin","Admin",false,1L, null, null, null)),1,"disable-super","request"));
     }
     @Test void shadowAcceptsExportedConfigurationAndPreservesLocalAuthorityWithoutWrites(){
         var snapshot=graph.codec.model(directory.export(administrator,false).body(),ControlSnapshot.class);

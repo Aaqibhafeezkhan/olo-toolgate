@@ -28,3 +28,13 @@ deadline, rounded down to X.509 second precision. Tool leases are also capped at
 the finite deadline, and open job sockets recheck authorization every five seconds.
 Unlimited approval keeps certificates short lived and supports exact-key recovery
 after a long outage without changing the owner or grant.
+
+
+## Execution trust limits
+
+The [adopted Zero Trust Execution model](zero-trust-boundaries.md) distinguishes healthy hosts,
+root-compromised hosts and compromised Control/identity/kernel trust roots.
+Lease expiry cannot constrain root controlling the supervisor or revoke already
+delivered credentials at unfenced targets. Current qualified Python OCI and OLO
+fenced-write guarantees do not imply generalized route/consent enforcement,
+sender-constrained agent credentials, externally anchored audit or production SLOs.

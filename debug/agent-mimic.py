@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import ssl
@@ -49,6 +50,18 @@ def resolve_ca(gateway, explicit_ca=None):
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
+
+class UnconfirmedOperation(ValueError):
+    """Authenticated Gateway outcome metadata, never worker output or retry authority."""
+    def __init__(self, outcome, tool_error):
+        self.outcome = {key: outcome[key] for key in (
+            'operationId', 'state', 'grade', 'retryable', 'finalized', 'journalComplete',
+            'attemptCount', 'effectCount', 'unresolvedEffectCount', 'unsettledAttemptCount',
+            'deduplicationAssumed') if key in outcome}
+        self.tool_error = tool_error
+        super().__init__('Operation ' + outcome['operationId']
+            + ' is OUTCOME_UNKNOWN; completion is unconfirmed. Do not retry; independent reconciliation is required.')
+
 
 class Agent:
     def __init__(self, gateway, token_file, ca_file=None):
@@ -107,6 +120,17 @@ class Agent:
             data = reply['error'].get('data') or {}
             raise ValueError(f'MCP error {reply["error"].get("code")}: {data.get("code", "REQUEST_REJECTED")}')
         result = reply.get('result')
+        if isinstance(result, dict):
+            meta = result.get('_meta')
+            outcome = meta.get('io.ololabs.toolgate/operationOutcome') if isinstance(meta, dict) else None
+            valid_identity = (isinstance(outcome, dict) and isinstance(outcome.get('operationId'), str)
+                and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', outcome['operationId']))
+            if method == 'tools/call' and not valid_identity:
+                raise ValueError('Current operation outcome metadata is required')
+            if isinstance(outcome, dict) and outcome.get('state') == 'OUTCOME_UNKNOWN':
+                if outcome.get('retryable') is not False:
+                    raise ValueError('An unknown operation cannot grant retry authority')
+                raise UnconfirmedOperation(outcome, result.get('isError') is True)
         if not isinstance(result, dict) or result.get('isError'): raise ValueError('MCP tool failed')
         return result
 

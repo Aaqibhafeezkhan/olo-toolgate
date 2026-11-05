@@ -13,12 +13,14 @@ final readonly class ServiceProfile implements \JsonSerializable {
         public string $packageId,
         public array $destinations,
         public array $routes,
-        public array $privateRanges
+        public array $privateRanges,
+        public ?array $effectReviews = null,
+        public ?array $nativeMcpEffects = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['profileId', 'revision', 'packageId', 'destinations', 'routes', 'privateRanges']) || array_diff(['profileId', 'revision', 'packageId', 'destinations', 'routes', 'privateRanges'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['profileId', 'revision', 'packageId', 'destinations', 'routes', 'privateRanges', 'effectReviews', 'nativeMcpEffects']) || array_diff(['profileId', 'revision', 'packageId', 'destinations', 'routes', 'privateRanges'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +29,9 @@ final readonly class ServiceProfile implements \JsonSerializable {
             $data['packageId'],
             array_map(static fn ($item) => ServiceDestination::fromArray($item), $data['destinations']),
             array_map(static fn ($item) => RouteDeclaration::fromArray($item), $data['routes']),
-            array_map(static fn ($item) => PrivateRangeApproval::fromArray($item), $data['privateRanges'])
+            array_map(static fn ($item) => PrivateRangeApproval::fromArray($item), $data['privateRanges']),
+            array_key_exists('effectReviews', $data) ? array_map(static fn ($item) => RouteEffectReview::fromArray($item), $data['effectReviews']) : null,
+            array_key_exists('nativeMcpEffects', $data) ? array_map(static fn ($item) => NativeMcpEffectReview::fromArray($item), $data['nativeMcpEffects']) : null
         );
     }
 

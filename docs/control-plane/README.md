@@ -28,6 +28,6 @@ ASK approvals remain bound to the exact operation and current authority.
 ## Design references
 
 [Invocation state](invocation-state-v2.md), [kill switch](kill-switch.md) and
-[migration specifications](migrations-v2/README.md) define contracts used by
+[fresh-schema design specifications](schema-specifications/README.md) define contracts used by
 conformance tests. A design does not establish that every executor implements it.
 Check each component guide for its supported behavior and current limits.

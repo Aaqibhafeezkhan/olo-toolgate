@@ -82,7 +82,7 @@ class FoundationTests(unittest.TestCase):
 
     def test_all_schemas_and_every_definition_have_valid_fixtures(self):
         self.assertEqual(set(self.validators), set(self.fixtures))
-        self.assertEqual(18, len(self.schemas))
+        self.assertEqual(19, len(self.schemas))
         for name, fixture in self.fixtures.items():
             with self.subTest(model=name):
                 self.validators[name].validate(fixture)
@@ -116,38 +116,19 @@ class FoundationTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 self.validators[target].validate(self.fixtures[source])
 
-    def test_frozen_compatibility_corpus_and_schema(self):
+    def test_archived_corpus_is_preserved_but_does_not_define_current_acceptance(self):
         baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')
         corpus = json.loads((ROOT/'tests/fixtures/contracts/v1/compatibility.json').read_text())
         self.assertEqual(1, corpus['readerMajor'])
-        archival=validators(baseline)
-        for name,fixture in corpus['fixtures'].items():archival[name].validate(fixture)
-        # Group-only runtime contracts deliberately reject the frozen principal shape.
-        # The request context is defined in v2 now; it still rejects the frozen device-bound shape.
-        with self.assertRaises(ValidationError):validators(schemas_at(ROOT/'packages/contracts/schemas/v2'))['RequestContext'].validate(corpus['fixtures']['RequestContext'])
-        with self.assertRaises(ValueError):compatible(baseline['common.schema.json'],self.schemas['common.schema.json'])
-        for name,schema in baseline.items():
-            if name not in ('common.schema.json','policy.schema.json','runtime.schema.json'):
-                current = self.schemas[name]
-                if name == 'client.schema.json':
-                    # The local power switch requires a current Control reader. Its
-                    # precise extension is covered below; all other frozen fields
-                    # retain the strict reader compatibility check.
-                    current = copy.deepcopy(current)
-                    del current['$defs']['ClientReport']['properties']['power']
-                if name == 'error.schema.json':
-                    # This unreleased tenant baseline requires matching current readers.
-                    # Check the exact intentional enum extension separately, retaining
-                    # compatibility checks for every other error-envelope field.
-                    current = copy.deepcopy(current)
-                    current['$defs']['ErrorCode']['enum'] = schema['$defs']['ErrorCode']['enum']
-                if name == 'tool.schema.json':
-                    # The fresh-install reconciliation contract requires current
-                    # readers. Its exact extension and archived rejection are
-                    # proved below; every other frozen field stays checked.
-                    current = copy.deepcopy(current)
-                    del current['$defs']['ToolDefinition']['properties']['reconciliation']
-                compatible(schema,current,name)
+        archival = validators(baseline)
+        for name, fixture in corpus['fixtures'].items():
+            archival[name].validate(fixture)
+        # S20 is a fresh coordinated build. Archives are historical evidence,
+        # not a promise that current readers accept obsolete authority.
+        current = validators(schemas_at(ROOT/'packages/contracts/schemas/v2'))
+        for name in ('RequestContext', 'PackageManifest'):
+            with self.subTest(model=name), self.assertRaises(ValidationError):
+                current[name].validate(corpus['fixtures'][name])
 
     def test_reconciliation_requires_current_readers_without_weakening_other_fields(self):
         baseline = schemas_at(ROOT/'tests/fixtures/contracts/v1/schemas')

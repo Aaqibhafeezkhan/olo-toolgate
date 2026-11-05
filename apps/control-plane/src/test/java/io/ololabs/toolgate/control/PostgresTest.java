@@ -29,19 +29,12 @@ final class PostgresTest {
         var migration = Flyway.configure().dataSource(url, "control_migrator", password).target("1").cleanDisabled(true).load();
         migration.migrate();
         var codec = new ContractCodec();
-        try (var connection = java.sql.DriverManager.getConnection(url, "control_migrator", password); var statement = connection.prepareStatement(
-                "INSERT INTO control_records (tenant_id,kind,record_id,revision,document) VALUES ('2e7a227d-83fc-39a0-aa45-a486d145c2d6','USER','kept',1,?::jsonb)")) {
-            io.ololabs.toolgate.control.fixtures.Tenants.provision(connection);
-            TestSupport.scope(connection, io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"));
-            statement.setString(1, DomainTest.user("kept", 1)); statement.executeUpdate(); connection.commit();
-        }
         var latest = Flyway.configure().dataSource(url, "control_migrator", password).cleanDisabled(true).load();
         assertEquals(0, latest.migrate().migrationsExecuted); latest.validate();
+        assertEquals(0, latest.migrate().migrationsExecuted);
         var source = new PGSimpleDataSource(); source.setURL(url); source.setUser("control_app"); source.setPassword(password);
         var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); var service = new DirectoryService(store, codec, 512, 1048576);
         var actor = TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"),"root");
-        var upgrade=TestSupport.seed(store,codec,io.ololabs.toolgate.control.fixtures.Tenants.id("upgrade"),"root");
-        assertEquals(200, service.get(upgrade, Kind.USER, "kept").status());
         try (var connection = source.getConnection(); var statement = connection.createStatement()) {
             assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("DELETE FROM control_audit"));
             assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("CREATE TABLE forbidden (id int)"));

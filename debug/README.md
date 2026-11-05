@@ -132,6 +132,13 @@ Both commands save console output under `.dev/debug/logs/` and accept `-Gateway`
 `-TokenFile`, `-CaFile`, `-File` and `-DurationSeconds`. The **Client tool
 requests** page shows each request; use **View response** for the JSON output.
 
+On the fresh zero-trust feature build, an OUTCOME_UNKNOWN response stops the
+mimic immediately, including duration mode. It does not print the reported tool
+payload, repeat the uncertain write or continue to readback. Native business
+finality is not yet qualified; independently reconcile the operation instead of
+rerunning it to obtain a success. See the
+[current outcome boundary](../examples/langchain/README.md).
+
 The tools come from the `examples.hotfolder` Marketplace package, never from the
 client: install it, release it to the device and give the device an engine and a
 files area as the demos do (`deploy/docker`, [ADR 027](../docs/adr/027-one-tool-protocol-device-files.md)).

@@ -29,6 +29,9 @@ pub struct Config {
     /// Language runtimes by `runtimeId`; `jvm` needs `javaPath`.
     #[serde(default)]
     pub runtimes: Runtimes,
+    /// A rootless OCI-only worker pool. Omit only for the legacy HOST_NATIVE tier.
+    #[serde(default)]
+    pub sandbox: Option<crate::sandbox::Config>,
     #[serde(default)]
     pub limits: Limits,
     /// Lets the broker reach `http://` destinations on loopback hosts, for local development and tests only.
@@ -163,6 +166,12 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(sandbox) = &self.sandbox {
+            sandbox.validate()?;
+            if self.limits.memory_bytes == 0 {
+                return Err("OCI_SANDBOX requires a nonzero memory limit".into());
+            }
+        }
         let tenant = &self.control.tenant_id;
         if tenant.len() != 36
             || !tenant.bytes().enumerate().all(|(i, b)| {

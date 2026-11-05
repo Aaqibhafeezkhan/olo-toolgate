@@ -14,6 +14,13 @@ pub fn jcs(value: &Value) -> Result<String, String> {
     Ok(toolgate_cli::canonical::sha256_tagged(out.as_bytes()))
 }
 
+/// Exact RFC 8785 request bytes, preserving admitted strings without NFC.
+pub fn jcs_bytes(value: &Value) -> Result<Vec<u8>, String> {
+    let mut out = String::new();
+    write(value, &mut out)?;
+    Ok(out.into_bytes())
+}
+
 /// `sha256:` over the descriptor canonical form (NFC, then RFC 8785).
 pub fn canonical(value: &Value) -> Result<String, String> {
     toolgate_cli::canonical::digest(value).map_err(|e| e.to_string())

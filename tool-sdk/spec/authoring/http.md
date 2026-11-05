@@ -18,7 +18,7 @@ TcpDestination(id, hostSetting, defaultHost?, port)
 |---|---|
 | Host values | `hostSetting` names a **service-profile setting**, confirmed by an admin at enable and part of the security delta. It is not a global and is not readable through `global()`. `defaultHost` is only the proposed value. |
 | `path` | RFC 6570 level-1 template. Every variable carries a pattern: `{name:regex}`. A variable without a pattern is an error. The patterns `.*` and `.+` are rejected; a variable never matches `/`. |
-| `tls` | `spkiPins` are `sha256/<base64>` of a certificate's SubjectPublicKeyInfo; with pins, a server is trusted only when a certificate in its chain matches one. Without pins or `caBundle`, the system CA store applies. |
+| TLS | The profile field spkiPins holds SHA-256/base64 of the CA-verified leaf certificate DER, matching the broker's current pin semantics. Pins do not replace CA and hostname verification. Without pins or caBundle, the system CA store applies. |
 | `method` | One of `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`. Fixed per route. |
 | `query`, `headers` | Allowlists of names. `Authorization`, `Proxy-Authorization`, `Cookie`, `Host`, `X-Forwarded-*` and any header used by the route's auth are never allowed. |
 | `streaming` | `NONE` (default), `RESPONSE`, `BIDIRECTIONAL` |
@@ -93,3 +93,13 @@ In standalone mode the SDK applies the same declarations as developer feedback; 
 
 - [errors.md](errors.md) for `UpstreamError`
 - [execution.md](execution.md) for retry and redirect rules
+
+## Broker-only vault references
+
+For governed routes, an HTTP auth secret is a vault reference. API-key auth can
+name it without declaring a worker Secret variable. Control includes only
+reachable auth references in admission resources; the private broker resolves
+them for the pinned destination. They receive no worker secret handle or raw
+value. A separate worker Secret declaration remains explicit and does not qualify
+for automatic broker-only recovery. Auth-only references require governed broker
+transport; standalone runtimes cannot obtain them through worker variable access.

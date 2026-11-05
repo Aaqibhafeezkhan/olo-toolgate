@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import time
 
-from agent_mimic import Agent
+from agent_mimic import Agent, UnconfirmedOperation
 from langchain.agents import create_agent
 from langchain_core.tools import StructuredTool, ToolException
 from langchain_openrouter import ChatOpenRouter
@@ -128,18 +128,45 @@ def smoke(gateway):
     print('No model was called. Device output: HotFolder/' + destination)
 
 
+def verify_native_boundary(gateway):
+    """S20 has no independently qualified native scope: no success, write or retry."""
+    catalog = gateway.rpc('tools/list')['tools']
+    if not TOOLS <= {tool['name'] for tool in catalog}:
+        raise ValueError('The current signed HotFolder tools must be discoverable')
+    try:
+        gateway.rpc('tools/call', {'name': 'examples.hotfolder/list', 'arguments': {}})
+    except UnconfirmedOperation as failure:
+        outcome = failure.outcome
+        expected = dict(state='OUTCOME_UNKNOWN', grade='REPORTED', retryable=False,
+            finalized=False, journalComplete=True, deduplicationAssumed=False,
+            attemptCount=1, effectCount=0, unresolvedEffectCount=0, unsettledAttemptCount=1)
+        if not failure.tool_error or any(
+                type(outcome.get(key)) is not type(value) or outcome[key] != value
+                for key, value in expected.items()):
+            raise ValueError('Unqualified native outcome did not preserve the current refusal contract') from None
+        print('PASS: unqualified native completion remains OUTCOME_UNKNOWN/REPORTED and non-retryable.')
+        print('No write, retry, model call or native business-success claim was submitted.')
+        return
+    raise ValueError('An unqualified native call was incorrectly presented as a success')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=['any', 'linux', 'windows'], default='any')
     parser.add_argument('--use-case', choices=list(USE_CASES), default='tickets')
-    parser.add_argument('--smoke', action='store_true')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--smoke', action='store_true')
+    mode.add_argument('--verify-native-boundary', action='store_true',
+                      help='Verify S20 refuses unqualified native completion; never write or retry')
     args = parser.parse_args()
     directory = Path(os.environ.get('TOOLGATE_CREDENTIAL_DIRECTORY', '/run/toolgate-agents'))
     descriptor = json.loads((directory / (args.target + '.json')).read_text(encoding='utf-8'))
     gateway = Agent(descriptor['gateway'], directory / (args.target + '.token'), directory / 'gateway-ca.crt')
     print('Target:', descriptor.get('platform', args.target), descriptor['deviceId'],
           'group=' + descriptor.get('deviceGroupId', 'ReadAndWriteDeviceGroup'))
-    if args.smoke:
+    if args.verify_native_boundary:
+        verify_native_boundary(gateway)
+    elif args.smoke:
         smoke(gateway)
     else:
         run(gateway, args.use_case)
@@ -151,7 +178,7 @@ if __name__ == '__main__':
     except Exception as failure:
         # Never echo provider exception bodies, headers or credentials; status and code are safe.
         status, code = getattr(failure, 'status_code', None), getattr(failure, 'code', None)
-        if type(failure) is ValueError:
+        if type(failure) is ValueError or isinstance(failure, UnconfirmedOperation):
             message = str(failure)
         elif isinstance(status, int):
             message = (f'The model provider rejected the request (HTTP {status}'

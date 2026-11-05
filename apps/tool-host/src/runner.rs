@@ -97,19 +97,35 @@ pub async fn run(
         .env("LANG", "C.UTF-8")
         .env("TOOLGATE_PROTOCOL", "2")
         .env("TOOLGATE_EXECUTION_TARGET", "SERVER")
-        .current_dir(launch.sandbox_dir)
+        .current_dir(launch.sandbox_dir);
+    exchange(
+        command,
+        input,
+        deadline_unix_ms,
+        launch.max_output_bytes,
+        frames,
+        broker,
+    )
+    .await
+}
+
+/// The same bounded stdio protocol for a native child or an attached OCI worker.
+pub(crate) async fn exchange(
+    mut command: tokio::process::Command,
+    input: &ToolInput,
+    deadline_unix_ms: u64,
+    max_output_bytes: usize,
+    frames: Option<&crate::events::Sink>,
+    broker: &crate::broker::Invocation,
+) -> Ran {
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(e) => {
-            return Ran::Crashed(format!(
-                "cannot start the {} runtime: {e}",
-                launch.runtime_id
-            ))
-        }
+        Err(e) => return Ran::Crashed(format!("cannot start the {} runtime: {e}", "worker")),
     };
     let mut line = match serde_json::to_vec(input) {
         Ok(line) => line,
@@ -121,14 +137,40 @@ pub async fn run(
     let stderr = child.stderr.take().expect("piped");
     // The terminal frame carries maxOutputBytes plus its envelope. Reserve a bounded
     // additional budget for SDK response frames; exceeding it fails the run explicitly.
-    let out_cap = launch.max_output_bytes + 576 * 1024;
+    let out_cap = max_output_bytes + 576 * 1024;
+    let strict = broker.isolated_worker_protocol();
     let work = async {
         let _ = stdin.write_all(&line).await;
         let _ = stdin.flush().await;
-        let (out, err) = tokio::join!(
-            converse(stdout, &mut stdin, out_cap, frames, broker),
-            bounded(stderr, MAX_STDERR)
-        );
+        let (out, err) = {
+            let read_out = converse(
+                stdout,
+                &mut stdin,
+                out_cap,
+                max_output_bytes,
+                frames,
+                broker,
+            );
+            let read_err = bounded(stderr, MAX_STDERR);
+            tokio::pin!(read_out, read_err);
+            tokio::select! {
+                out=&mut read_out=>{
+                    if out.fault.is_some() {
+                        let _=child.kill().await;
+                        (out,(Vec::new(),false))
+                    } else { (out,read_err.await) }
+                },
+                err=&mut read_err=>{
+                    if err.1 {
+                        let _=child.kill().await;
+                        // Drop the outstanding stdout/broker future immediately;
+                        // waiting for it could keep target authority and a socket
+                        // alive until the full invocation deadline.
+                        (Transcript{bytes:Vec::new(),fault:Some("worker exceeded its diagnostic output budget")},err)
+                    } else { (read_out.await,err) }
+                },
+            }
+        };
         drop(stdin);
         let status = child.wait().await;
         (out, err, status)
@@ -146,10 +188,16 @@ pub async fn run(
             "tool diagnostics received"
         );
     }
-    if out.1 {
-        return Ran::Crashed(format!("the tool wrote more than {out_cap} bytes"));
+    if let Some(fault) = out.fault {
+        return Ran::Crashed(fault.into());
     }
-    let text = String::from_utf8_lossy(&out.0);
+    if strict && !status.as_ref().is_ok_and(|s| s.success()) {
+        return Ran::Crashed("worker exited unsuccessfully".into());
+    }
+    if err.1 {
+        return Ran::Crashed("the tool exceeded its diagnostic output budget".into());
+    }
+    let text = String::from_utf8_lossy(&out.bytes);
     let last = text
         .lines()
         .rev()
@@ -166,29 +214,68 @@ pub async fn run(
 
 /// Reads stdout line by line, at most `cap` bytes: answers each `BROKER_REQUEST` on stdin and offers every other line
 /// to `lines`. Returns everything read, and whether the cap was exceeded.
+struct Transcript {
+    bytes: Vec<u8>,
+    fault: Option<&'static str>,
+}
 async fn converse<R: AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
     mut reader: R,
     stdin: &mut W,
     cap: usize,
+    output_limit: usize,
     lines: Option<&crate::events::Sink>,
     broker: &crate::broker::Invocation,
-) -> (Vec<u8>, bool) {
+) -> Transcript {
+    let mut protocol = broker
+        .isolated_worker_protocol()
+        .then(|| crate::worker_protocol::Protocol::new(output_limit));
     let mut out = Vec::new();
     let mut scanned = 0;
+    // Bytes already searched for a newline, including an unfinished frame.
+    let mut searched = 0;
     let mut calls = 0;
     let mut chunk = [0u8; 16 * 1024];
     loop {
         match reader.read(&mut chunk).await {
-            Ok(0) | Err(_) => return (out, false),
+            Ok(0) => {
+                let fault = protocol
+                    .as_mut()
+                    .and_then(|p| p.finish(&out[scanned..]).err());
+                return Transcript { bytes: out, fault };
+            }
+            Err(_) => {
+                return Transcript {
+                    bytes: out,
+                    fault: Some("worker stdout read failed"),
+                }
+            }
             Ok(n) => {
                 if out.len() + n > cap {
-                    return (out, true);
+                    return Transcript {
+                        bytes: out,
+                        fault: Some("worker aggregate output limit exceeded"),
+                    };
                 }
                 out.extend_from_slice(&chunk[..n]);
-                while let Some(end) = out[scanned..].iter().position(|b| *b == b'\n') {
-                    let line = String::from_utf8_lossy(&out[scanned..scanned + end]).into_owned();
-                    scanned += end + 1;
-                    let frame: Option<serde_json::Value> = serde_json::from_str(line.trim()).ok();
+                while let Some(relative) = out[searched..].iter().position(|b| *b == b'\n') {
+                    let end = searched + relative;
+                    let raw = &out[scanned..end];
+                    let frame = if let Some(protocol) = &mut protocol {
+                        match protocol.accept(raw) {
+                            Ok(frame) => frame,
+                            Err(fault) => {
+                                return Transcript {
+                                    bytes: out,
+                                    fault: Some(fault),
+                                }
+                            }
+                        }
+                    } else {
+                        serde_json::from_slice(raw).ok()
+                    };
+                    let line = String::from_utf8_lossy(raw).into_owned();
+                    scanned = end + 1;
+                    searched = scanned;
                     let brokered = frame.as_ref().is_some_and(|f| {
                         f.get("kind").and_then(|k| k.as_str()) == Some("BROKER_REQUEST")
                     });
@@ -209,6 +296,7 @@ async fn converse<R: AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
                         sink.offer(&line);
                     }
                 }
+                searched = out.len();
             }
         }
     }

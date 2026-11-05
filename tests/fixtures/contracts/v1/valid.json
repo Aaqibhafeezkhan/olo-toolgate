@@ -25,6 +25,11 @@
     "lifetimeMs": 60000,
     "graceMs": 0
   },
+  "BusinessKeyNamespace": "AGENT",
+  "BusinessKeyPolicy": {
+    "required": false,
+    "namespace": "AGENT"
+  },
   "CancellationAccepted": {
     "cancelled": true
   },
@@ -1114,6 +1119,28 @@
   },
   "EnterpriseApprovalState": "PENDING",
   "EnterpriseApprovalType": "OPERATION",
+  "EnterpriseAttemptEffectScope": "ADMISSION_ONLY",
+  "EnterpriseAttemptHistory": {
+    "attemptId": "device-1",
+    "ordinal": 1,
+    "state": "PENDING_APPROVAL",
+    "consumed": false,
+    "issuedAtUnixMs": 0,
+    "expiresAtUnixMs": 0,
+    "evidenceCount": 0,
+    "scope": "ADMISSION_ONLY",
+    "manifestSealed": false,
+    "manifestEffectCount": 0,
+    "settled": false,
+    "grade": "REPORTED"
+  },
+  "EnterpriseAttemptSettlementReview": {
+    "expectedOutcomeRevision": 1,
+    "attemptIds": [
+      "attempt-001-example"
+    ],
+    "noFurtherEffects": true
+  },
   "EnterpriseAuthorityStatus": {
     "directoryRevision": 1,
     "authorizationEpoch": 1,
@@ -1281,6 +1308,17 @@
     "diagnosticId": "example"
   },
   "EnterpriseDecisionReason": "MATCHED",
+  "EnterpriseEffectGenerationState": "AUTHORIZED",
+  "EnterpriseEffectHistory": {
+    "effectId": "effect-first",
+    "generation": 1,
+    "attemptId": "attempt-first",
+    "routeId": "olo-memory/memory.append",
+    "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "AUTHORIZED",
+    "grade": "CONTROL_PROVEN",
+    "evidenceCount": 0
+  },
   "EnterpriseEffectReport": {
     "invocationId": "example",
     "expectedRevision": 1,
@@ -1454,6 +1492,42 @@
     }
   },
   "EnterpriseMemberType": "USER",
+  "EnterpriseOperationHistoryPage": {
+    "operation": {
+      "operationId": "device-1",
+      "state": "RUNNING",
+      "revision": 1,
+      "grade": "REPORTED",
+      "journalComplete": false,
+      "attemptCount": 0,
+      "effectCount": 0,
+      "unresolvedEffectCount": 0,
+      "unsettledAttemptCount": 0,
+      "finalized": false,
+      "retryable": false,
+      "deduplicationAssumed": false,
+      "updatedAtUnixMs": 0
+    },
+    "attempts": [],
+    "effects": [],
+    "truncated": false
+  },
+  "EnterpriseOperationOutcome": {
+    "operationId": "device-1",
+    "state": "RUNNING",
+    "revision": 1,
+    "grade": "REPORTED",
+    "journalComplete": false,
+    "attemptCount": 0,
+    "effectCount": 0,
+    "unresolvedEffectCount": 0,
+    "unsettledAttemptCount": 0,
+    "finalized": false,
+    "retryable": false,
+    "deduplicationAssumed": false,
+    "updatedAtUnixMs": 0
+  },
+  "EnterpriseOperationState": "RUNNING",
   "EnterpriseOperationalStatus": {
     "pendingSnapshotEvents": 0,
     "oldestUnpublishedUnixMs": 0,
@@ -1464,6 +1538,7 @@
     "authorityCacheGraceMs": 0,
     "readyProbeFreshnessMs": 0
   },
+  "EnterpriseOutcomeGrade": "REPORTED",
   "EnterprisePermitClaims": {
     "issuer": "example",
     "audience": "example",
@@ -2309,6 +2384,32 @@
     }
   },
   "PackageState": "READY",
+  "PreparedHttpRequestManifest": {
+    "version": "toolgate-http-request-v1",
+    "profileId": "profile",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "routeId": "write",
+    "scheme": "https",
+    "host": "example.test",
+    "port": 443,
+    "method": "POST",
+    "path": "/a%20b",
+    "query": "a=2&a=1&z=9",
+    "contentType": "application/json; charset=utf-8",
+    "bodyDigest": "sha256:5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22",
+    "headers": {
+      "x-recipient": [
+        "alice"
+      ],
+      "accept": [
+        "*/*"
+      ]
+    },
+    "authDeclarationId": "api-key",
+    "credentialHeaders": [
+      "authorization"
+    ]
+  },
   "ReconciliationMethod": "STATUS_LOOKUP",
   "RemoteToolAuthorization": {
     "requestId": "request",
@@ -2541,6 +2642,34 @@
   "ServicePermit": {
     "jws": "e30.e30.c2ln"
   },
+  "ServicePermitClaimConsumption": {
+    "request": {
+      "permit": {
+        "jws": "e30.e30.c2ln"
+      },
+      "operation": "memory.append",
+      "resources": [
+        {
+          "kind": "CUSTOM",
+          "locator": "olo://10000000-0000-4000-8000-000000000001/conversation/c1"
+        }
+      ],
+      "requestFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "httpRequestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "claimToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitClaimReference": {
+    "authNonce": "device-1",
+    "claimToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitClaimResult": {
+    "effectId": "device-1",
+    "authorizationGeneration": 1,
+    "status": "CONSUMED"
+  },
+  "ServicePermitClaimState": "CONSUMED",
   "ServicePermitClaims": {
     "iss": "control",
     "aud": "olo-memory",
@@ -2561,7 +2690,8 @@
     "authorizationEpoch": 7,
     "iat": 1791450000000,
     "exp": 1791450015000,
-    "executionNonce": "fence-1"
+    "executionNonce": "fence-1",
+    "httpRequestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
   "ServicePermitConsumed": {
     "authorized": true
@@ -2578,13 +2708,66 @@
       }
     ],
     "requestFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    "executorKeySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "httpRequestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitDispatch": {
+    "permit": {
+      "jws": "e30.e30.c2ln"
+    },
+    "brokerInstanceId": "device-1",
+    "handlerId": "device-1"
+  },
+  "ServicePermitDispatchAllowed": {
+    "authorized": true
   },
   "ServicePermitIssue": {
     "invocationId": "inv-1",
     "fencingToken": "fence-1",
-    "audience": "olo-memory"
+    "audience": "olo-memory",
+    "httpRequestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "httpRequestManifest": {
+      "version": "toolgate-http-request-v1",
+      "profileId": "profile",
+      "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "routeId": "write",
+      "scheme": "https",
+      "host": "example.test",
+      "port": 443,
+      "method": "POST",
+      "path": "/a%20b",
+      "query": "a=2&a=1&z=9",
+      "contentType": "application/json; charset=utf-8",
+      "bodyDigest": "sha256:5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22",
+      "headers": {
+        "x-recipient": [
+          "alice"
+        ],
+        "accept": [
+          "*/*"
+        ]
+      },
+      "authDeclarationId": "api-key",
+      "credentialHeaders": [
+        "authorization"
+      ]
+    },
+    "invocationPermit": {
+      "jws": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+    },
+    "brokerInstanceId": "broker-1",
+    "handlerId": "handler-1",
+    "effectKey": "memory-append"
   },
+  "ServicePermitTargetOutcome": {
+    "claim": {
+      "authNonce": "device-1",
+      "claimToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "outcome": "COMPLETED",
+    "resultDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ServicePermitTargetOutcomeKind": "COMPLETED",
   "Sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "SignedClientDiscovery": {
     "payload": "AA",

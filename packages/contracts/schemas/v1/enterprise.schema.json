@@ -1263,7 +1263,7 @@
     },
     "EnterpriseInvocation": {
       "type": "object",
-      "description": "Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry.",
+      "description": "Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects.",
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -1315,6 +1315,9 @@
         },
         "reconciliation": {
           "$ref": "tool.schema.json#/$defs/ReconciliationMethod"
+        },
+        "operationOutcome": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOperationOutcome"
         }
       },
       "required": [
@@ -1905,6 +1908,11 @@
         },
         "executionContext": {
           "$ref": "../v2/protocol.schema.json#/$defs/ExecutionContext"
+        },
+        "businessKeyHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Tenant-domain-separated SHA-256 of an explicit caller business key. Control derives its owner and namespace from authenticated context."
         }
       },
       "required": [
@@ -2837,6 +2845,9 @@
         "resultDigest": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "attemptSettlement": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseAttemptSettlementReview"
         }
       },
       "required": [
@@ -3108,7 +3119,8 @@
         "authorizationEpoch",
         "iat",
         "exp",
-        "executionNonce"
+        "executionNonce",
+        "httpRequestDigest"
       ],
       "properties": {
         "iss": {
@@ -3175,6 +3187,21 @@
         },
         "executionNonce": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Required exact prepared transport fingerprint; unbound and earlier-stage formats are rejected."
+        },
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "Immutable effect identity for bound OLO writes; supplied by Control."
+        },
+        "authorizationGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Recorded authorization generation for the signed effect."
         }
       }
     },
@@ -3185,7 +3212,12 @@
       "required": [
         "invocationId",
         "fencingToken",
-        "audience"
+        "audience",
+        "httpRequestDigest",
+        "httpRequestManifest",
+        "invocationPermit",
+        "brokerInstanceId",
+        "handlerId"
       ],
       "properties": {
         "invocationId": {
@@ -3196,6 +3228,26 @@
         },
         "audience": {
           "$ref": "#/$defs/ServiceAudience"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Required exact prepared transport fingerprint; unbound and earlier-stage formats are rejected."
+        },
+        "httpRequestManifest": {
+          "$ref": "#/$defs/PreparedHttpRequestManifest"
+        },
+        "invocationPermit": {
+          "$ref": "../v2/permit.schema.json#/$defs/SignedInvocationPermit"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "effectKey": {
+          "$ref": "../v2/effect-authorization.schema.json#/$defs/EffectKey"
         }
       }
     },
@@ -3223,7 +3275,8 @@
         "operation",
         "resources",
         "requestFingerprint",
-        "executorKeySha256"
+        "executorKeySha256",
+        "httpRequestDigest"
       ],
       "properties": {
         "permit": {
@@ -3249,6 +3302,11 @@
         "executorKeySha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "Required exact prepared transport fingerprint; unbound and earlier-stage formats are rejected."
         }
       }
     },
@@ -3297,6 +3355,245 @@
           "type": "boolean"
         }
       }
+    },
+    "PreparedHttpRequestManifest": {
+      "type": "object",
+      "description": "Credential-free toolgate-http-request-v1 manifest of the exact prepared wire request. Never conveys authority on its own.",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "profileId",
+        "profileDigest",
+        "routeId",
+        "scheme",
+        "host",
+        "port",
+        "method",
+        "path",
+        "query",
+        "contentType",
+        "bodyDigest",
+        "headers",
+        "authDeclarationId",
+        "credentialHeaders"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "toolgate-http-request-v1"
+        },
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "profileDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "routeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "scheme": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "contentType": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "bodyDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "headers": {
+          "type": "object",
+          "maxProperties": 128,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          }
+        },
+        "authDeclarationId": {
+          "description": "Auth declaration ID, or null for an unauthenticated transport. OLO issuance requires its fixed service-permit declaration."
+        },
+        "credentialHeaders": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      }
+    },
+    "ServicePermitDispatch": {
+      "type": "object",
+      "description": "Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send.",
+      "additionalProperties": false,
+      "required": [
+        "permit",
+        "brokerInstanceId",
+        "handlerId"
+      ],
+      "properties": {
+        "permit": {
+          "$ref": "#/$defs/ServicePermit"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      }
+    },
+    "ServicePermitDispatchAllowed": {
+      "type": "object",
+      "description": "This owner won the single send transition; a lost response cannot be replayed into new authority.",
+      "additionalProperties": false,
+      "required": [
+        "authorized"
+      ],
+      "properties": {
+        "authorized": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "ServicePermitClaimConsumption": {
+      "type": "object",
+      "description": "Target-owned claim consumption. Replies are status only; local ownership controls execution.",
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "claimToken"
+      ],
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/ServicePermitConsumption"
+        },
+        "claimToken": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServicePermitClaimReference": {
+      "type": "object",
+      "description": "Recorded target claim reference; not an execution capability.",
+      "additionalProperties": false,
+      "required": [
+        "authNonce",
+        "claimToken"
+      ],
+      "properties": {
+        "authNonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "claimToken": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServicePermitTargetOutcome": {
+      "type": "object",
+      "description": "Authenticated target evidence, accepted after grant expiry without renewing authority.",
+      "additionalProperties": false,
+      "required": [
+        "claim",
+        "outcome",
+        "resultDigest"
+      ],
+      "properties": {
+        "claim": {
+          "$ref": "#/$defs/ServicePermitClaimReference"
+        },
+        "outcome": {
+          "$ref": "#/$defs/ServicePermitTargetOutcomeKind"
+        },
+        "resultDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "ServicePermitClaimResult": {
+      "type": "object",
+      "description": "Status only. Never grants execution authority; the target must own its shared local claim.",
+      "additionalProperties": false,
+      "required": [
+        "effectId",
+        "authorizationGeneration",
+        "status"
+      ],
+      "properties": {
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "$ref": "#/$defs/ServicePermitClaimState"
+        }
+      }
+    },
+    "ServicePermitTargetOutcomeKind": {
+      "type": "string",
+      "enum": [
+        "COMPLETED",
+        "FAILED"
+      ]
+    },
+    "ServicePermitClaimState": {
+      "type": "string",
+      "enum": [
+        "CONSUMED",
+        "CONSUMED_BY_OTHER_CLAIM",
+        "COMPLETED",
+        "FAILED",
+        "AMBIGUOUS",
+        "CONFLICT"
+      ]
     }
   }
 }

@@ -200,6 +200,11 @@ struct Authority {
     replayed: bool,
     /// A repeated call whose invocation already ended in this state.
     ended: Option<EnterpriseInvocationState>,
+    business_policy: Option<BusinessKeyPolicy>,
+    canonical: Option<String>,
+    mismatched_context_id: bool,
+    outcome_unavailable: bool,
+    history_reads: Mutex<Vec<(String, Option<String>, u16)>>,
 }
 impl Authority {
     /// The host claims the call on the second poll and finishes it on the third.
@@ -220,6 +225,7 @@ impl Authority {
         let guard = self.submission.lock().unwrap();
         let s = guard.as_ref().unwrap();
         RemoteToolResponse {
+            operation_outcome: None,
             record: RemoteToolRecord {
                 request_id: s.context.request_id.clone(),
                 device_id: "placed-device".into(),
@@ -318,6 +324,7 @@ impl RelayPort for Authority {
                     input_schema: serde_json::from_value(json!({"type":"object"})).unwrap(),
                     tool_digest: "a".repeat(64),
                     package_digest: "b".repeat(64),
+                    business_key_policy: self.business_policy.clone(),
                 }],
             })
         })
@@ -345,7 +352,11 @@ impl RelayPort for Authority {
                 fields.remove(key);
             }
             fields.insert("deviceId".into(), json!("placed-device"));
-            i.id = r.context.request_id.clone();
+            i.id = self
+                .canonical
+                .clone()
+                .unwrap_or_else(|| r.context.request_id.clone());
+            fields.insert("requestId".into(), json!(i.id));
             i.evaluation.context = serde_json::from_value(c).unwrap();
             i.evaluation.tool_id = r.request.tool_id.clone();
             i.evaluation.action = r.request.action.clone();
@@ -370,8 +381,79 @@ impl RelayPort for Authority {
             if self.substitute {
                 i.evaluation.context.binding_id = "attacker-binding".into();
             }
+            if self.mismatched_context_id {
+                i.evaluation.context.request_id = "wrong-context".into();
+            }
             *self.invocation.lock().unwrap() = Some(i.clone());
             Ok(i)
+        })
+    }
+    fn read_invocation<'a>(
+        &'a self,
+        context: &'a RequestContext,
+    ) -> PortFuture<'a, Result<EnterpriseInvocation, ErrorCode>> {
+        Box::pin(async move {
+            if self.outcome_unavailable {
+                return Err(ErrorCode::DependencyUnavailable);
+            }
+            let mut invocation = self
+                .invocation
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or(ErrorCode::NotFound)?;
+            if invocation.id != context.request_id
+                || invocation.evaluation.context.user_id != context.user_id
+                || invocation.evaluation.context.agent_id != context.agent_id
+                || invocation.evaluation.context.mode != context.mode
+                || invocation.evaluation.context.workload_binding_id != context.workload_binding_id
+                || invocation.evaluation.context.chain != context.chain
+                || invocation.evaluation.context.binding_id.as_str()
+                    != context.binding_id.as_deref().unwrap_or("")
+            {
+                return Err(ErrorCode::NotFound);
+            }
+            let working = self.ask
+                || !self.replayed
+                    && self.ended.is_none()
+                    && self.submission.lock().unwrap().is_none()
+                    && self.permit.lock().unwrap().is_none();
+            invocation.operation_outcome = Some(serde_json::from_value(json!({
+                "operationId":invocation.id,"state":if working {"RUNNING"} else {"OUTCOME_UNKNOWN"},
+                "revision":1,"grade":"REPORTED","journalComplete":true,
+                "attemptCount":1,"effectCount":0,"unresolvedEffectCount":0,"unsettledAttemptCount":1,
+                "finalized":false,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
+            })).unwrap());
+            Ok(invocation)
+        })
+    }
+    fn operation_history<'a>(
+        &'a self,
+        context: &'a RequestContext,
+        cursor: Option<&'a str>,
+        limit: u16,
+    ) -> PortFuture<'a, Result<EnterpriseOperationHistoryPage, ErrorCode>> {
+        Box::pin(async move {
+            let invocation = self.read_invocation(context).await?;
+            let operation = invocation.operation_outcome.unwrap();
+            self.history_reads.lock().unwrap().push((
+                context.request_id.clone(),
+                cursor.map(str::to_owned),
+                limit,
+            ));
+            if cursor.is_some_and(|value| {
+                value.split(':').next().and_then(|v| v.parse::<u64>().ok())
+                    != Some(operation.revision)
+            }) {
+                return Err(ErrorCode::Conflict);
+            }
+            Ok(EnterpriseOperationHistoryPage {
+                operation,
+                attempts: vec![],
+                effects: vec![],
+                next: None,
+                truncated: false,
+            })
         })
     }
     fn reserve<'a>(
@@ -956,6 +1038,44 @@ async fn a_tool_host_without_a_route_gets_its_calls_through_control() {
 /// ADR 031 and conformance case `mcp-core/trace-propagation`: the caller's trace and declared correlation reach the
 /// dispatch, and the result names its invocation. None of it is an authorization input.
 #[tokio::test]
+async fn worker_success_is_reported_separately_from_the_unknown_control_business_outcome() {
+    let authority = Arc::new(Authority {
+        tool_host: true,
+        ..Authority::default()
+    });
+    let (status, body) = call(
+        runtime_router(state(authority)),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["structuredContent"]["greeting"], "hi");
+    assert_eq!(body["result"]["isError"], true);
+    let operation = &body["result"]["_meta"]["io.ololabs.toolgate/operationOutcome"];
+    assert_eq!(operation["state"], "OUTCOME_UNKNOWN");
+    assert_eq!(operation["grade"], "REPORTED");
+    assert_eq!(operation["retryable"], false);
+}
+
+#[tokio::test]
+async fn an_unavailable_authorized_outcome_does_not_disclose_the_worker_result_or_invite_retry() {
+    let authority = Arc::new(Authority {
+        tool_host: true,
+        outcome_unavailable: true,
+        ..Authority::default()
+    });
+    let (status, body) = call(
+        runtime_router(state(authority)),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["error"]["data"]["state"], "OUTCOME_UNKNOWN");
+    assert_eq!(body["error"]["data"]["retryable"], false);
+    assert!(body.get("result").is_none());
+}
+
+#[tokio::test]
 async fn trace_context_and_declared_ids_reach_the_dispatch() {
     let a = Arc::new(Authority {
         tool_host: true,
@@ -1163,4 +1283,379 @@ async fn identity_extension_reports_only_authenticated_binding_without_authorizi
     assert!(body["result"].get("credentialSha256").is_none());
     assert!(a.submission.lock().unwrap().is_none());
     assert_eq!(a.reservations.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn explicit_business_keys_ignore_request_ids_and_bind_input_and_identity() {
+    let authority = Arc::new(Authority::default());
+    let state = state(authority);
+    let first = state
+        .gateway
+        .authorize_business(
+            serde_json::from_value(payload()).unwrap(),
+            context(),
+            None,
+            Some("invoice-42"),
+        )
+        .await
+        .unwrap();
+    let mut retry = context();
+    retry.request_id = "new-agent-step".into();
+    let second = state
+        .gateway
+        .authorize_business(
+            serde_json::from_value(payload()).unwrap(),
+            retry.clone(),
+            None,
+            Some("invoice-42"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.invocation.id, second.invocation.id);
+    assert!(first.invocation.id.starts_with("op-"));
+    retry.user_id = Some("other-user".into());
+    // AGENT namespace stays stable; Control enforces the original user owner before disclosing a result.
+    let other = state
+        .gateway
+        .authorize_business(
+            serde_json::from_value(payload()).unwrap(),
+            retry,
+            None,
+            Some("invoice-43"),
+        )
+        .await
+        .unwrap();
+    assert_ne!(first.invocation.id, other.invocation.id);
+    for key in ["", "key with spaces", "key/with/slashes"] {
+        assert_eq!(
+            state
+                .gateway
+                .authorize_business(
+                    serde_json::from_value(payload()).unwrap(),
+                    context(),
+                    None,
+                    Some(key)
+                )
+                .await
+                .unwrap_err(),
+            ErrorCode::Validation
+        );
+    }
+}
+
+#[tokio::test]
+async fn mcp_business_metadata_survives_new_rpc_ids_and_rejects_non_strings() {
+    let authority = Arc::new(Authority {
+        ended: Some(EnterpriseInvocationState::OutcomeUnknown),
+        ..Default::default()
+    });
+    let router = runtime_router(state(authority.clone()));
+    let mut references = Vec::new();
+    for id in [7, 101] {
+        let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+        let bytes = to_bytes(body, 65536).await.unwrap();
+        let mut value: Value = serde_json::from_slice(&bytes).unwrap();
+        value["id"] = json!(id);
+        value["params"]["_meta"]["io.ololabs.toolgate/businessKey"] = json!("run-7.step-42");
+        let (code, response) = call(
+            router.clone(),
+            Request::from_parts(parts, Body::from(value.to_string())),
+        )
+        .await;
+        assert_eq!(code, StatusCode::OK);
+        let reference = response["result"]["structuredContent"]["invocationId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(reference.starts_with("op-"));
+        assert!(response["result"]["_meta"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|v| v == &json!(reference)));
+        references.push(reference);
+    }
+    assert_eq!(references[0], references[1]);
+    assert!(authority.permit.lock().unwrap().is_none());
+    for malformed in [Value::Null, json!(42), json!({"key":"x"}), json!("")] {
+        let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+        let mut value: Value =
+            serde_json::from_slice(&to_bytes(body, 65536).await.unwrap()).unwrap();
+        value["params"]["_meta"]["io.ololabs.toolgate/businessKey"] = malformed;
+        assert_eq!(
+            call(
+                router.clone(),
+                Request::from_parts(parts, Body::from(value.to_string()))
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+}
+
+fn key_policy(value: Value) -> BusinessKeyPolicy {
+    serde_json::from_value(value).unwrap()
+}
+fn tenant_operation_reference(key: &str) -> String {
+    let tenant = credential().context.tenant_id;
+    let hash = digest(format!("toolgate-business-key-v1\0{tenant}\0{key}").as_bytes());
+    format!(
+        "op-{}",
+        digest(format!("toolgate-operation-v1\n{tenant}\nfiles.read\nTENANT\n\n{hash}").as_bytes())
+    )
+}
+
+#[tokio::test]
+async fn native_business_keys_follow_the_control_catalog_namespace() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(json!({"required":true,"namespace":"TENANT"}))),
+        ..Default::default()
+    });
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        req("/access/invocations", payload()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(
+        response["invocation"]["id"],
+        json!(tenant_operation_reference("logical-request"))
+    );
+    assert_eq!(authority.reservations.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn header_argument_key_conflicts_are_refused_before_control_invocation() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":true,"namespace":"TENANT","argument":"operationKey"}),
+        )),
+        ..Default::default()
+    });
+    let mut body = payload();
+    body["arguments"]["operationKey"] = json!("different-key");
+    let (status, _) = call(
+        runtime_router(state(authority.clone())),
+        req("/access/invocations", body),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(authority.invocation.lock().unwrap().is_none());
+    assert_eq!(authority.reservations.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn mcp_argument_keys_use_the_canonical_id_for_results_and_local_dispatch() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":true,"namespace":"TENANT","argument":"operationKey"}),
+        )),
+        ..Default::default()
+    });
+    let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+    let mut value: Value = serde_json::from_slice(&to_bytes(body, 65536).await.unwrap()).unwrap();
+    value["params"]["arguments"]["operationKey"] = json!("run-42");
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        Request::from_parts(parts, Body::from(value.to_string())),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    let expected = tenant_operation_reference("run-42");
+    assert_eq!(
+        response["result"]["_meta"]["io.ololabs.toolgate/invocationId"],
+        json!(expected)
+    );
+    let submitted = authority.submission.lock().unwrap().clone().unwrap();
+    assert_eq!(submitted.invocation_id, expected);
+    assert_eq!(submitted.context.request_id, expected);
+    assert_eq!(submitted.request.arguments["operationKey"], json!("run-42"));
+}
+
+#[tokio::test]
+async fn declared_unkeyed_windows_accept_only_a_valid_control_canonical_reference() {
+    let canonical = format!("op-{}", "a".repeat(64));
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":false,"namespace":"AGENT","dedupeWindowMs":5000}),
+        )),
+        canonical: Some(canonical.clone()),
+        ..Default::default()
+    });
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(
+        response["result"]["_meta"]["io.ololabs.toolgate/invocationId"],
+        json!(canonical)
+    );
+    let submitted = authority.submission.lock().unwrap().clone().unwrap();
+    assert_eq!(submitted.invocation_id, canonical);
+    assert_eq!(submitted.context.request_id, canonical);
+}
+
+#[tokio::test]
+async fn undeclared_malformed_or_context_mismatched_canonical_ids_never_dispatch() {
+    let policy = key_policy(json!({"required":false,"namespace":"AGENT","dedupeWindowMs":5000}));
+    for (policy, canonical, mismatch) in [
+        (None, format!("op-{}", "a".repeat(64)), false),
+        (Some(policy.clone()), "inv-unexpected".into(), false),
+        (
+            Some(policy.clone()),
+            format!("op-{}", "A".repeat(64)),
+            false,
+        ),
+        (Some(policy), format!("op-{}", "a".repeat(64)), true),
+    ] {
+        let authority = Arc::new(Authority {
+            business_policy: policy,
+            canonical: Some(canonical),
+            mismatched_context_id: mismatch,
+            ..Default::default()
+        });
+        let (status, response) = call(
+            runtime_router(state(authority.clone())),
+            mcp("tools/call", Some("files.read")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+        assert!(authority.submission.lock().unwrap().is_none());
+        assert_eq!(authority.reservations.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn a_required_key_cannot_fall_back_to_a_window_at_the_gateway() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(
+            json!({"required":true,"namespace":"AGENT","dedupeWindowMs":5000}),
+        )),
+        ..Default::default()
+    });
+    let (status, response) = call(
+        runtime_router(state(authority.clone())),
+        mcp("tools/call", Some("files.read")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+    assert!(authority.invocation.lock().unwrap().is_none());
+    assert!(authority.submission.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn key_policy_discovery_cannot_be_overridden_by_caller_metadata() {
+    let authority = Arc::new(Authority {
+        business_policy: Some(key_policy(json!({"required":true,"namespace":"AGENT"}))),
+        ..Default::default()
+    });
+    let router = runtime_router(state(authority.clone()));
+    let (status, listed) = call(router.clone(), mcp("tools/list", None)).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(
+        listed["result"]["tools"][0]["_meta"]["io.ololabs.toolgate/businessKeyPolicy"]["required"],
+        json!(true)
+    );
+    let (parts, body) = mcp("tools/call", Some("files.read")).into_parts();
+    let mut value: Value = serde_json::from_slice(&to_bytes(body, 65536).await.unwrap()).unwrap();
+    value["params"]["_meta"]["io.ololabs.toolgate/businessKeyPolicy"] =
+        json!({"required":false,"namespace":"TENANT"});
+    let (status, response) = call(
+        router,
+        Request::from_parts(parts, Body::from(value.to_string())),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+    assert!(authority.invocation.lock().unwrap().is_none());
+    assert!(authority.submission.lock().unwrap().is_none());
+}
+
+fn metadata_request(path: &str) -> Request<Body> {
+    let mut request = req(path, json!({}));
+    *request.method_mut() = axum::http::Method::GET;
+    *request.body_mut() = Body::empty();
+    request.headers_mut().remove("idempotency-key");
+    request
+}
+#[tokio::test]
+async fn native_owned_status_history_and_stale_cursor_never_reserve_again() {
+    let authority = Arc::new(Authority::default());
+    let router = runtime_router(state(authority.clone()));
+    let (status, created) = call(router.clone(), req("/access/invocations", payload())).await;
+    assert_eq!(status, StatusCode::OK);
+    let id = created["invocation"]["id"].as_str().unwrap();
+    let (status, view) = call(
+        router.clone(),
+        metadata_request(&format!("/access/invocations/{id}")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{view}");
+    assert_eq!(view["operationOutcome"]["state"], "RUNNING");
+    let (status, page) = call(
+        router.clone(),
+        metadata_request(&format!(
+            "/access/invocations/{id}/history?limit=3&cursor=1:0"
+        )),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{page}");
+    assert_eq!(page["operation"]["operationId"], id);
+    assert_eq!(
+        authority.history_reads.lock().unwrap()[0],
+        (id.to_owned(), Some("1:0".into()), 3)
+    );
+    let (status, _) = call(
+        router,
+        metadata_request(&format!("/access/invocations/{id}/history?cursor=2:0")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 1);
+}
+#[tokio::test]
+async fn native_metadata_rejects_bad_pagination_without_calling_control() {
+    let authority = Arc::new(Authority::default());
+    let router = runtime_router(state(authority.clone()));
+    for query in [
+        "limit=0",
+        "limit=101",
+        "cursor=bad",
+        "cursor=1:9999",
+        "unexpected=true",
+        "limit=1&limit=2",
+    ] {
+        let (status, _) = call(
+            router.clone(),
+            metadata_request(&format!("/access/invocations/op-1/history?{query}")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{query}");
+    }
+    assert!(authority.history_reads.lock().unwrap().is_empty());
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 0);
+}
+#[tokio::test]
+async fn native_metadata_cannot_disclose_a_different_owners_operation() {
+    let authority = Arc::new(Authority::default());
+    let mut foreign: EnterpriseInvocation =
+        serde_json::from_value(fixtures()["EnterpriseInvocation"].clone()).unwrap();
+    foreign.id = "foreign-op".into();
+    foreign.evaluation.context.request_id = foreign.id.clone();
+    foreign.evaluation.context.user_id = Some("another-user".into());
+    *authority.invocation.lock().unwrap() = Some(foreign);
+    let router = runtime_router(state(authority.clone()));
+    for path in [
+        "/access/invocations/foreign-op",
+        "/access/invocations/foreign-op/history",
+        "/access/invocations/absent",
+    ] {
+        let (status, body) = call(router.clone(), metadata_request(path)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+        assert_eq!(body["code"], "NOT_FOUND");
+        assert!(body.get("evaluation").is_none());
+    }
+    assert_eq!(authority.reservations.load(Ordering::Relaxed), 0);
 }

@@ -1,0 +1,104 @@
+{
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "vectors": [
+    {
+      "name": "sorted-duplicate-query",
+      "url": "https://EXAMPLE.test:443/a%20b?a=2&a=1&z=9",
+      "body": "{\"x\":1}",
+      "recipient": "alice",
+      "manifest": {
+        "version": "toolgate-http-request-v1",
+        "profileId": "profile",
+        "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "routeId": "write",
+        "scheme": "https",
+        "host": "example.test",
+        "port": 443,
+        "method": "POST",
+        "path": "/a%20b",
+        "query": "a=2&a=1&z=9",
+        "contentType": "application/json; charset=utf-8",
+        "bodyDigest": "sha256:5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22",
+        "headers": {
+          "x-recipient": [
+            "alice"
+          ],
+          "accept": [
+            "*/*"
+          ]
+        },
+        "authDeclarationId": "api-key",
+        "credentialHeaders": [
+          "authorization"
+        ]
+      },
+      "digest": "sha256:e4e8f9d03eb8265019f8a3fec7156d8116653513c79ac1d0ad47e5eca705ba5a"
+    },
+    {
+      "name": "changed-body",
+      "url": "https://EXAMPLE.test:443/a%20b?a=2&a=1&z=9",
+      "body": "{\"x\":2}",
+      "recipient": "alice",
+      "manifest": {
+        "version": "toolgate-http-request-v1",
+        "profileId": "profile",
+        "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "routeId": "write",
+        "scheme": "https",
+        "host": "example.test",
+        "port": 443,
+        "method": "POST",
+        "path": "/a%20b",
+        "query": "a=2&a=1&z=9",
+        "contentType": "application/json; charset=utf-8",
+        "bodyDigest": "sha256:5e2b030a4a0f1582d78c0fd9924511cd6b1f2df9879e574f5ea1406c94052418",
+        "headers": {
+          "x-recipient": [
+            "alice"
+          ],
+          "accept": [
+            "*/*"
+          ]
+        },
+        "authDeclarationId": "api-key",
+        "credentialHeaders": [
+          "authorization"
+        ]
+      },
+      "digest": "sha256:82c63d43db232b9ff6e4d51d13c4f8e70d8acff95d0e6b0b0c243d1fa337974d"
+    },
+    {
+      "name": "duplicate-order",
+      "url": "https://EXAMPLE.test:443/a%20b?a=1&a=2&z=9",
+      "body": "{\"x\":1}",
+      "recipient": "alice",
+      "manifest": {
+        "version": "toolgate-http-request-v1",
+        "profileId": "profile",
+        "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "routeId": "write",
+        "scheme": "https",
+        "host": "example.test",
+        "port": 443,
+        "method": "POST",
+        "path": "/a%20b",
+        "query": "a=1&a=2&z=9",
+        "contentType": "application/json; charset=utf-8",
+        "bodyDigest": "sha256:5041bf1f713df204784353e82f6a4a535931cb64f1f4b4a5aeaffcb720918b22",
+        "headers": {
+          "x-recipient": [
+            "alice"
+          ],
+          "accept": [
+            "*/*"
+          ]
+        },
+        "authDeclarationId": "api-key",
+        "credentialHeaders": [
+          "authorization"
+        ]
+      },
+      "digest": "sha256:2ea236833a6a1c034655da6b4c7626d1cf49afcb50bc27b8312ea1e847abc1e8"
+    }
+  ]
+}

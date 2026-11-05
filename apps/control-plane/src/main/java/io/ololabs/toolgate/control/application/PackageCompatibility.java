@@ -81,6 +81,17 @@ public final class PackageCompatibility {
         JsonNode protocol = protocol(manifest), hostProtocol = registration.path("protocol");
         if (!overlaps(protocol, hostProtocol.path("min").asLong(0), hostProtocol.path("max").asLong(-1)))
             problems.add("Tool Host " + hostId + " speaks protocol " + range(hostProtocol) + ", the package needs " + range(protocol));
+        boolean nativeTier=false,ociTier=false;
+        for(var tier:registration.path("tiers")){nativeTier|=tier.asText().equals("HOST_NATIVE");ociTier|=tier.asText().equals("OCI_SANDBOX");}
+        var serverRuntimes=new java.util.HashSet<String>();
+        for(var tool:manifest.path("tools"))if(tool.path("descriptor").path("kind").asText().equals("SERVER"))serverRuntimes.add(tool.path("runtimeId").asText());
+        for(var runtime:manifest.path("runtimes"))if(serverRuntimes.contains(runtime.path("runtimeId").asText())){
+            boolean pinned=runtime.hasNonNull("baseImageDigest");
+            if(pinned&&(!ociTier||!runtime.path("runtimeId").asText().equals("python")))
+                problems.add("Tool Host "+hostId+" cannot provide the image-bound Python OCI tier");
+            else if(!pinned&&ociTier&&!nativeTier)
+                problems.add("Tool Host "+hostId+" requires a pinned Python runtime image");
+        }
         return problems;
     }
 

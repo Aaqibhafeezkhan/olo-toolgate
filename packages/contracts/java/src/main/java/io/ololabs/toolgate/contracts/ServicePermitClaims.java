@@ -21,6 +21,9 @@ package io.ololabs.toolgate.contracts;
  * @param iat canonical iat value
  * @param exp canonical exp value
  * @param executionNonce canonical executionNonce value
+ * @param httpRequestDigest canonical httpRequestDigest value
+ * @param effectId canonical effectId value
+ * @param authorizationGeneration canonical authorizationGeneration value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ServicePermitClaims(
@@ -39,7 +42,10 @@ public record ServicePermitClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationEpoch", required = true) Long authorizationEpoch,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "iat", required = true) Long iat,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "exp", required = true) Long exp,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionNonce", required = true) String executionNonce
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executionNonce", required = true) String executionNonce,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "httpRequestDigest", required = true) String httpRequestDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectId", required = false) String effectId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationGeneration", required = false) Long authorizationGeneration
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -59,6 +65,9 @@ public record ServicePermitClaims(
      * @param iat canonical iat value
      * @param exp canonical exp value
      * @param executionNonce canonical executionNonce value
+     * @param httpRequestDigest canonical httpRequestDigest value
+     * @param effectId canonical effectId value
+     * @param authorizationGeneration canonical authorizationGeneration value
      */
     public ServicePermitClaims {
         java.util.Objects.requireNonNull(iss, "iss");
@@ -77,5 +86,6 @@ public record ServicePermitClaims(
         java.util.Objects.requireNonNull(iat, "iat");
         java.util.Objects.requireNonNull(exp, "exp");
         java.util.Objects.requireNonNull(executionNonce, "executionNonce");
+        java.util.Objects.requireNonNull(httpRequestDigest, "httpRequestDigest");
     }
 }

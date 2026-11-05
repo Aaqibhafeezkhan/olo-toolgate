@@ -525,12 +525,17 @@
         },
         "notStarted": {
           "$ref": "protocol.schema.json#/$defs/RefusalReason"
+        },
+        "executionTier": {
+          "$ref": "descriptor.schema.json#/$defs/RuntimeTier",
+          "description": "The executor's selected tier for this attempt; executor-reported evidence, not independent attestation."
         }
       },
       "required": [
         "invocationId",
         "fencingToken",
-        "outcome"
+        "outcome",
+        "executionTier"
       ]
     },
     "RunEventKind": {

@@ -29,7 +29,7 @@ class EnterpriseConformanceTest {
     @TempDir java.nio.file.Path temp;
     @BeforeEach void graph() {
         entries=new HashMap<>();GroupGraph.defaults(entries,codec);
-        add(Kind.USER,new ControlUser("alice","Alice",true,1L));add(Kind.USER,new ControlUser("bob","Bob",true,1L));add(Kind.USER,new ControlUser("admin","Administrator",true,1L));
+        add(Kind.USER,new ControlUser("alice","Alice",true,1L, null, null, null));add(Kind.USER,new ControlUser("bob","Bob",true,1L, null, null, null));add(Kind.USER,new ControlUser("admin","Administrator",true,1L, null, null, null));
         add(Kind.TEAM,new ControlTeam("team-a","Team A",true,1L,List.of("alice"),List.of()));
         add(Kind.TEAM,new ControlTeam("team-b","Team B",true,1L,List.of("alice"),List.of()));
         GroupGraph.addDefault(entries,codec,Kind.USER,"bob");GroupGraph.addDefault(entries,codec,Kind.USER,"admin");
@@ -103,7 +103,7 @@ class EnterpriseConformanceTest {
     @Test void allowPolicyDoesNotCreateMissingGrant() {remove(Kind.GRANT,"human");policy("allow",Decision.ALLOW);assertEquals(Decision.BLOCK,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
     @Test void blockOverridesEveryGrant() {policy("block",Decision.BLOCK);policy("allow",Decision.ALLOW);assertEquals(EnterpriseDecisionReason.BLOCKED,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}
     @Test void askObligationsAccumulateAcrossAllowPaths() {policy("ask-a",Decision.ASK);policy("ask-b",Decision.ASK);policy("allow",Decision.ALLOW);var d=decide(context(RequestMode.DELEGATED,"binding-a"));assertEquals(Decision.ASK,d.decision());assertEquals(List.of("ask-a","ask-b"),d.obligations());}
-    @Test void disabledIdentityCannotBeApproved() {policy("ask",Decision.ASK);add(Kind.USER,new ControlUser("alice","Alice",false,2L));assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}
+    @Test void disabledIdentityCannotBeApproved() {policy("ask",Decision.ASK);add(Kind.USER,new ControlUser("alice","Alice",false,2L, null, null, null));assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(context(RequestMode.DELEGATED,"binding-a")).reason());}
     @Test void missingRequiredTrustEvidenceDeniesButUnconditionalGrantNeedsNoUnusedAttestation() {
         remove(Kind.DEVICE_EVIDENCE,"evidence");assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());
         var ordinary=scope("tools-a","devices-a");

@@ -24,6 +24,11 @@ and `pack`. The Python console command is `toolgate-python-sdk`; `toolgate`
 belongs to the shared Rust CLI. `[tool.toolgate].descriptor_generation = 1`
 is required, along with `packages` or `modules` naming the tool code.
 
+For a rootless OCI pool, set `[tool.toolgate].runtime_image_digest` to the reviewed
+`sha256:<manifest digest>`. Packaging binds it into the runtime declaration;
+the host must have that exact image prepared. See the
+[OCI pool guide](../../docs/operations/rootless-tool-host.md).
+
 Decorators, context getters, error classes and route APIs follow
 [the Python authoring API](../spec/authoring/python.md). Both normal and
 `async def` handlers work; `async_=True` declares a protocol Task independently

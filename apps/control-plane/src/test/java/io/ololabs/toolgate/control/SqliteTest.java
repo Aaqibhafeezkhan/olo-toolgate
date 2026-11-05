@@ -15,8 +15,9 @@ final class SqliteTest {
     @Test void firstInitializationContainsOnlyTheCurrentSchema() throws Exception {
         var source=SqliteState.open(directory.resolve("initial.sqlite"));
         try(var c=source.getConnection();var s=c.createStatement()) {
-            try(var r=s.executeQuery("SELECT version FROM quickstart_migrations")){
-                assertTrue(r.next());assertEquals(1,r.getInt(1));assertFalse(r.next());
+            try(var r=s.executeQuery("SELECT version FROM quickstart_schema ORDER BY version")){
+                for(int version=1;version<=1;version++){assertTrue(r.next());assertEquals(version,r.getInt(1));}
+                assertFalse(r.next());
             }
             try(var r=s.executeQuery("SELECT name FROM sqlite_master WHERE name IN ('control_access_migration_archive','control_approvals','control_permit_leases','quickstart_vault')")){
                 assertFalse(r.next());
@@ -79,29 +80,33 @@ final class SqliteTest {
             try(var r=s.executeQuery("SELECT count(*) FROM control_audit")){assertTrue(r.next());assertEquals(3,r.getInt(1));}
         }
     }
-    @Test void initialSchemaReopensWithoutReplayingAndFutureVersionFailsClosed() throws Exception {
-        var path=directory.resolve("upgrade.sqlite");var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+path);
-        try(var c=source.getConnection();var statement=c.createStatement()) {
-            statement.execute("CREATE TABLE quickstart_migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)");
-            byte[] bytes;try(var input=SqliteTest.class.getResourceAsStream("/db/quickstart/V1.sql")){bytes=new String(java.util.Objects.requireNonNull(input).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8).replace("\r\n","\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);}
-            var script=new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
-            for(var sql:script.split("(?m)^-- statement\\s*$"))if(!sql.isBlank())statement.execute(sql);
-            try(var insert=c.prepareStatement("INSERT INTO quickstart_migrations VALUES(1,?)")){insert.setString(1,DirectoryService.digest(bytes));insert.executeUpdate();}
-            io.ololabs.toolgate.control.fixtures.Tenants.provision(c);
-            statement.execute("INSERT INTO control_records VALUES('3ddfb462-d173-3b24-823b-17d134680296','USER','kept',1,'{\"id\":\"kept\",\"name\":\"Kept\",\"enabled\":true,\"revision\":1}')");
-        }
-        var upgraded=SqliteState.open(path);
-        try(var c=upgraded.getConnection();var s=c.createStatement()){
-            try(var r=s.executeQuery("SELECT count(*) FROM quickstart_migrations")){assertTrue(r.next());assertEquals(1,r.getInt(1));}
-            try(var r=s.executeQuery("SELECT document FROM control_records WHERE record_id='kept'")){assertTrue(r.next());assertTrue(r.getString(1).contains("Kept"));}
-            s.execute("INSERT INTO quickstart_migrations VALUES(2,'future')");
+    @Test void currentSchemaReopensAndMissingOrUnexpectedIdentityFailsClosed() throws Exception {
+        var path=directory.resolve("current.sqlite");var source=SqliteState.open(path);
+        assertNotNull(SqliteState.open(path));
+        try(var c=source.getConnection();var statement=c.createStatement()){
+            assertThrows(java.sql.SQLException.class,()->statement.execute("INSERT INTO quickstart_schema VALUES(2,'other')"));
+            statement.execute("DELETE FROM quickstart_schema");
         }
         assertThrows(IllegalStateException.class,()->SqliteState.open(path));
     }
-    @Test void appliedMigrationChecksumTamperingFailsClosed() throws Exception {
+    @Test void earlierStageDatabaseIsRejectedWithoutConversion()throws Exception{
+        var path=directory.resolve("old-stage.sqlite");
+        var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+path);
+        try(var c=source.getConnection();var statement=c.createStatement()){
+            statement.execute("CREATE TABLE quickstart_migrations(version INTEGER PRIMARY KEY,checksum TEXT NOT NULL)");
+            statement.execute("INSERT INTO quickstart_migrations VALUES(1,'old-stage')");
+            statement.execute("CREATE TABLE old_application_data(value TEXT)");
+            statement.execute("INSERT INTO old_application_data VALUES('retained')");
+        }
+        assertThrows(IllegalStateException.class,()->SqliteState.open(path));
+        try(var c=source.getConnection();var statement=c.createStatement();var row=statement.executeQuery("SELECT value FROM old_application_data")){
+            assertTrue(row.next());assertEquals("retained",row.getString(1));
+        }
+    }
+    @Test void currentSchemaChecksumTamperingFailsClosed() throws Exception {
         var path=directory.resolve("control.sqlite");var source=SqliteState.open(path);
         try(var c=source.getConnection();var s=c.createStatement()){
-            s.execute("UPDATE quickstart_migrations SET checksum='tampered' WHERE version=1");
+            s.execute("UPDATE quickstart_schema SET checksum='tampered' WHERE version=1");
         }
         assertThrows(IllegalStateException.class,()->SqliteState.open(path));
     }

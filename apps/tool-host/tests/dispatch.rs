@@ -30,6 +30,11 @@ import json, os, sys
 inp = json.loads(sys.stdin.readline())
 args = inp["arguments"]
 mode = args.get("since", 0)
+if mode == 7:
+    import time
+    print(json.dumps({"kind":"LOG","level":"info","message":"waiting for lease test"}),flush=True)
+    time.sleep(2)
+    open("post-lease-effect","w").write("effect")
 if mode == 2:
     sys.exit(3)
 if mode == 6:
@@ -101,10 +106,15 @@ fn put(dir: &Path, kind: &str, value: &Value) -> String {
 
 #[derive(Default)]
 struct Seen {
+    revoke: bool,
+    short_lease: bool,
+    partition: bool,
+    lease_ms: Option<u64>,
     /// Run-event batches, and the order in which events and reports reached Control.
     events: Vec<Value>,
     order: Vec<&'static str>,
     reports: Vec<Value>,
+    effect_owners: std::collections::HashMap<String, (String, bool)>,
     consumed: Vec<Value>,
     upstream: Vec<Value>,
     /// Pull mode: dispatches Control holds for the host, and what the host answered.
@@ -125,6 +135,70 @@ async fn serve(router: Router) -> u16 {
 }
 
 async fn control(seen: Shared) -> u16 {
+    async fn authorize_effect(
+        State(seen): State<Shared>,
+        Json(body): Json<Value>,
+    ) -> axum::response::Response {
+        let mut seen = seen.lock().unwrap();
+        if seen.revoke || seen.partition {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        assert_eq!(body["fencingToken"], FENCE);
+        let parts: Vec<_> = body["invocationPermit"]["jws"]
+            .as_str()
+            .unwrap()
+            .split('.')
+            .collect();
+        let proof: Value =
+            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(parts[1]).unwrap()).unwrap();
+        assert_eq!(
+            proof["argumentsDigest"],
+            tool_host::digest::jcs(&body["arguments"]).unwrap()
+        );
+        assert_eq!(
+            body["httpRequestDigest"],
+            tool_host::digest::jcs(&body["httpRequestManifest"]).unwrap()
+        );
+        let handler = body["handlerId"].as_str().unwrap().to_owned();
+        assert!(seen
+            .effect_owners
+            .insert(
+                handler.clone(),
+                (body["brokerInstanceId"].as_str().unwrap().into(), false)
+            )
+            .is_none());
+        Json(json!({"grant":{"jws":handler},"validForMs":2000})).into_response()
+    }
+    async fn sending_effect(
+        State(seen): State<Shared>,
+        Json(body): Json<Value>,
+    ) -> axum::response::Response {
+        let mut seen = seen.lock().unwrap();
+        if seen.revoke || seen.partition {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+        let handler = body["handlerId"].as_str().unwrap();
+        assert_eq!(body["grant"]["jws"], handler);
+        let owner = seen
+            .effect_owners
+            .get_mut(handler)
+            .expect("grant before send");
+        assert_eq!(body["brokerInstanceId"], owner.0);
+        assert!(!owner.1);
+        owner.1 = true;
+        Json(json!({"authorized":true})).into_response()
+    }
+
+    async fn heartbeat(
+        State(seen): State<Shared>,
+        Json(body): Json<Value>,
+    ) -> axum::response::Response {
+        let seen = seen.lock().unwrap();
+        if seen.partition {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+        Json(json!({"invocationId":body["invocationId"],"fencingToken":body["fencingToken"],"leaseExpiresAtUnixMs":tool_host::now_ms()+seen.lease_ms.unwrap_or(if seen.short_lease{600}else{10_000}),"cancelRequested":seen.revoke})).into_response()
+    }
     async fn consume(State(seen): State<Shared>, Json(body): Json<Value>) -> impl IntoResponse {
         seen.lock().unwrap().consumed.push(body.clone());
         Json(
@@ -207,7 +281,19 @@ async fn control(seen: Shared) -> u16 {
                 post(result),
             )
             .route("/api/control/v1/access/permits/consume", post(consume))
+            .route(
+                "/api/control/v1/access/invocations/{id}/heartbeat",
+                post(heartbeat),
+            )
             .route("/api/control/v1/access/effects/report", post(report))
+            .route(
+                "/api/control/v1/access/effects/authorize",
+                post(authorize_effect),
+            )
+            .route(
+                "/api/control/v1/access/effects/sending",
+                post(sending_effect),
+            )
             .route(
                 "/api/control/v1/access/invocations/{id}/events",
                 post(events),
@@ -266,6 +352,10 @@ async fn rig() -> Option<Rig> {
 }
 
 async fn rig_for(python_sdk: bool) -> Option<Rig> {
+    rig_for_tier(python_sdk, None, false).await
+}
+
+async fn rig_for_tier(python_sdk: bool, image_digest: Option<&str>, oci: bool) -> Option<Rig> {
     let python = ["/usr/bin/python3", "/usr/local/bin/python3", "/bin/python3"]
         .into_iter()
         .find(|p| Path::new(p).exists())?;
@@ -284,6 +374,9 @@ async fn rig_for(python_sdk: bool) -> Option<Rig> {
     for artifact in m["artifacts"].as_array_mut().unwrap() {
         artifact.as_object_mut().unwrap().remove("artifactDigest");
         artifact.as_object_mut().unwrap().remove("sizeBytes");
+    }
+    if let Some(digest) = image_digest {
+        m.get_mut("runtimes").unwrap()[0]["baseImageDigest"] = json!(digest);
     }
     let staging = dir.join("staging");
     std::fs::create_dir_all(staging.join("artifacts")).unwrap();
@@ -310,21 +403,34 @@ modules = ["orders"]
 "#,
         )
         .unwrap();
+        if let Some(digest) = image_digest {
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(project.join("pyproject.toml"))
+                .unwrap()
+                .write_all(format!("runtime_image_digest = \"{digest}\"\n").as_bytes())
+                .unwrap();
+        }
         std::fs::write(project.join("orders.py"), r#"
 from typing import Annotated, Any
 from toolgate import *
 tool_package(id="acme.orders", name="Orders", publisher="Acme")
 destination(id="acme-api", host_setting="AcmeApiHost")
 http_auth(id="acme-key", type="API_KEY", header="X-Api-Key", secret="ApiKey")
-http_route(id="orders.get", destination="acme-api", method="GET", path="/orders/{orderId:[0-9]{6,12}}", headers=["X-On-Behalf-Of"], auth="acme-key")
+http_route(id="orders.get", destination="acme-api", method="GET", path="/orders/{orderId:[0-9]{6,12}}", max_response_bytes=2_097_152, headers=["X-On-Behalf-Of"], auth="acme-key")
 @server_tool(name="orders.lookup", title="Lookup", description="Lookup", effect=EffectSafety.READ_ONLY, routes=["orders.get"])
 @Secret(name="ApiKey")
 @Global(name="TimeoutSeconds", type=ValueType.INT, default_value="10")
 @JwtClaim(name="UserName", claim="UserName")
-def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *, context: ToolContext) -> dict[str, Any]:
+async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *, context: ToolContext) -> dict[str, Any]:
     context.log.info("Calling the order API")
     context.progress(.5, "calling")
-    return context.http.route("orders.get").path_var("orderId", order_id).header("X-On-Behalf-Of", context.jwt.get_str("UserName")).send(dict[str, Any])
+    reply = context.http.route("orders.get").path_var("orderId", order_id).header("X-On-Behalf-Of", context.jwt.get_str("UserName")).send(dict[str, Any])
+    if order_id == "999999":
+        import time
+        time.sleep(60)
+    return reply
 "#).unwrap();
         // The ordinary SDK staging command builds the executable and manifest, rather than a test runtime double.
         let built = std::process::Command::new(python)
@@ -355,6 +461,11 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *,
     .unwrap();
 
     let mut profile = fixture("ServiceProfile");
+    if oci {
+        for route in profile["routes"].as_array_mut().unwrap() {
+            route["maxResponseBytes"] = json!(2_097_152);
+        }
+    }
     profile["destinations"][0]["host"] = json!("127.0.0.1");
     profile["destinations"][0]["port"] = json!(upstream_port);
     let profile_digest = put(&store, "profiles", &profile);
@@ -377,7 +488,7 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *,
             .unwrap(),
     )
     .unwrap();
-    let config: Config = serde_json::from_value(json!({
+    let mut config_value = json!({
         "hostId": "host-1",
         "listen": "127.0.0.1:0",
         "permitKeys": [{"kid": "k1", "publicKeyPath": public}],
@@ -388,10 +499,27 @@ def lookup(order_id: Annotated[str, Param(name="orderId", description="Id")], *,
         "runtimes": {"javaPath": runtime, "pythonPath": python},
         "limits": {"maxConcurrent": 4, "maxInputBytes": 65536, "maxOutputBytes": 1048576, "syncDeadlineMs": 20000, "memoryBytes": 268435456, "maxPermitWindowMs": 30000},
         "developmentLoopbackHttp": true
-    }))
-    .unwrap();
+    });
+    if oci {
+        config_value["sandbox"] = json!({"brokerImage":std::env::var("TOOLGATE_SANDBOX_BROKER_IMAGE").unwrap(),"podmanPath":"/usr/bin/podman","pythonImage":std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap(),"cgroupParent":std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT").unwrap(),"ioDevice":std::env::var("TOOLGATE_SANDBOX_IO_DEVICE").unwrap(),"ioBytesPerSecond":67108864,"scratchBytes":8388608});
+    }
+    let config: Config = serde_json::from_value(config_value).unwrap();
     let host = tool_host::server::Host::new(config).unwrap();
     let port = serve(tool_host::server::router(host.clone())).await;
+    if oci {
+        let health = format!("http://127.0.0.1:{port}/v1/health");
+        assert_eq!(
+            reqwest::get(&health).await.unwrap().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        host.qualify_execution()
+            .await
+            .expect("OCI tier must qualify before admission");
+        assert_eq!(
+            reqwest::get(&health).await.unwrap().status(),
+            StatusCode::OK
+        );
+    }
 
     let tool = &packaged["tools"][0];
     let target = json!({
@@ -498,6 +626,73 @@ async fn a_real_python_sdk_package_runs_through_admission_broker_and_control_rep
     assert_eq!(seen.upstream[0]["onBehalfOf"], "ada");
     assert_eq!(seen.reports[0]["outcome"], "COMPLETED");
     assert!(!seen.events.is_empty());
+}
+
+#[tokio::test]
+async fn an_image_bound_runtime_is_refused_by_a_native_host_before_consumption() {
+    let digest = format!("sha256:{}", "a".repeat(64));
+    let rig = rig_for_tier(false, Some(&digest), false)
+        .await
+        .expect("Python fixture required");
+    let arguments = json!({"orderId":"123456"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[0]["kind"], "REFUSED");
+    assert_eq!(lines[0]["reason"], "UNSUPPORTED_TIER");
+    let seen = rig.seen.lock().unwrap();
+    assert!(seen.consumed.is_empty());
+    assert!(seen.upstream.is_empty());
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[ignore = "requires a delegated rootless OCI service; run tools/security/sandbox.py"]
+async fn a_pinned_sdk_package_runs_in_oci_and_lease_revocation_tears_it_down() {
+    let image = std::env::var("TOOLGATE_SANDBOX_IMAGE").expect("pinned image required");
+    let digest = image.split_once('@').unwrap().1;
+    let rig = rig_for_tier(true, Some(digest), true)
+        .await
+        .expect("Python SDK required");
+    let arguments = json!({"orderId":"123456"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[0]["kind"], "ADMITTED", "{lines:?}");
+    assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
+    assert_eq!(lines[1]["result"]["structuredContent"]["orderId"], "123456");
+    assert_eq!(
+        rig.seen.lock().unwrap().reports[0]["executionTier"],
+        "OCI_SANDBOX"
+    );
+    rig.seen.lock().unwrap().lease_ms = Some(2000);
+    let arguments = json!({"orderId":"999999"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let seen = rig.seen.clone();
+    let revoke = async move {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                if seen.lock().unwrap().upstream.len() >= 2 {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("worker did not reach its broker");
+        seen.lock().unwrap().revoke = true;
+    };
+    let (lines, ()) = tokio::join!(dispatch(&rig, &jws, &arguments), revoke);
+    assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
+    assert_eq!(
+        std::fs::read_dir(rig.dir.join("work/sandbox-spool"))
+            .unwrap()
+            .count(),
+        1,
+        "the owned container must be gone before reporting lease loss"
+    );
+    assert_eq!(
+        rig.seen.lock().unwrap().reports[1]["executionTier"],
+        "OCI_SANDBOX"
+    );
 }
 
 /// ADR 031 and conformance case `mcp-core/trace-propagation`: the tool input continues the dispatch's trace with the
@@ -675,6 +870,56 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
         std::fs::read_dir(rig.dir.join("work/i")).unwrap().count(),
         0
     );
+}
+
+#[tokio::test]
+async fn revoked_authority_never_starts_a_worker_or_contacts_the_target() {
+    let rig = rig!();
+    rig.seen.lock().unwrap().revoke = true;
+    let arguments = json!({"orderId":"123456"});
+    let (jws, _) = permit(&rig, &arguments, |_| {});
+    let lines = dispatch(&rig, &jws, &arguments).await;
+    assert_eq!(lines[0]["kind"], "ADMITTED", "{lines:?}");
+    assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
+    let seen = rig.seen.lock().unwrap();
+    assert!(seen.upstream.is_empty());
+    assert_eq!(seen.reports.len(), 1);
+}
+
+#[tokio::test]
+async fn revocation_and_control_partition_stop_a_live_worker_before_its_delayed_effect() {
+    for partition in [false, true] {
+        let rig = rig!();
+        rig.seen.lock().unwrap().short_lease = true;
+        let arguments = json!({"orderId":"123456","since":7});
+        let (jws, _) = permit(&rig, &arguments, |_| {});
+        let seen = rig.seen.clone();
+        let revoke = async move {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                loop {
+                    if !seen.lock().unwrap().events.is_empty() {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("worker did not start");
+            let mut state = seen.lock().unwrap();
+            if partition {
+                state.partition = true;
+            } else {
+                state.revoke = true;
+            }
+        };
+        let (lines, ()) = tokio::join!(dispatch(&rig, &jws, &arguments), revoke);
+        assert_eq!(lines[1]["outcome"], "OUTCOME_UNKNOWN");
+        tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+        assert!(rig.seen.lock().unwrap().upstream.is_empty());
+        for sandbox in std::fs::read_dir(rig.dir.join("work/i")).unwrap() {
+            assert!(!sandbox.unwrap().path().join("post-lease-effect").exists());
+        }
+    }
 }
 
 #[tokio::test]
@@ -897,4 +1142,61 @@ async fn pull_mode_takes_calls_from_control_and_answers_through_it() {
     assert_eq!(seen.results[0]["invocationId"], id);
     assert_eq!(seen.results[0]["outcome"], "COMPLETED");
     assert_eq!(seen.reports.len(), 1);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+#[ignore = "requires a delegated rootless OCI service; run tools/security/sandbox.py"]
+async fn isolated_pool_refuses_unsupported_profiles_before_consuming_authority() {
+    let image = std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap();
+    let mut rig = rig_for_tier(true, Some(image.split_once('@').unwrap().1), true)
+        .await
+        .unwrap();
+    let store = rig.dir.join("store");
+    let original: Value = serde_json::from_slice(
+        &std::fs::read(store.join("profiles").join(format!(
+                "{}.json",
+                rig.target["serviceProfileDigest"]
+                    .as_str()
+                    .unwrap()
+                    .trim_start_matches("sha256:")
+            )))
+        .unwrap(),
+    )
+    .unwrap();
+    for mutation in [
+        "tunnel",
+        "streaming",
+        "request-limit",
+        "response-limit",
+        "duplicate-destination",
+    ] {
+        let mut profile = original.clone();
+        match mutation {
+            "tunnel" => profile["destinations"][0]["mode"] = json!("TUNNEL"),
+            "streaming" => profile["routes"][0]["streaming"] = json!("RESPONSE"),
+            "request-limit" => profile["routes"][0]["maxRequestBytes"] = json!(2_097_153),
+            "response-limit" => profile["routes"][0]["maxResponseBytes"] = json!(2_097_153),
+            "duplicate-destination" => {
+                let duplicate = profile["destinations"][0].clone();
+                profile["destinations"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(duplicate);
+            }
+            _ => unreachable!(),
+        }
+        rig.target["serviceProfileDigest"] = json!(put(&store, "profiles", &profile));
+        let arguments = json!({"orderId":"123456"});
+        let (jws, _) = permit(&rig, &arguments, |_| {});
+        let lines = dispatch(&rig, &jws, &arguments).await;
+        assert_eq!(lines[0]["kind"], "REFUSED", "{mutation}: {lines:?}");
+        assert_eq!(
+            lines[0]["reason"], "UNSUPPORTED_TIER",
+            "{mutation}: {lines:?}"
+        );
+        let seen = rig.seen.lock().unwrap();
+        assert!(seen.consumed.is_empty(), "{mutation}");
+        assert!(seen.upstream.is_empty(), "{mutation}");
+    }
 }

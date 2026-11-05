@@ -1,0 +1,46 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+name: Zero Trust coverage diagnostics
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  scorecard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Test fail-closed scorecard handling
+        run: python -m unittest discover -s tests/contracts -p test_zero_trust_scorecard.py -v
+      - name: Install pinned Rust toolchain
+        run: python tools/ci/install_rust.py
+      - name: Execute scoped evidence and publish missing coverage
+        id: scorecard
+        continue-on-error: true
+        run: python tools/security/scorecard.py --execute
+      - name: Preserve complete diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zero-trust-scorecard
+          path: build/zero-trust-scorecard/
+          if-no-files-found: error
+      - name: Require the supported observation and disclose incomplete acceptance
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, "tools/security")
+          from scorecard import verify_diagnostics
+          folder = Path("build/zero-trust-scorecard")
+          verify_diagnostics(folder)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write((folder / "scorecard.md").read_text())
+          print("::warning::Zero Trust acceptance is incomplete. This diagnostic job is not a release security gate.")
+          PY

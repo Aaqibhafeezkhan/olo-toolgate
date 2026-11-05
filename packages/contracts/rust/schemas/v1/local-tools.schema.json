@@ -39,6 +39,9 @@
         },
         "packageDigest": {
           "$ref": "identifiers.schema.json#/$defs/Sha256"
+        },
+        "businessKeyPolicy": {
+          "$ref": "tool.schema.json#/$defs/BusinessKeyPolicy"
         }
       },
       "required": [

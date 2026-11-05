@@ -289,6 +289,11 @@ export interface Dispatch {
   readonly executionContext?: ExecutionContext;
   readonly collectSpans?: boolean;
 }
+/** Supervisor-only broker-injected key. Persisted once per effect; tools cannot select its value. */
+export interface DownstreamEffectKey {
+  readonly header: string;
+  readonly value: string;
+}
 /** Reviewed effect class per tool. */
 export interface EffectApproval {
   readonly toolId: string;
@@ -297,6 +302,126 @@ export interface EffectApproval {
   readonly missingKeyPolicy: MissingKeyPolicy;
   readonly approvalId: string;
 }
+export type EffectBodyMode = "NONE" | "CANONICAL_JSON";
+export type EffectClassification = "READ" | "WRITE" | "DESTRUCTIVE" | "FINANCIAL";
+/** Authenticated explicit approval of one immutable preview and revision. No worker-provided replacement intent or validity window is accepted. */
+export interface EffectConsentApprovalRequest {
+  readonly previewDigest: string;
+  readonly expectedRevision: number;
+}
+/** Signed admission reference to exact approved consent; never substitutes for current Control authority at the effect boundary. */
+export interface EffectConsentBinding {
+  readonly consentId: string;
+  readonly previewDigest: string;
+}
+/** Control-reconstructed outbound business request. Contains resolved mapped values, never credentials. Native MCP excludes handler ID and opaque session/protocol headers; these remain bound by the execution grant. */
+export interface EffectConsentMappedRequest {
+  readonly kind: EffectConsentMappingKind;
+  readonly routeId: string;
+  readonly classification: EffectClassification;
+  readonly scheme: "https";
+  readonly host: string;
+  readonly port: number;
+  readonly method: string;
+  readonly path: string;
+  readonly query: string;
+  readonly headers: Record<string, unknown>;
+  readonly contentType: string;
+  readonly bodyMode: EffectBodyMode;
+  readonly body: unknown;
+}
+export type EffectConsentMappingKind = "MAPPED_HTTP" | "NATIVE_MCP";
+/** Immutable exact-effect preview created by Control from authenticated original arguments and pinned reviewed mappings. Its canonical digest must be explicitly approved; ordinary invocation approval is not exact consent. Validity never exceeds original operation and credential deadlines. */
+export interface EffectConsentPreview {
+  readonly consentId: string;
+  readonly tenantId: string;
+  readonly operationId: string;
+  readonly runId: string;
+  readonly toolId: string;
+  readonly action: string;
+  readonly argumentsDigest: string;
+  readonly resources: ReadonlyArray<V1.ResourceDescriptor>;
+  readonly profileDigest: string;
+  readonly notBeforeUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly slots: ReadonlyArray<EffectConsentSlot>;
+}
+/** Explicit bounded route allowance. Each distinct effect identity reserves one use atomically with its authorization; another generation of the same identity reuses that use. */
+export interface EffectConsentSlot {
+  readonly slotIndex: number;
+  readonly request: EffectConsentMappedRequest;
+  readonly permittedCount: number;
+}
+export type EffectConsentState = "PENDING" | "APPROVED" | "REVOKED";
+/** Scoped exact-effect review presentation, with a revision that changes on approval or revocation. */
+export interface EffectConsentView {
+  readonly preview: EffectConsentPreview;
+  readonly previewDigest: string;
+  readonly state: EffectConsentState;
+  readonly revision: number;
+  readonly reviewedBy?: string;
+  readonly approvedAtUnixMs?: number;
+}
+/** Issued authority and conservative monotonic send budget, measured from before the issuance request. */
+export interface EffectGrant {
+  readonly grant: SignedEffectGrant;
+  readonly validForMs: number;
+  readonly downstreamKey?: DownstreamEffectKey;
+}
+/** Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline. */
+export interface EffectGrantClaims {
+  readonly iss: string;
+  readonly aud: string;
+  readonly iat: number;
+  readonly nbf: number;
+  readonly exp: number;
+  readonly tenantId: string;
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly authorizationEpoch: number;
+  readonly effectId: string;
+  readonly generation: number;
+  readonly authNonce: string;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+  readonly httpRequestDigest: string;
+  readonly profileDigest: string;
+  readonly routeId: string;
+  readonly classification: EffectClassification;
+  readonly downstreamKey?: DownstreamEffectKey;
+}
+/** One owner may claim the SENDING transition once. */
+export interface EffectGrantDispatch {
+  readonly grant: SignedEffectGrant;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+}
+/** Only explicit true permits the single transport send. */
+export interface EffectGrantDispatchAllowed {
+  readonly authorized: boolean;
+}
+/** Request for fresh owner-bound authority. Control independently verifies the signed argument preimage and reconstructs the reviewed request. */
+export interface EffectGrantIssue {
+  readonly invocationId: string;
+  readonly fencingToken: string;
+  readonly invocationPermit: SignedInvocationPermit;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+  readonly arguments: Record<string, unknown>;
+  readonly httpRequestDigest: string;
+  readonly httpRequestManifest: V1.PreparedHttpRequestManifest;
+  readonly effectKey?: string;
+}
+/** Reviewed request blueprint. Values are constants or closed $arg JSON-pointer references; resolved argument data is never interpreted as a template. */
+export interface EffectIntentBlueprint {
+  readonly path: unknown;
+  readonly query: Record<string, unknown>;
+  readonly headers: Record<string, unknown>;
+  readonly contentType: string;
+  readonly bodyMode: EffectBodyMode;
+  readonly body: unknown;
+}
+export type EffectKey = string;
 export type EffectSafety = "READ_ONLY" | "IDEMPOTENT" | "NON_IDEMPOTENT" | "UNKNOWN";
 /** GET /api/control/v1/deployments/{bindingId}/effective. */
 export interface EffectiveDeployment {
@@ -619,6 +744,7 @@ export interface InvocationPermitClaims {
   readonly approvalIds: ReadonlyArray<string>;
   readonly deadlineUnixMs: number;
   readonly mcpVerification?: McpPermitVerification;
+  readonly effectConsent?: EffectConsentBinding;
 }
 /** Tool Host result to Control (effects/report, v2 body), keyed by invocation and fencing token. notStarted, with outcome FAILED, reports a claim the host abandoned before any sandbox started (invocation-state-v2.md T10). */
 export interface InvocationResultReport {
@@ -627,6 +753,7 @@ export interface InvocationResultReport {
   readonly outcome: InvocationOutcome;
   readonly result?: ResultFrame;
   readonly notStarted?: RefusalReason;
+  readonly executionTier: RuntimeTier;
 }
 /** v2 body of POST /access/invocations (invocation-state-v2.md T1). The Gateway generates invocationId; Control evaluates policy, reserves the business key and decides whether a task exists. */
 export interface InvocationSubmission {
@@ -767,9 +894,16 @@ export interface McpApprovedTool {
   readonly toolId: string;
   readonly upstreamName: string;
   readonly definitionDigest: string;
+  readonly effectPolicy: McpEffectPolicy;
 }
 export type McpAuthScheme = "BEARER" | "HEADER";
 export type McpCheckFailure = "PIN_MISMATCH" | "TLS_ERROR" | "UPSTREAM_UNREACHABLE" | "UPSTREAM_ERROR" | "PROTOCOL_ERROR" | "SCAN_LIMIT_EXCEEDED" | "DEADLINE_EXCEEDED" | "DEFINITION_CHANGED" | "TOOL_MISSING" | "SERVER_CHANGED";
+/** Explicit operator review for one native MCP business call. Upstream annotations do not confer effect authority. */
+export interface McpEffectPolicy {
+  readonly classification: EffectClassification;
+  readonly consentRequired: boolean;
+  readonly acknowledgedUnfencedRisk: boolean;
+}
 export type McpName = string;
 /** Freshness evidence an invocation permit carries for an MCP_PROXY tool. */
 export interface McpPermitVerification {
@@ -925,6 +1059,7 @@ export type McpTaskStatus = "working" | "input_required" | "completed" | "failed
 export interface McpToolApproval {
   readonly upstreamName: string;
   readonly name: string;
+  readonly effectPolicy: McpEffectPolicy;
 }
 /** A snapshot tool: the upstream definition and its definition digest (tool-sdk/conformance/mcp-proxy). */
 export interface McpToolDefinition {
@@ -956,6 +1091,13 @@ export interface McpVerification {
 export type McpVerificationStatus = "CURRENT" | "UNVERIFIED";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";
 export type NamespacePrefix = string;
+/** Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors. */
+export interface NativeMcpEffectReview {
+  readonly toolId: string;
+  readonly policy: McpEffectPolicy;
+  readonly reviewedBy: string;
+  readonly reviewedAtUnixMs: number;
+}
 /** Version requirements checked at enable. */
 export interface PackageCompatibility {
   readonly contractsVersion: string;
@@ -988,6 +1130,7 @@ export interface PackageDeploymentRequest {
   readonly deviceGroupIds?: ReadonlyArray<string>;
   readonly privateRanges?: ReadonlyArray<PrivateRangeApproval>;
   readonly destinationTls?: Record<string, unknown>;
+  readonly effectPolicies?: ReadonlyArray<RouteEffectPolicy>;
 }
 /** Enable exactly the reviewed digest with this binding. */
 export interface PackageEnableRequest {
@@ -1002,7 +1145,7 @@ export interface PackageLimits {
   readonly maxTools: number;
   readonly maxDescriptorBytes: number;
 }
-/** Package manifest v2. v1 manifests stay readable and are upgraded on read. */
+/** Current package manifest. Earlier formats are rejected without conversion. */
 export interface PackageManifest {
   readonly schemaVersion: 2;
   readonly kind: PackageKind;
@@ -1205,6 +1348,14 @@ export interface RecoveryEvent {
   readonly issuedAtUnixMs: number;
   readonly signature: string;
 }
+/** Bounded current-only preflight. Opaque cursors fence a changed tenant directory; observed facts never authorize a resend. */
+export interface RecoveryPreflightPage {
+  readonly items: ReadonlyArray<ToolRecoveryReadiness>;
+  readonly nextCursor?: string;
+  readonly observedAtUnixMs: number;
+  readonly buildMode: "CURRENT_ONLY";
+}
+export type RecoveryReadinessReason = "ELIGIBLE" | "DISABLED" | "MISSING_PROFILE" | "PROFILE_CHANGED" | "NO_WRITE_ROUTES" | "UNREVIEWED_ROUTE" | "MISSING_GUARANTEE" | "REVIEW_EXPIRED" | "INDEPENDENT_REVIEW_REQUIRED" | "UNSUPPORTED_CREDENTIAL" | "UNQUALIFIED_EXECUTOR";
 /** Request a reviewed recovery event. */
 export interface RecoveryRequest {
   readonly supersedes: ReadonlyArray<string>;
@@ -1277,6 +1428,34 @@ export interface RouteDeclaration {
   readonly streaming: Streaming;
   readonly timeoutMs: number;
   readonly auth?: string;
+}
+/** Tool configuration review binds the exact declaration to an immutable profile/route. Direct or self-reviewed metadata is insufficient. */
+export interface RouteDedupeConfiguration {
+  readonly profileDigest: string;
+  readonly routeId: string;
+  readonly guarantee: TargetDedupeGuarantee;
+}
+/** Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority. */
+export interface RouteEffectPolicy {
+  readonly routeId: string;
+  readonly classification: EffectClassification;
+  readonly consentRequired: boolean;
+  readonly acknowledgedUnfencedRisk: boolean;
+  readonly intent: EffectIntentBlueprint;
+  readonly targetDedupeGuarantee?: TargetDedupeGuarantee;
+}
+/** Review stamp created by Control, never accepted from package or worker input. */
+export interface RouteEffectReview {
+  readonly policy: RouteEffectPolicy;
+  readonly reviewedBy: string;
+  readonly reviewedAtUnixMs: number;
+}
+/** Current reviewed contract facts for one write route; no operation-specific retry authority. */
+export interface RouteRecoveryReadiness {
+  readonly routeId: string;
+  readonly reason: RecoveryReadinessReason;
+  readonly lookupAvailable: boolean;
+  readonly reviewExpiresAtUnixMs?: number;
 }
 /** One retained run-response event. cursor is assigned by Control and orders replay; timestamps are display data only. */
 export interface RunEvent {
@@ -1401,9 +1580,15 @@ export interface ServiceProfile {
   readonly destinations: ReadonlyArray<ServiceDestination>;
   readonly routes: ReadonlyArray<RouteDeclaration>;
   readonly privateRanges: ReadonlyArray<PrivateRangeApproval>;
+  readonly effectReviews?: ReadonlyArray<RouteEffectReview>;
+  readonly nativeMcpEffects?: ReadonlyArray<NativeMcpEffectReview>;
 }
 export type ServiceRoute = RouteDeclaration;
 export type Sha256 = string;
+/** JWS with the fixed toolgate-effect-grant-v1 type; not interchangeable with admission or service permits. */
+export interface SignedEffectGrant {
+  readonly jws: string;
+}
 /** Compact JWS over InvocationPermitClaims. */
 export interface SignedInvocationPermit {
   readonly jws: string;
@@ -1414,6 +1599,37 @@ export interface SignedTenantDiscovery {
 }
 export type Slug = string;
 export type Streaming = "NONE" | "RESPONSE" | "BIDIRECTIONAL";
+export type TargetDedupeDifferentBody = "REJECT" | "REPLAY_FIRST";
+/** Explicit operator-reviewed target contract; its presence alone never authorizes resend. */
+export interface TargetDedupeGuarantee {
+  readonly documentationUrl: string;
+  readonly retentionMs: number;
+  readonly scope: TargetDedupeScope;
+  readonly scopeBindingDigest: string;
+  readonly differentBody: TargetDedupeDifferentBody;
+  readonly reviewExpiresAtUnixMs: number;
+  readonly header: string;
+  readonly credentialVersion?: number;
+  readonly statusRouteId?: string;
+}
+export type TargetDedupeScope = "GLOBAL" | "ACCOUNT" | "API_KEY";
+/** Scoped operator result for one read-only target lookup. Effect status does not imply whole-operation completion; no target key, receipt or credential is exposed. */
+export interface TargetEffectLookupResult {
+  readonly invocationId: string;
+  readonly effectId: string;
+  readonly state: TargetEffectStatus;
+  readonly outcomeRevision: number;
+  readonly evidenceDigest?: string;
+}
+export type TargetEffectStatus = "UNKNOWN" | "PENDING" | "COMPLETED" | "FAILED";
+/** Current target lookup response. Terminal evidence must match the stored key/body and include a stable business receipt and result digest; unknown/pending never authorize execution. FAILED means a durable target witness that the effect was not applied; an ordinary failed HTTP/business response is insufficient. */
+export interface TargetEffectStatusReply {
+  readonly key: string;
+  readonly state: TargetEffectStatus;
+  readonly bodyDigest?: string;
+  readonly businessReceipt?: string;
+  readonly resultDigest?: string;
+}
 export type TargetKind = "TOOL_HOST_POOL" | "DEVICE_GROUP";
 /** Whether this request declared the MCP Tasks extension, and the owner digest a task would be bound to (invocation-state-v2.md §7). */
 export interface TaskCapability {
@@ -1593,6 +1809,16 @@ export interface ToolLimits {
 }
 export type ToolLocalName = string;
 export type ToolReconciliation = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
+/** Fresh-build preflight for tools declaring downstream idempotency. Eligibility is configured capability only; each retry independently needs qualified complete history, current policy/consent and its original window. No key, receipt or credential is exposed. */
+export interface ToolRecoveryReadiness {
+  readonly tenantId: string;
+  readonly toolId: string;
+  readonly name: string;
+  readonly automaticResendEligible: boolean;
+  readonly effectiveMethod: V1.ReconciliationMethod;
+  readonly reason: RecoveryReadinessReason;
+  readonly routes: ReadonlyArray<RouteRecoveryReadiness>;
+}
 /** Declared configuration and identity inputs. */
 export interface ToolVariables {
   readonly globals: ReadonlyArray<GlobalDeclaration>;

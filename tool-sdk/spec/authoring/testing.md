@@ -42,7 +42,7 @@ A JSON array of exchanges. Unknown fields are an error.
 | Field | Meaning |
 |---|---|
 | `request.route` | Route id; required |
-| `request.method`, `variables`, `query`, `body`, `bodyText`, `bodyBase64` | When present, the call must have exactly this value. `variables` values and `query` values are strings |
+| `request.method`, `effectKey`, `variables`, `query`, `body`, `bodyText`, `bodyBase64` | When present, the call must have exactly this value. `variables` values and `query` values are strings |
 | `request.headers` | When present, the call must send each named header with this value; other headers are not compared |
 | `response.status` | HTTP status, default 200. A non-2xx status gives `UPSTREAM_4XX` or `UPSTREAM_5XX` as on the network |
 | `response.headers` | Header name to a string or an array of strings |

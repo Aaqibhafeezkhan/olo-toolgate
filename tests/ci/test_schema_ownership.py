@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Fail closed when a V1 table is added without an explicit ownership decision."""
+"""Fail closed when a shipped table lacks an explicit ownership decision."""
 import json
 from pathlib import Path
 import re
@@ -49,17 +49,18 @@ class SchemaOwnershipTests(unittest.TestCase):
             self.assertNotIn('TOOLGATE_CONTROL_ENDPOINT_TENANT_ID', path.read_text(), str(path))
             self.assertNotIn('TOOLGATE_DEFAULT_TENANT_ID', path.read_text(), str(path))
 
-    def test_v1_tables_match_reviewed_inventory_in_both_storage_modes(self):
+    def test_shipped_tables_match_reviewed_inventory_in_both_storage_modes(self):
         manifest = json.loads((DB / 'schema-ownership.json').read_text())
         entries = manifest['tables']
         names = {entry['name'] for entry in entries}
         self.assertEqual(len(names), len(entries), 'Duplicate manifest entries')
-        postgres = (DB / 'migration/V1__initial_schema.sql').read_text()
-        self.assertEqual(names, set(re.findall(r'CREATE TABLE\s+(\w+)\s*\(', postgres)))
-        # Interpret the actual SQLite V1, so omitted NOT NULL and ownership keys
+        postgres = '\n'.join(path.read_text() for path in sorted((DB/'migration').glob('V*__*.sql'),key=lambda p:int(p.name.split('__')[0][1:])))
+        self.assertEqual(names, set(re.findall(r'CREATE TABLE\s+(?:public\.)?(\w+)\s*\(', postgres)))
+        # Interpret all shipped SQLite migrations, so omitted NOT NULL and ownership keys
         # cannot be concealed by formatting or a source-text match.
         with sqlite3.connect(':memory:') as local:
-            local.executescript((DB / 'quickstart/V1.sql').read_text())
+            for path in sorted((DB/'quickstart').glob('V*.sql'),key=lambda p:int(p.stem[1:])):
+                local.executescript(path.read_text())
             tables = {row[0] for row in local.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             self.assertEqual(names | {'sqlite_sequence'}, tables)
             for entry in entries:
@@ -74,8 +75,7 @@ class SchemaOwnershipTests(unittest.TestCase):
                         value = foreign_keys.setdefault(row[0], {'table': row[2], 'columns': [], 'referencedColumns': []})
                         value['columns'].append(row[3]); value['referencedColumns'].append(row[4])
                     self.assertCountEqual(entry['foreignKeys'], list(foreign_keys.values()))
-        policy_block = postgres.split('DO $tenant_policies$', 1)[1]
-        policies = set(re.findall(r"'(control_[a-z_]+)'", policy_block))
+        policies = set(re.findall(r'ALTER TABLE (?:ONLY )?(?:public\.)?(control_[a-z_]+) FORCE ROW LEVEL SECURITY',postgres))
         self.assertEqual({entry['name'] for entry in entries if entry['rowSecurity'] == 'forced'}, policies)
         platform = [entry for entry in entries if entry['rowSecurity'] != 'forced']
         self.assertEqual(['control_tenant_hosts','control_tenants'], [entry['name'] for entry in platform])

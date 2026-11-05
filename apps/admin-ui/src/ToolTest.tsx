@@ -5,6 +5,7 @@ import type { LocalToolInfo, ControlDevice, ControlExecutionBinding } from '@olo
 import type { RunEvent, RunEventPage } from '@olo-labs/toolgate-contracts/v2';
 import { ApiError, ControlClient } from './api';
 import { Failure } from './Failure';
+import { OperationHistory } from './OperationHistory';
 import { testDefaults } from './testDefaults';
 
 type Run = { id: string; startedAt: number; endedAt?: number; state: string; terminal: boolean; events: RunEvent[]; truncated: boolean; droppedFrames: number; expired: boolean; gaps: RunEventPage['gaps']; reconnecting: boolean };
@@ -21,7 +22,7 @@ export function responseText(event: RunEvent | undefined): string | undefined {
 }
 function describe(event: RunEvent): string {
   switch (event.kind) {
-    case 'STATE': return `Invocation ${event.state?.toLowerCase().replace(/_/g, ' ') ?? 'changed'}`;
+    case 'STATE': return `${event.state === 'SUCCEEDED' ? 'Executor reported' : 'Invocation'} ${event.state?.toLowerCase().replace(/_/g, ' ') ?? 'changed'}`;
     case 'LOG': return `${event.level ?? 'info'}: ${event.message ?? ''}`;
     case 'PROGRESS': return `Progress ${Math.round((event.fraction ?? 0) * 100)}%${event.message ? ` — ${event.message}` : ''}`;
     case 'INPUT_REQUEST': return `Input requested (${event.requestId ?? 'request'})`;
@@ -85,10 +86,15 @@ export function ToolTest({ client, deviceId: fixedDevice }: { client: ControlCli
     let argumentsValue: unknown;
     try { argumentsValue = JSON.parse(input); } catch { setError(new ApiError(400, 'INVALID_JSON')); return; }
     if (!argumentsValue || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) { setError(new ApiError(400, 'INVALID_REQUEST')); return; }
+    const keyArgument = selected.businessKeyPolicy?.argument;
+    const declaredKey = keyArgument === undefined ? undefined : (argumentsValue as Record<string, unknown>)[keyArgument];
+    if (declaredKey !== undefined && (typeof declaredKey !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(declaredKey))) {
+      setError(new ApiError(400, 'INVALID_BUSINESS_KEY')); return;
+    }
     const body = { bindingId, deviceId, request: { toolId: selected.toolId, action: selected.action, arguments: argumentsValue as Record<string, unknown> } };
     const exact = JSON.stringify(body);
     // The same request keeps its key, so a retry after an ambiguous failure or an approval is the same invocation.
-    if (retry.current?.body !== exact) retry.current = { body: exact, key: crypto.randomUUID() };
+    if (retry.current?.body !== exact) retry.current = { body: exact, key: typeof declaredKey === 'string' ? declaredKey : crypto.randomUUID() };
     setBusy(true); stream.current?.abort();
     try {
       const outcome = await client.invokeHumanTool(body, retry.current.key); const startedAt = Date.now();
@@ -124,11 +130,12 @@ export function ToolTest({ client, deviceId: fixedDevice }: { client: ControlCli
     {run && <section aria-label="Run responses">
       <h3>Run responses</h3>
       <p>Invocation <code>{run.id}</code>{run.events.find(e => e.executorId)?.executorId ? <> on <code>{run.events.find(e => e.executorId)?.executorId}</code></> : null} — {run.state.toLowerCase().replace(/_/g, ' ')}{run.endedAt ? ` after ${run.endedAt - run.startedAt} ms` : ''}</p>
-      <p role="status" aria-live="polite">{run.reconnecting ? 'Connection lost; resuming the same run from the last received event.' : run.terminal ? 'Run finished.' : run.state === 'PENDING_APPROVAL' ? 'Waiting for approval. An independent reviewer decides in Approvals; then press Test again with the same input to continue this request.' : 'Waiting for responses…'}</p>
+      <p role="status" aria-live="polite">{run.reconnecting ? 'Connection lost; resuming the same run from the last received event.' : run.terminal ? 'Executor run finished. Business completion is shown separately.' : run.state === 'PENDING_APPROVAL' ? 'Waiting for approval. An independent reviewer decides in Approvals; then press Test again with the same input to continue this request.' : 'Waiting for responses…'}</p>
       {run.expired && <p role="alert">Retention for this run has ended; its events are no longer available.</p>}
       {run.truncated && <p role="alert">Some responses exceeded the retained limits and are not shown.</p>}
       {run.droppedFrames > 0 && <p role="alert">The executor dropped {run.droppedFrames} response frame(s) before delivery.</p>}
       {run.gaps.length > 0 && <p role="alert">Missing responses: {run.gaps.map(g => g.fromSequence === g.toSequence ? `#${g.fromSequence}` : `#${g.fromSequence}–${g.toSequence}`).join(', ')}.</p>}
+      <OperationHistory key={run.id+':'+run.terminal} client={client} id={run.id}/>
       <label><input type="checkbox" checked={follow} onChange={e => setFollow(e.target.checked)} /> Follow new responses</label>
       <ol ref={timeline} className="run-timeline" aria-label="Run timeline">{run.events.map(e => <li key={e.cursor}><time>{time(e.recordedAtUnixMs)}</time> <strong>{label(e)}</strong> {describe(e)}</li>)}</ol>
       {final && <section aria-label="Response"><h3>Response</h3><p>{response}</p>

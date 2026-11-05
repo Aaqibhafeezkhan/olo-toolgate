@@ -41,7 +41,7 @@ class RecordedExchanges:
             request, response = exchange["request"], exchange["response"]
             if not isinstance(request, dict) or not isinstance(response, dict) or not request.get("route"):
                 raise ValueError("Invalid recorded exchange")
-            if set(request) - {"route", "method", "variables", "query", "headers", "body", "bodyText", "bodyBase64"} \
+            if set(request) - {"route", "effectKey", "method", "variables", "query", "headers", "body", "bodyText", "bodyBase64"} \
                     or set(response) - {"status", "headers", "body", "bodyText", "bodyBase64", "failure"}:
                 raise ValueError("Unknown recorded-exchange field")
             if len(set(response) & {"body", "bodyText", "bodyBase64"}) > 1:

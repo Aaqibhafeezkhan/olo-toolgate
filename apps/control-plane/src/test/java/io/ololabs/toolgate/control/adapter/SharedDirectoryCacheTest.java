@@ -24,7 +24,7 @@ class SharedDirectoryCacheTest {
     private static final ContractCodec CODEC = new ContractCodec();
 
     private static Directory directory(String name) {
-        var entry = CODEC.entry(Ids.Kind.USER, CODEC.json(new ControlUser("user", name, true, 1L)));
+        var entry = CODEC.entry(Ids.Kind.USER, CODEC.json(new ControlUser("user", name, true, 1L, null, null, null)));
         return new Directory(1, Map.of(entry.id(), entry));
     }
     private static SharedDirectoryCache shared(Endpoint endpoint) {
@@ -78,7 +78,7 @@ class SharedDirectoryCacheTest {
             assertEquals(after, third.transaction(TENANT, false, tx -> tx.load()));
             // Identity observations can alter records without advancing configuration revision.
             try (var c = pool.getConnection(); var s = c.prepareStatement("UPDATE control_records SET revision=3,document=? WHERE tenant_id=?")) {
-                s.setString(1, CODEC.json(new ControlUser("user", "Observed", false, 3L))); s.setString(2, TENANT.value()); s.executeUpdate();
+                s.setString(1, CODEC.json(new ControlUser("user", "Observed", false, 3L, null, null, null))); s.setString(2, TENANT.value()); s.executeUpdate();
             }
             var observed = second.transaction(TENANT, false, tx -> tx.load());
             assertEquals(after.revision(), observed.revision());

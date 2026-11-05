@@ -71,9 +71,11 @@ public class ContractCodec implements Codec {
     /** v2 schema files Control already serves, validated by their v2 binding names. v1 definitions that reference v2
      *  (`../v2/...`, such as the request context) pull in those definitions too. Every adopted name must be new or
      *  identical to its v1 definition apart from descriptions, since both share one flat namespace. */
-    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json");
+    static final java.util.List<String> V2_FILES = java.util.List.of("settings.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json", "effect-authorization.schema.json");
     /** Single v2 definitions Control serves from files whose other names collide with v1 (package, protocol). */
     static final java.util.List<java.util.Map.Entry<String, String>> V2_NAMES = java.util.List.of(
+        java.util.Map.entry("service-profile.schema.json", "ServiceProfile"),
+        java.util.Map.entry("permit.schema.json", "LeaseHeartbeat"), java.util.Map.entry("permit.schema.json", "LeaseRenewal"),
         java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
         java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"), java.util.Map.entry("protocol.schema.json", "RunEventBatch"),
         java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"), java.util.Map.entry("package.schema.json", "ClientReleaseRequest"), java.util.Map.entry("package.schema.json", "ClientRelease"),
@@ -81,7 +83,7 @@ public class ContractCodec implements Codec {
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
-                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json")) {
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json", "effect-authorization.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));
@@ -90,8 +92,12 @@ public class ContractCodec implements Codec {
         var pending = new java.util.ArrayDeque<java.util.Map.Entry<String, String>>();
         for (var file : V2_FILES) v2.get(file).fieldNames().forEachRemaining(name -> pending.add(java.util.Map.entry(file, name)));
         pending.addAll(V2_NAMES);
+        // Package admission validates the complete current v2 manifest graph in its
+        // own namespace, rather than accidentally selecting its v1 namesake.
+        pending.add(java.util.Map.entry("package.schema.json","PackageManifest"));
         for (var ref : crossVersion) { int split = ref.indexOf("#/$defs/"); pending.add(java.util.Map.entry(ref.substring("../v2/".length(), split), ref.substring(split + 8))); }
         var requested = new java.util.HashSet<String>(); pending.forEach(entry -> requested.add(entry.getValue()));
+        requested.remove("PackageManifest");
         var adopted = new java.util.HashSet<String>(); var added = new java.util.ArrayList<String>(); var renamed = new java.util.HashSet<String>();
         while (!pending.isEmpty()) {
             var next = pending.poll(); var name = next.getValue();
@@ -160,7 +166,8 @@ public class ContractCodec implements Codec {
         return node;
     }
     private void validate(String model, JsonNode node) {
-        if (!validators.get(model).validate(node).isEmpty()) throw Failure.validation();
+        var validator=validators.get(model);
+        if (validator==null||!validator.validate(node).isEmpty()) throw Failure.validation();
     }
     public Directory.Entry entry(Kind kind, String document) {
         var node = parse(document, false); validate(kind.model(), node);
@@ -269,7 +276,10 @@ public class ContractCodec implements Codec {
     }
     public Object value(String document) { return parse(document, false); }
     public <T> T model(String document, Class<T> type) {
-        var node = parse(document, false); validate(type.getSimpleName(), node);
+        var node = parse(document, false);
+        String name=type.getSimpleName();
+        if(type.getPackageName().equals("io.ololabs.toolgate.contracts.v2")&&validators.containsKey("V2"+name))name="V2"+name;
+        validate(name, node);
         try { return mapper.treeToValue(node, type); }
         catch (java.io.IOException | IllegalArgumentException e) { throw Failure.validation(); }
     }

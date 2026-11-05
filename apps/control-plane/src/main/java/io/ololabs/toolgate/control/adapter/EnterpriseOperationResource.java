@@ -19,7 +19,7 @@ public class EnterpriseOperationResource {
     @Inject EnterpriseOperations operations;@Inject VerifiedActors actors;@Inject ContractCodec codec;
     @Inject EndpointService endpoints;@Inject PostgresStore store;@Inject RoutingContext routing;
     @Inject io.quarkus.security.identity.SecurityIdentity security;
-    @Inject VaultResource vault;
+    @Inject VaultResource vault;@Inject TargetStatusClient targetStatus;
     @Inject DirectoryService directory;
     @Inject ServerPackages packages;@Inject Correlation correlation;@Inject InsightsService insights;
     /** v2 bodies extend these endpoints for Tool Hosts; a v2 body is recognised by a field only it has. */
@@ -68,17 +68,51 @@ public class EnterpriseOperationResource {
     public Response invocations(@QueryParam("after")String after,@QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.page(actors.human(),after,limit));}
     @POST @Path("invocations/{id}/reconciliation") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response propose(@PathParam("id")String id,@HeaderParam("Idempotency-Key")String key,String document){return reply(operations.proposeReconciliation(actors.human(),id,body(document),key));}
+    @POST @Path("invocations/{id}/effects/{effect}/lookup") @io.quarkus.security.Authenticated
+    public Response lookupEffect(@PathParam("id")String id,@PathParam("effect")String effect){
+        return reply(new TargetLookups(store,codec,operations,vault::service,targetStatus).lookup(actors.human(),id,effect));
+    }
     @GET @Path("reconciliations/{id}") @io.quarkus.security.Authenticated
     public Response reconciliation(@PathParam("id")String id){return reply(operations.reconciliation(actors.human(),id));}
     @POST @Path("reconciliations/{id}/decision") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response reconcile(@PathParam("id")String id,String document){return reply(operations.reconcile(actors.human(),id,body(document)));}
+    @POST @Path("invocations/{id}/status") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response callerStatus(@PathParam("id")String id,String document){return reply(operations.readFromGateway(gateway(),id,body(document)));}
+    @POST @Path("invocations/{id}/history") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
+    public Response callerHistory(@PathParam("id")String id,@QueryParam("cursor")String cursor,
+            @QueryParam("limit")@DefaultValue("50")int limit,String document){
+        return reply(operations.historyFromGateway(gateway(),id,body(document),cursor,limit));
+    }
+    @GET @Path("invocations/{id}/history") @io.quarkus.security.Authenticated
+    public Response history(@PathParam("id")String id,@QueryParam("cursor")String cursor,
+            @QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.history(reader(),id,cursor,limit));}
     @GET @Path("invocations/{id}") @io.quarkus.security.Authenticated
     public Response invocation(@PathParam("id")String id){return reply(operations.get(reader(),id));}
+    @GET @Path("invocations/{id}/effect-consent") @io.quarkus.security.Authenticated
+    public Response effectConsent(@PathParam("id")String id){return reply(operations.effectConsent(actors.human(),id));}
+    @POST @Path("invocations/{id}/effect-consent/approve") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response approveEffectConsent(@PathParam("id")String id,String document){return reply(operations.decideEffectConsent(actors.human(),id,body(document),false));}
+    @POST @Path("invocations/{id}/effect-consent/revoke") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response revokeEffectConsent(@PathParam("id")String id,String document){return reply(operations.decideEffectConsent(actors.human(),id,body(document),true));}
     @POST @Path("invocations/{id}/cancel") @io.quarkus.security.Authenticated
     public Response cancel(@PathParam("id")String id,@HeaderParam("If-Match")String etag){if(etag==null||!etag.matches("\"[1-9][0-9]{0,15}\""))throw Failure.validation();long revision=Long.parseLong(etag.substring(1,etag.length()-1));if(revision>9007199254740991L)throw Failure.validation();return reply(operations.cancel(actors.human(),id,revision));}
     @POST @Path("permits/consume") @Consumes("application/json") @PermitAll
     public Response consume(String document){var certificate=peer();java.util.function.Function<Store.Session,String> device=tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
         return reply(v2(document,"toolDescriptorDigest")?operations.consumeInvocation(tenant(),device,document):operations.consume(tenant(),device,body(document)));}
+    @POST @Path("invocations/{id}/heartbeat") @Consumes("application/json") @PermitAll
+    public Response heartbeat(@PathParam("id")String id,String document){var certificate=peer();return reply(operations.heartbeat(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id,body(document)));}
+    @POST @Path("effects/authorize") @Consumes("application/json") @PermitAll
+    public Response authorizeEffect(String document){
+        var certificate=peer();
+        if(document==null||document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>2*1024*1024)throw Failure.validation();
+        return reply(new EffectGrants(store,codec,operations).issue(tenant(),
+            tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),document));
+    }
+    @POST @Path("effects/sending") @Consumes("application/json") @PermitAll
+    public Response sendingEffect(String document){
+        var certificate=peer();return reply(new EffectGrants(store,codec,operations).sending(tenant(),
+            tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document)));
+    }
     @POST @Path("effects/report") @Consumes("application/json") @PermitAll
     public Response report(@HeaderParam("Toolgate-Fencing-Token")String fencingToken,String document){var certificate=peer();java.util.function.Function<Store.Session,String> device=tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
         return reply(v2(document,"fencingToken")?operations.reportInvocation(tenant(),device,document,fencingToken==null?"":fencingToken):operations.report(tenant(),device,body(document)));}

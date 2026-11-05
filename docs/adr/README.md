@@ -21,6 +21,9 @@ Create an ADR when changing:
 
 Use `000-template.md`.
 
+- [032: Renewable execution authority and durable evidence](032-renewable-execution-authority.md)
+- [033: Rootless OCI Tool Host containment](033-rootless-tool-host-containment.md)
+
 - [001: Shared contracts and foundation](001-foundation-contract-generation.md)
 - [002: Gateway static foundation](002-gateway-static-foundation.md)
 - [003: Control Plane transactions and identity](003-control-plane-transactions.md)
@@ -55,3 +58,47 @@ Use `000-template.md`.
 - [029: UUID tenant ownership with shared management and isolated execution](029-tenant-ownership-and-trust-boundaries.md)
 - [030: Existing MCP servers become tenant-owned MCP_PROXY packages](030-mcp-proxy-packages.md)
 - [031: Execution correlation and operator Insights](031-execution-correlation-operator-insights.md) (proposed)
+
+- [032: Renewable execution authority](032-renewable-execution-authority.md)
+- [033: Rootless Tool Host containment](033-rootless-tool-host-containment.md)
+- [034: Durable business-operation binding](034-durable-business-operation-binding.md)
+- [035: Independent operation and attempt journal](035-operation-attempt-journal.md)
+- [036: Durable effect authorization generations](036-effect-authorization-generations.md)
+- [037: Prepare one immutable broker HTTP request](037-prepared-http-request-binding.md)
+
+- [038: OLO prepared HTTP request grants](038-olo-http-request-grants.md)
+
+- [039: Independent Control HTTP manifest validation](039-control-http-manifest-validation.md)
+
+- [040: Knowledge target HTTP bindings](040-knowledge-target-http-bindings.md)
+
+- [041: Owner-bound OLO dispatch](041-owned-olo-dispatch.md)
+
+- [042: Shared target SQL claims](042-shared-target-claims.md)
+
+- [043: OLO claim consumption and target outcomes](043-olo-claim-consumption-outcomes.md)
+
+- [044: Verified target claim orchestration](044-target-claim-orchestration.md)
+
+- [045: Source-bound actual Control/knowledge qualification](045-knowledge-stack-qualification.md)
+
+- [046: Control-owned business-key policy and retention](046-business-key-policy-retention.md)
+
+- [047: Positive-proof operation rebinding](047-proof-bound-operation-rebinding.md)
+
+- [048 — Derived operation finalization and caller history](048-derived-operation-finalization.md)
+
+- [049: Isolated per-invocation brokers](049-isolated-invocation-brokers.md)
+- [050 — Strict qualified-worker protocol boundary](050-qualified-worker-protocol-boundary.md)
+
+- [051 — Verified leaf SPKI pins](051-verified-leaf-spki-pins.md)
+
+- [052 — Managed containment crash qualification](052-managed-containment-crash-qualification.md)
+
+- [053 — General effect intents and send grants](053-general-effect-intents-and-send-grants.md)
+
+- [054 — Native MCP effect authority](054-native-mcp-effect-authority.md)
+
+- [055 — Exact effect consent and atomic slots](055-exact-effect-consent-slots.md)
+
+- [ADR 056: Per-effect keys and qualified resend](056-per-effect-keys-and-qualified-resend.md)

@@ -4,6 +4,10 @@ package io.ololabs.toolgate.control.application;
 import io.ololabs.toolgate.contracts.*;
 /** Dedicated effect-capability key boundary, independent from policy and identity signing keys. */
 public interface EffectSigner {
+    /** Domain-separated supervisor key; persist the first result so signer rotation never changes an effect's target key. */
+    default String downstreamKey(String tenant,String effectId){throw Failure.unavailable();}
+    default io.ololabs.toolgate.contracts.v2.SignedEffectGrant signEffect(io.ololabs.toolgate.contracts.v2.EffectGrantClaims claims){throw Failure.unavailable();}
+    default io.ololabs.toolgate.contracts.v2.EffectGrantClaims verifyEffect(io.ololabs.toolgate.contracts.v2.SignedEffectGrant grant){throw Failure.unavailable();}
     default ServicePermit signService(ServicePermitClaims claims){throw Failure.unavailable();}
     default ServicePermitClaims verifyService(ServicePermit permit){throw Failure.unavailable();}
     default java.util.Map<String,Object> servicePublicKey(){throw Failure.unavailable();}

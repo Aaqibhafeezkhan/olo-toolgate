@@ -196,22 +196,53 @@ impl Session {
     /// Sends one JSON-RPC request and returns its `result`. Notifications the upstream sends first are read and
     /// noted; the reply stream is closed as soon as the response arrived.
     async fn request(&mut self, method: &str, params: Value) -> Result<Value, Failure> {
-        let id = self.next_id;
+        self.request_inner(method, params, None).await
+    }
+    async fn request_inner(
+        &mut self,
+        method: &str,
+        params: Value,
+        authority: Option<(&crate::mcp_effect::Authority<'_>, &str)>,
+    ) -> Result<Value, Failure> {
+        let handler = crate::random_hex(16);
+        let id = if authority.is_some() {
+            json!(handler)
+        } else {
+            json!(self.next_id)
+        };
         self.next_id += 1;
-        let body =
-            serde_json::to_vec(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
-                .map_err(|e| protocol(e.to_string()))?;
-        let reply = self
-            .upstream
-            .post(
-                self.headers(),
-                Some(self.credential.clone()),
-                body,
-                &self.limits,
-                self.deadline,
-            )
-            .await
-            .map_err(failure)?;
+        let rpc = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+        let body = if authority.is_some() {
+            crate::digest::jcs_bytes(&rpc).map_err(protocol)?
+        } else {
+            serde_json::to_vec(&rpc).map_err(|e| protocol(e.to_string()))?
+        };
+        let reply = if let Some((authority, slug)) = authority {
+            if method != "tools/call" {
+                return Err(protocol("only tools/call may request effect authority"));
+            }
+            self.upstream
+                .post_authorized(
+                    self.headers(),
+                    Some(self.credential.clone()),
+                    body,
+                    &self.limits,
+                    self.deadline,
+                    (authority, &handler, slug),
+                )
+                .await
+        } else {
+            self.upstream
+                .post(
+                    self.headers(),
+                    Some(self.credential.clone()),
+                    body,
+                    &self.limits,
+                    self.deadline,
+                )
+                .await
+        }
+        .map_err(failure)?;
         if self.observed_pin.is_none() {
             self.observed_pin = reply.observed_pin.clone();
         }
@@ -339,6 +370,20 @@ impl Session {
         Err(limit("tools/list has more than 16 pages"))
     }
 
+    pub(crate) async fn call_authorized(
+        &mut self,
+        name: &str,
+        arguments: Value,
+        authority: &crate::mcp_effect::Authority<'_>,
+        slug: &str,
+    ) -> Result<Value, Failure> {
+        self.request_inner(
+            "tools/call",
+            json!({"name":name,"arguments":arguments}),
+            Some((authority, slug)),
+        )
+        .await
+    }
     /// `tools/call`, returning the CallToolResult.
     pub async fn call(&mut self, name: &str, arguments: Value) -> Result<Value, Failure> {
         self.request(

@@ -136,6 +136,7 @@ final class RouteClient implements HttpClient {
         private final Map<String, String> patterns = new LinkedHashMap<>();
         private final Map<String, List<String>> query = new LinkedHashMap<>();
         private final Map<String, String> headers = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        private String effectKey;
         private byte[] body;
         private String contentType;
         private long timeoutMs;
@@ -146,6 +147,13 @@ final class RouteClient implements HttpClient {
             this.timeoutMs = route.path("timeoutMs").asLong(10_000);
             Matcher m = VARIABLE.matcher(route.path("path").asText());
             while (m.find()) patterns.put(m.group(1), m.group(2));
+        }
+
+        @Override
+        public RouteCall effectKey(String key) {
+            if (key == null || !key.matches("[A-Za-z0-9._:-]{1,128}")) throw refused("Invalid logical effect key");
+            this.effectKey = key;
+            return this;
         }
 
         @Override
@@ -266,6 +274,7 @@ final class RouteClient implements HttpClient {
             if (left <= 0) throw new PlatformError(PlatformError.Code.DEADLINE_EXCEEDED, "The invocation deadline has passed");
             String method = route.path("method").asText();
             if (egress.exchanges != null) return recorded(method);
+            if (effectKey != null) throw refused("Effect keys require the governed broker");
             String destinationId = route.path("destination").asText();
             Egress.Target target = egress.target(destinationId);
             if (target == null || target.problem != null) {
@@ -334,6 +343,7 @@ final class RouteClient implements HttpClient {
         private Response recorded(String method) {
             ObjectNode request = JSON.createObjectNode();
             request.put("route", routeId).put("method", method).put("destination", route.path("destination").asText());
+            if (effectKey != null) request.put("effectKey", effectKey);
             ObjectNode vars = request.putObject("variables");
             variables.forEach(vars::put);
             ObjectNode q = request.putObject("query");

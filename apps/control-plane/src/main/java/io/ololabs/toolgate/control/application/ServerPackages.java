@@ -31,7 +31,14 @@ public final class ServerPackages {
     public static final String ACTION = "invoke";
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private final Store store; private final Codec codec; private final EnterpriseOperations operations; private final Clock clock;
-    public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock) { this.store = store; this.codec = codec; this.operations = operations; this.clock = clock; }
+    private final Set<String> qualifiedRecoveryExecutors;
+    public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock) {
+        this(store,codec,operations,clock,Set.of());
+    }
+    public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock,Set<String> qualifiedRecoveryExecutors) {
+        this.store=store;this.codec=codec;this.operations=operations;this.clock=clock;
+        this.qualifiedRecoveryExecutors=RecoveryAdmissionPolicy.parseQualifiedExecutors(String.join(",",qualifiedRecoveryExecutors));
+    }
 
     private static void validateDestinationTls(String id,JsonNode tls) {
         // Platform mTLS must retain normal CA/hostname validation; SPKI-only validation is insufficient.
@@ -66,6 +73,7 @@ public final class ServerPackages {
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
         var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
         PackageCompatibility.require(PackageCompatibility.problems(manifest));
+        codec.model(codec.json(manifest),io.ololabs.toolgate.contracts.v2.PackageManifest.class);
         // Only Control generates MCP_PROXY packages, from an approved MCP server snapshot.
         if (PackageCompatibility.proxy(manifest)) throw PackageCompatibility.incompatible();
         return store.transaction(actor.tenant(), true, tx -> {
@@ -115,7 +123,7 @@ public final class ServerPackages {
             var stored = tx.packages().version(request.packageDigest());
             // A generated MCP_PROXY package is deployed by its approval only, onto its registration's pool.
             if (stored != null && PackageCompatibility.proxy(node(stored.document()).get("manifest"))) throw Failure.conflict();
-            return reply(200, deployIn(tx, actor.id(), request, requestId));
+            return reply(200, deployIn(tx, actor.id(), actor.userId(), request, requestId));
         });
     }
 
@@ -123,6 +131,9 @@ public final class ServerPackages {
      *  manifest omits are retired in the same directory change: disabled with their extractors, so catalogs stop listing
      *  them and permits for them are refused. */
     ObjectNode deployIn(Store.Session tx, String actor, PackageDeploymentRequest request, String requestId) {
+        return deployIn(tx,actor,null,request,requestId);
+    }
+    private ObjectNode deployIn(Store.Session tx,String actor,String reviewerUser,PackageDeploymentRequest request,String requestId){
         {
             var version = tx.packages().version(request.packageDigest());
             if (version == null) throw notFound();
@@ -136,6 +147,10 @@ public final class ServerPackages {
                 for (var global : descriptor.path("variables").path("globals")) same(declared, global.get("name").asText(), global);
                 var names = new TreeSet<String>();
                 for (var secret : descriptor.path("variables").path("secrets")) names.add(secret.get("name").asText());
+                var usedAuths=new HashSet<String>();
+                for(var route:descriptor.path("routes"))if(route.path("auth").isTextual())usedAuths.add(route.path("auth").asText());
+                for(var auth:descriptor.path("httpAuth"))if(usedAuths.contains(auth.path("id").asText())&&auth.path("secret").isTextual())
+                    names.add(auth.path("secret").asText());
                 secrets.put(toolId, names);
                 for (var destination : descriptor.path("destinations")) { same(destinations, destination.get("id").asText(), destination); hosts.add(destination.get("hostSetting").asText()); }
                 for (var route : descriptor.path("routes")) same(routes, route.get("id").asText(), route);
@@ -191,6 +206,26 @@ public final class ServerPackages {
             var profile = JSON.objectNode().put("profileId", "sp-" + packageId).put("revision", revision).put("packageId", packageId);
             profile.set("destinations", profileDestinations);
             var profileRoutes = profile.putArray("routes"); routes.values().forEach(profileRoutes::add);
+            if(request.effectPolicies()!=null){
+                var reviews=profile.putArray("effectReviews");var reviewedRoutes=new HashSet<String>();
+                for(var policy:request.effectPolicies()){
+                    var declaredRoute=routes.get(policy.routeId());
+                    if(declaredRoute==null||!reviewedRoutes.add(policy.routeId()))throw Failure.validation();
+                    var route=codec.model(codec.json(declaredRoute),io.ololabs.toolgate.contracts.v2.RouteDeclaration.class);
+                    EffectIntentValidation.review(policy,route);
+                    if(policy.targetDedupeGuarantee()!=null&&(reviewerUser==null||!tx.load().entries().containsKey(Ids.Kind.USER.id(reviewerUser))))throw Failure.validation();
+                    reviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.RouteEffectReview(policy,reviewerUser==null?actor:reviewerUser,clock.millis()))));
+                }
+            }
+            if(PackageCompatibility.proxy(manifest)){
+                var nativeReviews=profile.putArray("nativeMcpEffects");
+                for(var tool:proxyDocument(tx,version).path("tools"))if(tool.hasNonNull("effectPolicy")){
+                    var policy=codec.model(codec.json(tool.get("effectPolicy")),io.ololabs.toolgate.contracts.v2.McpEffectPolicy.class);
+                    McpEffectValidation.review(policy);
+                    nativeReviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.NativeMcpEffectReview(
+                        tool.path("toolId").asText(),policy,actor,clock.millis()))));
+                }
+            }
             var ranges = profile.putArray("privateRanges");
             for (var range : request.privateRanges() == null ? List.<io.ololabs.toolgate.contracts.v2.PrivateRangeApproval>of() : request.privateRanges()) {
                 var ports = java.util.stream.StreamSupport.stream(profileDestinations.spliterator(),false)
@@ -205,6 +240,7 @@ public final class ServerPackages {
                 } catch (IllegalArgumentException | java.net.UnknownHostException invalid) { throw Failure.validation(); }
                 ranges.add(node(codec.json(range)));
             }
+            TargetLookupRoutes.validate(codec.model(codec.json(profile),io.ololabs.toolgate.contracts.v2.ServiceProfile.class));
             String profileDigest = Canonical.digest(profile), globalsDigest = Canonical.digest(globals);
             tx.packages().saveDocument(profileDigest, codec.json(profile));
             tx.packages().saveDocument(globalsDigest, codec.json(globals));
@@ -226,6 +262,8 @@ public final class ServerPackages {
                 definition.putArray("actions").addObject().put("name", authorization.action()).putArray("resourceKinds").add("CUSTOM");
                 String reconciliation = PackageReconciliation.of(descriptor);
                 if (reconciliation != null) definition.put("reconciliation", reconciliation);
+                var businessKeyPolicy=BusinessKeyPolicies.packaged(descriptor);
+                if(businessKeyPolicy!=null)definition.set("businessKeyPolicy",node(codec.json(businessKeyPolicy)));
                 definition.set("inputSchema", descriptor.get("inputSchema"));
                 definition.set("outputSchema", descriptor.path("outputSchema").isObject() ? descriptor.get("outputSchema") : JSON.objectNode().put("type", "object"));
                 var controlTool = JSON.objectNode().put("id", toolId).put("name", toolId).put("enabled", false).put("revision", 1);
@@ -281,15 +319,22 @@ public final class ServerPackages {
     public static final String MCP_PROXY_MEDIA_TYPE = "application/vnd.ololabs.toolgate.mcp-proxy+json";
     /** The mcp-proxy.json of a stored MCP_PROXY package. */
     JsonNode proxyDocument(Store.Session tx, PackageStore.Version version) {
-        var manifest = node(version.document()).get("manifest"); String path = null;
-        for (var artifact : manifest.path("artifacts")) if (MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())) path = artifact.get("path").asText();
-        var bytes = tx.packages().content(version.digest());
-        if (path == null || bytes == null) throw Failure.conflict();
-        var file = PackageArchive.validate(bytes, this::node).files().get(path);
-        if (file == null) throw Failure.conflict();
-        String json = new String(file, java.nio.charset.StandardCharsets.UTF_8);
-        codec.model(json, io.ololabs.toolgate.contracts.v2.McpProxyDocument.class);
-        return node(json);
+        return proxyDocument(tx,version,codec);
+    }
+    /** The exact verified generated artifact, independent of caller-selected HTTP facts. */
+    static JsonNode proxyDocument(Store.Session tx,PackageStore.Version version,Codec codec){
+        java.util.function.Function<String,JsonNode> parse=text->(JsonNode)codec.value(text);
+        var manifest=parse.apply(version.document()).get("manifest");String path=null;int count=0;
+        for(var artifact:manifest.path("artifacts"))if(MCP_PROXY_MEDIA_TYPE.equals(artifact.path("mediaType").asText())){
+            path=artifact.path("path").asText();count++;
+        }
+        var bytes=tx.packages().content(version.digest());
+        if(count!=1||path==null||bytes==null)throw Failure.conflict();
+        var verified=PackageArchive.validate(bytes,parse);
+        if(!verified.packageDigest().equals(version.digest()))throw Failure.conflict();
+        var file=verified.files().get(path);if(file==null)throw Failure.conflict();
+        String json=new String(file,java.nio.charset.StandardCharsets.UTF_8);
+        codec.model(json,io.ololabs.toolgate.contracts.v2.McpProxyDocument.class);return parse.apply(json);
     }
 
     /** A deployment runs on the Tool Hosts it names, on the current members of the Device Groups (pools) it names, or on
@@ -424,6 +469,18 @@ public final class ServerPackages {
 
     /** The permit for one attempt on the Tool Host the invocation was placed on. Only a declaration whose execution
      *  location allows SERVER can be permitted here, whatever the directory, placement or a forged request says. */
+    boolean qualifiedForRecovery(Store.Session tx,JsonNode deployment,JsonNode descriptor,JsonNode runtime,JsonNode profile){
+        var seen=new HashSet<String>();
+        for(String pin:qualifiedRecoveryExecutors){
+            String device=pin.substring(0,pin.indexOf('@'));if(!seen.add(device))continue;
+            var entry=tx.load().entries().get(Ids.Kind.DEVICE.id(device));
+            if(entry==null||!entry.enabled()||!targets(tx.load(),codec,deployment,device))continue;
+            String registration=tx.packages().toolHost(device);
+            if(registration!=null&&RecoveryAdmissionPolicy.qualify(runtime,descriptor,profile,node(registration),qualifiedRecoveryExecutors)!=null)
+                return true;
+        }
+        return false;
+    }
     private io.ololabs.toolgate.contracts.v2.SignedInvocationPermit permitIn(Store.Session tx, DirectoryService.Actor actor, PermitReservationRequest request) {
         {
             var i = operations.invocationIn(tx, request.invocationId()); var e = i.evaluation(); String device = e.context().deviceId();
@@ -435,6 +492,7 @@ public final class ServerPackages {
             var deployment = node(raw);
             if (!deployment.get("packageDigest").asText().equals("sha256:" + e.packageDigest()) || !targets(tx.load(), codec, deployment, device)) throw Failure.conflict();
             var version = tx.packages().version(deployment.get("packageDigest").asText()); var manifest = node(version.document()).get("manifest");
+            PackageCompatibility.require(PackageCompatibility.hostProblems(manifest,device,node(tx.packages().toolHost(device))));
             JsonNode tool = null;
             for (var t : manifest.path("tools")) if (t.path("descriptor").path("toolId").asText().equals(e.toolId())) tool = t;
             if (tool == null) throw Failure.conflict();
@@ -461,16 +519,33 @@ public final class ServerPackages {
                 .put("deploymentBindingDigest", Canonical.digest(deployment)).put("deploymentBindingRevision", deployment.get("revision").asLong()).put("configRevision", deployment.get("revision").asLong());
             var targetRoutes = target.putArray("routes"); for (var route : descriptor.path("routes")) targetRoutes.add(route.get("id").asText());
             var claims = JSON.objectNode().put("jti", UUID.randomUUID().toString()).put("iss", operations.issuer()).put("aud", device)
-                .put("iat", lease.issuedAt()).put("nbf", lease.issuedAt()).put("exp", lease.expiresAt()).put("nonce", lease.nonce()).put("invocationId", i.id()).put("attempt", request.attempt());
+                .put("iat", lease.issuedAt()).put("nbf", lease.issuedAt()).put("exp", lease.expiresAt()).put("nonce", lease.nonce()).put("invocationId", i.id()).put("attempt",tx.enterprise().attempts(i.id(),lease.issuedAt()).size());
             claims.set("identity", identity); claims.set("target", target);
             claims.put("catalogRevision", Canonical.sha256(Long.toString(tx.load().revision()).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .put("argumentsDigest", Canonical.arguments(arguments)).put("action", e.action());
+            var exactConsent=EffectConsents.require(tx,codec,i,lease.issuedAt());
+            if(exactConsent!=null)claims.set("effectConsent",node(codec.json(exactConsent)));
             claims.set("resources", node(codec.json(e.resources())));
             claims.put("effectSafety", safety).put("requiresExecutionLedger", !safety.equals("READ_ONLY") && !safety.equals("IDEMPOTENT"));
             var approvals = claims.putArray("approvalIds"); lease.approvalIds().forEach(approvals::add);
             claims.put("deadlineUnixMs", i.expiresAtUnixMs());
             if (PackageCompatibility.proxy(manifest)) claims.set("mcpVerification", mcpVerification(tx, version, clock.millis()));
-            return operations.signer().signInvocation(codec.model(codec.json(claims), io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class));
+            var signedClaims=codec.model(codec.json(claims),io.ololabs.toolgate.contracts.v2.InvocationPermitClaims.class);
+            if(!qualifiedRecoveryExecutors.isEmpty()){
+                String profile=tx.packages().document(target.path("serviceProfileDigest").asText());
+                if(profile!=null){
+                    var scope=RecoveryAdmissionPolicy.qualify(runtime,descriptor,node(profile),
+                            node(tx.packages().toolHost(device)),qualifiedRecoveryExecutors);
+                    if(scope!=null){
+                        if(!scope.runtimeDigest().equals(signedClaims.target().runtimeDigest())
+                                ||!scope.descriptorDigest().equals(signedClaims.target().toolDescriptorDigest())
+                                ||!scope.profileDigest().equals(signedClaims.target().serviceProfileDigest())
+                                ||scope.profileRevision()!=signedClaims.target().serviceProfileRevision())throw Failure.conflict();
+                        tx.enterprise().saveRecoveryScope(lease.nonce(),scope);
+                    }
+                }
+            }
+            return operations.signer().signInvocation(signedClaims);
         }
     }
 
@@ -518,6 +593,11 @@ public final class ServerPackages {
         try { return node(new String(Base64.getUrlDecoder().decode(parts[1]), java.nio.charset.StandardCharsets.UTF_8)); }
         catch (IllegalArgumentException invalid) { throw Failure.validation(); }
     }
+    private String dispatchNonce(PackageStore.Relayed relayed){
+        String nonce=claims(node(relayed.document()).path("dispatch")).path("nonce").asText("");
+        if(nonce.isEmpty())throw Failure.conflict();
+        return Ids.valid(nonce);
+    }
     private ObjectNode status(PackageStore.Relayed relayed) { return (ObjectNode) node(relayed.document()).get("status"); }
     private PackageStore.Relayed updated(PackageStore.Relayed relayed, String state, java.util.function.Consumer<ObjectNode> change) {
         var document = (ObjectNode) node(relayed.document()); var status = (ObjectNode) document.get("status");
@@ -560,7 +640,7 @@ public final class ServerPackages {
             if (actor.userId() == null || !actor.userId().equals(context.userId())
                     || context.mode() != io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN
                     || !Objects.equals(context.sessionEpoch(), sessionEpoch)) throw ManagementAccess.denied();
-            operations.requireFresh(actor.tenant(), tx, invocation);
+            operations.requireMetadataFresh(actor.tenant(), tx, invocation);
             var relayed = current(tx.packages().relayed(invocationId));
             if (relayed == null || !relayed.hostId().equals(context.deviceId())) throw notFound();
             var status = status(relayed); RemoteToolResult result = null; ErrorCode error = null;
@@ -583,7 +663,7 @@ public final class ServerPackages {
             else if (state == RemoteToolState.FAILED) error = ErrorCode.DEPENDENCY_UNAVAILABLE;
             var record = new RemoteToolRecord(invocationId, context.deviceId(), null, evaluation.toolId(), state,
                     evaluation.nowUnixMs(), invocation.expiresAtUnixMs(), null, null, null, error);
-            return reply(200, new RemoteToolResponse(record, result));
+            return reply(200, new RemoteToolResponse(record, result, new OperationFinalizer(codec).refresh(tx,invocationId,operations.clock(tx))));
         });
     }
 
@@ -635,6 +715,10 @@ public final class ServerPackages {
             var d = host(tx, device); var relayed = current(tx.packages().relayed(invocationId));
             if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
             if (!relayed.state().equals("CLAIMED")) throw Failure.conflict();
+            String expected=dispatchNonce(relayed);
+            if(admission.fencingToken()!=null&&!expected.equals(admission.fencingToken())
+                    ||admission.kind()==io.ololabs.toolgate.contracts.v2.AdmissionKind.ADMITTED&&admission.fencingToken()==null
+                    ||admission.fencingToken()==null&&tx.enterprise().hasRecovery(invocationId))throw Failure.conflict();
             String state = admission.kind() == io.ololabs.toolgate.contracts.v2.AdmissionKind.ADMITTED ? "ADMITTED" : "REFUSED";
             var next = updated(relayed, state, s -> s.set("admission", node(codec.json(admission))));
             tx.packages().saveRelayed(next);
@@ -648,8 +732,19 @@ public final class ServerPackages {
         if (!result.invocationId().equals(invocationId)) throw Failure.validation();
         return store.transaction(tenant, true, tx -> {
             var d = host(tx, device); var relayed = tx.packages().relayed(invocationId);
+            if(operations!=null&&result.fencingToken()!=null){
+                var i=operations.invocationIn(tx,invocationId);
+                if(!Objects.equals(i.reservedNonce(),result.fencingToken())){
+                    operations.retainHistoricalExecutionEvidence(tenant,tx,d.deviceId(),invocationId,result.fencingToken(),body);
+                    // Acknowledge the superseded receipt even while the replacement has no dispatch pointer.
+                    var receipt=relayed==null?JSON.objectNode().put("invocationId",invocationId).put("hostId",d.deviceId()).put("state","EXPIRED"):status(current(relayed));
+                    return reply(200,receipt);
+                }
+            }
             if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
             if (!relayed.state().equals("ADMITTED")) throw Failure.conflict();
+            if(result.fencingToken()!=null&&!dispatchNonce(relayed).equals(result.fencingToken())
+                    ||result.fencingToken()==null&&tx.enterprise().hasRecovery(invocationId))throw Failure.conflict();
             var next = updated(relayed, "FINISHED", s -> s.set("result", node(codec.json(result))));
             tx.packages().saveRelayed(next);
             return reply(200, status(next));

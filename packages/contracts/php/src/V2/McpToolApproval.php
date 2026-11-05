@@ -9,17 +9,19 @@ namespace OloLabs\ToolGate\Contracts\V2;
 final readonly class McpToolApproval implements \JsonSerializable {
     public function __construct(
         public string $upstreamName,
-        public string $name
+        public string $name,
+        public McpEffectPolicy $effectPolicy
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['upstreamName', 'name']) || array_diff(['upstreamName', 'name'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['upstreamName', 'name', 'effectPolicy']) || array_diff(['upstreamName', 'name', 'effectPolicy'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['upstreamName'],
-            $data['name']
+            $data['name'],
+            McpEffectPolicy::fromArray($data['effectPolicy'])
         );
     }
 

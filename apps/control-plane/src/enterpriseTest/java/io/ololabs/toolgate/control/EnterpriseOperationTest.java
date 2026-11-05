@@ -22,18 +22,19 @@ class EnterpriseOperationTest {
     static java.security.interfaces.RSAPrivateCrtKey key;
     EnterpriseConformanceTest graph;PostgresStore store;EnterpriseOperations operations;EffectSigner signer;Clock clock;
     DirectoryService.Actor gateway,reviewer;
+    javax.sql.DataSource keyPolicySource;
     @BeforeAll static void signingKey()throws Exception{var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);key=(java.security.interfaces.RSAPrivateCrtKey)generator.generateKeyPair().getPrivate();}
     @BeforeEach void setup(){
         graph=new EnterpriseConformanceTest();graph.graph();clock=Clock.fixed(Instant.ofEpochMilli(EnterpriseConformanceTest.NOW),ZoneOffset.UTC);
         var rules=List.of(new EnterpriseManagementRule(List.of("operation.approve","operation.read","operation.cancel"),EnterpriseGroupType.TOOL_GROUP,new GroupSelection(List.of("tools-a"),false),List.of(),graph.conditions(),null),new EnterpriseManagementRule(List.of("operation.approve","operation.read","operation.cancel"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("devices-a"),false),List.of(),graph.conditions(),null));
         graph.add(Kind.ROLE,new ControlRole("reviewer-role","Reviewer",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
         graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,1L,List.of("alice","admin"),List.of("reviewer-role")));
-        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("operations.sqlite"))),graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
+        keyPolicySource=SqliteState.open(temp.resolve("operations.sqlite"));store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(keyPolicySource),graph.codec);store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
         signer=new RsaEffectSigner(key,"permit-key",graph.codec);operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
         gateway=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"a".repeat(64),false);reviewer=new DirectoryService.Actor(EnterpriseConformanceTest.TENANT,"c".repeat(64),true,false,"admin");
     }
     void saveGraph(){store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var d=tx.load();tx.save(d,new Directory(d.revision()+1,graph.entries));return null;});}
-    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null,null);}
+    EnterpriseInvocationRequest request(String id,String path){var context=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,CredentialKind.STATIC_TOKEN,null,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);var request=graph.codec.model("{\"toolId\":\"tool\",\"action\":\"read\",\"arguments\":{\"path\":\""+path+"\"}}",AuthorizationRequest.class);var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);return new EnterpriseInvocationRequest(context,request,new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),EnterpriseConformanceTest.DIGEST,null,null, null);}
     EnterpriseInvocation submit(String id){return graph.codec.model(operations.submit(gateway,graph.codec.json(request(id,"data/report.txt"))).body(),EnterpriseInvocation.class);}
     EnterpriseReservation reserve(EnterpriseInvocation i){return graph.codec.model(operations.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);}
     String consumption(EnterpriseReservation r){var e=r.invocation().evaluation();return graph.codec.json(new EnterprisePermitConsumption(r.invocation().id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest()));}
@@ -47,10 +48,10 @@ class EnterpriseOperationTest {
                 null,"alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
         var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
         var i=graph.codec.model(operations.submitHuman(alice,new EnterpriseInvocationRequest(context,original.request(),
-                original.toolDigest(),original.packageDigest(),null,null),"device").body(),EnterpriseInvocation.class);
+                original.toolDigest(),original.packageDigest(),null,null, null),"device").body(),EnterpriseInvocation.class);
         var finished=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.SUCCEEDED,
                 i.revision()+1,i.authorizationEpoch(),"host-fence",i.expiresAtUnixMs(),i.evaluation().resources(),
-                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId(),i.reconciliation());
+                i.downstreamIdempotencyKey(),EnterpriseConformanceTest.DIGEST,i.diagnosticId(),i.reconciliation(), null);
         store.transaction(gateway.tenant(),true,tx->{
             tx.enterprise().saveInvocation(finished,clock.millis(),i.revision());tx.packages().saveToolHost("device","{}");
             tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),"device","FINISHED",i.expiresAtUnixMs(),
@@ -60,12 +61,181 @@ class EnterpriseOperationTest {
         return new HumanRuntime(store,graph.codec,operations,null,new ServerPackages(store,graph.codec,operations,clock));
     }
 
+    private EnterpriseInvocation failWithoutAdditionalAuthority(EnterpriseInvocation i){
+        var failed=new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),EnterpriseInvocationState.FAILED,
+                i.revision()+1,i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),List.of(),
+                i.downstreamIdempotencyKey(),null,i.diagnosticId(),i.reconciliation(), null);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(failed,clock.millis(),i.revision());return null;});
+        return failed;
+    }
+    private io.ololabs.toolgate.control.application.OperationRebindingPolicy.Facts recoveryFacts(String id){
+        return store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveryFacts(id));
+    }
+    @Test void recoveryScopeIsAdmissionBoundImmutableAndUnavailableForRetroactiveClaims() throws Exception {
+        var scope=new io.ololabs.toolgate.control.application.RecoveryAdmissionPolicy.Scope("device","pool",
+                "sha256:"+"a".repeat(64),"sha256:"+"b".repeat(64),"sha256:"+"c".repeat(64),"sha256:"+"d".repeat(64),1L);
+        assertNull(store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveryScope("absent")));
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope("absent",scope);return null;}));
+        var r=reserve(submit("recovery-scoped"));String nonce=r.invocation().reservedNonce();
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(nonce,scope);return null;});
+        assertEquals(scope,store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveryScope(nonce)));
+        var changed=new io.ololabs.toolgate.control.application.RecoveryAdmissionPolicy.Scope("device","different-pool",
+                scope.imageDigest(),scope.runtimeDigest(),scope.descriptorDigest(),scope.profileDigest(),1L);
+        assertEquals(409,assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(nonce,changed);return null;})).status());
+        for(var sql:List.of("UPDATE control_attempt_recovery_scopes SET pool_id='forged' WHERE tenant_id=? AND attempt_id=?",
+                "DELETE FROM control_attempt_recovery_scopes WHERE tenant_id=? AND attempt_id=?")){
+            try(var connection=keyPolicySource.getConnection()){
+                connection.setAutoCommit(false);
+                if(connection.getMetaData().getDatabaseProductName().equals("PostgreSQL"))
+                    try(var context=connection.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){
+                        context.setString(1,gateway.tenant().value());context.execute();
+                    }
+                try(var check=connection.prepareStatement("SELECT count(*) FROM control_attempt_recovery_scopes WHERE tenant_id=? AND attempt_id=?")){
+                    check.setString(1,gateway.tenant().value());check.setString(2,nonce);
+                    try(var rows=check.executeQuery()){assertTrue(rows.next());assertEquals(1,rows.getInt(1));}
+                }
+                try(var change=connection.prepareStatement(sql)){
+                    change.setString(1,gateway.tenant().value());change.setString(2,nonce);
+                    assertThrows(java.sql.SQLException.class,change::executeUpdate);
+                }
+                connection.rollback();
+            }
+        }
+        var running=consume(r);failWithoutAdditionalAuthority(running);
+        var facts=recoveryFacts(running.id());
+        assertTrue(facts.attempts().getFirst().qualifiedBrokerOnly());
+        assertEquals(io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.QUALIFIED_BROKER_NO_WRITE,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(facts,clock.millis()));
+        var qualifiedRecord=store.transaction(gateway.tenant(),true,tx->tx.enterprise().recordRecovery(
+                tx.enterprise().invocation(running.id()),
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.QUALIFIED_BROKER_NO_WRITE,clock.millis()));
+        assertEquals("QUALIFIED_BROKER_NO_WRITE",qualifiedRecord.proof());
+        var other=consume(reserve(submit("recovery-retroactive")));
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(other.reservedNonce(),scope);return null;}));
+        assertFalse(recoveryFacts(other.id()).attempts().getFirst().qualifiedBrokerOnly());
+    }
+
+    @Test void recoveryRecordsRetainExactPredecessorsWithoutGrantingReplacementAuthority() throws Exception {
+        var reserved=reserve(submit("recovery-record"));
+        var failed=failWithoutAdditionalAuthority(reserved.invocation());
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->tx.enterprise().recordRecovery(failed,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,clock.millis())));
+        clock=Clock.offset(clock,java.time.Duration.ofMillis(10001));
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->tx.enterprise().recordRecovery(failed,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.QUALIFIED_BROKER_NO_WRITE,clock.millis())));
+        var record=store.transaction(gateway.tenant(),true,tx->tx.enterprise().recordRecovery(failed,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,clock.millis()));
+        assertEquals(failed.revision()+1,record.toRevision());
+        var snapshot=(com.fasterxml.jackson.databind.JsonNode)graph.codec.value(record.document());
+        assertEquals(graph.codec.json(failed),snapshot.path("invocation").asText());
+        assertEquals(1,snapshot.path("attemptIds").size());assertEquals(failed.reservedNonce(),snapshot.path("attemptIds").get(0).asText());
+        assertEquals(List.of(record),store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(failed.id(),100)));
+        assertEquals(EnterpriseInvocationState.FAILED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(failed.id())).state());
+        assertThrows(Failure.class,()->reserve(failed));
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->tx.enterprise().recordRecovery(failed,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,clock.millis())));
+        for(var sql:List.of("UPDATE control_operation_recoveries SET proof='QUALIFIED_BROKER_NO_WRITE' WHERE tenant_id=? AND operation_id=?",
+                "DELETE FROM control_operation_recoveries WHERE tenant_id=? AND operation_id=?")){
+            try(var connection=keyPolicySource.getConnection()){
+                connection.setAutoCommit(false);
+                if(connection.getMetaData().getDatabaseProductName().equals("PostgreSQL"))
+                    try(var context=connection.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){
+                        context.setString(1,gateway.tenant().value());context.execute();
+                    }
+                try(var check=connection.prepareStatement("SELECT count(*) FROM control_operation_recoveries WHERE tenant_id=? AND operation_id=?")){
+                    check.setString(1,gateway.tenant().value());check.setString(2,failed.id());
+                    try(var rows=check.executeQuery()){assertTrue(rows.next());assertEquals(1,rows.getInt(1));}
+                }
+                try(var statement=connection.prepareStatement(sql)){
+                    statement.setString(1,gateway.tenant().value());statement.setString(2,failed.id());
+                    assertThrows(java.sql.SQLException.class,statement::executeUpdate);
+                }
+                connection.rollback();
+            }
+        }
+    }
+
+    @Test void recoveryRebindIsAtomicKeepsTheDeadlineAndRetainsAllOldAttempts(){
+        var i=keyed("recovery-rebind","data/report.txt","e".repeat(64));
+        var old=reserve(i);var failed=failWithoutAdditionalAuthority(old.invocation());
+        clock=Clock.offset(clock,java.time.Duration.ofMillis(10001));
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var keyBefore=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(i.id()));
+        String dispatch="{\"dispatch\":{\"permit\":{\"jws\":\"expired-admission\"}},\"status\":{\"state\":\"REFUSED\"}}";
+        store.transaction(gateway.tenant(),true,tx->{tx.packages().saveRelayed(new PackageStore.Relayed(i.id(),"device","REFUSED",failed.expiresAtUnixMs(),dispatch));return null;});
+        assertThrows(IllegalStateException.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().rebind(failed,io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,clock.millis());
+            throw new IllegalStateException("simulated loss before commit");
+        }));
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(i.id(),100)).isEmpty());
+        assertEquals(failed,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(i.id())));
+        assertEquals(dispatch,store.transaction(gateway.tenant(),false,tx->tx.packages().relayed(i.id()).document()));
+        var next=store.transaction(gateway.tenant(),true,tx->tx.enterprise().rebind(failed,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,clock.millis()));
+        assertEquals(i.id(),next.id());assertEquals(i.requestDigest(),next.requestDigest());
+        assertEquals(i.expiresAtUnixMs(),next.expiresAtUnixMs());assertEquals(EnterpriseInvocationState.QUEUED,next.state());
+        assertNull(next.reservedNonce());assertNull(store.transaction(gateway.tenant(),false,tx->tx.packages().relayed(i.id())));
+        var keyAfter=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(i.id()));
+        assertEquals(keyBefore.retainUntil(),keyAfter.retainUntil());assertEquals(keyBefore.fingerprint(),keyAfter.fingerprint());assertNull(keyAfter.outcome());
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(i.id(),100));
+        assertEquals(1,history.size());
+        var snapshot=(com.fasterxml.jackson.databind.JsonNode)graph.codec.value(history.getFirst().document());
+        assertEquals(dispatch,snapshot.path("dispatch").asText());
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->tx.enterprise().rebind(failed,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,clock.millis())));
+        var replacement=reserve(next);
+        assertNotEquals(old.invocation().reservedNonce(),replacement.invocation().reservedNonce());
+        assertEquals(403,assertThrows(Failure.class,()->consume(old)).status());
+        assertEquals(EnterpriseInvocationState.EXECUTING,consume(replacement).state());
+        var attempts=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),clock.millis()));
+        assertEquals(2,attempts.size());assertEquals("FAILED",attempts.getFirst().state());
+        assertNull(attempts.getFirst().consumedAt());assertTrue(attempts.getFirst().expiresAt()<=clock.millis());
+        assertEquals(old.invocation().reservedNonce(),attempts.getFirst().id());
+    }
+
+    @Test void recoveryJournalUsesPositiveControlAdmissionAndExpiredPermitBindings(){
+        var admitted=submit("recover-never-issued");
+        assertNull(io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(recoveryFacts(admitted.id()),clock.millis()));
+        var failed=failWithoutAdditionalAuthority(admitted);
+        assertEquals(io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(recoveryFacts(failed.id()),clock.millis()));
+        var reserved=reserve(submit("recover-unconsumed")).invocation();
+        failWithoutAdditionalAuthority(reserved);
+        assertNull(io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(recoveryFacts(reserved.id()),clock.millis()));
+        clock=Clock.offset(clock,java.time.Duration.ofMillis(10001));
+        var facts=recoveryFacts(reserved.id());
+        assertTrue(facts.completeJournal());assertEquals(1,facts.attempts().size());
+        assertTrue(facts.attempts().getFirst().journalBound());
+        assertEquals(io.ololabs.toolgate.control.application.OperationRebindingPolicy.Proof.NEVER_CONSUMED,
+                io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(facts,clock.millis()));
+        assertNull(io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(facts,reserved.expiresAtUnixMs()));
+    }
+    @Test void recoveryJournalNeverTurnsMissingRecordsOrConsumedReportsIntoProof(){
+        var absent=recoveryFacts("recover-does-not-exist");
+        assertFalse(absent.present());
+        assertNull(io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(absent,clock.millis()));
+        var executing=consume(reserve(submit("recover-consumed")));
+        failWithoutAdditionalAuthority(executing);
+        var facts=recoveryFacts(executing.id());
+        assertEquals("OUTCOME_UNKNOWN",facts.operationState());
+        assertNotNull(facts.attempts().getFirst().consumedAt());
+        assertFalse(facts.attempts().getFirst().qualifiedBrokerOnly());
+        assertNull(io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(facts,clock.millis()));
+        var failed=failWithoutAdditionalAuthority(submit("recover-cancelled"));
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().cancelOperation(failed.id());return null;});
+        assertTrue(recoveryFacts(failed.id()).cancelled());
+        assertNull(io.ololabs.toolgate.control.application.OperationRebindingPolicy.proof(recoveryFacts(failed.id()),clock.millis()));
+    }
+
     @Test void humanHostResultUsesTheDispatchStoreAndPreservesLiveCallerAuthority() {
         var runtime=completedHumanHostCall();
         var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
         var response=graph.codec.model(runtime.result(alice,1L,"human-host").body(),RemoteToolResponse.class);
         assertEquals(RemoteToolState.DONE,response.record().state());
         assertEquals("Hello World",response.result().output().get("message").asText());
+        assertEquals(EnterpriseOperationState.OUTCOME_UNKNOWN,response.operationOutcome().state());
+        assertEquals(EnterpriseOutcomeGrade.REPORTED,response.operationOutcome().grade());
+        assertFalse(response.operationOutcome().retryable());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,2L,"human-host")).status());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(reviewer,1L,"human-host")).status());
         graph.remove(Kind.GRANT,"human");saveGraph();
@@ -84,7 +254,7 @@ class EnterpriseOperationTest {
 
     EnterpriseInvocationRequest delegated(String id,CredentialKind kind,String issuer){var r=request(id,"data/report.txt");
         var c=new RequestContext(id,EnterpriseConformanceTest.TENANT.value(),RequestMode.DELEGATED,kind,issuer,"alice","agent","workload",List.of(),1L,1L,null,null,"binding-a",EnterpriseConformanceTest.PROOF);
-        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
+        return new EnterpriseInvocationRequest(c,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null, null);}
     /** M3.10: an on-behalf-of binding takes its user only from a verified user credential of the configured issuer. */
     @Test void onBehalfOfBindingNeedsAVerifiedUserCredential(){
         graph.remove(Kind.WORKLOAD_BINDING,"workload");graph.workload("workload","agent",RequestMode.DELEGATED,null,null);saveGraph();
@@ -106,13 +276,19 @@ class EnterpriseOperationTest {
     }
     EnterpriseInvocationRequest epochs(String id,String path,long session,long credential){var r=request(id,path);var c=r.context();
         var renewed=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),c.userId(),c.agentId(),c.workloadBindingId(),c.chain(),session,credential,c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
-        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null);}
+        return new EnterpriseInvocationRequest(renewed,r.request(),r.toolDigest(),r.packageDigest(),r.downstreamIdempotencyKey(),null, null);}
+    /** Compare the preserved report independently of additive response-only outcome metadata. */
+    static EnterpriseInvocation reported(EnterpriseInvocation i){
+        return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),i.state(),i.revision(),
+                i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),
+                i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation(), null);
+    }
     EnterpriseInvocation submitted(EnterpriseInvocationRequest r){return graph.codec.model(operations.submit(gateway,graph.codec.json(r)).body(),EnterpriseInvocation.class);}
     /** M5.3: the same logical operation with changed arguments is a conflict and never creates or changes an invocation. */
     @Test void changedArgumentsUnderTheSameKeyAreAConflict(){var first=submit("op-1");
         var conflict=assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(request("op-1","data/other.txt"))));
         assertEquals(409,conflict.status());
-        assertEquals(first,store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-1")));}
+        assertEquals(reported(first),store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation("op-1")));}
     /** M5.3: rotating the workload credential replays the same invocation under the current credential epoch. */
     @Test void aRotatedCredentialReplaysTheSameInvocation(){var first=submit("op-2");
         graph.remove(Kind.WORKLOAD_BINDING,"workload");
@@ -181,8 +357,8 @@ class EnterpriseOperationTest {
         assertEquals(invocation.id(),unknown.id());assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());
         assertThrows(Failure.class,()->reserve(unknown));
     }
-    /** M5.4: an unknown outcome of a DOWNSTREAM_IDEMPOTENCY tool is resent by replaying its key; the target deduplicates. */
-    @Test void downstreamIdempotentToolsAreResentWhenTheirKeyIsReplayed(){
+    /** A declaration alone cannot authorize a new consumed attempt (ADR 035). */
+    @Test void downstreamIdempotentDeclarationDoesNotReopenAnUnknownAttempt(){
         var old=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
         var definition=graph.codec.model(graph.codec.json(old.definition()).replaceFirst("[{]","{\"reconciliation\":\"DOWNSTREAM_IDEMPOTENCY\","),ToolDefinition.class);
         graph.add(Kind.TOOL,new ControlTool(old.id(),old.name(),old.enabled(),old.revision()+1,definition,old.extractorId(),old.version(),old.packageDigest()));saveGraph();
@@ -191,12 +367,26 @@ class EnterpriseOperationTest {
         var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);
         operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report));
         var resent=submit("resend");
-        assertEquals("resend",resent.id());assertEquals(EnterpriseInvocationState.QUEUED,resent.state());
+        assertEquals("resend",resent.id());assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,resent.state());
         assertEquals(i.requestDigest(),resent.requestDigest());
-        assertEquals(EnterpriseInvocationState.RESERVED,reserve(resent).invocation().state());}
+        assertThrows(Failure.class,()->reserve(resent));}
     @Test void invocationsRecordTheirToolsReconciliationMethod(){assertEquals(ReconciliationMethod.MANUAL,submit("manual").reconciliation());}
-    @Test void unknownExternalOutcomeCannotTriggerBlindRetry(){var i=consume(reserve(submit("request")));var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report)).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());assertThrows(Failure.class,()->reserve(unknown));assertEquals(unknown,submit("request"));}
+    @Test void unknownExternalOutcomeCannotTriggerBlindRetry(){var i=consume(reserve(submit("request")));var report=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null);var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(report)).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,unknown.state());assertThrows(Failure.class,()->reserve(unknown));assertEquals(unknown,reported(submit("request")));}
     @Test void successRequiresEveryResourceAndAResultDigest(){var i=consume(reserve(submit("request")));assertThrows(Failure.class,()->operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,List.of(),EnterpriseConformanceTest.DIGEST))));var success=new EnterpriseEffectReport(i.id(),i.revision(),EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST);assertEquals(EnterpriseInvocationState.SUCCEEDED,graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(success)).body(),EnterpriseInvocation.class).state());}
+    @Test void historyRequiresCurrentAuthorizationAndDoesNotWriteOnDeniedRead(){
+        var i=submit("history-authorization");
+        assertEquals(200,operations.history(gateway,i.id(),null,10).status());
+        for(int invalidLimit:new int[]{Integer.MIN_VALUE,0,101,Integer.MAX_VALUE}){
+            assertEquals(400,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,invalidLimit)).status());
+        }
+        assertEquals(200,operations.history(gateway,i.id(),null,100).status());
+        var before=store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id()));
+        graph.remove(Kind.GRANT,"human");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,10)).status());
+        assertEquals(before,store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id())));
+        assertEquals(400,assertThrows(Failure.class,()->operations.history(gateway,i.id(),"not-a-cursor",10)).status());
+        assertEquals(400,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,101)).status());
+    }
     @Test void responseRetrievalChecksRevokedAuthorization(){var i=consume(reserve(submit("request")));assertEquals(200,operations.get(gateway,i.id()).status());graph.remove(Kind.GRANT,"human");saveGraph();assertThrows(Failure.class,()->operations.get(gateway,i.id()));}
     @Test void durableGroupBudgetHasOneWinnerAcrossConcurrentSubmissions()throws Exception{
         var entry=graph.entries.get(Kind.GRANT.id("human"));var node=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(entry.document());((com.fasterxml.jackson.databind.node.ObjectNode)node.path("scope").path("conditions")).put("maxInvocationsPerMinute",1);graph.entries.put(entry.id(),graph.codec.entry(Kind.GRANT,graph.codec.json(node)));saveGraph();
@@ -209,14 +399,736 @@ class EnterpriseOperationTest {
         var expired=graph.codec.model(later.get(reviewer,i.id()).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,expired.state());assertThrows(Failure.class,()->reserve(expired));assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().invocation(i.id())).state());
     }
     @Test void reconciliationRequiresIndependentCurrentCheckerAndNeverReissuesPermit(){
-        graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L));graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker"),List.of("reviewer-role")));saveGraph();var executing=consume(reserve(submit("unknown-review")));
+        graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L, null, null, null));graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker"),List.of("reviewer-role")));saveGraph();var executing=consume(reserve(submit("unknown-review")));
         var unknown=graph.codec.model(operations.report(EnterpriseConformanceTest.TENANT,"device",graph.codec.json(new EnterpriseEffectReport(executing.id(),executing.revision(),EnterpriseInvocationState.OUTCOME_UNKNOWN,List.of(),null))).body(),EnterpriseInvocation.class);
-        var request=new EnterpriseReconciliationRequest(unknown.revision(),EnterpriseReconciledState.SUCCEEDED,unknown.evaluation().resources(),EnterpriseConformanceTest.DIGEST,EnterpriseConformanceTest.DIGEST);
+        var request=new EnterpriseReconciliationRequest(unknown.revision(),EnterpriseReconciledState.SUCCEEDED,unknown.evaluation().resources(),EnterpriseConformanceTest.DIGEST,EnterpriseConformanceTest.DIGEST, null);
         var proposed=graph.codec.model(operations.proposeReconciliation(reviewer,unknown.id(),graph.codec.json(request),"reconcile-key").body(),EnterpriseReconciliation.class);assertEquals(proposed.id(),graph.codec.model(operations.proposeReconciliation(reviewer,unknown.id(),graph.codec.json(request),"reconcile-key").body(),EnterpriseReconciliation.class).id());
         String decision=graph.codec.json(new EnterpriseReconciliationDecision(proposed.revision(),true));assertEquals(403,assertThrows(Failure.class,()->operations.reconcile(reviewer,proposed.id(),decision)).status());
         var checker=new DirectoryService.Actor(reviewer.tenant(),"f".repeat(64),true,false,"checker");assertEquals(EnterpriseReconciliationState.APPLIED,graph.codec.model(operations.reconcile(checker,proposed.id(),decision).body(),EnterpriseReconciliation.class).state());
         var resolved=graph.codec.model(operations.get(reviewer,unknown.id()).body(),EnterpriseInvocation.class);assertEquals(EnterpriseInvocationState.SUCCEEDED,resolved.state());assertEquals(resolved.id(),graph.codec.model(operations.deviceOutcome(reviewer.tenant(),tx->"device",resolved.id()).body(),EnterpriseInvocation.class).id());assertEquals(403,assertThrows(Failure.class,()->operations.deviceOutcome(reviewer.tenant(),tx->"other-device",resolved.id())).status());assertThrows(Failure.class,()->reserve(resolved));assertThrows(Failure.class,()->operations.reconcile(checker,proposed.id(),decision));
     }
     @Test void watchdogCommitsUnknownEvenWhenSubsequentAuthorityIsRevoked(){var i=consume(reserve(submit("watchdog")));graph.remove(Kind.GRANT,"human");saveGraph();var later=new EnterpriseOperations(store,graph.codec,signer,Clock.fixed(Instant.ofEpochMilli(i.expiresAtUnixMs()+1),ZoneOffset.UTC),"control","toolgate-client",60000,100);assertEquals(1,later.sweep(gateway.tenant()));assertEquals(0,later.sweep(gateway.tenant()));assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(i.id())).state());}
+
+    EnterpriseInvocation keyed(String requestId,String path,String hash){
+        var r=request(requestId,path);
+        return graph.codec.model(operations.submit(gateway,graph.codec.json(new EnterpriseInvocationRequest(r.context(),r.request(),r.toolDigest(),r.packageDigest(),null,null,hash))).body(),EnterpriseInvocation.class);
+    }
+    @Test void businessKeySurvivesNewRequestIdsAndStoreReopen(){
+        var first=keyed("step-a","data/report.txt","a".repeat(64));
+        assertTrue(first.id().startsWith("op-"));
+        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("operations.sqlite"))),graph.codec);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        assertEquals(first,keyed("step-b","data/report.txt","a".repeat(64)));
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("step-c","data/different.txt","a".repeat(64))).status());
+    }
+    @Test void concurrentBusinessKeyReservationsCreateOneInvocation()throws Exception{
+        var pool=Executors.newFixedThreadPool(4);
+        try{
+            var tasks=new ArrayList<Callable<String>>();for(int n=0;n<8;n++){int index=n;tasks.add(()->keyed("parallel-"+index,"data/report.txt","b".repeat(64)).id());}
+            var results=pool.invokeAll(tasks);var ids=new HashSet<String>();for(var result:results)ids.add(result.get());
+            assertEquals(1,ids.size());assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        }finally{pool.shutdownNow();}
+    }
+    @Test void ambiguousBusinessOperationCannotBeReopenedByDownstreamRetry(){
+        var initial=keyed("ambiguous-a","data/report.txt","c".repeat(64));var executing=consume(reserve(initial));
+        var unknown=new EnterpriseInvocation(executing.id(),executing.requestDigest(),executing.evaluation(),EnterpriseInvocationState.OUTCOME_UNKNOWN,executing.revision()+1,executing.authorizationEpoch(),executing.reservedNonce(),executing.expiresAtUnixMs(),List.of(),executing.downstreamIdempotencyKey(),null,executing.diagnosticId(),ReconciliationMethod.DOWNSTREAM_IDEMPOTENCY, null);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(unknown,clock.millis(),executing.revision());return null;});
+        assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,keyed("ambiguous-b","data/report.txt","c".repeat(64)).state());
+        assertEquals(409,assertThrows(Failure.class,()->reserve(unknown)).status());
+    }
+    @Test void businessReplayChecksCurrentAuthorityAndRetention(){
+        keyed("authority-a","data/report.txt","d".repeat(64));graph.remove(Kind.GRANT,"capability");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->keyed("authority-b","data/report.txt","d".repeat(64))).status());
+    }
+
+    @Test void businessKeyOwnerAndExpiredRetentionNeverPermitAnotherExecution(){
+        var first=keyed("owner-a","data/report.txt","e".repeat(64));
+        var r=request("owner-b","data/report.txt");var c=r.context();
+        var other=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),"admin",c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
+        assertEquals(409,assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(new EnterpriseInvocationRequest(other,r.request(),r.toolDigest(),r.packageDigest(),null,null,"e".repeat(64))))).status());
+        operations=new EnterpriseOperations(store,graph.codec,signer,Clock.offset(clock,Duration.ofDays(31)),"control","toolgate-client",60000,100);
+        assertEquals(409,assertThrows(Failure.class,()->keyed("owner-c","data/report.txt","e".repeat(64))).status());
+        assertEquals(first.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).getFirst().id()));
+    }
+    @Test void businessKeysAlsoHoldUnderPostgresRuntimeRole()throws Exception{
+        String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
+        Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL fixture");
+        String database="business_"+UUID.randomUUID().toString().replace("-","");
+        try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var stmt=c.createStatement()){stmt.execute("CREATE DATABASE "+database);}
+        String url=base.replace("/control?","/"+database+"?");
+        org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).cleanDisabled(true).load().migrate();
+        var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
+        keyPolicySource=source;store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
+        store.transaction(gateway.tenant(),true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        concurrentBusinessKeyReservationsCreateOneInvocation();
+        ambiguousBusinessOperationCannotBeReopenedByDownstreamRetry();
+        businessKeyOwnerAndExpiredRetentionNeverPermitAnotherExecutionPostgres();
+        expiredReservationsRetainIndependentAttemptHistory();
+    }
+    void businessKeyOwnerAndExpiredRetentionNeverPermitAnotherExecutionPostgres(){
+        var first=keyed("pg-retry-a","data/report.txt","f".repeat(64));
+        assertEquals(first,keyed("pg-retry-b","data/report.txt","f".repeat(64)));
+        assertEquals(409,assertThrows(Failure.class,()->keyed("pg-retry-c","data/different.txt","f".repeat(64))).status());
+    }
+
+    @Test void expiredUnconsumedBusinessInvocationIsNotSilentlyRebound(){
+        var original=keyed("expiry-a","data/report.txt","1".repeat(64));
+        operations=new EnterpriseOperations(store,graph.codec,signer,Clock.offset(clock,Duration.ofSeconds(61)),"control","toolgate-client",60000,100);
+        var replay=keyed("expiry-b","data/report.txt","1".repeat(64));
+        assertEquals(original.id(),replay.id());assertEquals(EnterpriseInvocationState.EXPIRED,replay.state());
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","1".repeat(64)));
+        assertEquals(original.id(),key.invocation());
+    }
+    @Test void deniedBusinessAdmissionLeavesNoReservation(){
+        var capability=graph.entries.get(Kind.GRANT.id("capability"));graph.remove(Kind.GRANT,"capability");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->keyed("denied-a","data/report.txt","2".repeat(64))).status());
+        assertNull(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","2".repeat(64))));
+        graph.entries.put(Kind.GRANT.id("capability"),capability);saveGraph();
+        assertEquals(EnterpriseInvocationState.QUEUED,keyed("denied-b","data/report.txt","2".repeat(64)).state());
+    }
+
+    @Test void keyedCancellationAcceptsOnlyExistingOwnedOperation(){
+        var invocation=keyed("cancel-keyed","data/report.txt","3".repeat(64));var c=request(invocation.id(),"data/report.txt").context();
+        var other=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),"admin",c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
+        assertEquals(403,assertThrows(Failure.class,()->operations.cancelFromGateway(gateway,graph.codec.json(other))).status());
+        assertEquals(200,operations.cancelFromGateway(gateway,graph.codec.json(c)).status());
+        assertEquals(EnterpriseInvocationState.CANCELLED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(invocation.id()).state()));
+        var missing=request("op-"+"0".repeat(64),"data/report.txt").context();
+        assertEquals(404,assertThrows(Failure.class,()->operations.cancelFromGateway(gateway,graph.codec.json(missing))).status());
+        assertFalse(store.transaction(gateway.tenant(),false,tx->tx.enterprise().operationCancelled(missing.requestId())).booleanValue());
+    }
+
+    @Test void expiredReservationsRetainIndependentAttemptHistory(){
+        var first=reserve(submit("attempt-history"));String oldFence=first.invocation().reservedNonce();
+        operations=new EnterpriseOperations(store,graph.codec,signer,Clock.offset(clock,Duration.ofSeconds(11)),"control","toolgate-client",60000,100);
+        var next=reserve(first.invocation());assertNotEquals(oldFence,next.invocation().reservedNonce());
+        var attempts=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(first.invocation().id(),clock.millis()+11000));
+        assertEquals(2,attempts.size());assertEquals("EXPIRED",attempts.getFirst().state());assertNull(attempts.getFirst().consumedAt());
+        assertEquals("RESERVED",attempts.getLast().state());assertEquals(oldFence,attempts.getFirst().id());
+        assertThrows(Failure.class,()->consume(first));
+        var executing=consume(next);
+        var success=new EnterpriseEffectReport(executing.id(),executing.revision(),EnterpriseInvocationState.SUCCEEDED,executing.evaluation().resources(),EnterpriseConformanceTest.DIGEST);
+        operations.report(gateway.tenant(),"device",graph.codec.json(success));
+        assertEquals("OUTCOME_UNKNOWN",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(executing.id()).state()));
+        var retained=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()+11000));
+        assertEquals("EXPIRED",retained.getFirst().state());assertEquals("SUCCEEDED",retained.getLast().state());
+        assertNotNull(retained.getLast().consumedAt());
+    }
+    @Test void operationCanFinalizeFailureOnlyWithoutConsumedAuthority(){
+        var reserved=reserve(submit("never-started-operation"));
+        operations=new EnterpriseOperations(store,graph.codec,signer,Clock.offset(clock,Duration.ofSeconds(61)),"control","toolgate-client",60000,100);
+        var expired=submit("never-started-operation");assertEquals(EnterpriseInvocationState.EXPIRED,expired.state());
+        assertEquals("FAILED",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(expired.id()).state()));
+        assertThrows(Failure.class,()->consume(reserved));
+    }
+    @Test void consumedFailureRemainsUnknownAtOperationLevel(){
+        var executing=consume(reserve(submit("failed-attempt")));
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(executing.id(),executing.revision(),EnterpriseInvocationState.FAILED,List.of(),null)));
+        assertEquals("OUTCOME_UNKNOWN",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(executing.id()).state()));
+        assertEquals("FAILED",store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()).getFirst().state()));
+    }
+    @Test void operationIntentAndAttemptHistorySurviveStoreReopen(){
+        var executing=consume(reserve(submit("reopen-attempt")));
+        store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("operations.sqlite"))),graph.codec);
+        var operation=store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(executing.id()));
+        assertEquals("RUNNING",operation.state());assertFalse(operation.legacy());
+        var attempts=store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(executing.id(),clock.millis()));
+        assertEquals(executing.reservedNonce(),attempts.getFirst().id());assertEquals("EXECUTING",attempts.getFirst().state());assertNotNull(attempts.getFirst().consumedAt());
+    }
+
+
+    void businessPolicy(BusinessKeyPolicy policy) {
+        var original=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var d=original.definition();
+        var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),
+                d.outputSchema(),d.reconciliation(),policy, null);
+        graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),
+                original.revision()+1,definition,original.extractorId(),original.version(),original.packageDigest()));
+        saveGraph();
+    }
+    @Test void reportedSuccessCannotFinalizeAConsumedUnqualifiedBusinessKey(){
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,10000L,null));
+        var i=consume(reserve(keyed("reported-key","data/report.txt","b6".repeat(32))));
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),
+                EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST)));
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","b6".repeat(32)));
+        assertEquals("OUTCOME_UNKNOWN",key.outcome());
+        var latest=store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id()));
+        assertEquals(EnterpriseOperationState.OUTCOME_UNKNOWN,latest.value().state());assertFalse(latest.value().retryable());
+        assertEquals(EnterpriseInvocationState.SUCCEEDED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(i.id())).state());
+        assertNull(key.tombstonedAt());
+    }
+    @Test void completedWriteWithAWorkerFailureKeepsAPartialBusinessKey(){
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,10000L,null));
+        var reservation=reserve(keyed("partial-key","data/report.txt","b7".repeat(32)));
+        // Trusted admission/target ports exercise derivation and SQL, not OCI or provider qualification.
+        var scope=new RecoveryAdmissionPolicy.Scope("device","pool","sha256:"+"a".repeat(64),
+                "sha256:"+"b".repeat(64),"sha256:"+"c".repeat(64),"sha256:"+"d".repeat(64),1L);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(reservation.invocation().reservedNonce(),scope);return null;});
+        var i=consume(reservation);long now=clock.millis();String digest="sha256:"+"a".repeat(64);
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.effects().authorize(new EffectStore.Binding("partial-effect",i.id(),i.reservedNonce(),"approved-route",
+                    digest,"device","broker","handler","partial-auth",now+10000,now+60000),now);
+            tx.effects().consume("partial-auth",digest,"target","partial-claim",now);
+            tx.effects().targetOutcome("partial-auth","target","partial-claim","COMPLETED","sha256:"+"b".repeat(64),now);
+            return null;
+        });
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),
+                EnterpriseInvocationState.FAILED,List.of(),null)));
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(i.id()));
+        assertEquals("PARTIAL",key.outcome());assertNull(key.tombstonedAt());
+        var observed=graph.codec.model(operations.get(gateway,i.id()).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseInvocationState.FAILED,observed.state());
+        assertEquals(EnterpriseOperationState.PARTIAL,observed.operationOutcome().state());
+        assertEquals(EnterpriseOutcomeGrade.TARGET_CONFIRMED,observed.operationOutcome().grade());
+        assertFalse(observed.operationOutcome().retryable());assertThrows(Failure.class,()->reserve(observed));
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.effects().targetOutcome("partial-auth","target","partial-claim","FAILED","sha256:"+"c".repeat(64),now);
+            new OperationFinalizer(graph.codec).refresh(tx,i.id(),now);return null;
+        });
+        var changed=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(i.id()));
+        assertEquals("OUTCOME_UNKNOWN",changed.outcome());assertEquals(key.retainUntil(),changed.retainUntil());
+        assertEquals(key.fingerprint(),changed.fingerprint());assertEquals(key.invocation(),changed.invocation());
+        assertEquals(EnterpriseOperationState.RECONCILIATION_REQUIRED,store.transaction(gateway.tenant(),false,
+                tx->tx.enterprise().latestOperationOutcome(i.id())).value().state());
+    }
+    @Test void originalReviewOwnersRemainImmutableAcrossAgentOwnershipTransfer(){
+        var i=submit("review-ownership");
+        assertEquals(Set.of("alice","bob"),store.transaction(gateway.tenant(),false,tx->tx.enterprise().reviewOwners(i.id())));
+        graph.add(Kind.AGENT,new ControlAgent("agent","Transferred agent",null,true,2L,"admin"));saveGraph();
+        assertEquals(Set.of("alice","bob"),store.transaction(gateway.tenant(),false,tx->tx.enterprise().reviewOwners(i.id())));
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().saveReviewOwners(i.id(),tx.load().revision(),Set.of("admin"));return null;
+        }));
+        assertEquals(Set.of("alice","bob"),store.transaction(gateway.tenant(),false,tx->tx.enterprise().reviewOwners(i.id())));
+    }
+    private String callerContext(String id,java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> change){
+        var value=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.codec.json(request(id,"data/report.txt").context()));
+        change.accept(value);return value.toString();
+    }
+    @Test void nativeStatusAndHistoryReadCurrentOwnedMetadataWithoutAddingAuthority(){
+        var i=submit("caller-running");
+        var current=graph.codec.model(operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->{})).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseOperationState.RUNNING,current.operationOutcome().state());assertFalse(current.operationOutcome().retryable());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),clock.millis())).isEmpty());
+        var reservation=reserve(i);assertEquals(EnterpriseOperationState.RUNNING,reservation.invocation().operationOutcome().state());
+        var history=graph.codec.model(operations.historyFromGateway(gateway,i.id(),callerContext(i.id(),v->{}),null,10).body(),EnterpriseOperationHistoryPage.class);
+        assertEquals(EnterpriseOperationState.RUNNING,history.operation().state());assertEquals(1,history.attempts().size());
+        assertFalse(history.attempts().getFirst().consumed());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(i.id(),clock.millis())).size());
+    }
+    @Test void currentCallerCanReadAfterExecutionDeadlineWithoutRebindingOrExtendingIt(){
+        var i=submit("caller-expired");var reservation=reserve(i);
+        clock=Clock.offset(clock,Duration.ofMillis(60001));
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        String context=callerContext(i.id(),v->v.put("expiresAtUnixMs",clock.millis()+15000));
+        var current=graph.codec.model(operations.readFromGateway(gateway,i.id(),context).body(),EnterpriseInvocation.class);
+        assertEquals(EnterpriseInvocationState.EXPIRED,current.state());assertEquals(i.expiresAtUnixMs(),current.expiresAtUnixMs());
+        assertEquals(EnterpriseOperationState.FAILED,current.operationOutcome().state());assertFalse(current.operationOutcome().retryable());
+        assertEquals(reservation.invocation().reservedNonce(),current.reservedNonce());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(i.id(),100)).isEmpty());
+        assertEquals(1,graph.codec.model(operations.historyFromGateway(gateway,i.id(),context,null,10).body(),EnterpriseOperationHistoryPage.class).attempts().size());
+        assertThrows(Failure.class,()->reserve(current));
+    }
+    @Test void callerMetadataUsesRotatedCurrentProofWithoutRewritingHistoricalCredentials(){
+        var i=submit("caller-rotated");
+        graph.add(Kind.WORKLOAD_BINDING,new ControlWorkloadBinding("workload","workload",true,2L,"agent",RequestMode.DELEGATED,
+                "gateway","workload-subject","gateway","c".repeat(64),2L,EnterpriseConformanceTest.NOW+100000,"alice",null,1L,null,null));saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->{}))).status());
+        String current=callerContext(i.id(),v->v.put("credentialSha256","c".repeat(64)).put("credentialEpoch",2));
+        var view=graph.codec.model(operations.readFromGateway(gateway,i.id(),current).body(),EnterpriseInvocation.class);
+        assertEquals(1L,view.evaluation().context().credentialEpoch());
+        assertEquals(reported(i),store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(i.id())));
+        graph.remove(Kind.GRANT,"human");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->operations.historyFromGateway(gateway,i.id(),current,null,10)).status());
+    }
+    @Test void unownedAndUnknownCallerOperationsAreNotFoundAndFakeProofCannotRead(){
+        var i=submit("caller-private");
+        assertEquals(404,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("userId","bob")))).status());
+        assertEquals(404,assertThrows(Failure.class,()->operations.historyFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("agentId","another-agent")),null,10)).status());
+        assertEquals(404,assertThrows(Failure.class,()->operations.readFromGateway(gateway,"absent",callerContext("absent",v->{}))).status());
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("credentialSha256","0".repeat(64))))).status());
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),callerContext(i.id(),v->v.put("expiresAtUnixMs",clock.millis())))).status());
+    }
+    @Test void gatewayHumanMetadataRequiresTheConfiguredVerifiedUserIssuer(){
+        var original=request("caller-human","data/report.txt");
+        var context=new RequestContext("caller-human",gateway.tenant().value(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,null,
+                "alice",null,null,List.of(),1L,null,null,null,"binding-a",null);
+        var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        var i=graph.codec.model(operations.submitHuman(owner,new EnterpriseInvocationRequest(context,original.request(),
+                original.toolDigest(),original.packageDigest(),null,null, null),"device").body(),EnterpriseInvocation.class);
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),graph.codec.json(context))).status());
+        operations.userCredentialIssuer("https://identity.example");
+        var body=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(graph.codec.json(context));
+        body.put("credentialKind","JWT").put("issuer","https://identity.example").put("credentialSha256","f".repeat(64)).put("expiresAtUnixMs",clock.millis()+10000);
+        assertEquals(200,operations.readFromGateway(gateway,i.id(),body.toString()).status());
+        body.put("issuer","https://wrong.example");
+        assertEquals(403,assertThrows(Failure.class,()->operations.readFromGateway(gateway,i.id(),body.toString())).status());
+    }
+    @Test void requiredBusinessKeyIsRefusedBeforeAnyInvocationIsAdmitted() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
+        assertEquals(400,assertThrows(Failure.class,()->submit("missing-required-key")).status());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100)).isEmpty());
+        assertTrue(keyed("required-key-present","data/report.txt","4".repeat(64)).id().startsWith("op-"));
+    }
+    @Test void tenantBusinessKeyUsesTheEmptyVerifiedNamespaceIdentity() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.TENANT,null,null,null,null));
+        var first=keyed("tenant-key-a","data/report.txt","5".repeat(64));
+        assertEquals("op-"+DirectoryService.digest("toolgate-operation-v1\n"+gateway.tenant().value()+"\ntool\nTENANT\n\n"+"5".repeat(64)),first.id());
+        assertEquals(first,keyed("tenant-key-b","data/report.txt","5".repeat(64)));
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","TENANT","","5".repeat(64)));
+        assertEquals(first.id(),row.invocation());
+        assertEquals("alice",row.user());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("tenant-key-changed","data/other.txt","5".repeat(64))).status());
+    }
+    EnterpriseInvocation argumentKey(String id,String explicit) {
+        var r=request(id,"data/report.txt");
+        var arguments=new HashMap<>(r.request().arguments());
+        arguments.put("paymentKey",com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.textNode("payment-42"));
+        var call=new AuthorizationRequest(r.request().toolId(),r.request().action(),arguments);
+        return graph.codec.model(operations.submit(gateway,graph.codec.json(new EnterpriseInvocationRequest(
+                r.context(),call,r.toolDigest(),r.packageDigest(),null,null,explicit))).body(),EnterpriseInvocation.class);
+    }
+    @Test void argumentBusinessKeysAreDerivedAndPersistTheirSource() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,"paymentKey",null,null,null));
+        var first=argumentKey("argument-key-a",null);
+        assertEquals(first,argumentKey("argument-key-b",null));
+        String hash=DirectoryService.digest("toolgate-business-key-v1\0"+gateway.tenant().value()+"\0payment-42");
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent",hash));
+        assertEquals("ARGUMENT",row.source());
+        assertEquals(first.id(),row.invocation());
+        assertEquals(409,assertThrows(Failure.class,()->argumentKey("argument-key-mismatch","f".repeat(64))).status());
+        assertFalse(store.transaction(gateway.tenant(),false,tx->tx.auditPage(0,100)).contains("payment-42"));
+    }
+    @Test void businessKeyReplayDoesNotExtendSnapshottedRetention() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,60000L,30000L));
+        var first=keyed("retention-policy-a","data/report.txt","6".repeat(64));
+        long expected=clock.millis()+60000;
+        clock=Clock.fixed(Instant.ofEpochMilli(clock.millis()+1000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        assertEquals(first,keyed("retention-policy-b","data/report.txt","6".repeat(64)));
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","6".repeat(64)));
+        assertEquals(expected,row.retainUntil());
+    }
+    @Test void businessKeyPolicyReplaysStillRequireCurrentAuthorization() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
+        keyed("policy-authority-a","data/report.txt","7".repeat(64));
+        graph.remove(Kind.GRANT,"capability");saveGraph();
+        assertEquals(403,assertThrows(Failure.class,()->keyed("policy-authority-b","data/report.txt","7".repeat(64))).status());
+    }
+    @Test void businessKeyPoliciesAlsoHoldUnderPostgresRuntimeRole() throws Exception {
+        String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
+        Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL fixture");
+        String database="keypolicy_"+UUID.randomUUID().toString().replace("-","");
+        try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var stmt=c.createStatement()){stmt.execute("CREATE DATABASE "+database);}
+        String url=base.replace("/control?","/"+database+"?");
+        org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).cleanDisabled(true).load().migrate();
+        var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
+        keyPolicySource=source;store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
+        store.transaction(gateway.tenant(),true,tx->{tx.save(tx.load(),graph.directory());return null;});EnterpriseConformanceTest.online(store,graph.codec,"device");
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        requiredBusinessKeyIsRefusedBeforeAnyInvocationIsAdmitted();
+        tenantBusinessKeyUsesTheEmptyVerifiedNamespaceIdentity();
+        argumentBusinessKeysAreDerivedAndPersistTheirSource();
+        businessKeyReplayDoesNotExtendSnapshottedRetention();
+        businessKeyPolicyReplaysStillRequireCurrentAuthorization();
+    }
+
+
+    @Test void businessKeyMaintenanceIsBoundedAndNeverTombstonesAmbiguousWork() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,1000L,null));
+        var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        for(char key:List.of('8','9','a')) {
+            var invocation=keyed("maintenance-"+key,"data/report.txt",String.valueOf(key).repeat(64));
+            operations.cancel(owner,invocation.id(),invocation.revision());
+        }
+        var unknown=consume(reserve(keyed("maintenance-unknown","data/report.txt","b".repeat(64))));
+        clock=Clock.fixed(Instant.ofEpochMilli(clock.millis()+2000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        for(int n=0;n<3;n++)assertEquals(1,store.transaction(gateway.tenant(),true,
+                tx->tx.enterprise().tombstoneExpiredBusinessKeys(clock.millis(),1)).intValue());
+        assertEquals(0,store.transaction(gateway.tenant(),true,
+                tx->tx.enterprise().tombstoneExpiredBusinessKeys(clock.millis(),1)).intValue());
+        var expired=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","8".repeat(64)));
+        assertEquals(clock.millis(),expired.tombstonedAt());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("maintenance-replay","data/report.txt","8".repeat(64))).status());
+        clock=Clock.fixed(Instant.ofEpochMilli(unknown.expiresAtUnixMs()+1),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        operations.sweep(gateway.tenant());
+        var unresolved=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","b".repeat(64)));
+        assertNull(unresolved.tombstonedAt());
+        assertEquals("OUTCOME_UNKNOWN",unresolved.outcome());
+    }
+    @Test void resolvedWindowReplacementArchivesExactlyOneImmutableGeneration() {
+        var original=submit("window-store-original");
+        long created=clock.millis();
+        var old=new EnterpriseStore.BusinessKey("tool","AGENT","agent","c".repeat(64),"sha256:"+original.requestDigest(),
+                "agent","alice",original.id(),created+10000,null,"DEDUPE_WINDOW",created+5000);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveBusinessKey(old,created);return null;});
+        operations.cancel(new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice"),original.id(),original.revision());
+        clock=Clock.fixed(Instant.ofEpochMilli(created+6000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=submit("window-store-next");
+        var previous=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","c".repeat(64)));
+        var replacement=new EnterpriseStore.BusinessKey(previous.tool(),previous.namespace(),previous.identity(),previous.hash(),
+                previous.fingerprint(),previous.agent(),previous.user(),next.id(),clock.millis()+10000,null,"DEDUPE_WINDOW",clock.millis()+5000);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().replaceBusinessKey(previous,replacement,clock.millis());return null;});
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory("tool","AGENT","agent","c".repeat(64),100));
+        assertEquals(List.of(previous),history);
+        assertEquals(next.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","c".repeat(64))).invocation());
+        assertEquals(409,assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().replaceBusinessKey(previous,replacement,clock.millis());return null;
+        })).status());
+        assertEquals(history,store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory("tool","AGENT","agent","c".repeat(64),100)));
+    }
+    @Test void unresolvedWindowCannotBeReplacedDespiteElapsedTime() {
+        var original=consume(reserve(submit("window-store-ambiguous")));
+        long created=clock.millis();
+        var old=new EnterpriseStore.BusinessKey("tool","AGENT","agent","d".repeat(64),"sha256:"+original.requestDigest(),
+                "agent","alice",original.id(),created+10000,null,"DEDUPE_WINDOW",created+5000);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveBusinessKey(old,created);return null;});
+        clock=Clock.fixed(Instant.ofEpochMilli(created+6000),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=submit("window-store-denied-next");
+        var replacement=new EnterpriseStore.BusinessKey(old.tool(),old.namespace(),old.identity(),old.hash(),old.fingerprint(),
+                old.agent(),old.user(),next.id(),clock.millis()+10000,null,"DEDUPE_WINDOW",clock.millis()+5000);
+        assertEquals(409,assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().replaceBusinessKey(old,replacement,clock.millis());return null;
+        })).status());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory("tool","AGENT","agent","d".repeat(64),100)).isEmpty());
+        assertEquals(original.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKey("tool","AGENT","agent","d".repeat(64))).invocation());
+    }
+
+
+    void windowPolicy() { businessPolicy(new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,5000L,10000L,null)); }
+    void advanceKeyClock(long millis) {
+        clock=Clock.fixed(Instant.ofEpochMilli(clock.millis()+millis),ZoneOffset.UTC);
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+    }
+    @Test void optionalWindowCoalescesNewRequestIdsWithoutBecomingAnExplicitKey() {
+        windowPolicy();
+        var original=submit("optional-window-a");
+        assertEquals(original,submit("optional-window-b"));
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id()));
+        assertEquals("DEDUPE_WINDOW",key.source());
+        assertEquals(clock.millis()+5000,key.dedupeExpiresAt());
+        assertEquals(409,assertThrows(Failure.class,()->keyed("borrow-window-hash","data/report.txt",key.hash())).status());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+    }
+    @Test void elapsedWindowCannotReplaceAStillRunningOperation() {
+        windowPolicy();
+        var original=submit("window-still-running");
+        advanceKeyClock(6000);
+        assertEquals(409,assertThrows(Failure.class,()->submit("window-running-retry")).status());
+        assertEquals(original.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).getFirst().id()));
+    }
+    @Test void elapsedWindowCreatesANewOperationOnlyAfterPositiveResolution() {
+        windowPolicy();
+        var original=submit("window-positive-a");
+        var owner=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        operations.cancel(owner,original.id(),original.revision());
+        var previous=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id()));
+        advanceKeyClock(6000);
+        var next=submit("window-positive-b");
+        assertNotEquals(original.id(),next.id());
+        assertEquals(next,submit("window-positive-c"));
+        assertEquals(EnterpriseInvocationState.CANCELLED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocation(original.id())).state());
+        assertEquals(List.of(previous),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(
+                previous.tool(),previous.namespace(),previous.identity(),previous.hash(),100)));
+        assertEquals(2,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+    }
+    @Test void tombstonedWindowHistorySurvivesANewResolvedGeneration() {
+        windowPolicy();
+        var original=submit("window-tombstone-a");
+        operations.cancel(new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice"),original.id(),original.revision());
+        advanceKeyClock(11000);
+        operations.sweep(gateway.tenant());
+        var previous=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id()));
+        assertNotNull(previous.tombstonedAt());
+        var next=submit("window-tombstone-b");
+        assertNotEquals(original.id(),next.id());
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(
+                previous.tool(),previous.namespace(),previous.identity(),previous.hash(),100));
+        assertEquals(List.of(previous),history);
+        assertNotNull(history.getFirst().tombstonedAt());
+        assertNull(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(next.id())).tombstonedAt());
+    }
+    @Test void ambiguousWindowRemainsFencedAfterItsDedupeDeadline() {
+        windowPolicy();
+        var executing=consume(reserve(submit("window-unknown-a")));
+        var unknown=new EnterpriseInvocation(executing.id(),executing.requestDigest(),executing.evaluation(),
+                EnterpriseInvocationState.OUTCOME_UNKNOWN,executing.revision()+1,executing.authorizationEpoch(),
+                executing.reservedNonce(),executing.expiresAtUnixMs(),List.of(),executing.downstreamIdempotencyKey(),
+                null,executing.diagnosticId(),executing.reconciliation(), null);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveInvocation(unknown,clock.millis(),executing.revision());return null;});
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(executing.id()));
+        advanceKeyClock(6000);
+        assertEquals(409,assertThrows(Failure.class,()->submit("window-unknown-b")).status());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(
+                key.tool(),key.namespace(),key.identity(),key.hash(),100)).isEmpty());
+    }
+    @Test void concurrentWindowSubmissionsFromTwoServiceInstancesShareOneOperation() throws Exception {
+        windowPolicy();
+        var other=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var pool=Executors.newFixedThreadPool(8);
+        try {
+            var calls=new ArrayList<Callable<String>>();
+            for(int n=0;n<8;n++) {
+                int index=n;
+                calls.add(()->{
+                    var service=index%2==0?operations:other;
+                    return graph.codec.model(service.submit(gateway,graph.codec.json(request("window-parallel-"+index,"data/report.txt"))).body(),EnterpriseInvocation.class).id();
+                });
+            }
+            var ids=new HashSet<String>();for(var result:pool.invokeAll(calls))ids.add(result.get());
+            assertEquals(1,ids.size());
+            assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        } finally {pool.shutdownNow();}
+    }
+    @Test void verifiedDerivedSuccessCanRotateAWindowDespiteTheConservativeLegacySummary(){
+        windowPolicy();var reserved=reserve(submit("verified-window"));
+        // Trusted admission-port fixture, not an executor claim or an OCI qualification.
+        var scope=new RecoveryAdmissionPolicy.Scope("device","pool","sha256:"+"a".repeat(64),
+                "sha256:"+"b".repeat(64),"sha256:"+"c".repeat(64),"sha256:"+"d".repeat(64),1L);
+        store.transaction(gateway.tenant(),true,tx->{tx.enterprise().saveRecoveryScope(reserved.invocation().reservedNonce(),scope);return null;});
+        var i=consume(reserved);
+        operations.report(gateway.tenant(),"device",graph.codec.json(new EnterpriseEffectReport(i.id(),i.revision(),
+                EnterpriseInvocationState.SUCCEEDED,i.evaluation().resources(),EnterpriseConformanceTest.DIGEST)));
+        assertEquals("OUTCOME_UNKNOWN",store.transaction(gateway.tenant(),false,tx->tx.enterprise().operation(i.id())).state());
+        assertEquals(EnterpriseOperationState.SUCCEEDED,store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id())).value().state());
+        clock=Clock.offset(clock,Duration.ofMillis(6000));
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=submit("verified-window-next");assertNotEquals(i.id(),next.id());
+        assertEquals(EnterpriseInvocationState.QUEUED,next.state());
+        var row=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(next.id()));
+        var history=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyHistory(row.tool(),row.namespace(),row.identity(),row.hash(),10));
+        assertEquals(1,history.size());assertEquals("COMPLETED",history.getFirst().outcome());
+    }
+    @Test void requiredKeyNeverFallsBackToItsConfiguredWindow() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,5000L,10000L,null));
+        assertEquals(400,assertThrows(Failure.class,()->submit("required-key-window-fallback")).status());
+        assertTrue(store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100)).isEmpty());
+    }
+    @FunctionalInterface interface KeyPolicyScenario { void run() throws Exception; }
+    @Test void windowAndRetentionScenariosHoldUnderPostgresRuntimeRole() throws Exception {
+        var scenarios=List.<KeyPolicyScenario>of(
+                this::optionalWindowCoalescesNewRequestIdsWithoutBecomingAnExplicitKey,
+                this::elapsedWindowCannotReplaceAStillRunningOperation,
+                this::elapsedWindowCreatesANewOperationOnlyAfterPositiveResolution,
+                this::verifiedDerivedSuccessCanRotateAWindowDespiteTheConservativeLegacySummary,
+                this::reportedSuccessCannotFinalizeAConsumedUnqualifiedBusinessKey,
+                this::completedWriteWithAWorkerFailureKeepsAPartialBusinessKey,
+                this::originalReviewOwnersRemainImmutableAcrossAgentOwnershipTransfer,
+                this::nativeStatusAndHistoryReadCurrentOwnedMetadataWithoutAddingAuthority,
+                this::currentCallerCanReadAfterExecutionDeadlineWithoutRebindingOrExtendingIt,
+                this::callerMetadataUsesRotatedCurrentProofWithoutRewritingHistoricalCredentials,
+                this::unownedAndUnknownCallerOperationsAreNotFoundAndFakeProofCannotRead,
+                this::gatewayHumanMetadataRequiresTheConfiguredVerifiedUserIssuer,
+                this::tombstonedWindowHistorySurvivesANewResolvedGeneration,
+                this::ambiguousWindowRemainsFencedAfterItsDedupeDeadline,
+                this::concurrentWindowSubmissionsFromTwoServiceInstancesShareOneOperation,
+                this::requiredKeyNeverFallsBackToItsConfiguredWindow,
+                this::businessKeyMaintenanceIsBoundedAndNeverTombstonesAmbiguousWork,
+                this::resolvedWindowReplacementArchivesExactlyOneImmutableGeneration,
+                this::unresolvedWindowCannotBeReplacedDespiteElapsedTime,
+                this::tenantKeysNeverDiscloseAnotherOwnersResultForMatchingOrChangedInputs,
+                this::humanKeysUseTheVerifiedUserNamespaceAndCannotUseAnAbsentAgent,
+                this::invalidKeyPolicyCannotPassConfigurationReviewValidation,
+                this::databaseGuardsRejectRetentionRewritesHistoryDeletionAndForgedArchives,
+                this::catalogUsesCurrentControlKeyPolicyInsteadOfDeviceHints,
+                this::directHumanPolicyCallsUseCanonicalIdsAndOneDurableLocalDispatch);
+        runPostgresScenarios(scenarios);
+    }
+    @Test void publicRebindingOfExpiredUnconsumedPermitRetainsBusinessKeyAndAudit() {
+        var original=keyed("public-unconsumed","data/report.txt","a".repeat(64));
+        var reserved=reserve(original);failWithoutAdditionalAuthority(reserved.invocation());
+        assertEquals(EnterpriseInvocationState.FAILED,keyed("early-replay","data/report.txt","a".repeat(64)).state());
+        clock=Clock.offset(clock,Duration.ofMillis(10001));
+        operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+        var next=keyed("fresh-replay","data/report.txt","a".repeat(64));
+        assertEquals(original.id(),next.id());assertEquals(original.expiresAtUnixMs(),next.expiresAtUnixMs());
+        assertEquals(EnterpriseInvocationState.QUEUED,next.state());
+        assertEquals(next,keyed("duplicate-replay","data/report.txt","a".repeat(64)));
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().recoveries(next.id(),100)).size());
+        var extended=new EnterpriseInvocation(next.id(),next.requestDigest(),next.evaluation(),next.state(),next.revision()+1,
+                next.authorizationEpoch(),next.reservedNonce(),next.expiresAtUnixMs()+1,next.completedResources(),
+                next.downstreamIdempotencyKey(),next.resultDigest(),next.diagnosticId(),next.reconciliation(), null);
+        assertThrows(Failure.class,()->store.transaction(gateway.tenant(),true,tx->{
+            tx.enterprise().saveInvocation(extended,clock.millis(),next.revision());return null;}));
+        var replacement=reserve(next);
+        assertNotEquals(reserved.invocation().reservedNonce(),replacement.invocation().reservedNonce());
+        assertThrows(Failure.class,()->consume(reserved));assertEquals(EnterpriseInvocationState.EXECUTING,consume(replacement).state());
+        var business=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(next.id()));
+        assertEquals(original.id(),business.invocation());assertNull(business.outcome());
+    }
+    @Test void recoveryJournalScenariosHoldUnderPostgresRuntimeRole() throws Exception {
+        runPostgresScenarios(List.of(this::recoveryJournalUsesPositiveControlAdmissionAndExpiredPermitBindings,
+                this::recoveryJournalNeverTurnsMissingRecordsOrConsumedReportsIntoProof,
+                this::recoveryScopeIsAdmissionBoundImmutableAndUnavailableForRetroactiveClaims,
+                this::recoveryRecordsRetainExactPredecessorsWithoutGrantingReplacementAuthority,
+                this::recoveryRebindIsAtomicKeepsTheDeadlineAndRetainsAllOldAttempts,
+                this::publicRebindingOfExpiredUnconsumedPermitRetainsBusinessKeyAndAudit));
+    }
+    private void runPostgresScenarios(List<KeyPolicyScenario> scenarios) throws Exception {
+        String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
+        Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL fixture");
+        for(var scenario:scenarios) {
+            graph=new EnterpriseConformanceTest();graph.graph();
+            clock=Clock.fixed(Instant.ofEpochMilli(EnterpriseConformanceTest.NOW),ZoneOffset.UTC);
+            String database="windowpolicy_"+UUID.randomUUID().toString().replace("-","");
+            try(var connection=java.sql.DriverManager.getConnection(base,"control_migrator",password);var statement=connection.createStatement()){statement.execute("CREATE DATABASE "+database);}
+            String url=base.replace("/control?","/"+database+"?");
+            org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).cleanDisabled(true).load().migrate();
+            var source=new org.postgresql.ds.PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
+            keyPolicySource=source;store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),graph.codec);
+            store.transaction(gateway.tenant(),true,tx->{tx.save(tx.load(),graph.directory());return null;});
+            EnterpriseConformanceTest.online(store,graph.codec,"device");
+            signer=new RsaEffectSigner(key,"permit-key",graph.codec);
+            operations=new EnterpriseOperations(store,graph.codec,signer,clock,"control","toolgate-client",60000,100);
+            scenario.run();
+        }
+    }
+
+
+    @Test void tenantKeysNeverDiscloseAnotherOwnersResultForMatchingOrChangedInputs() {
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.TENANT,null,null,null,null));
+        var original=keyed("tenant-owner-a","data/report.txt","e".repeat(64));
+        for(String path:List.of("data/report.txt","data/other.txt")) {
+            var r=request("tenant-owner-other",path);var c=r.context();
+            var other=new RequestContext(c.requestId(),c.tenantId(),c.mode(),c.credentialKind(),c.issuer(),"admin",
+                    c.agentId(),c.workloadBindingId(),c.chain(),c.sessionEpoch(),c.credentialEpoch(),
+                    c.delegatedSessionEpoch(),c.expiresAtUnixMs(),c.bindingId(),c.credentialSha256());
+            var supplied=new EnterpriseInvocationRequest(other,r.request(),r.toolDigest(),r.packageDigest(),null,null,"e".repeat(64));
+            assertEquals(409,assertThrows(Failure.class,()->operations.submit(gateway,graph.codec.json(supplied))).status());
+        }
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().invocations("",100).size()).intValue());
+        assertEquals(original.id(),store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(original.id())).invocation());
+    }
+    @Test void humanKeysUseTheVerifiedUserNamespaceAndCannotUseAnAbsentAgent() {
+        var alice=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,null,null));
+        var denied=request("human-agent-key","data/report.txt");var c=denied.context();
+        var human=new RequestContext(c.requestId(),c.tenantId(),RequestMode.HUMAN,CredentialKind.STATIC_TOKEN,
+                null,"alice",null,null,List.of(),1L,null,null,null,c.bindingId(),null);
+        var supplied=new EnterpriseInvocationRequest(human,denied.request(),denied.toolDigest(),denied.packageDigest(),null,null,"f".repeat(64));
+        assertEquals(403,assertThrows(Failure.class,()->operations.submitHuman(alice,supplied,"device")).status());
+        businessPolicy(new BusinessKeyPolicy(true,BusinessKeyNamespace.DELEGATED_USER,null,null,null,null));
+        var allowed=request("human-user-key","data/report.txt");
+        var keyRequest=new EnterpriseInvocationRequest(human,allowed.request(),allowed.toolDigest(),allowed.packageDigest(),null,null,"f".repeat(64));
+        var invocation=graph.codec.model(operations.submitHuman(alice,keyRequest,"device").body(),EnterpriseInvocation.class);
+        var key=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(invocation.id()));
+        assertEquals("DELEGATED_USER",key.namespace());assertEquals("alice",key.identity());assertEquals("",key.agent());
+        assertEquals("alice",key.user());
+    }
+    @Test void invalidKeyPolicyCannotPassConfigurationReviewValidation() {
+        var original=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var d=original.definition();
+        for(var invalid:List.of(
+                new BusinessKeyPolicy(true,BusinessKeyNamespace.AGENT,null,null,1000L,2000L),
+                new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,5000L,1000L,null))) {
+            var definition=new ToolDefinition(d.id(),d.name(),d.description(),d.actions(),d.inputSchema(),d.outputSchema(),d.reconciliation(),invalid, null);
+            graph.add(Kind.TOOL,new ControlTool(original.id(),original.name(),original.enabled(),original.revision()+1,
+                    definition,original.extractorId(),original.version(),original.packageDigest()));
+            assertThrows(IllegalArgumentException.class,()->graph.codec.validatePolicies(graph.directory()));
+        }
+    }
+    void deniedKeySql(String table,String invocation,String sql) throws Exception {
+        try(var connection=keyPolicySource.getConnection()) {
+            connection.setAutoCommit(false);
+            if(connection.getMetaData().getDatabaseProductName().equals("PostgreSQL"))
+                try(var scope=connection.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){
+                    scope.setString(1,gateway.tenant().value());scope.execute();
+                }
+            try(var check=connection.prepareStatement("SELECT count(*) FROM "+table+" WHERE tenant_id=? AND invocation_id=?")){
+                check.setString(1,gateway.tenant().value());check.setString(2,invocation);
+                try(var rows=check.executeQuery()){assertTrue(rows.next());assertEquals(1,rows.getInt(1));}
+            }
+            try(var statement=connection.prepareStatement(sql)){
+                statement.setString(1,gateway.tenant().value());statement.setString(2,invocation);
+                assertThrows(java.sql.SQLException.class,statement::executeUpdate);
+            }
+            connection.rollback();
+        }
+    }
+    @Test void databaseGuardsRejectRetentionRewritesHistoryDeletionAndForgedArchives() throws Exception {
+        resolvedWindowReplacementArchivesExactlyOneImmutableGeneration();
+        for(String update:List.of("retain_until=retain_until+1","dedupe_expires_at=dedupe_expires_at+1","namespace_identity='forged'"))
+            deniedKeySql("control_business_keys","window-store-next",
+                    "UPDATE control_business_keys SET "+update+" WHERE tenant_id=? AND invocation_id=?");
+        deniedKeySql("control_business_key_history","window-store-original",
+                "DELETE FROM control_business_key_history WHERE tenant_id=? AND invocation_id=?");
+        deniedKeySql("control_business_key_history","window-store-original",
+                "UPDATE control_business_key_history SET fingerprint='sha256:"+"0".repeat(64)+"' WHERE tenant_id=? AND invocation_id=?");
+        deniedKeySql("control_business_keys","window-store-next",
+                "INSERT INTO control_business_key_history(tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,outcome,tombstoned_at,archived_at) SELECT tenant_id,tool_id,namespace,namespace_identity,business_key_hash,invocation_id,fingerprint,caller_agent_id,caller_user_id,created_at,dedupe_expires_at,retain_until,'FAILED',tombstoned_at,dedupe_expires_at+1 FROM control_business_keys WHERE tenant_id=? AND invocation_id=?");
+        try(var connection=keyPolicySource.getConnection()){
+            if(connection.getMetaData().getDatabaseProductName().equals("PostgreSQL")){
+                connection.setAutoCommit(false);
+                try(var scope=connection.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){
+                    scope.setString(1,io.ololabs.toolgate.control.fixtures.Tenants.id("other").value());scope.execute();
+                }
+                try(var query=connection.prepareStatement("SELECT count(*) FROM control_business_key_history WHERE tenant_id=?")){
+                    query.setString(1,gateway.tenant().value());
+                    try(var rows=query.executeQuery()){assertTrue(rows.next());assertEquals(0,rows.getInt(1));}
+                }
+                connection.rollback();
+            }
+        }
+    }
+
+
+    @Test void catalogUsesCurrentControlKeyPolicyInsteadOfDeviceHints() {
+        var policy=new BusinessKeyPolicy(true,BusinessKeyNamespace.TENANT,null,null,10000L,null);
+        businessPolicy(policy);
+        var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var hint=new LocalToolInfo("tool","read","Device hint",true,tool.definition().inputSchema(),
+                new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),tool.packageDigest(),
+                new BusinessKeyPolicy(false,BusinessKeyNamespace.AGENT,null,null,null,null));
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.saveEndpointConfiguration(new Store.EndpointConfiguration("device",tx.load().revision(),"{}",null,
+                    graph.codec.json(new LocalToolCatalog(List.of(hint)))));
+            return null;
+        });
+        var endpoints=new EndpointService(store,graph.codec,null,clock,true,gateway.tenant().value(),
+                "server","Organization","https://control.example.test","https://gateway.example.test");
+        var service=new McpService(store,graph.codec,endpoints,operations,clock,gateway.tenant(),"server");
+        String body=graph.codec.json(request("policy-catalog","data/report.txt").context());
+        var catalog=graph.codec.model(service.catalog(gateway,true,body).body(),LocalToolCatalog.class);
+        assertEquals(1,catalog.tools().size());
+        assertEquals(policy,catalog.tools().getFirst().businessKeyPolicy());
+        graph.remove(Kind.GRANT,"capability");saveGraph();
+        assertTrue(graph.codec.model(service.catalog(gateway,true,body).body(),LocalToolCatalog.class).tools().isEmpty());
+    }
+
+
+    @Test void directHumanPolicyCallsUseCanonicalIdsAndOneDurableLocalDispatch() {
+        var policy=new BusinessKeyPolicy(true,BusinessKeyNamespace.DELEGATED_USER,null,null,10000L,null);
+        businessPolicy(policy);
+        var tool=graph.codec.model(graph.entries.get(Kind.TOOL.id("tool")).document(),ControlTool.class);
+        var hint=new LocalToolInfo("tool","read","Human local tool",true,tool.definition().inputSchema(),
+                new EnterpriseEvaluator(graph.codec).toolDigest(graph.directory(),tool),tool.packageDigest(), null);
+        store.transaction(gateway.tenant(),true,tx->{
+            tx.saveEndpointConfiguration(new Store.EndpointConfiguration("device",tx.load().revision(),"{}",null,
+                    graph.codec.json(new LocalToolCatalog(List.of(hint)))));return null;
+        });
+        var endpoints=new EndpointService(store,graph.codec,null,clock,true,gateway.tenant().value(),
+                "server","Organization","https://control.example.test","https://gateway.example.test").operations(operations);
+        var service=new McpService(store,graph.codec,endpoints,operations,clock,gateway.tenant(),"server");
+        var runtime=new HumanRuntime(store,graph.codec,operations,service,new ServerPackages(store,graph.codec,operations,clock));
+        var actor=new DirectoryService.Actor(gateway.tenant(),"d".repeat(64),false,false,"alice");
+        var request=new EnterpriseHumanRequest("binding-a","device",request("human-local-policy","data/report.txt").request());
+        var first=graph.codec.model(runtime.invoke(actor,1,graph.codec.json(request),"human-step-42").body(),EnterpriseHumanOutcome.class);
+        assertTrue(first.invocation().id().startsWith("op-"));
+        assertEquals(first.invocation().id(),first.dispatch().record().requestId());
+        var replay=graph.codec.model(runtime.invoke(actor,1,graph.codec.json(request),"human-step-42").body(),EnterpriseHumanOutcome.class);
+        assertEquals(first.invocation().id(),replay.invocation().id());
+        assertEquals(first.dispatch().record().requestId(),replay.dispatch().record().requestId());
+        var binding=store.transaction(gateway.tenant(),false,tx->tx.enterprise().businessKeyForInvocation(first.invocation().id()));
+        assertEquals("DELEGATED_USER",binding.namespace());assertEquals("alice",binding.identity());
+        assertEquals(1,store.transaction(gateway.tenant(),false,tx->tx.enterprise().attempts(first.invocation().id(),clock.millis()).size()).intValue());
+    }
 
 }

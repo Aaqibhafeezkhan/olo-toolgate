@@ -8,22 +8,26 @@ package io.ololabs.toolgate.contracts.v2;
  * @param toolId canonical toolId value
  * @param upstreamName canonical upstreamName value
  * @param definitionDigest canonical definitionDigest value
+ * @param effectPolicy canonical effectPolicy value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record McpApprovedTool(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolId", required = true) String toolId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "upstreamName", required = true) String upstreamName,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "definitionDigest", required = true) String definitionDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "definitionDigest", required = true) String definitionDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectPolicy", required = true) McpEffectPolicy effectPolicy
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
      * @param toolId canonical toolId value
      * @param upstreamName canonical upstreamName value
      * @param definitionDigest canonical definitionDigest value
+     * @param effectPolicy canonical effectPolicy value
      */
     public McpApprovedTool {
         java.util.Objects.requireNonNull(toolId, "toolId");
         java.util.Objects.requireNonNull(upstreamName, "upstreamName");
         java.util.Objects.requireNonNull(definitionDigest, "definitionDigest");
+        java.util.Objects.requireNonNull(effectPolicy, "effectPolicy");
     }
 }

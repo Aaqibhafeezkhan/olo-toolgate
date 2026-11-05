@@ -921,7 +921,10 @@
       "properties": {
         "permissions": {
           "type": "array",
-          "items": {"type": "string", "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"},
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z_]*\\.[a-z][a-z_]*$"
+          },
           "maxItems": 256,
           "uniqueItems": true,
           "description": "Server-derived available feature actions; target-specific authorization is rechecked for each request."
@@ -1205,7 +1208,11 @@
         "REPLACE_CONFLICTS",
         "ONE_DEVICE_PER_ACCOUNT",
         "REQUIRED_REVIEWS_CHANGE",
-        "RATE_LIMITED"
+        "RATE_LIMITED",
+        "BOUND_SERVICE_EFFECT_REQUIRED",
+        "EFFECT_CONSENT_REQUIRED",
+        "EFFECT_CONSENT_MISMATCH",
+        "EFFECT_CONSENT_EXHAUSTED"
       ]
     },
     "ControlErrorDetail": {

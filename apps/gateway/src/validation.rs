@@ -28,9 +28,11 @@ impl Contracts {
             .map_err(|_| "invalid embedded registry")?;
         for (name, file) in [
             ("AuthorizationRequest", "v1/runtime"),
+            ("BusinessKeyPolicy", "v1/tool"),
             ("RequestContext", "v2/common"),
             ("EnterpriseInvocationRequest", "v1/enterprise"),
             ("EnterpriseInvocation", "v1/enterprise"),
+            ("EnterpriseOperationHistoryPage", "v1/operation"),
             ("EnterpriseReservationRequest", "v1/enterprise"),
             ("EnterpriseReservation", "v1/enterprise"),
             ("EnterpriseAuthorizationOutcome", "v1/enterprise"),

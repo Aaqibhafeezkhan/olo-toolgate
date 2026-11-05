@@ -72,6 +72,24 @@ final class PackageCompatibilityTest {
         assertEquals(1, PackageCompatibility.hostProblems(manifest(), "host-1", JSON.readTree("{\"version\":\"0.10.0\"}")).size(), "a host that reports no protocol");
     }
 
+    @Test void imageBoundPackagesAndHostTiersCannotSilentlyDowngrade() throws Exception {
+        var manifest=manifest();var runtime=(ObjectNode)manifest.path("runtimes").get(0);
+        runtime.put("runtimeId","python").put("language","python").put("baseImageDigest","sha256:"+"a".repeat(64));
+        ((ObjectNode)manifest.path("tools").get(0)).put("runtimeId","python");
+        var nativeHost=(ObjectNode)host("1.0.0",2,2);nativeHost.putArray("tiers").add("HOST_NATIVE");
+        var ociHost=(ObjectNode)host("1.0.0",2,2);ociHost.putArray("tiers").add("OCI_SANDBOX");
+        assertEquals(1,PackageCompatibility.hostProblems(manifest,"host",nativeHost).size());
+        assertTrue(PackageCompatibility.hostProblems(manifest,"host",ociHost).isEmpty());
+        runtime.remove("baseImageDigest");
+        assertEquals(1,PackageCompatibility.hostProblems(manifest,"host",ociHost).size());
+        assertTrue(PackageCompatibility.hostProblems(manifest,"host",nativeHost).isEmpty());
+        runtime.put("baseImageDigest","sha256:"+"a".repeat(64));
+        var client=((ObjectNode)manifest.path("tools").get(0)).deepCopy();client.put("runtimeId","jvm");((ObjectNode)client.get("descriptor")).put("kind","CLIENT");
+        ((com.fasterxml.jackson.databind.node.ArrayNode)manifest.path("tools")).add(client);
+        ((com.fasterxml.jackson.databind.node.ArrayNode)manifest.path("runtimes")).addObject().put("runtimeId","jvm").put("language","java").put("version","17");
+        assertTrue(PackageCompatibility.hostProblems(manifest,"host",ociHost).isEmpty(),"client-only runtimes do not force native server execution");
+    }
+
     @Test void uploadRefusesWhatNoToolHostCanRunAndDeployRefusesATooOldHost() throws Exception {
         var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("compatibility.sqlite"))), codec);
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");

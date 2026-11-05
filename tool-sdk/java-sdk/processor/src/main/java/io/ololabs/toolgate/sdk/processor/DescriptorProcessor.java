@@ -546,12 +546,8 @@ public final class DescriptorProcessor extends AbstractProcessor {
             d.put("tcp", tcpList);
 
             Variables vars = variables(method, owner, grouped, properties.keySet(), isClient);
-            for (String authId : authIds) {
-                HttpAuth a = auths.get(authId).value;
-                if (!a.secret().isEmpty() && vars.secrets.stream().noneMatch(s -> s.name().equals(a.secret()))) {
-                    throw new Problem(method, "auth " + authId + " uses secret " + a.secret() + ", which tool " + name + " does not declare");
-                }
-            }
+            // Auth-only vault references stay in the broker. A separate @Secret
+            // declaration explicitly opts into raw worker access.
             if (isClient && owner.getAnnotationsByType(HttpAuth.class).length > 0) {
                 throw new Problem(method, "client tool " + name + " cannot be declared next to @HttpAuth");
             }

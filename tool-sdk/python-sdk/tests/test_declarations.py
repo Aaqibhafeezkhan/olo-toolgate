@@ -108,6 +108,21 @@ class DeclarationTest(unittest.TestCase):
         self.assertIn('"permissions":["HTTP_ROUTE"]', server)
         self.assertIn('"destinations":[{"hostSetting":"ApiHost","id":"api","port":443,"spkiPins":[]}]', server)
 
+    def test_api_key_vault_reference_can_remain_broker_only(self):
+        result = self.ok(tools('''
+            http_auth(id="key", type=AuthType.API_KEY, header="X-Key", secret="AUTH_KEY")
+            http_route(id="items.mine", destination="api", method=HttpMethod.GET, path="/me", auth="key")
+            ''', '''
+            @server_tool(name="items.mine", title="T", description="D", routes="items.mine")
+            def mine(self) -> Out:
+                return None
+            '''))
+        descriptor = result.descriptor("items.mine")
+        self.assertIn('"secret":"AUTH_KEY"', descriptor)
+        self.assertIn('"secrets":[]', descriptor)
+        self.assertIn('"permissions":["HTTP_ROUTE"]', descriptor)
+        self.assertNotIn("CREDENTIALS_IN_SANDBOX", descriptor)
+
     def test_non_idempotent_destructive_tools_require_a_business_key(self):
         r = self.ok(tools("", '''
             @server_tool(name="items.delete", title="T", description="D", effect=EffectSafety.NON_IDEMPOTENT,

@@ -31,7 +31,7 @@ def expression(row,fields,queued,postgres):
     queue='0' if queued is None else 'CASE WHEN '+queued.format(row=row,state=state)+' THEN 1 ELSE 0 END'
     return '+'.join(values),queue
 
-def block(postgres):
+def block(postgres, include_table=True):
     integer='bigint' if postgres else 'INTEGER';text='varchar(128)' if postgres else 'TEXT'
     owner='' if postgres else ' REFERENCES control_tenants(tenant_id)'
     statements=[f'''CREATE TABLE control_tenant_capacity(
@@ -43,6 +43,7 @@ def block(postgres):
  max_stored_rows {integer} NOT NULL DEFAULT 100000 CHECK(max_stored_rows BETWEEN 1 AND 1000000),
  max_queued_rows {integer} NOT NULL DEFAULT 256 CHECK(max_queued_rows BETWEEN 1 AND 100000),
  CHECK(stored_rows<=max_stored_rows AND queued_rows<=max_queued_rows AND stored_bytes+queued_rows*16777216<=max_stored_bytes));''']
+    if not include_table: statements=[]
     if postgres:
         statements+=['GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;',
                      'GRANT SELECT,INSERT,UPDATE,DELETE ON control_tenant_capacity TO toolgate_control_platform;',
@@ -82,7 +83,7 @@ def main():
     for postgres,filename in [(True,'migration/V1__initial_schema.sql'),(False,'quickstart/V1.sql')]:
         path=ROOT/'apps/control-plane/src/main/resources/db'/filename;source=path.read_text()
         if START in source:
-            a=source.index(START);b=source.index(END,a)+len(END);updated=source[:a]+block(postgres)+source[b:]
+            a=source.index(START);b=source.index(END,a)+len(END);updated=source[:a]+block(postgres, include_table="CREATE TABLE control_tenant_capacity(" in source[a:b])+source[b:]
         elif postgres:
             at=source.index('DO $tenant_policies$');updated=source[:at]+block(True)+'\n'+source[at:]
             updated=updated.replace("        ,'control_tenant_identity_keys'","        ,'control_tenant_identity_keys'\n        ,'control_tenant_capacity'")

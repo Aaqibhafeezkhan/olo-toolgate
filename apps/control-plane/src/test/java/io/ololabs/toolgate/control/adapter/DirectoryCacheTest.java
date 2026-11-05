@@ -24,7 +24,7 @@ class DirectoryCacheTest {
         store.transaction(tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
             var id = Ids.Kind.USER.id("same-id"); var old = entries.get(id);
-            entries.put(id, codec.entry(Ids.Kind.USER, codec.json(new ControlUser(id.value(), name, true, old == null ? 1L : old.revision() + 1))));
+            entries.put(id, codec.entry(Ids.Kind.USER, codec.json(new ControlUser(id.value(), name, true, old == null ? 1L : old.revision() + 1, null, null, null))));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null;
         });
     }
@@ -70,7 +70,7 @@ class DirectoryCacheTest {
             var before = read(first, A);
             // Identity observations use this same UPDATE path without advancing control_tenants.revision.
             try (var c = otherSource.getConnection(); var s = c.prepareStatement("UPDATE control_records SET revision=revision+1,document=? WHERE tenant_id=? AND record_id='same-id'")) {
-                s.setString(1, codec.json(new ControlUser("same-id", "Client update", false, 3L))); s.setString(2, A.value()); assertEquals(1, s.executeUpdate());
+                s.setString(1, codec.json(new ControlUser("same-id", "Client update", false, 3L, null, null, null))); s.setString(2, A.value()); assertEquals(1, s.executeUpdate());
             }
             var after = read(first, A); assertEquals(before.revision(), after.revision());
             assertFalse(after.entries().get(Ids.Kind.USER.id("same-id")).enabled());
@@ -86,7 +86,7 @@ class DirectoryCacheTest {
             var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec); update(store, codec, A, "Committed"); read(store, A);
             assertThrows(IllegalStateException.class, () -> store.transaction(A, true, tx -> {
                 var before = tx.load(); var entries = new HashMap<>(before.entries());
-                entries.put(Ids.Kind.USER.id("same-id"), codec.entry(Ids.Kind.USER, codec.json(new ControlUser("same-id", "Rolled back", false, 2L))));
+                entries.put(Ids.Kind.USER.id("same-id"), codec.entry(Ids.Kind.USER, codec.json(new ControlUser("same-id", "Rolled back", false, 2L, null, null, null))));
                 tx.save(before, new Directory(before.revision() + 1, entries));
                 assertFalse(tx.load().entries().get(Ids.Kind.USER.id("same-id")).enabled());
                 tx.adoptionDigest(A, codec); throw new IllegalStateException("rollback");

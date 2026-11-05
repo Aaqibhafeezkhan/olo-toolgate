@@ -37,6 +37,16 @@ export interface BundlePublishRequest {
   readonly gracePolicyIds?: ReadonlyArray<string>;
   readonly rollbackOf?: number;
 }
+export type BusinessKeyNamespace = "AGENT" | "DELEGATED_USER" | "TENANT";
+/** Reviewed admission key policy. Missing policy retains conservative legacy explicit-key behavior. */
+export interface BusinessKeyPolicy {
+  readonly required: boolean;
+  readonly namespace: BusinessKeyNamespace;
+  readonly argument?: string;
+  readonly dedupeWindowMs?: number;
+  readonly retentionMs?: number;
+  readonly upstreamIdempotencyWindowMs?: number;
+}
 /** Durable caller-scoped cancellation acknowledgement. */
 export interface CancellationAccepted {
   readonly cancelled: boolean;
@@ -373,7 +383,7 @@ export interface ControlErrorDetail {
   readonly ids?: ReadonlyArray<string>;
   readonly requestId?: string;
 }
-export type ControlErrorDetailCode = "UNRESOLVED_IDENTITIES" | "REPLACE_CONFLICTS" | "ONE_DEVICE_PER_ACCOUNT" | "REQUIRED_REVIEWS_CHANGE" | "RATE_LIMITED";
+export type ControlErrorDetailCode = "UNRESOLVED_IDENTITIES" | "REPLACE_CONFLICTS" | "ONE_DEVICE_PER_ACCOUNT" | "REQUIRED_REVIEWS_CHANGE" | "RATE_LIMITED" | "BOUND_SERVICE_EFFECT_REQUIRED" | "EFFECT_CONSENT_REQUIRED" | "EFFECT_CONSENT_MISMATCH" | "EFFECT_CONSENT_EXHAUSTED";
 /** Explicit Tool Group to Device Group binding; one binding is selected per invocation. */
 export interface ControlExecutionBinding {
   readonly id: string;
@@ -881,6 +891,29 @@ export interface EnterpriseApprovalReview {
 }
 export type EnterpriseApprovalState = "PENDING" | "APPROVED" | "DENIED" | "CANCELLED" | "EXPIRED" | "REVOKED";
 export type EnterpriseApprovalType = "OPERATION" | "CONFIGURATION";
+export type EnterpriseAttemptEffectScope = "ADMISSION_ONLY" | "QUALIFIED_BROKER_ONLY" | "REVIEWER_WITNESSED" | "LEGACY_UNKNOWN";
+/** Bounded attempt metadata; no bearer capabilities, raw input or target claim tokens. */
+export interface EnterpriseAttemptHistory {
+  readonly attemptId: string;
+  readonly ordinal: number;
+  readonly state: EnterpriseInvocationState;
+  readonly consumed: boolean;
+  readonly issuedAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly evidenceCount: number;
+  readonly scope: EnterpriseAttemptEffectScope;
+  readonly manifestSealed: boolean;
+  readonly manifestEffectCount: number;
+  readonly manifestDigest?: string;
+  readonly settled: boolean;
+  readonly grade: EnterpriseOutcomeGrade;
+}
+/** Exact closed-attempt scope attestation for independent maker/checker review; never execution authority. */
+export interface EnterpriseAttemptSettlementReview {
+  readonly expectedOutcomeRevision: number;
+  readonly attemptIds: ReadonlyArray<string>;
+  readonly noFurtherEffects: boolean;
+}
 /** Saved authority, explicitly published signed snapshot and independently acknowledged device adoption are distinct states. */
 export interface EnterpriseAuthorityStatus {
   readonly directoryRevision: number;
@@ -986,6 +1019,19 @@ export interface EnterpriseDecision {
   readonly diagnosticId: string;
 }
 export type EnterpriseDecisionReason = "MATCHED" | "NO_GRANT" | "IDENTITY_DISABLED" | "INVALID_CONTEXT" | "GROUP_UNAVAILABLE" | "NO_BINDING" | "DEVICE_UNTRUSTED" | "RESOURCE_REJECTED" | "BLOCKED" | "APPROVAL_REQUIRED" | "EVIDENCE_MISSING" | "EXPIRED" | "STALE_AUTHORITY" | "QUOTA_EXCEEDED" | "VERSION_MISMATCH" | "MANAGEMENT_DENIED";
+export type EnterpriseEffectGenerationState = "AUTHORIZED" | "RELEASED" | "SENDING" | "CONSUMED" | "AMBIGUOUS" | "COMPLETED" | "FAILED" | "CONFLICT";
+/** One immutable authorization-generation identity and its current evidence-derived state; response digests do not prove business-receipt equivalence. */
+export interface EnterpriseEffectHistory {
+  readonly effectId: string;
+  readonly generation: number;
+  readonly attemptId: string;
+  readonly routeId: string;
+  readonly requestDigest: string;
+  readonly state: EnterpriseEffectGenerationState;
+  readonly grade: EnterpriseOutcomeGrade;
+  readonly evidenceCount: number;
+  readonly receiptDigest?: string;
+}
 /** Device-bound durable effect outcome and completed resource subset. */
 export interface EnterpriseEffectReport {
   readonly invocationId: string;
@@ -1052,7 +1098,7 @@ export interface EnterpriseHumanTarget {
   readonly bindingId: string;
   readonly deviceId: string;
 }
-/** Durable exact binding and outcome state. OUTCOME_UNKNOWN never authorizes a blind retry. */
+/** Durable exact binding and executor-reported state. operationOutcome, when present, is Control's independently derived business outcome; reported success alone never proves effects. */
 export interface EnterpriseInvocation {
   readonly id: string;
   readonly requestDigest: string;
@@ -1067,6 +1113,7 @@ export interface EnterpriseInvocation {
   readonly resultDigest?: string;
   readonly diagnosticId: string;
   readonly reconciliation?: ReconciliationMethod;
+  readonly operationOutcome?: EnterpriseOperationOutcome;
 }
 /** Scoped durable effect states. A cursor does not disclose hidden rows. */
 export interface EnterpriseInvocationPage {
@@ -1081,6 +1128,7 @@ export interface EnterpriseInvocationRequest {
   readonly packageDigest: string;
   readonly downstreamIdempotencyKey?: string;
   readonly executionContext?: V2.ExecutionContext;
+  readonly businessKeyHash?: string;
 }
 export type EnterpriseInvocationState = "PENDING_APPROVAL" | "QUEUED" | "RESERVED" | "DISPATCHED" | "EXECUTING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "PARTIAL" | "OUTCOME_UNKNOWN";
 /** Feature/action management grants belong to group-assigned Management Roles only. Generic legacy action names are rejected. */
@@ -1093,6 +1141,31 @@ export interface EnterpriseManagementRule {
   readonly deviceScope?: string;
 }
 export type EnterpriseMemberType = "USER" | "AGENT" | "TOOL" | "DEVICE";
+/** Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots. */
+export interface EnterpriseOperationHistoryPage {
+  readonly operation: EnterpriseOperationOutcome;
+  readonly attempts: ReadonlyArray<EnterpriseAttemptHistory>;
+  readonly effects: ReadonlyArray<EnterpriseEffectHistory>;
+  readonly next?: string;
+  readonly truncated: boolean;
+}
+/** Control-derived business outcome; metadata never grants execution authority or automatic retry. */
+export interface EnterpriseOperationOutcome {
+  readonly operationId: string;
+  readonly state: EnterpriseOperationState;
+  readonly revision: number;
+  readonly grade: EnterpriseOutcomeGrade;
+  readonly journalComplete: boolean;
+  readonly attemptCount: number;
+  readonly effectCount: number;
+  readonly unresolvedEffectCount: number;
+  readonly unsettledAttemptCount: number;
+  readonly finalized: boolean;
+  readonly retryable: boolean;
+  readonly deduplicationAssumed: boolean;
+  readonly updatedAtUnixMs: number;
+}
+export type EnterpriseOperationState = "RUNNING" | "OUTCOME_UNKNOWN" | "RECONCILIATION_REQUIRED" | "SUCCEEDED" | "PARTIAL" | "FAILED";
 /** Scoped operational health and configured hard bounds. Snapshot lag never authorizes a cached effect. */
 export interface EnterpriseOperationalStatus {
   readonly pendingSnapshotEvents: number;
@@ -1104,6 +1177,7 @@ export interface EnterpriseOperationalStatus {
   readonly authorityCacheGraceMs: number;
   readonly readyProbeFreshnessMs: number;
 }
+export type EnterpriseOutcomeGrade = "REPORTED" | "CONTROL_PROVEN" | "TARGET_CONFIRMED" | "REVIEWER_CONFIRMED" | "TARGET_DEDUPLICATION_ASSUMED";
 /** Short-lived audience-bound permit for one exact invocation and target. */
 export interface EnterprisePermitClaims {
   readonly issuer: string;
@@ -1161,6 +1235,7 @@ export interface EnterpriseReconciliationRequest {
   readonly completedResources: ReadonlyArray<ResourceDescriptor>;
   readonly evidenceDigest: string;
   readonly resultDigest?: string;
+  readonly attemptSettlement?: EnterpriseAttemptSettlementReview;
 }
 export type EnterpriseReconciliationState = "PENDING" | "APPLIED" | "DENIED";
 /** Protected operator review for group-only bootstrap or bounded recovery. */
@@ -1516,6 +1591,7 @@ export interface LocalToolInfo {
   readonly inputSchema: Record<string, unknown>;
   readonly toolDigest: string;
   readonly packageDigest: string;
+  readonly businessKeyPolicy?: BusinessKeyPolicy;
 }
 /** One JSON stdin document; arguments never become process command strings. */
 export interface LocalToolInput {
@@ -1589,6 +1665,24 @@ export interface PackageManifest {
   readonly compatibility: PackageCompatibility;
 }
 export type PackageState = "ABSENT" | "STAGING" | "READY" | "FAILED" | "REVOKED";
+/** Credential-free toolgate-http-request-v1 manifest of the exact prepared wire request. Never conveys authority on its own. */
+export interface PreparedHttpRequestManifest {
+  readonly version: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly routeId: string;
+  readonly scheme: string;
+  readonly host: string;
+  readonly port: number;
+  readonly method: string;
+  readonly path: string;
+  readonly query: string;
+  readonly contentType: string;
+  readonly bodyDigest: string;
+  readonly headers: Record<string, unknown>;
+  readonly authDeclarationId: unknown;
+  readonly credentialHeaders: ReadonlyArray<string>;
+}
 export type ReconciliationMethod = "DOWNSTREAM_IDEMPOTENCY" | "STATUS_LOOKUP" | "MANUAL";
 /** A leased client rechecks the exact pending operation online before execution. */
 export interface RemoteToolAuthorization {
@@ -1623,10 +1717,11 @@ export interface RemoteToolRecord {
   readonly completedAtUnixMs?: number;
   readonly error?: ErrorCode;
 }
-/** Gateway-private queued request/result response. */
+/** Authorized queued executor report/result. operationOutcome separately records the Control-derived business outcome; reported DONE alone does not prove completion. */
 export interface RemoteToolResponse {
   readonly record: RemoteToolRecord;
   readonly result?: RemoteToolResult;
+  readonly operationOutcome?: EnterpriseOperationOutcome;
 }
 /** Exact leased execution response. Failed execution carries a sanitized error code. */
 export interface RemoteToolResult {
@@ -1752,6 +1847,23 @@ export interface ServiceAuthorizationEpoch {
 export interface ServicePermit {
   readonly jws: string;
 }
+/** Target-owned claim consumption. Replies are status only; local ownership controls execution. */
+export interface ServicePermitClaimConsumption {
+  readonly request: ServicePermitConsumption;
+  readonly claimToken: string;
+}
+/** Recorded target claim reference; not an execution capability. */
+export interface ServicePermitClaimReference {
+  readonly authNonce: string;
+  readonly claimToken: string;
+}
+/** Status only. Never grants execution authority; the target must own its shared local claim. */
+export interface ServicePermitClaimResult {
+  readonly effectId: string;
+  readonly authorizationGeneration: number;
+  readonly status: ServicePermitClaimState;
+}
+export type ServicePermitClaimState = "CONSUMED" | "CONSUMED_BY_OTHER_CLAIM" | "COMPLETED" | "FAILED" | "AMBIGUOUS" | "CONFLICT";
 /** Control-issued exact-request authorization for a downstream service; times are Unix milliseconds. */
 export interface ServicePermitClaims {
   readonly iss: string;
@@ -1770,6 +1882,9 @@ export interface ServicePermitClaims {
   readonly iat: number;
   readonly exp: number;
   readonly executionNonce: string;
+  readonly httpRequestDigest: string;
+  readonly effectId?: string;
+  readonly authorizationGeneration?: number;
 }
 /** Single-use downstream write permit was consumed under current authority. */
 export interface ServicePermitConsumed {
@@ -1782,13 +1897,37 @@ export interface ServicePermitConsumption {
   readonly resources: ReadonlyArray<ResourceDescriptor>;
   readonly requestFingerprint: string;
   readonly executorKeySha256: string;
+  readonly httpRequestDigest: string;
+}
+/** Direct-mTLS owner request for the single AUTHORIZED to SENDING transition before a bound OLO write. A repeated request never permits another send. */
+export interface ServicePermitDispatch {
+  readonly permit: ServicePermit;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+}
+/** This owner won the single send transition; a lost response cannot be replayed into new authority. */
+export interface ServicePermitDispatchAllowed {
+  readonly authorized: boolean;
 }
 /** Executor request for downstream authorization; scope comes exclusively from the admitted invocation. */
 export interface ServicePermitIssue {
   readonly invocationId: string;
   readonly fencingToken: string;
   readonly audience: ServiceAudience;
+  readonly httpRequestDigest: string;
+  readonly httpRequestManifest: PreparedHttpRequestManifest;
+  readonly invocationPermit: V2.SignedInvocationPermit;
+  readonly brokerInstanceId: string;
+  readonly handlerId: string;
+  readonly effectKey?: string;
 }
+/** Authenticated target evidence, accepted after grant expiry without renewing authority. */
+export interface ServicePermitTargetOutcome {
+  readonly claim: ServicePermitClaimReference;
+  readonly outcome: ServicePermitTargetOutcomeKind;
+  readonly resultDigest: string;
+}
+export type ServicePermitTargetOutcomeKind = "COMPLETED" | "FAILED";
 export type Sha256 = string;
 /** Endpoint identity foundation wire model. */
 export interface SignedClientDiscovery {
@@ -1813,6 +1952,8 @@ export interface ToolDefinition {
   readonly inputSchema: Record<string, unknown>;
   readonly outputSchema: Record<string, unknown>;
   readonly reconciliation?: ReconciliationMethod;
+  readonly businessKeyPolicy?: BusinessKeyPolicy;
+  readonly targetDedupeGuarantees?: ReadonlyArray<V2.RouteDedupeConfiguration>;
 }
 export type UserRole = "BASIC" | "ADMINISTRATOR" | "SUPER_ADMIN";
 export const CONTRACT_SET_VERSION = "1.0.0-dev.1" as const;

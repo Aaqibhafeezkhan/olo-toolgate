@@ -29,6 +29,7 @@ IMAGE = 'olo-toolgate-local-ci:runner'
 # Coverage policy, NOT a second list of commands. New jobs require a decision.
 POLICY = {
     'quality-summary.reports': 'hosted-report',
+    'zero-trust-scorecard.scorecard': 'hosted-diagnostics',
     'create-release-branch.prepare': 'publication',
     'build-release.select': 'publication',
     'build-release.collect': 'artifacts',
@@ -78,6 +79,7 @@ POLICY = {
     'manual-development-release.publish-marketplace': 'publication',
 }
 REASONS = {
+    'hosted-diagnostics': 'Hosted scorecard artifact and Actions summary publication; execute tools/security/scorecard.py --execute locally. Missing case adapters are explicit acceptance gaps, never a passing security gate.',
     'hosted-report': 'Reporting-only coverage collection and Sonar upload use hosted repository variables, optional secrets and Actions summaries; collector helpers can run independently locally.',
     'python-matrix': 'Requires the hosted Python 3.10â€“3.14 and Linux, Windows and macOS matrix; foundation also runs the SDK tests locally on Python 3.12.',
     'legacy': 'Compatibility-only reusable body; the unified main pipeline owns these checks in foundation and images, so local default replay does not repeat them.',
