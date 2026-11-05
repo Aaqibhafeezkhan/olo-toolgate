@@ -36,6 +36,21 @@ class ServicePermitVerifierTest {
         return new ServicePermit(message+"."+b64.encodeToString(signature.sign()));
     }
     ServicePermitVerifier.Request request(String op){return new ServicePermitVerifier.Request(TENANT,op,RESOURCES,BODY,transport("alice"));}
+    @Test void requestValueSemanticsUseDefensiveBodyContentWithoutLoggingCredentials(){
+        byte[] body=BODY.clone();
+        var first=new ServicePermitVerifier.Request(TENANT,"memory.read",RESOURCES,body,transport("alice"));
+        var same=request("memory.read");
+        assertEquals(first,same);assertEquals(first.hashCode(),same.hashCode());
+        body[0]^=1;first.exactBody()[0]^=1;
+        assertEquals(first,same);
+        var changed=BODY.clone();changed[0]^=1;
+        assertNotEquals(first,new ServicePermitVerifier.Request(TENANT,"memory.read",RESOURCES,changed,transport("alice")));
+        assertNotEquals(first,request("memory.append"));
+        assertFalse(first.toString().contains("private"));
+        assertFalse(first.toString().contains("actual-signed-permit"));
+        assertFalse(first.toString().contains("alice"));
+        assertTrue(first.toString().contains("exactBodyBytes="+BODY.length));
+    }
     String transportDigest(){var t=transport("alice");return HttpRequestFingerprint.digest(t.profile(),t.uri(),t.method(),t.headers(),BODY);}
     ServicePermit boundPermit(String operation,String digest)throws Exception{
         var original=permit(operation);var json=new com.fasterxml.jackson.databind.ObjectMapper();

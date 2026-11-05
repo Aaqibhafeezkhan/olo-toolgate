@@ -20,6 +20,18 @@ public final class ServicePermitVerifier {
                           Transport transport) {
         public Request { resources=List.copyOf(resources);exactBody=exactBody.clone(); }
         @Override public byte[] exactBody(){return exactBody.clone();}
+        @Override public boolean equals(Object other){
+            return this==other || other instanceof Request that && Objects.equals(tenant,that.tenant)
+                && Objects.equals(operation,that.operation) && resources.equals(that.resources)
+                && Arrays.equals(exactBody,that.exactBody) && Objects.equals(transport,that.transport);
+        }
+        @Override public int hashCode(){
+            return 31*Objects.hash(tenant,operation,resources,transport)+Arrays.hashCode(exactBody);
+        }
+        @Override public String toString(){
+            return "Request[tenant="+tenant+", operation="+operation+", exactBodyBytes="+exactBody.length
+                +", resources=<redacted>, transport=<redacted>]";
+        }
     }
     /** Only accepted-request facts and trusted routing configuration belong here. */
     public record Transport(HttpRequestFingerprint.Profile profile,java.net.URI uri,String method,

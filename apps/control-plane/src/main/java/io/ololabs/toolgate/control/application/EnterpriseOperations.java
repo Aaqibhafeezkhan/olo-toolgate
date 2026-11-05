@@ -576,9 +576,10 @@ public final class EnterpriseOperations {
                         seal==null?0L:(long)seal.effectCount(),seal==null?null:seal.digest(),settlement!=null||reviewed!=null,
                         reviewed!=null?EnterpriseOutcomeGrade.REVIEWER_CONFIRMED:settlement==null||Set.of("SUCCEEDED","FAILED").contains(reported)?EnterpriseOutcomeGrade.REPORTED:EnterpriseOutcomeGrade.CONTROL_PROVEN));
             }
-            var rows=tx.enterprise().effectHistory(i.id(),offset,limit+1);
+            int nextOffset=Math.addExact(offset,limit);
+            var rows=tx.enterprise().effectHistory(i.id(),offset,Math.addExact(limit,1));
             boolean more=rows.size()>limit;var effects=more?rows.subList(0,limit):rows;
-            String next=more&&offset+limit<=4096?outcome.revision()+":"+(offset+limit):null;
+            String next=more&&nextOffset<=4096?outcome.revision()+":"+nextOffset:null;
             return reply(new EnterpriseOperationHistoryPage(outcome,entries,effects,next,
                     !outcome.journalComplete()||attempts.size()>64||more&&next==null),outcome.revision());
     }

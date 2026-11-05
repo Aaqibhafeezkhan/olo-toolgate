@@ -6,13 +6,43 @@ import io
 import tarfile
 import tempfile
 import unittest
+import subprocess
+from unittest.mock import patch
 import json
 from pathlib import Path
 from tools.client.extension import ROOT as PRODUCT_ROOT
-from tools.client.installer import linux_bytes, payload, embed_chrome
+from tools.client.installer import linux_bytes, payload, embed_chrome, create_dmg
 
 
 class InstallerTests(unittest.TestCase):
+    @patch('tools.client.installer.time.sleep')
+    @patch('tools.client.installer.subprocess.run')
+    def test_dmg_creation_retries_only_busy_service_with_identical_inputs(self,run,sleep):
+        busy=subprocess.CompletedProcess([],1,'','hdiutil: create failed - Resource busy')
+        run.side_effect=[busy,subprocess.CompletedProcess([],0,'','')]
+        create_dmg(Path('/fixture/source'),Path('/fixture/output.dmg'))
+        self.assertEqual(2,run.call_count)
+        self.assertEqual(run.call_args_list[0],run.call_args_list[1])
+        sleep.assert_called_once_with(1)
+
+    @patch('tools.client.installer.time.sleep')
+    @patch('tools.client.installer.subprocess.run')
+    def test_dmg_creation_preserves_nonbusy_failure_without_retry(self,run,sleep):
+        run.return_value=subprocess.CompletedProcess([],1,'','hdiutil: invalid source')
+        with self.assertRaises(subprocess.CalledProcessError) as failed:
+            create_dmg(Path('/fixture/source'),Path('/fixture/output.dmg'))
+        self.assertIn('invalid source',failed.exception.stderr)
+        run.assert_called_once();sleep.assert_not_called()
+
+    @patch('tools.client.installer.time.sleep')
+    @patch('tools.client.installer.subprocess.run')
+    def test_dmg_creation_busy_retry_is_bounded_and_remains_a_failure(self,run,sleep):
+        run.return_value=subprocess.CompletedProcess([],1,'','hdiutil: create failed - Resource busy')
+        with self.assertRaises(subprocess.CalledProcessError):
+            create_dmg(Path('/fixture/source'),Path('/fixture/output.dmg'))
+        self.assertEqual(3,run.call_count)
+        self.assertEqual([1,2],[call.args[0] for call in sleep.call_args_list])
+
     def test_windows_payload_contains_unpacked_chrome_extension(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory=Path(temporary)/'payload'

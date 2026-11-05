@@ -94,7 +94,7 @@ async fn fresh_generic_grants_guard_direct_and_private_child_transports_and_expi
             Mode::ExpiredSend,
             Mode::SlowTls,
         ] {
-            let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+            let certified = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).unwrap();
             let mut roots = rustls::RootCertStore::empty();
             roots.add(certified.cert.der().clone()).unwrap();
             let verifier = rustls::server::WebPkiClientVerifier::builder(Arc::new(roots))
@@ -208,7 +208,7 @@ async fn fresh_generic_grants_guard_direct_and_private_child_transports_and_expi
                 "query":[],"headers":[],"requestContentTypes":["application/json"],"maxRequestBytes":1024,"maxResponseBytes":1024,
                 "streaming":"NONE","timeoutMs":2500})).unwrap();
             let destination = serde_json::from_value(
-                json!({"id":"external","scheme":"https","host":"localhost","port":port,
+                json!({"id":"external","scheme":"https","host":"127.0.0.1","port":port,
                 "tls":{"caBundle":certified.cert.pem(),"spkiPins":[]},"mode":"BROKERED"}),
             )
             .unwrap();

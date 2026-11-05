@@ -9,12 +9,30 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
+import time
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[2]
 EXTENSIONS={'WINDOWS':'setup.exe','MACOS':'dmg','LINUX':'run'}
+
+
+def create_dmg(source, destination):
+    command=['/usr/bin/hdiutil','create','-volname','Install OLO ToolGate','-srcfolder',str(source),
+             '-format','UDZO','-ov',str(destination.resolve())]
+    for attempt in range(3):
+        result=subprocess.run(command,capture_output=True,text=True)
+        if result.returncode==0:
+            return
+        if 'resource busy' not in (result.stdout+result.stderr).lower() or attempt==2:
+            if result.stdout:print(result.stdout,end='')
+            if result.stderr:print(result.stderr,end='',file=sys.stderr)
+            raise subprocess.CalledProcessError(result.returncode,command,
+                                                output=result.stdout,stderr=result.stderr)
+        print('Disk image service is busy; retrying installer creation',flush=True)
+        time.sleep(attempt+1)
 
 
 def embed_chrome(directory_payload, build_number=0):
@@ -121,8 +139,7 @@ def build(target,output):
                     plist.write_bytes(plistlib.dumps(properties))
                 shutil.copytree(directory_payload,app/'Contents/Resources/payload')
                 shutil.copyfile(ROOT/'docs/client/installers.md',directory/'README.md')
-                subprocess.run(['/usr/bin/hdiutil','create','-volname','Install OLO ToolGate','-srcfolder',str(directory),
-                    '-format','UDZO','-ov',str(result.resolve())],check=True)
+                create_dmg(directory,result)
     result.with_name(result.name+'.sha256').write_text(hashlib.sha256(result.read_bytes()).hexdigest()+'  '+result.name+'\n',encoding='utf-8',newline='\n')
     print('Unsigned installer prepared: '+result.name)
 

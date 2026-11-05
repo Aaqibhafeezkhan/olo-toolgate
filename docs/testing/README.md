@@ -22,6 +22,9 @@ replay supported jobs. It reports coverage gaps explicitly.
 
 Use deterministic fixtures for unit tests and real service boundaries for
 integration/E2E checks. Run persistence changes against SQLite and PostgreSQL.
+Sonar's PL/SQL mapping is restricted to Oracle-specific file suffixes. This
+repository's .sql files use PostgreSQL and SQLite semantics, including SQLite
+empty strings; the executable engine/schema tests verify those dialects.
 The [foundation guide](../development/foundation.md) lists required tools and
 container-backed checks; dependencies that are missing must be reported.
 

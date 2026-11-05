@@ -376,6 +376,10 @@ class EnterpriseOperationTest {
     @Test void historyRequiresCurrentAuthorizationAndDoesNotWriteOnDeniedRead(){
         var i=submit("history-authorization");
         assertEquals(200,operations.history(gateway,i.id(),null,10).status());
+        for(int invalidLimit:new int[]{Integer.MIN_VALUE,0,101,Integer.MAX_VALUE}){
+            assertEquals(400,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,invalidLimit)).status());
+        }
+        assertEquals(200,operations.history(gateway,i.id(),null,100).status());
         var before=store.transaction(gateway.tenant(),false,tx->tx.enterprise().latestOperationOutcome(i.id()));
         graph.remove(Kind.GRANT,"human");saveGraph();
         assertEquals(403,assertThrows(Failure.class,()->operations.history(gateway,i.id(),null,10)).status());

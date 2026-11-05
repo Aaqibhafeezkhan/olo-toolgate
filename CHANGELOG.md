@@ -384,6 +384,12 @@ The project follows semantic versioning once stable versioning begins.
   recovery readiness. S20 stage qualification passes; full roadmap phase and
   production security acceptance remain pending.
 
+- Repair current-schema restore fixtures and deterministic TLS fixture addressing.
+  Use checked operation-history pagination, content-based immutable service
+  request values with redacted diagnostics, and bounded retry for macOS installer
+  disk-image service contention. Keep actual dialect SQL checks and map Oracle
+  analysis only to Oracle file suffixes.
+
 - Add immutable exact-effect previews, authenticated review and atomic consent
   slots for financial/destructive generic HTTP and native MCP calls. Preserve
   original expiry, keep policy approvals separate and refuse changed intent,
