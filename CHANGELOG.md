@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Distinguish unconfirmed operation outcomes in the example MCP client and stop
+  without retrying. Verify the current unqualified native boundary in the
+  LangChain image gate without presenting reported output as business success.
+
 - Patch the independent Ubuntu device base and LangChain package builder for
   CVE-2026-109518; require the fixed APT/libapt floor before secured-device
   package installation and inventory every production Noble root in CI.

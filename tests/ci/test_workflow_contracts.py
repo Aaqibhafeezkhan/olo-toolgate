@@ -45,6 +45,16 @@ class EarlyGateTests(unittest.TestCase):
         self.assertIn('tools/security/containment.py', str(jobs['rust']['steps']))
         self.assertIn('tools/security/deployment.py', str(jobs['rust']['steps']))
 
+    def test_langchain_gate_verifies_current_unqualified_native_refusal(self):
+        jobs=yaml.safe_load((ROOT/'.github/workflows/images.yml').read_text())['jobs']
+        gate=next(step for step in jobs['langchain']['steps']
+                  if '--verify-native-boundary' in step.get('run',''))
+        self.assertNotIn('--smoke',gate['run'])
+        self.assertIn('test_agent.py',gate['run'])
+        self.assertIn('manage.py setup',gate['run'])
+        self.assertNotIn('continue-on-error',gate)
+        self.assertNotIn('continue-on-error',jobs['langchain'])
+
     def test_manual_ci_reuses_all_unified_stages_after_bypassing_admission(self):
         manual = yaml.load((ROOT/'.github/workflows/ci-manual.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(manual['name'], 'ToolGate CI - Manual')

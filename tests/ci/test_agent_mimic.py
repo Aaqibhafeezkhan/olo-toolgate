@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('agent_mimic',ROOT/'debug/agent-mimic.py')
 mimic=importlib.util.module_from_spec(spec);spec.loader.exec_module(mimic)
@@ -94,5 +94,65 @@ class ScriptTests(unittest.TestCase):
                 self.assertEqual(mimic.resolve_ca('https://localhost:18450'),ca)
                 config.unlink()
                 self.assertIsNone(mimic.resolve_ca('https://localhost:18450'))
+
+class OutcomeMetadataTests(unittest.TestCase):
+    def rpc(self, result, wrong_id=False):
+        agent=mimic.Agent.__new__(mimic.Agent)
+        agent.token='fixture-token';agent.url='https://gateway.example/mcp'
+        agent.run_id='fixture';agent.sequence=0;agent.opener=Mock()
+        def response(request,timeout):
+            request_id=json.loads(request.data)['id']
+            data=json.dumps({'jsonrpc':'2.0','id':'wrong' if wrong_id else request_id,
+                             'result':result}).encode()
+            reply=Mock();reply.read.return_value=data;reply.headers={}
+            return contextlib.nullcontext(reply)
+        agent.opener.open.side_effect=response
+        with contextlib.redirect_stdout(io.StringIO()):
+            return agent.rpc('tools/call',{'name':'examples.hotfolder/list','arguments':{}})
+
+    def outcome(self):
+        return {'operationId':'inv-fixture','state':'OUTCOME_UNKNOWN','grade':'REPORTED',
+                'retryable':False,'unsettledAttemptCount':1}
+
+    def test_unknown_is_not_success_even_when_tool_error_flag_is_missing(self):
+        for flag in (True,False):
+            result={'isError':flag,'_meta':{'io.ololabs.toolgate/operationOutcome':self.outcome()},
+                    'structuredContent':{'private':'must-not-escape'}}
+            with self.subTest(flag=flag),self.assertRaises(mimic.UnconfirmedOperation) as caught:
+                self.rpc(result)
+            self.assertEqual(caught.exception.tool_error,flag)
+            self.assertNotIn('must-not-escape',str(caught.exception))
+            self.assertNotIn('structuredContent',caught.exception.__dict__)
+            self.assertIn('Do not retry',str(caught.exception))
+
+    def test_malformed_ids_retry_authority_and_worker_content_are_not_trusted_metadata(self):
+        for changes in ({'operationId':'bad\\nlog'},{'operationId':''},{'retryable':True}):
+            outcome=self.outcome();outcome.update(changes)
+            with self.subTest(changes=changes),self.assertRaises(ValueError) as caught:
+                self.rpc({'isError':True,'_meta':{'io.ololabs.toolgate/operationOutcome':outcome}})
+            self.assertNotIsInstance(caught.exception,mimic.UnconfirmedOperation)
+        with self.assertRaises(ValueError) as caught:
+            self.rpc({'isError':True,'structuredContent':{'operationOutcome':self.outcome()}})
+        self.assertNotIsInstance(caught.exception,mimic.UnconfirmedOperation)
+
+    def test_missing_metadata_or_unknown_retry_authority_cannot_be_a_success(self):
+        outcome=self.outcome();outcome['retryable']=True
+        for result in ({'isError':False,'structuredContent':{'written':True}},
+                       {'isError':False,'_meta':{'io.ololabs.toolgate/operationOutcome':outcome}}):
+            with self.subTest(result=result),self.assertRaises(ValueError):
+                self.rpc(result)
+
+    def test_duration_mode_stops_after_first_unknown_without_readback_or_retry(self):
+        agent=Mock()
+        agent.rpc.side_effect=mimic.UnconfirmedOperation(self.outcome(),True)
+        with contextlib.redirect_stdout(io.StringIO()),self.assertRaises(mimic.UnconfirmedOperation):
+            mimic.mimic(agent,'fixture.txt',60)
+        agent.rpc.assert_called_once_with('tools/call',{
+            'name':'examples.hotfolder/write_text',
+            'arguments':{'path':'fixture.txt','text':mimic.TEXT}})
+
+    def test_response_identity_is_checked_before_outcome_metadata(self):
+        with self.assertRaisesRegex(ValueError,'identity mismatch'):
+            self.rpc({'isError':True,'_meta':{'io.ololabs.toolgate/operationOutcome':self.outcome()}},True)
 
 if __name__=='__main__':unittest.main()

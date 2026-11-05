@@ -207,5 +207,53 @@ class OpenRouterTests(unittest.TestCase):
         self.assertTrue(any(message['role'] == 'tool' for message in requests[-1]['messages']))
 
 
+class NativeOutcomeBoundaryTests(unittest.TestCase):
+    def outcome(self):
+        return dict(operationId='inv-fixture',state='OUTCOME_UNKNOWN',grade='REPORTED',
+            retryable=False,finalized=False,journalComplete=True,deduplicationAssumed=False,
+            attemptCount=1,effectCount=0,unresolvedEffectCount=0,unsettledAttemptCount=1)
+
+    def gateway(self, outcome=None, tool_error=True, generic=False):
+        class Unqualified(Gateway):
+            def rpc(inner, method, params=None):
+                if method=='tools/list':return super().rpc(method,params)
+                inner.calls.append((method,params))
+                if generic:raise ValueError('MCP HTTP 403')
+                raise agent.UnconfirmedOperation(outcome or self.outcome(),tool_error)
+        return Unqualified()
+
+    def test_boundary_preserves_unknown_and_submits_no_write_or_retry(self):
+        gateway=self.gateway()
+        output=io.StringIO()
+        with contextlib.redirect_stdout(output):
+            agent.verify_native_boundary(gateway)
+        self.assertEqual([c[0] for c in gateway.calls],['tools/list','tools/call'])
+        self.assertEqual(gateway.calls[-1][1],{'name':'examples.hotfolder/list','arguments':{}})
+        self.assertEqual(set(gateway.files),{'support-tickets.json'})
+        self.assertIn('OUTCOME_UNKNOWN/REPORTED',output.getvalue())
+
+    def test_success_or_generic_failure_cannot_pass_the_unqualified_boundary(self):
+        for gateway in (Gateway(),self.gateway(generic=True)):
+            with self.subTest(gateway=gateway),self.assertRaises(ValueError):
+                agent.verify_native_boundary(gateway)
+
+    def test_wrong_grade_counts_flags_or_missing_error_flag_cannot_pass(self):
+        for change in ({'grade':'TARGET_CONFIRMED'},{'retryable':True},{'finalized':True},
+                       {'effectCount':1},{'attemptCount':True},{'unsettledAttemptCount':0},
+                       {'journalComplete':False},{'deduplicationAssumed':True}):
+            outcome=self.outcome();outcome.update(change)
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                agent.verify_native_boundary(self.gateway(outcome))
+        with self.assertRaises(ValueError):
+            agent.verify_native_boundary(self.gateway(tool_error=False))
+
+    def test_positive_smoke_still_refuses_unknown_without_continuing_or_writing(self):
+        gateway=self.gateway()
+        with self.assertRaises(agent.UnconfirmedOperation):
+            agent.smoke(gateway)
+        self.assertEqual(len(gateway.calls),2)
+        self.assertEqual(set(gateway.files),{'support-tickets.json'})
+
+
 if __name__ == '__main__':
     unittest.main()

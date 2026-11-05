@@ -398,7 +398,7 @@ jobs:
         docker load -i build/quickstart/image.tar
         docker load -i build/device/image.tar
       if: ${{ inputs.run_tests }}
-    - name: LangChain native smoke on the device image being published
+    - name: LangChain unqualified native outcome boundary on the published device
       env:
         TOOLGATE_QUICKSTART_IMAGE: olo-toolgate-quickstart:module11
         TOOLGATE_DEVICE_IMAGE: olo-toolgate-device:module11
@@ -425,7 +425,7 @@ jobs:
         docker compose up -d --wait --wait-timeout 180 quickstart linux-device
         python manage.py setup --bootstrap-local --approve-linux-device --target linux
         docker compose run --rm -T --no-deps --entrypoint python -v "$PWD/test_agent.py:/app/test_agent.py:ro" agent /app/test_agent.py
-        docker compose run --rm -T agent --target linux --smoke
+        docker compose run --rm -T agent --target linux --verify-native-boundary
       if: ${{ inputs.run_tests }}
     - name: Preserve LangChain diagnostics
       if: ${{ always() && inputs.run_tests }}
