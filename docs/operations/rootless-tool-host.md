@@ -13,7 +13,10 @@ before the host becomes ready or registers its tier. Supervisor comparison uses
 its proc identity and namespace witnesses; host-root cgroup files are not
 container limit witnesses. Each worker and broker must supply all required
 resource files from its private cgroup mount. Missing files refuse readiness
-and identify the unavailable probe path.
+and identify the unavailable probe path. Qualification holds attached probe
+clients through removal of both containers, then reaps the clients. An engine
+timeout still fences the pool and retains its owned journal until managed
+restart; diagnostics preserve the attempted engine operation.
 
 ## Prepare the service
 

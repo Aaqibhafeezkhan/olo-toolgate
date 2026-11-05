@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Keep qualification's attached probe clients alive through container removal;
+  preserve engine-operation errors and retained-journal fencing on uncertainty.
+- Recover one partial Rust component-conflict installation only inside owned CI
+  toolchain storage, retaining the pinned compiler and mandatory scan gates.
+
 - Separate OCI supervisor identity witnesses from mandatory worker/broker resource probes, fixing qualification on hosts whose root cgroup has no limit files.
 
 - Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.tgpkg`

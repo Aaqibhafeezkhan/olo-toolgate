@@ -200,7 +200,10 @@ impl Sandbox {
             }
             Err(_) => {
                 self.poisoned.store(true, Ordering::SeqCst);
-                return Err("sandbox engine timeout; managed service restart required".into());
+                return Err(format!(
+                    "sandbox engine {} timeout; managed service restart required",
+                    args.first().map(String::as_str).unwrap_or("operation")
+                ));
             }
         };
         if output.stdout.len() > 1024 * 1024 || output.stderr.len() > 64 * 1024 {
@@ -238,7 +241,7 @@ impl Sandbox {
     async fn remove_container(&self, name: &str) -> Result<(), String> {
         // An absent container is fine (including a crash before create). Engine
         // errors must not be confused with absence: exists uses exit code 1 only.
-        let _ = self
+        let removal = self
             .cli(&strings(&["rm", "--force", "--time=0", name]))
             .await;
         let mut c = self.command();
@@ -249,6 +252,9 @@ impl Sandbox {
             .map_err(|e| e.to_string())?;
         if status.code() != Some(1) {
             return Err("sandbox absence could not be established".into());
+        }
+        if self.poisoned.load(Ordering::SeqCst) {
+            removal?;
         }
         Ok(())
     }
@@ -439,22 +445,25 @@ impl Sandbox {
             broker_name: Some(broker_name.clone()),
         };
         self.journal(&record)?;
+        let mut probes = Vec::new();
         let result = async {
             let mut args = self.create_args(&name, 0, 128 * 1024 * 1024, 30_000);
             args.extend(strings(&["-I", "-c", PROBE]));
             self.cli(&args).await?;
-            let (_worker_process, worker) = self
+            let (worker_process, worker) = self
                 .live_probe(&name)
                 .await
                 .map_err(|error| format!("worker isolation {error}"))?;
+            probes.push(worker_process);
             validate_probe(&worker, &self.config)?;
             let mut args = self.broker_args(&broker_name, 0, 30_000);
             *args.last_mut().expect("broker mode") = "--isolation-probe".into();
             self.cli(&args).await?;
-            let (_broker_process, broker) = self
+            let (broker_process, broker) = self
                 .live_probe(&broker_name)
                 .await
                 .map_err(|error| format!("broker isolation {error}"))?;
+            probes.push(broker_process);
             validate_probe(&broker, &self.config)?;
             validate_pair(
                 &worker,
@@ -464,10 +473,31 @@ impl Sandbox {
             Ok::<(), String>(())
         }
         .await;
-        self.cleanup(&record).await?;
-        result?;
+        let cleanup = self.cleanup_probes(&record, probes).await;
+        if let Err(error) = result {
+            return Err(match cleanup {
+                Ok(()) => error,
+                Err(cleanup) => format!("{error}; probe cleanup failed: {cleanup}"),
+            });
+        }
+        cleanup?;
         self.ready.store(true, Ordering::SeqCst);
         Ok(())
+    }
+    async fn cleanup_probes(
+        &self,
+        record: &Record,
+        mut probes: Vec<tokio::process::Child>,
+    ) -> Result<(), String> {
+        // Keep attached engine clients and stdin alive until owned container
+        // removal is complete. Dropping them first kills Podman mid-attachment
+        // and can race conmon teardown on the deployed engine.
+        let result = self.cleanup(record).await;
+        for process in &mut probes {
+            let _ = process.kill().await;
+            let _ = tokio::time::timeout(Duration::from_secs(1), process.wait()).await;
+        }
+        result
     }
     async fn live_probe(&self, name: &str) -> Result<(tokio::process::Child, Value), String> {
         use tokio::io::{AsyncBufReadExt, AsyncReadExt};
@@ -1086,6 +1116,39 @@ mod tests {
             missing.as_object_mut().unwrap().remove(key);
             assert!(validate_pair(&worker, &missing, &supervisor).is_err());
         }
+    }
+    #[tokio::test]
+    async fn qualification_removes_containers_before_terminating_attached_probes() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("tg-probe-order-{}", crate::random_hex(16)));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut probe = tokio::process::Command::new("/usr/bin/python3")
+            .args(["-c", "import sys; sys.stdin.read()"])
+            .stdin(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        let pid = probe.id().unwrap();
+        let engine = root.join("engine");
+        std::fs::write(&engine, format!(
+            "#!/usr/bin/python3\nimport os,sys,pathlib\nmarker=pathlib.Path(__file__).parent/('removed-'+sys.argv[-1])\nif 'rm' in sys.argv:\n os.kill({pid},0)\n marker.touch()\n sys.exit(0)\nif 'exists' in sys.argv: sys.exit(1 if marker.exists() else 2)\nsys.exit(2)\n"
+        )).unwrap();
+        std::fs::set_permissions(&engine, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut configuration = config();
+        configuration.podman_path = engine;
+        let pool = Sandbox::open(configuration, &root, "probe-order", 1).unwrap();
+        let record = Record {
+            name: "probe-order-worker".into(),
+            slot: 0,
+            invocation_id: None,
+            broker_name: Some("probe-order-broker".into()),
+        };
+        pool.journal(&record).unwrap();
+        assert!(probe.try_wait().unwrap().is_none());
+        pool.cleanup_probes(&record, vec![probe]).await.unwrap();
+        assert!(!Path::new(&format!("/proc/{pid}")).exists());
+        assert!(!pool.directory.join("probe-order-worker.json").exists());
+        std::fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn supervisor_identity_requires_proc_witnesses_without_cgroup_limits() {

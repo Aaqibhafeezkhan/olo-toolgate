@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """CI must install pinned Rust independently of the runner's preinstalled toolchain."""
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -62,7 +63,7 @@ class RustInstallationTests(unittest.TestCase):
             (root/'rust-toolchain.toml').write_text(
                 '[toolchain]\nchannel="1.90.0"\nprofile="minimal"\n'
                 'components=["rustfmt","clippy"]\ntargets=["aarch64-unknown-linux-gnu"]\n')
-            with patch.object(installer, 'ROOT', root), patch.object(installer.subprocess, 'run') as run:
+            with patch.object(installer, 'ROOT', root), patch.object(installer.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run:
                 installer.main()
             command = run.call_args_list[0].args[0]
             self.assertEqual(['rustup', 'toolchain', 'install', '1.90.0'], command[:4])
@@ -77,6 +78,60 @@ class RustInstallationTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 installer.main()
         self.assertEqual(1, run.call_count)
+
+    def test_partial_component_conflict_reinstalls_once_in_owned_ci_home(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = {'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': folder,
+                   'RUSTUP_HOME': str(Path(folder)/'toolgate-rustup')}
+            failure = subprocess.CalledProcessError(1, 'rustup', stderr=
+                "recovering from a partially installed toolchain\n"
+                "failed to install component: 'clippy-preview', detected conflict: 'bin/cargo-clippy'")
+            ok = subprocess.CompletedProcess([], 0, '', '')
+            with patch.dict(os.environ, env), patch.object(installer.subprocess, 'run',
+                    side_effect=[failure, ok, ok, ok]) as run:
+                installer.main()
+            calls = run.call_args_list
+            self.assertEqual(4, len(calls))
+            self.assertEqual(['rustup', 'toolchain', 'uninstall', '1.94.1'], calls[1].args[0])
+            self.assertEqual(calls[0].args[0], calls[2].args[0])
+            self.assertEqual(['rustup', 'show', 'active-toolchain'], calls[3].args[0])
+
+    def test_repair_never_touches_developer_external_or_symlinked_homes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            allowed = root/'toolgate-rustup'
+            cases = [
+                {'GITHUB_ACTIONS': 'false', 'RUNNER_TEMP': folder, 'RUSTUP_HOME': str(allowed)},
+                {'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': folder, 'RUSTUP_HOME': str(root/'other')},
+                {'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': folder, 'RUSTUP_HOME': ''},
+            ]
+            if os.name != 'nt':
+                external = root/'external'
+                external.mkdir()
+                allowed.symlink_to(external, target_is_directory=True)
+                cases.append({'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': folder,
+                              'RUSTUP_HOME': str(allowed)})
+            for env in cases:
+                with self.subTest(env=env), patch.dict(os.environ, env):
+                    self.assertFalse(installer.owned_ci_home())
+
+    def test_unrelated_errors_and_repeated_conflicts_stop_without_another_retry(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = {'GITHUB_ACTIONS': 'true', 'RUNNER_TEMP': folder,
+                   'RUSTUP_HOME': str(Path(folder)/'toolgate-rustup')}
+            ok = subprocess.CompletedProcess([], 0, '', '')
+            for detail, expected in [
+                ('network unavailable', 1),
+                ("failed to install component: clippy, detected conflict: cargo-clippy", 1),
+                ("recovering from a partially installed toolchain\n"
+                 "failed to install component: clippy, detected conflict: cargo-clippy", 3),
+            ]:
+                failure = subprocess.CalledProcessError(1, 'rustup', stderr=detail)
+                with self.subTest(detail=detail), patch.dict(os.environ, env), patch.object(
+                        installer.subprocess, 'run', side_effect=[failure, ok, failure]) as run:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        installer.main()
+                    self.assertEqual(expected, run.call_count)
 
 
 if __name__ == '__main__':
