@@ -364,7 +364,7 @@
     },
     "PackageManifest": {
       "type": "object",
-      "description": "Package manifest v2. v1 manifests stay readable and are upgraded on read.",
+      "description": "Current package manifest. Earlier formats are rejected without conversion.",
       "additionalProperties": false,
       "properties": {
         "schemaVersion": {
@@ -701,6 +701,14 @@
           "additionalProperties": {
             "$ref": "service-profile.schema.json#/$defs/TlsSettings"
           }
+        },
+        "effectPolicies": {
+          "type": "array",
+          "description": "Explicit operator review for generic routes. Package declarations cannot confer effect authority.",
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/RouteEffectPolicy"
+          },
+          "maxItems": 256
         }
       },
       "required": [

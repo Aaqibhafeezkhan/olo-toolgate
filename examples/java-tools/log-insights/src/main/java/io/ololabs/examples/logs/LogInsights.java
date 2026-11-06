@@ -9,6 +9,11 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -69,6 +74,117 @@ public class LogInsights {
 
     @ServerTool(name = "search", title = "Search logs", description = "Finds log entries in a time window, optionally filtering by level and text.", effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"from\":\"not-a-time\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Find log entries containing {contains}",
+                "Show {minLevel} and worse logs from the last {lastMinutes} minutes",
+                "Search the logs for {contains} in the last {lastMinutes} minutes",
+                "Any {minLevel} entries between {from} and {to}?",
+                "Logs mentioning {contains}, at least {minLevel}",
+                "Show me the last {limit} log lines with {contains}",
+                "What got logged between {from} and {to}?",
+                "Search logs for {contains}, level {minLevel} or higher",
+                "grep the logs for {contains}"
+            },
+            defaultPhrasings = {
+                "Show me the recent log entries",
+                "What's in the logs lately?",
+                "Show recent logs",
+                "What's in the logs?",
+                "Search the logs",
+                "Show the last hour of logs",
+                "Recent log entries please",
+                "logs?",
+                "What happened in the logs recently?",
+                "Show me the log entries",
+                "Any new log lines?",
+                "Look at the logs"
+            },
+            negatives = {
+                "What log level should I use for retries?",
+                "How do I configure log4j?",
+                "What's the difference between WARN and ERROR?"
+            },
+            parameters = {
+                @TrainingValues(name = "from",
+                    examples = {
+                        "2026-10-30T08:00:00Z",
+                        "2026-10-31T00:00:00Z",
+                        "2026-10-29T14:30:00Z",
+                        "2026-10-31T06:15:00Z",
+                        "2026-10-28T22:00:00Z"
+                    }),
+                @TrainingValues(name = "to",
+                    examples = {
+                        "2026-10-30T12:00:00Z",
+                        "2026-10-31T09:00:00Z",
+                        "2026-10-29T18:00:00Z",
+                        "2026-10-31T10:45:00Z",
+                        "2026-10-29T02:00:00Z"
+                    }),
+                @TrainingValues(name = "lastMinutes",
+                    examples = {
+                        "5",
+                        "10",
+                        "15",
+                        "30",
+                        "45",
+                        "90",
+                        "120",
+                        "180",
+                        "240",
+                        "360",
+                        "720",
+                        "1440"
+                    }),
+                @TrainingValues(name = "contains",
+                    examples = {
+                        "timeout",
+                        "NullPointerException",
+                        "connection refused",
+                        "order 1042",
+                        "OutOfMemoryError",
+                        "payment failed",
+                        "login"
+                    }),
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "10",
+                        "20",
+                        "100",
+                        "200"
+                    }),
+                @TrainingValues(name = "minLevel",
+                    phrasings = {
+                        @ValuePhrasing(value = "DEBUG", phrasings = "DEBUG"),
+                        @ValuePhrasing(value = "INFO", phrasings = "INFO"),
+                        @ValuePhrasing(value = "WARN", phrasings = {
+                            "WARN",
+                            "warning"
+                        }),
+                        @ValuePhrasing(value = "ERROR", phrasings = {
+                            "ERROR",
+                            "error"
+                        }),
+                        @ValuePhrasing(value = "FATAL", phrasings = {
+                            "FATAL",
+                            "fatal"
+                        })
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "What got logged between 2026-10-28T22:00:00Z and 2026-10-31T10:45:00Z?", arguments = "{\"from\":\"2026-10-28T22:00:00Z\",\"to\":\"2026-10-31T10:45:00Z\"}"),
+                @TrainingPrompt(prompt = "Search logs for timeout, level DEBUG or higher", arguments = "{\"contains\":\"timeout\",\"minLevel\":\"DEBUG\"}"),
+                @TrainingPrompt(prompt = "Warnings and worse mentioning connection refused", arguments = "{\"contains\":\"connection refused\",\"minLevel\":\"WARN\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "find log lines with 'disk full' from the last 30 minutes", arguments = "{\"contains\":\"disk full\",\"lastMinutes\":30}"),
+                @TrainingPrompt(prompt = "only ERROR and above containing payment", arguments = "{\"contains\":\"payment\",\"minLevel\":\"ERROR\"}")
+            },
+            negatives = {
+                "How should log messages be formatted?"
+            })
     public Search search(
             @Param(description = "Inclusive start, ISO 8601", required = false) String from,
             @Param(description = "Inclusive end, ISO 8601", required = false) String to,
@@ -100,6 +216,82 @@ public class LogInsights {
 
     @ServerTool(name = "levels", title = "Log levels", description = "Counts log levels overall, per file and per time bucket.", effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"bucketMinutes\":0}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "How many errors vs warnings were logged in the last {lastMinutes} minutes?",
+                "Count log levels per hour",
+                "Break down log levels per {bucketMinutes}-minute bucket",
+                "Log level counts between {from} and {to}",
+                "Is the error rate going up? Count levels per {bucketMinutes} minutes",
+                "Give me a histogram of log levels for the last {lastMinutes} minutes",
+                "How many INFO, WARN and ERROR lines per file?"
+            },
+            defaultPhrasings = {
+                "Count the log levels",
+                "How many of each log level?",
+                "Count log levels",
+                "How many errors and warnings?",
+                "Log level breakdown",
+                "Level counts please",
+                "How many of each level were logged?",
+                "Show the log level histogram",
+                "errors vs warnings count?",
+                "Break the logs down by level",
+                "Log level summary",
+                "How noisy are the logs?",
+                "Log level counts"
+            },
+            negatives = "Explain log levels in syslog",
+            parameters = {
+                @TrainingValues(name = "from",
+                    examples = {
+                        "2026-10-30T08:00:00Z",
+                        "2026-10-31T00:00:00Z",
+                        "2026-10-29T14:30:00Z",
+                        "2026-10-31T06:15:00Z",
+                        "2026-10-28T22:00:00Z"
+                    }),
+                @TrainingValues(name = "to",
+                    examples = {
+                        "2026-10-30T12:00:00Z",
+                        "2026-10-31T09:00:00Z",
+                        "2026-10-29T18:00:00Z",
+                        "2026-10-31T10:45:00Z",
+                        "2026-10-29T02:00:00Z"
+                    }),
+                @TrainingValues(name = "lastMinutes",
+                    examples = {
+                        "5",
+                        "10",
+                        "15",
+                        "30",
+                        "45",
+                        "90",
+                        "120",
+                        "180",
+                        "240",
+                        "360",
+                        "720",
+                        "1440"
+                    }),
+                @TrainingValues(name = "bucketMinutes",
+                    examples = {
+                        "5",
+                        "10",
+                        "15",
+                        "30",
+                        "120",
+                        "1440"
+                    })
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "count log lines by level", arguments = "{}"),
+                @TrainingPrompt(prompt = "level breakdown per 30 minute bucket", arguments = "{\"bucketMinutes\":30}")
+            },
+            negatives = {
+                "What log level should I use for debugging?"
+            })
     public Levels levels(
             @Param(description = "Inclusive start, ISO 8601", required = false) String from,
             @Param(description = "Inclusive end, ISO 8601", required = false) String to,
@@ -135,6 +327,88 @@ public class LogInsights {
 
     @ServerTool(name = "errors", title = "Log errors", description = "Groups ERROR and FATAL entries by exception class or message, ignoring varying numbers and IDs.", effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"from\":\"not-a-time\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "What errors happened in the last {lastMinutes} minutes?",
+                "Group the errors by exception",
+                "What are the most common errors?",
+                "Top {limit} error types since {from}",
+                "Summarise the errors between {from} and {to}",
+                "Which exceptions keep coming up?",
+                "Show the error groups for the last {lastMinutes} minutes, top {limit}",
+                "What exceptions occurred in the last {lastMinutes} minutes?",
+                "What's been failing in the last {lastMinutes} minutes?"
+            },
+            defaultPhrasings = {
+                "What errors are in the logs?",
+                "Summarise recent errors",
+                "What errors are there?",
+                "Group the errors",
+                "Most common errors?",
+                "Show error groups",
+                "Summarise the errors",
+                "Which exceptions are happening?",
+                "errors?",
+                "Any errors lately?",
+                "What's failing?",
+                "Show me the top errors"
+            },
+            negatives = {
+                "What does a NullPointerException mean?",
+                "How do I fix a stack overflow error?"
+            },
+            parameters = {
+                @TrainingValues(name = "from",
+                    examples = {
+                        "2026-10-30T08:00:00Z",
+                        "2026-10-31T00:00:00Z",
+                        "2026-10-29T14:30:00Z",
+                        "2026-10-31T06:15:00Z",
+                        "2026-10-28T22:00:00Z"
+                    }),
+                @TrainingValues(name = "to",
+                    examples = {
+                        "2026-10-30T12:00:00Z",
+                        "2026-10-31T09:00:00Z",
+                        "2026-10-29T18:00:00Z",
+                        "2026-10-31T10:45:00Z",
+                        "2026-10-29T02:00:00Z"
+                    }),
+                @TrainingValues(name = "lastMinutes",
+                    examples = {
+                        "5",
+                        "10",
+                        "15",
+                        "30",
+                        "45",
+                        "90",
+                        "120",
+                        "180",
+                        "240",
+                        "360",
+                        "720",
+                        "1440"
+                    }),
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "5",
+                        "10",
+                        "30",
+                        "50"
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "What exceptions occurred in the last 1440 minutes?", arguments = "{\"lastMinutes\":1440}"),
+                @TrainingPrompt(prompt = "What's been failing in the last 180 minutes?", arguments = "{\"lastMinutes\":180}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "top errors in the last hour", arguments = "{\"lastMinutes\":60}"),
+                @TrainingPrompt(prompt = "group the errors since 2026-11-01T00:00:00Z", arguments = "{\"from\":\"2026-11-01T00:00:00Z\"}")
+            },
+            negatives = {
+                "What is a NullPointerException?"
+            })
     public Errors errors(
             @Param(description = "Inclusive start, ISO 8601", required = false) String from,
             @Param(description = "Inclusive end, ISO 8601", required = false) String to,
@@ -170,6 +444,40 @@ public class LogInsights {
 
     @ServerTool(name = "tail", title = "Tail log", description = "Reads the last lines of an allowed log file; truncated indicates the scan cap was reached before EOF.", effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"file\":\"../secret.log\"}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Tail {file}",
+                "Show the last {lines} lines of {file}",
+                "What's at the end of {file}?",
+                "tail -n {lines} {file}",
+                "Show me the latest lines in {file}"
+            },
+            defaultPhrasings = "Tail {file}",
+            negatives = "How does tail -f work?",
+            parameters = {
+                @TrainingValues(name = "file",
+                    examples = {
+                        "app.log",
+                        "server.log",
+                        "error.log",
+                        "access.log",
+                        "worker/worker.log"
+                    }),
+                @TrainingValues(name = "lines",
+                    examples = {
+                        "20",
+                        "50",
+                        "200",
+                        "500"
+                    })
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "last 50 lines of app.log", arguments = "{\"file\":\"app.log\",\"lines\":50}")
+            },
+            negatives = {
+                "What does tail -f do?"
+            })
     public Tail tail(
             @Param(description = "File name relative to LogDir", maxLength = 500) String file,
             @Param(description = "Most lines returned", defaultValue = "100", min = "1", max = "1000") int lines,

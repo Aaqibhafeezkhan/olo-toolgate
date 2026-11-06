@@ -158,7 +158,7 @@ def render_version(ver, version, outputs):
                 '            let value = <$ty as Deserialize>::deserialize(deserializer)?;', '            if value == $value {', '                Ok(value)', '            } else {',
                 '                Err(serde::de::Error::custom(concat!(', '                    "expected constant ",', '                    stringify!($value)', '                )))', '            }', '        }', '    };', '}']
     else:
-        rust = ['//! Shared structural contracts. Validate canonical schemas at input boundaries.', '// ' + HEADER.replace('\n', '\n// '), 'use serde::{Deserialize, Serialize};', '', '/// Contract set v2 models, side by side with v1 during migration.', 'pub mod v2;']
+        rust = ['//! Shared structural contracts. Validate canonical schemas at input boundaries.', '// ' + HEADER.replace('\n', '\n// '), 'use serde::{Deserialize, Serialize};', '', '/// Current execution models and current transport model namespaces.', 'pub mod v2;']
     ts = ['// ' + HEADER.replace('\n', '\n// ')] + (['import type * as V1 from "../index.js";'] if v2 else ['import type * as V2 from "./v2/index.js";'])
     rust_consts = []
     for name, schema in sorted(defs.items()):
@@ -202,16 +202,7 @@ def render_version(ver, version, outputs):
                 java += ['    }', '    /** Stable package identity. */', '    public static final String NAME = "olo-toolgate-contracts";', '    /** Canonical contract-set version. */', f'    public static final String VERSION = "{version}";', '    /** Embedded canonical schema inventory. */', '    public static final java.util.List<String> SCHEMA_FILES = java.util.List.of('+','.join('\"'+p.name+'\"' for p in sorted((CONTRACTS/'schemas/v1').glob('*.json')))+');', '    /** Current contract-set marker.\n     * @return the canonical identity and version\n     */', '    public static ContractSet current() { return new ContractSet(NAME, VERSION); }', '}']
             else:
                 java += ['    }']
-                # Retain the pre-email/pre-bootstrap-metadata Java construction API.
-                if not v2 and name in ('ControlUser', 'AdminSession'):
-                    previous = [key for key in props if key in required]
-                    signature = ', '.join(f'{field_type(props[key], "java", defs)} {java_ident(key)}' for key in previous)
-                    arguments = ', '.join(java_ident(key) if key in required else 'null' for key in props)
-                    java += ['    /** Construct a record without optional installation metadata.\n     *\n' + '\n'.join(f'     * @param {java_ident(key)} canonical {key} value' for key in previous) + '\n     */',
-                             f'    public {name}({signature}) {{ this({arguments}); }}']
-                if not v2 and name == 'AdminSession':
-                    java += ['    /** Construct a session without an optional tenant display name. */',
-                             '    public AdminSession(java.util.List<String> permissions, UserRole role, String bootstrapAdminUserId, String tenantId) { this(permissions, role, bootstrapAdminUserId, tenantId, null); }']
+                # Current records expose their canonical constructor only; no compatibility overloads.
                 java += ['}']
             rust += [f'/// {description}'.rstrip(), '#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]', '#[serde(rename_all = "camelCase", deny_unknown_fields)]', f'pub struct {name} {{']
             ts += [f'/** {description} */', f'export interface {name} {{']
@@ -251,7 +242,14 @@ def render_version(ver, version, outputs):
                 if v2 and 'const' in prop:
                     php += [f"        if ($data['{key}'] !== {const_literal(prop['const'], 'php')}) {{", f"            throw new \\InvalidArgumentException('{key} must be {prop['const']}');", '        }']
             php += ['        return new self(']
-            php += [',\n'.join('            ' + (php_value(props[k], f"$data['{k}']", defs) if k in required else f"array_key_exists('{k}', $data) ? " + php_value(props[k], f"$data['{k}']", defs) + ' : null') for k in ordered), '        );', '    }', '', '    public function jsonSerialize(): object {', '        return (object) array_filter(get_object_vars($this), static fn ($v) => $v !== null);', '    }', '}']
+            # Required arbitrary JSON values may explicitly be null (e.g. a credential-free
+            # manifest auth declaration). Only absent optional properties may be omitted.
+            nullable_required = [key for key in props if key in required and field_type(props[key], 'php', defs) == 'mixed']
+            php_serialization = '        return (object) array_filter(get_object_vars($this), static fn ($v) => $v !== null);'
+            if nullable_required:
+                keys = '[' + ', '.join("'" + key + "'" for key in nullable_required) + ']'
+                php_serialization = '        return (object) array_filter(get_object_vars($this), static fn ($v, $k) => $v !== null || in_array($k, ' + keys + ', true), ARRAY_FILTER_USE_BOTH);'
+            php += [',\n'.join('            ' + (php_value(props[k], f"$data['{k}']", defs) if k in required else f"array_key_exists('{k}', $data) ? " + php_value(props[k], f"$data['{k}']", defs) + ' : null') for k in ordered), '        );', '    }', '', '    public function jsonSerialize(): object {', php_serialization, '    }', '}']
             if name == 'ContractSet' and not v2:
                 php[-1:-1] = ["    public const NAME = 'olo-toolgate-contracts';", f"    public const VERSION = '{version}';", '    /** Current canonical contract-set identity. */', '    public static function current(): self { return new self(self::NAME, self::VERSION); }']
             rust += ['}']

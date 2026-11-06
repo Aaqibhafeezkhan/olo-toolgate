@@ -4,13 +4,22 @@ A pending registry row, enabled directory metadata or public CSR cannot grant ex
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
+## Zero Trust Execution scope
+
+The adopted [A1–A9 attacker matrix and C1–C8 requirements](zero-trust-boundaries.md)
+extend this model. Implementation availability and executed evidence live in the
+[claim inventory](zero-trust-execution-status.md#security-claim-inventory).
+Design requirements do not establish all-route per-effect authorization,
+sender-constrained identity, tamper-evident audit or deployment SLO acceptance.
+Healthy-host lease bounds do not apply to a root-compromised host.
+
 ## Purpose
 
 Threats include malicious internet users, compromised AI agents, malicious MCP servers, compromised endpoint processes, stolen devices, malicious community packages, admin compromise and supply-chain attacks.
 
 Server-tool execution (Tool Host, broker, egress proxy, transports, workload identity and secret delivery) has its own model: [threat-models/tool-host.md](threat-models/tool-host.md).
 
-The OLO platform integration (user-bound credentials, service permits for OLO memory and RAG services, and delegated agent tools) has a proposed model: [threat-models/olo-integration.md](threat-models/olo-integration.md).
+The OLO platform integration (user-bound credentials, service permits for OLO memory and RAG services, and delegated agent tools) has a scoped implementation model: [threat-models/olo-integration.md](threat-models/olo-integration.md).
 
 ## Enterprise authorization boundaries
 
@@ -30,7 +39,9 @@ disabled; invalid authentication cannot create an identity.
 
 Independent configuration and operation reviews bind exact digests, revisions and
 expiry. Live grant, session, device, workload and approval checks run before permit
-consumption and again at protected runtime boundaries and result/secret retrieval.
+consumption and at the implemented protected runtime and result/secret boundaries.
+Independent per-effect authorization is qualified on the bound OLO write path;
+generalized route enforcement and exact consent remain outstanding.
 Single-use durable nonces prevent concurrent permit replay. They cannot prove that
 an interrupted external effect did not happen: uncertain outcomes remain fenced
 until independent reconciliation supplies evidence, without issuing another permit.
@@ -38,8 +49,9 @@ until independent reconciliation supplies evidence, without issuing another perm
 Resource extractors authorize every batch member and both source and destination.
 Installed profiles bind definition, extractor, package and runtime digests.
 Filesystem containment and link checks, public DNS/socket pinning, redirect
-rejection, unprivileged OCI confinement and group-scoped secret delivery constrain
-supported effects. Arbitrary host shell, raw SQL, unconstrained egress and offline
+rejection and group-scoped secret delivery constrain their supported effects.
+Tool Host OCI confinement is qualified for configured Python pools; native
+workers remain uncontained and broker OS/network separation is outstanding. Arbitrary host shell, raw SQL, unconstrained egress and offline
 execution have no supported permission fallback.
 
 Recovery trust and observed monotonic floors live outside backups. Two independent

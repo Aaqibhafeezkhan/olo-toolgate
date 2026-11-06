@@ -8,7 +8,7 @@ Posts a notification (title, text, severity, source, reference) as JSON to `/hoo
 ## Safety
 
 - The API key is route auth (`X-Api-Key` from the `WebhookApiKey` secret). Under ToolGate the broker adds it, so the code never sees it.
-- The tool is `NON_IDEMPOTENT` with a business key: `reference`. A repeat with the same reference returns the first result instead of sending twice, and the reference goes upstream as `Idempotency-Key` so the receiver can deduplicate as well.
+- The tool is NON_IDEMPOTENT with business reference `reference` and explicit logical effect key `notification`. A reference is not a target deduplication guarantee. Governed downstream keys and retry require current independent target-contract review and a qualified executor; uncertain outcomes otherwise require reconciliation.
 - Only channels in `AllowedChannels` can be posted to. Messages are capped at 16 KiB.
 
 ## Settings

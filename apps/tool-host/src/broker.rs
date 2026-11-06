@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// Request headers a tool may never set, whatever the route allows (ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.8.5).
-const FORBIDDEN: [&str; 11] = [
+const FORBIDDEN: [&str; 14] = [
     "authorization",
     "toolgate-service-permit",
     "proxy-authorization",
@@ -39,6 +39,9 @@ const FORBIDDEN: [&str; 11] = [
     "connection",
     "te",
     "upgrade",
+    "user-agent",
+    "traceparent",
+    "tracestate",
 ];
 /// Response headers removed before the reply reaches the tool.
 const STRIPPED: [&str; 5] = [
@@ -54,6 +57,11 @@ pub struct Invocation {
     pub invocation_id: String,
     pub fencing_token: String,
     pub deadline_unix_ms: u64,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub(crate) effect_key_headers: std::collections::BTreeMap<String, String>,
+    pub invocation_permit: Option<olo_toolgate_contracts::v2::SignedInvocationPermit>,
+    broker_instance_id: String,
     /// The permit's routes as the service profile approves them.
     pub routes: Vec<RouteDeclaration>,
     pub destinations: Vec<ServiceDestination>,
@@ -63,18 +71,21 @@ pub struct Invocation {
     /// Handle ÃÆ’Æ’¢ÃÆ’¢ââ€Å¡¬ ÃÆ’¢ââ€Å¡¬ââ€Å¾¢ secret name, for secrets delivered into the sandbox.
     pub secret_handles: HashMap<String, String>,
     pub development_loopback_http: bool,
-    pub control: Arc<Control>,
+    authority: Arc<dyn crate::broker_authority::BrokerControl>,
     /// Set when the invocation ends; the broker refuses everything afterwards.
-    pub closed: AtomicBool,
+    pub closed: Arc<AtomicBool>,
     /// A single-use downstream write capability was dispatched; a lost/error reply needs reconciliation.
-    pub service_effect_started: AtomicBool,
+    pub service_effect_started: Arc<AtomicBool>,
     /// Route calls, for DETAILED Insights spans (ADR 031 §9): route ID, timing and status only, never the URL.
     pub egress: Mutex<Vec<Egress>>,
     clients: Mutex<HashMap<String, reqwest::Client>>,
+    requires_isolated: AtomicBool,
+    remote: Mutex<Option<Arc<dyn crate::broker_process::Connection>>>,
 }
 
 /// One brokered route call as an Insights span records it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Egress {
     pub route_id: String,
     pub started_unix_ms: u64,
@@ -86,11 +97,127 @@ pub struct Egress {
 const MAX_EGRESS: usize = 256;
 
 impl Invocation {
+    pub(crate) fn isolated_worker_protocol(&self) -> bool {
+        self.requires_isolated.load(Ordering::SeqCst)
+    }
+    pub fn require_isolated_broker(&self) -> Result<(), &'static str> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err("broker invocation has ended");
+        }
+        self.requires_isolated.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+    pub async fn attach_broker<
+        R: tokio::io::AsyncBufRead + Unpin + Send + 'static,
+        W: tokio::io::AsyncWrite + Unpin + Send + 'static,
+    >(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<Arc<dyn crate::broker_process::Connection>, &'static str> {
+        self.require_isolated_broker()?;
+        if self
+            .remote
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
+        {
+            self.closed.store(true, Ordering::SeqCst);
+            return Err("broker connection cannot be replaced");
+        }
+        let connection = crate::broker_process::connect(self, reader, writer).await?;
+        if self.closed.load(Ordering::SeqCst) {
+            connection.finish().await;
+            return Err("broker invocation ended during setup");
+        }
+        let mut remote = self.remote.lock().unwrap_or_else(|e| e.into_inner());
+        if remote.is_some() {
+            self.closed.store(true, Ordering::SeqCst);
+            return Err("broker connection cannot be replaced");
+        }
+        *remote = Some(connection.clone());
+        Ok(connection)
+    }
+    pub fn broker_policy(&self) -> Result<crate::broker_process::Policy, &'static str> {
+        if self.closed.load(Ordering::SeqCst) {
+            return Err("broker invocation has ended");
+        }
+        let policy = crate::broker_process::Policy {
+            invocation_id: self.invocation_id.clone(),
+            fencing_token: self.fencing_token.clone(),
+            deadline_unix_ms: self.deadline_unix_ms,
+            profile_id: self.profile_id.clone(),
+            profile_digest: self.profile_digest.clone(),
+            effect_key_headers: self.effect_key_headers.clone(),
+            broker_instance_id: self.broker_instance_id.clone(),
+            invocation_permit: self
+                .invocation_permit
+                .clone()
+                .ok_or("signed broker admission required")?,
+            routes: self.routes.clone(),
+            destinations: self.destinations.clone(),
+            private_ranges: self.private_ranges.clone(),
+            auths: self.auths.clone(),
+            secrets: self.secrets.clone(),
+            secret_handles: self.secret_handles.clone().into_iter().collect(),
+            development_loopback_http: self.development_loopback_http,
+        };
+        policy.validate(crate::now_ms())?;
+        Ok(policy)
+    }
+    pub(crate) fn from_broker_policy(
+        policy: &crate::broker_process::Policy,
+        authority: Arc<dyn crate::broker_authority::BrokerControl>,
+        closed: Arc<AtomicBool>,
+    ) -> Result<Self, &'static str> {
+        policy.validate(crate::now_ms())?;
+        Ok(Self {
+            invocation_id: policy.invocation_id.clone(),
+            fencing_token: policy.fencing_token.clone(),
+            deadline_unix_ms: policy.deadline_unix_ms,
+            profile_id: policy.profile_id.clone(),
+            profile_digest: policy.profile_digest.clone(),
+            effect_key_headers: policy.effect_key_headers.clone(),
+            invocation_permit: Some(policy.invocation_permit.clone()),
+            broker_instance_id: policy.broker_instance_id.clone(),
+            routes: policy.routes.clone(),
+            destinations: policy.destinations.clone(),
+            private_ranges: policy.private_ranges.clone(),
+            auths: policy.auths.clone(),
+            secrets: policy.secrets.clone(),
+            secret_handles: policy.secret_handles.clone().into_iter().collect(),
+            development_loopback_http: policy.development_loopback_http,
+            authority,
+            closed,
+            service_effect_started: Arc::new(AtomicBool::new(false)),
+            egress: Mutex::new(Vec::new()),
+            clients: Mutex::new(HashMap::new()),
+            requires_isolated: AtomicBool::new(false),
+            remote: Mutex::new(None),
+        })
+    }
+    /// Parent-only immutable original admission; private broker messages cannot replace its argument preimage.
+    pub fn bind_effect_arguments(
+        &self,
+        arguments: std::collections::BTreeMap<String, Value>,
+    ) -> Result<(), &'static str> {
+        self.authority.bind_effect_admission(
+            self.invocation_permit
+                .clone()
+                .ok_or("signed effect admission required")?,
+            arguments,
+        )
+    }
+    pub(crate) fn authority_port(&self) -> Arc<dyn crate::broker_authority::BrokerControl> {
+        self.authority.clone()
+    }
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         invocation_id: String,
         fencing_token: String,
         deadline_unix_ms: u64,
+        profile_id: String,
+        profile_digest: String,
         routes: Vec<RouteDeclaration>,
         destinations: Vec<ServiceDestination>,
         private_ranges: Vec<PrivateRangeApproval>,
@@ -100,10 +227,35 @@ impl Invocation {
         development_loopback_http: bool,
         control: Arc<Control>,
     ) -> Invocation {
+        let broker_instance_id = crate::random_hex(16);
+        let closed = Arc::new(AtomicBool::new(false));
+        let service_effect_started = Arc::new(AtomicBool::new(false));
+        let scope = crate::broker_authority::Scope {
+            invocation: invocation_id.clone(),
+            fence: fencing_token.clone(),
+            deadline: deadline_unix_ms,
+            profile: profile_id.clone(),
+            profile_digest: profile_digest.clone(),
+            broker: broker_instance_id.clone(),
+            routes: routes.clone(),
+            destinations: destinations.clone(),
+            secret_names: crate::broker_authority::secret_names(&routes, &auths, &secrets),
+            closed: closed.clone(),
+            effect_started: service_effect_started.clone(),
+            private_ranges: private_ranges.clone(),
+            auths: auths.clone(),
+            development_loopback_http,
+            admission: std::sync::OnceLock::new(),
+        };
         Invocation {
             invocation_id,
             fencing_token,
             deadline_unix_ms,
+            profile_id,
+            profile_digest,
+            effect_key_headers: std::collections::BTreeMap::new(),
+            invocation_permit: None,
+            broker_instance_id,
             routes,
             destinations,
             private_ranges,
@@ -111,11 +263,13 @@ impl Invocation {
             secrets,
             secret_handles,
             development_loopback_http,
-            control,
-            closed: AtomicBool::new(false),
-            service_effect_started: AtomicBool::new(false),
+            authority: Arc::new(crate::broker_authority::Local::new(control, scope)),
+            closed,
+            service_effect_started,
             egress: Mutex::new(Vec::new()),
             clients: Mutex::new(HashMap::new()),
+            requires_isolated: AtomicBool::new(false),
+            remote: Mutex::new(None),
         }
     }
 }
@@ -131,6 +285,34 @@ pub async fn answer(invocation: &Invocation, frame: &Value) -> Value {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
+    if invocation.requires_isolated.load(Ordering::SeqCst) {
+        let remote = invocation
+            .remote
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if !invocation.closed.load(Ordering::SeqCst)
+            && crate::now_ms() < invocation.deadline_unix_ms
+        {
+            if let (Some(remote), Ok(request)) = (
+                remote.as_ref(),
+                serde_json::from_value::<olo_toolgate_contracts::v2::BrokerRequestFrame>(
+                    frame.clone(),
+                ),
+            ) {
+                if let Ok(reply) = remote.call(request).await {
+                    *invocation.egress.lock().unwrap_or_else(|e| e.into_inner()) = reply.egress;
+                    return serde_json::to_value(reply.response).unwrap_or_default();
+                }
+            }
+        }
+        if let Some(remote) = remote {
+            remote.abort();
+        }
+        invocation.closed.store(true, Ordering::SeqCst);
+        return json!({"kind":"BROKER_RESPONSE","requestId":id,
+            "error":{"code":"BROKER_REFUSED","message":"the isolated broker is unavailable","retryable":false}});
+    }
     let empty = json!({});
     let request = frame.get("request").unwrap_or(&empty);
     let operation = frame
@@ -168,7 +350,7 @@ async fn secret(invocation: &Invocation, body: &Value) -> Result<Value, String> 
         return Err("the secret handle is not valid for this invocation".into());
     };
     match invocation
-        .control
+        .authority
         .secret(&invocation.invocation_id, &invocation.fencing_token, name)
         .await
     {
@@ -255,11 +437,11 @@ async fn call(invocation: &Invocation, body: &Value) -> Value {
     reply
 }
 
-struct Sent {
-    reply: Value,
-    status: u16,
-    bytes: usize,
-    upstream_id: Option<String>,
+pub(crate) struct Sent {
+    pub reply: Value,
+    pub status: u16,
+    pub bytes: usize,
+    pub upstream_id: Option<String>,
 }
 
 pub fn method_name(method: &HttpMethod) -> &'static str {
@@ -355,9 +537,20 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
                 "route {route_id} does not allow header {name}"
             )));
         }
+        // The pinned profile owns this derived header; discard legacy invocation keys and caller substitutions.
+        if invocation
+            .effect_key_headers
+            .get(route_id)
+            .is_some_and(|header| header == &lower)
+        {
+            continue;
+        }
         let value = value
             .as_str()
             .ok_or_else(|| refused(format!("header {name} is not a string")))?;
+        if outgoing.contains_key(&lower) {
+            return Err(refused(format!("duplicate header name {name}")));
+        }
         let name = reqwest::header::HeaderName::from_bytes(lower.as_bytes())
             .map_err(|_| refused(format!("header {name} is not valid")))?;
         let value = reqwest::header::HeaderValue::from_str(value)
@@ -365,7 +558,13 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         outgoing.insert(name, value);
     }
 
-    let request_body = request_body(body).map_err(refused)?;
+    let request_body = if !matches!(destination.id.as_str(), "olo-memory" | "olo-rag")
+        && body.get("body").is_some()
+    {
+        Some(crate::digest::jcs_bytes(&body["body"]).map_err(refused)?)
+    } else {
+        request_body(body).map_err(refused)?
+    };
     if let Some(bytes) = &request_body {
         if bytes.len() as u64 > route.max_request_bytes {
             return Err(refused(format!(
@@ -396,7 +595,13 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
         );
     }
 
-    let plain = invocation.development_loopback_http && is_loopback_host(&destination.host);
+    // Development loopback permission never downgrades a reserved OLO service to HTTP.
+    let service_destination = matches!(destination.id.as_str(), "olo-memory" | "olo-rag");
+    let plain = invocation.development_loopback_http
+        && is_loopback_host(&destination.host)
+        && !service_destination
+        && destination.tls.ca_bundle.is_none()
+        && destination.tls.spki_pins.is_empty();
     let policy = AddressPolicy {
         host: destination.host.clone(),
         port: u16::try_from(destination.port)
@@ -417,42 +622,22 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
             "service permits require mTLS HTTPS without package credentials",
         ));
     }
-    let client = if service_audience.is_some() {
-        egress::client_with_identity(
-            destination,
-            policy.clone(),
-            Some(invocation.control.service_identity().map_err(refused)?),
-        )
-        .map_err(refused)?
-    } else {
+    // Preparation has no workload identity and performs no target I/O.
+    // Only the supervisor authority port owns the actual client identity.
+    let client = {
         let mut clients = invocation.clients.lock().unwrap();
         match clients.get(&destination.id) {
-            Some(c) => c.clone(),
+            Some(client) => client.clone(),
             None => {
-                let c = egress::client(destination, policy.clone()).map_err(refused)?;
-                clients.insert(destination.id.clone(), c.clone());
-                c
+                let client = egress::client(destination, policy.clone()).map_err(refused)?;
+                clients.insert(destination.id.clone(), client.clone());
+                client
             }
         }
     };
 
     let service_write =
         service_audience.is_some() && !matches!(path.as_str(), "/v1/memory.read" | "/v1/rag.query");
-    if let Some(audience) = service_audience {
-        let permit = invocation
-            .control
-            .service_permit(
-                &invocation.invocation_id,
-                &invocation.fencing_token,
-                audience,
-            )
-            .await
-            .map_err(|_| refused("downstream service authorization refused"))?;
-        let mut value = reqwest::header::HeaderValue::from_str(&permit.jws)
-            .map_err(|_| refused("invalid service permit"))?;
-        value.set_sensitive(true);
-        outgoing.insert("toolgate-service-permit", value);
-    }
     // Credentials go in last, after every check, and never into the reply.
     if let Some(auth) = auth {
         let value = credential(invocation, auth).await.map_err(refused)?;
@@ -492,12 +677,119 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
     if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
         return Err(refused("the invocation has ended"));
     }
+    let (auth_id, credential_headers) = if let Some(audience) = service_audience.clone() {
+        (
+            Some(
+                match audience {
+                    olo_toolgate_contracts::ServiceAudience::OloMemory => {
+                        "toolgate-service-permit:olo-memory"
+                    }
+                    olo_toolgate_contracts::ServiceAudience::OloRag => {
+                        "toolgate-service-permit:olo-rag"
+                    }
+                }
+                .into(),
+            ),
+            vec!["toolgate-service-permit".into()],
+        )
+    } else if let Some(auth) = auth {
+        (
+            Some(auth.id.clone()),
+            vec![auth
+                .header
+                .clone()
+                .unwrap_or_else(|| "authorization".into())
+                .to_ascii_lowercase()],
+        )
+    } else {
+        (None, Vec::new())
+    };
+    let prepared = crate::request_binding::PreparedRequest::new(
+        &client,
+        request.build().map_err(failure)?,
+        crate::request_binding::Metadata {
+            profile_id: invocation.profile_id.clone(),
+            profile_digest: invocation.profile_digest.clone(),
+            route_id: route.id.clone(),
+            auth_id,
+            credential_headers,
+        },
+    )
+    .map_err(refused)?
+    .with_effect_key(match body.get("effectKey") {
+        None => None,
+        Some(Value::String(key)) => Some(key.as_str()),
+        Some(_) => return Err(refused("invalid logical effect key")),
+    })
+    .map_err(refused)?;
+    let handler_id = crate::random_hex(16);
+    let permit = if let Some(audience) = service_audience {
+        Some(
+            invocation
+                .authority
+                .service_permit(&olo_toolgate_contracts::ServicePermitIssue {
+                    invocation_id: invocation.invocation_id.clone(),
+                    fencing_token: invocation.fencing_token.clone(),
+                    audience,
+                    http_request_digest: prepared.digest().into(),
+                    http_request_manifest: serde_json::from_value(prepared.manifest().clone())
+                        .map_err(|_| refused("invalid prepared manifest"))?,
+                    invocation_permit: invocation
+                        .invocation_permit
+                        .as_ref()
+                        .ok_or_else(|| refused("signed admission proof required"))?
+                        .clone(),
+                    broker_instance_id: invocation.broker_instance_id.clone(),
+                    handler_id: handler_id.clone(),
+                    effect_key: prepared.effect_key().map(str::to_owned),
+                })
+                .await
+                .map_err(|_| refused("downstream service authorization refused"))?,
+        )
+    } else {
+        None
+    };
+    let prepared = if let Some(permit) = &permit {
+        prepared.with_service_permit(&permit.jws).map_err(refused)?
+    } else {
+        prepared
+    };
+    tracing::info!(target:"toolgate::audit",invocation_id=%invocation.invocation_id,route=%route.id,request_digest=%prepared.digest(),"prepared broker request");
+    if invocation.closed.load(Ordering::SeqCst) || crate::now_ms() >= invocation.deadline_unix_ms {
+        return Err(refused("the invocation has ended"));
+    }
+    let prepared = invocation
+        .authority
+        .prepare_transport(prepared, &handler_id)?;
     if service_write {
+        let permit = permit
+            .as_ref()
+            .ok_or_else(|| refused("service permit required"))?;
+        invocation
+            .authority
+            .service_sending(&olo_toolgate_contracts::ServicePermitDispatch {
+                permit: permit.clone(),
+                broker_instance_id: invocation.broker_instance_id.clone(),
+                handler_id: handler_id.clone(),
+            })
+            .await
+            .map_err(|_| refused("downstream dispatch authorization refused"))?;
+        if invocation.closed.load(Ordering::SeqCst)
+            || crate::now_ms() >= invocation.deadline_unix_ms
+        {
+            return Err(refused("the invocation has ended"));
+        }
         invocation
             .service_effect_started
             .store(true, Ordering::SeqCst);
     }
-    let response = request.send().await.map_err(failure)?;
+    invocation.authority.transport(prepared, &handler_id).await
+}
+
+pub(crate) async fn collect_response(
+    mut response: reqwest::Response,
+    cap: usize,
+) -> Result<Sent, Value> {
     let status = response.status().as_u16();
     let mut reply_headers = Map::new();
     for (name, value) in response.headers() {
@@ -519,11 +811,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
             .map(str::to_string)
     });
     // At most one byte past the route's cap, so the SDK reports the response as too large.
-    let cap = usize::try_from(route.max_response_bytes)
-        .unwrap_or(usize::MAX)
-        .saturating_add(1);
     let mut bytes = Vec::new();
-    let mut response = response;
     while let Some(chunk) = response.chunk().await.map_err(failure)? {
         let room = cap - bytes.len();
         bytes.extend_from_slice(&chunk[..chunk.len().min(room)]);
@@ -540,7 +828,7 @@ async fn send(invocation: &Invocation, body: &Value) -> Result<Sent, Value> {
 }
 
 /// How a call that was attempted failed. A refused address is a refusal: nothing was sent.
-fn failure(error: reqwest::Error) -> Value {
+pub(crate) fn failure(error: reqwest::Error) -> Value {
     let mut source: Option<&dyn std::error::Error> = Some(&error);
     while let Some(e) = source {
         if let Some(refusal) = e.downcast_ref::<AddressRefused>() {
@@ -558,7 +846,7 @@ fn failure(error: reqwest::Error) -> Value {
     json!({ "failure": kind })
 }
 
-fn is_loopback_host(host: &str) -> bool {
+pub(crate) fn is_loopback_host(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost")
         || host
             .trim_matches(['[', ']'])
@@ -612,7 +900,7 @@ async fn credential(invocation: &Invocation, auth: &HttpAuthDeclaration) -> Resu
 
 async fn fetch(invocation: &Invocation, name: &str) -> Result<String, String> {
     invocation
-        .control
+        .authority
         .secret(&invocation.invocation_id, &invocation.fencing_token, name)
         .await
         .map_err(|e| format!("Control did not deliver secret {name}: {e:?}"))

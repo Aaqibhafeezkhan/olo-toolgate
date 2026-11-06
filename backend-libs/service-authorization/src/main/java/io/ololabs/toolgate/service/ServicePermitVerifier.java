@@ -16,10 +16,31 @@ import java.util.*;
 public final class ServicePermitVerifier {
     public record Epoch(long value, long observedAtUnixMs) {}
     @FunctionalInterface public interface EpochFeed { Epoch current(String tenant); }
-    @FunctionalInterface public interface WriteConsumer { boolean consume(ServiceAudience audience, ServicePermitConsumption request); }
-    public record Request(String tenant, String operation, List<ResourceDescriptor> resources, byte[] exactBody) {
+    public record Request(String tenant, String operation, List<ResourceDescriptor> resources, byte[] exactBody,
+                          Transport transport) {
         public Request { resources=List.copyOf(resources);exactBody=exactBody.clone(); }
         @Override public byte[] exactBody(){return exactBody.clone();}
+        @Override public boolean equals(Object other){
+            return this==other || other instanceof Request that && Objects.equals(tenant,that.tenant)
+                && Objects.equals(operation,that.operation) && resources.equals(that.resources)
+                && Arrays.equals(exactBody,that.exactBody) && Objects.equals(transport,that.transport);
+        }
+        @Override public int hashCode(){
+            return 31*Objects.hash(tenant,operation,resources,transport)+Arrays.hashCode(exactBody);
+        }
+        @Override public String toString(){
+            return "Request[tenant="+tenant+", operation="+operation+", exactBodyBytes="+exactBody.length
+                +", resources=<redacted>, transport=<redacted>]";
+        }
+    }
+    /** Only accepted-request facts and trusted routing configuration belong here. */
+    public record Transport(HttpRequestFingerprint.Profile profile,java.net.URI uri,String method,
+                            Map<String,List<String>> headers) {
+        public Transport {
+            var copy=new HashMap<String,List<String>>();
+            headers.forEach((name,values)->copy.put(name,List.copyOf(values)));
+            headers=Map.copyOf(copy);
+        }
     }
     public final class Authorization {
         private final ServicePermitClaims claims;
@@ -35,28 +56,60 @@ public final class ServicePermitVerifier {
     private final Map<String,PublicKey> keys;
     private final Clock clock;
     private final EpochFeed epochs;
-    private final WriteConsumer consumer;
     private static final ObjectMapper JSON=JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
         .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     public ServicePermitVerifier(String issuer, ServiceAudience audience, Map<String,PublicKey> trustedKeys,
-            Clock clock, EpochFeed epochs, WriteConsumer consumer){
+            Clock clock, EpochFeed epochs){
         this.issuer=Objects.requireNonNull(issuer);this.audience=Objects.requireNonNull(audience);this.keys=Map.copyOf(trustedKeys);
         if(keys.isEmpty()||keys.size()>16||keys.values().stream().anyMatch(key->!(key instanceof java.security.interfaces.RSAPublicKey rsa)
                 ||rsa.getModulus().bitLength()<2048||!rsa.getPublicExponent().equals(java.math.BigInteger.valueOf(65537))))
             throw new IllegalArgumentException("Pinned RSA service permit keys required");
-        this.clock=Objects.requireNonNull(clock);this.epochs=Objects.requireNonNull(epochs);this.consumer=Objects.requireNonNull(consumer);
+        this.clock=Objects.requireNonNull(clock);this.epochs=Objects.requireNonNull(epochs);
     }
-    /** The TLS session must come from the accepted mTLS socket, never from an HTTP header or submitted certificate. */
-    public Authorization authorize(ServicePermit permit, Request request, SSLSession authenticatedExecutor) {
-        try {
-            if(authenticatedExecutor==null||!authenticatedExecutor.isValid())throw denied();
-            var peer=(X509Certificate)authenticatedExecutor.getPeerCertificates()[0];peer.checkValidity(new Date(clock.millis()));
-            String keyHash=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(peer.getPublicKey().getEncoded()));
-            return authorizeKey(permit,request,keyHash);
-        } catch(GeneralSecurityException|javax.net.ssl.SSLPeerUnverifiedException invalid){throw denied();}
+    /** Verified facts only. This object cannot authorize a business commit before online claim consumption. */
+    public final class VerifiedWrite {
+        private final Verification verified;
+        private final JdbcEffectClaims.Binding binding;
+        private VerifiedWrite(Verification verified){
+            this.verified=verified;var c=verified.authorization().claims();
+            binding=new JdbcEffectClaims.Binding(c.tenantId(),c.effectId(),c.authorizationGeneration(),c.nonce(),c.httpRequestDigest());
+        }
+        public ServicePermitClaims claims(){return verified.authorization().claims();}
+        public JdbcEffectClaims.Binding binding(){return binding;}
+        ServicePermitConsumption consumption(){return verified.consumption();}
+        void checkDeadline(){verified.authorization().checkCommitDeadline();}
+        Authorization consumed(){checkDeadline();return verified.authorization();}
     }
-    // Package-private test seam; production requests enter through the authenticated TLS session above.
-    Authorization authorizeKey(ServicePermit permit, Request request, String executorKey) {
+    private record Verification(Authorization authorization,ServicePermitConsumption consumption,boolean read) {}
+    /** The session must come from the accepted mTLS socket, never a header or submitted certificate. */
+    private String executorKey(SSLSession session){
+        try{
+            if(session==null||!session.isValid())throw denied();
+            var peers=session.getPeerCertificates();
+            if(peers.length==0||!(peers[0] instanceof X509Certificate peer))throw denied();
+            peer.checkValidity(new Date(clock.millis()));
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(peer.getPublicKey().getEncoded()));
+        }catch(GeneralSecurityException|javax.net.ssl.SSLPeerUnverifiedException invalid){throw denied();}
+    }
+    public Authorization authorize(ServicePermit permit,Request request,SSLSession authenticatedExecutor){
+        return authorizeKey(permit,request,executorKey(authenticatedExecutor));
+    }
+    public VerifiedWrite verifyWrite(ServicePermit permit,Request request,SSLSession authenticatedExecutor){
+        return verifyWriteKey(permit,request,executorKey(authenticatedExecutor));
+    }
+    // Package-private test seams; production enters through the accepted TLS session above.
+    Authorization authorizeKey(ServicePermit permit,Request request,String executorKey){
+        var verified=verifyKey(permit,request,executorKey);
+        if(!verified.read())throw denied();
+        verified.authorization().checkCommitDeadline();return verified.authorization();
+    }
+    VerifiedWrite verifyWriteKey(ServicePermit permit,Request request,String executorKey){
+        var verified=verifyKey(permit,request,executorKey);var c=verified.authorization().claims();
+        if(verified.read()||c.httpRequestDigest()==null||c.effectId()==null
+            ||c.authorizationGeneration()==null||c.authorizationGeneration()<1)throw denied();
+        try{return new VerifiedWrite(verified);}catch(IllegalArgumentException invalid){throw denied();}
+    }
+    private Verification verifyKey(ServicePermit permit,Request request,String executorKey) {
         try {
             if(permit==null||permit.jws().length()>32768)throw denied();
             String[] parts=permit.jws().split("\\.",-1);if(parts.length!=3)throw denied();
@@ -78,6 +131,11 @@ public final class ServicePermitVerifier {
                 ||!digest.equals(claims.requestFingerprint())||!executorKey.equals(claims.executorKeySha256())
                 ||claims.iat()>now||claims.exp()<=now||claims.exp()<=claims.iat()||claims.exp()-claims.iat()>15000
                 ||request.resources().isEmpty()||request.resources().stream().anyMatch(r->r.kind()!=ResourceKind.CUSTOM||!r.locator().startsWith("olo://"+request.tenant()+"/")))throw denied();
+            var transport=request.transport();
+            if(transport==null)throw denied();
+            String transportDigest=HttpRequestFingerprint.digest(transport.profile(),transport.uri(),transport.method(),
+                transport.headers(),request.exactBody());
+            if(!transportDigest.equals(claims.httpRequestDigest()))throw denied();
             boolean read=switch(request.operation()){
                 case "memory.read","rag.query" -> true;
                 case "memory.append","memory.delete","memory.share","memory.export","rag.ingest","rag.update","rag.delete","rag.share" -> false;
@@ -85,8 +143,9 @@ public final class ServicePermitVerifier {
             };
             if(read){var epoch=epochs.current(request.tenant());
                 if(epoch==null||epoch.observedAtUnixMs()>now||now-epoch.observedAtUnixMs()>10000||epoch.value()!=claims.authorizationEpoch())throw new StaleReadEpoch();
-            } else if(!consumer.consume(audience,new ServicePermitConsumption(permit,request.operation(),request.resources(),digest,executorKey)))throw denied();
-            return new Authorization(claims);
+            }
+            return new Verification(new Authorization(claims),new ServicePermitConsumption(permit,request.operation(),
+                request.resources(),digest,executorKey,transportDigest),read);
         } catch(java.io.IOException|GeneralSecurityException|IllegalArgumentException invalid){throw denied();}
     }
     /** Only reached after signature, peer, identity, exact request and lifetime checks pass. */

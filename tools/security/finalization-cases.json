@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "scope": "S10 Control component cases only; original distributed suites and security claims remain unaccepted",
+  "tests": {
+    "operation/all-generations": "io.ololabs.toolgate.control.RecoveryAdmissionIntegrationTest.authoritativeProjectionUsesAllRecoveryGenerationsAndWaitsForWorkerClosure",
+    "operation/pending-late-success": "io.ololabs.toolgate.control.RecoveryAdmissionIntegrationTest.qualifiedLateSuccessDoesNotResolveAPendingWriteButCanCompleteAfterItsTargetWitness",
+    "operation/reported-success": "io.ololabs.toolgate.control.RecoveryAdmissionIntegrationTest.anUnqualifiedSuccessfulReportAndAnUnresolvedQualifiedWriteStayUnknown",
+    "operation/partial-error": "io.ololabs.toolgate.control.RecoveryAdmissionIntegrationTest.completedTransportWithAnErrorFrameCannotSupplySuccessfulAttemptEvidence",
+    "operation/outcome-audit-atomicity": "io.ololabs.toolgate.control.RecoveryAdmissionIntegrationTest.outcomePersistenceAndItsAuditRollBackTogether",
+    "operation/manifest-closure": "io.ololabs.toolgate.control.AttemptManifestTest.authorizationMembershipAndClosureAreAtomicAndImmutable",
+    "operation/review-rollback": "io.ololabs.toolgate.control.AttemptReviewTest.approvedStateMismatchRollsBackTheDecisionProofAndDerivedOutcome",
+    "operation/no-blind-retry": "io.ololabs.toolgate.control.EnterpriseOperationTest.unknownExternalOutcomeCannotTriggerBlindRetry",
+    "operation/settlement-no-authority": "io.ololabs.toolgate.control.RecoveryAdmissionIntegrationTest.aQualifiedTerminalAttemptClosesItsLeaseAndSettlesWithoutNewAuthority",
+    "operation/review-no-reissue": "io.ololabs.toolgate.control.AttemptReviewTest.publicMakerCheckerSettlesOnceWithoutRewritingOrReissuing",
+    "operation/current-caller-metadata": "io.ololabs.toolgate.control.EnterpriseOperationTest.currentCallerCanReadAfterExecutionDeadlineWithoutRebindingOrExtendingIt"
+  }
+}

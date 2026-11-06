@@ -13,7 +13,7 @@ import java.util.Base64;
 
 /** Fixed algorithm, fixed type, pinned verification key; no attacker-selected key URLs or algorithms. */
 public final class RsaEffectSigner implements EffectSigner {
-    private final RSAPrivateCrtKey key;private final PublicKey publicKey;private final ContractCodec codec;private final String header,invocationHeader,scanHeader,serviceHeader,keyId;
+    private final RSAPrivateCrtKey key;private final PublicKey publicKey;private final ContractCodec codec;private final String header,invocationHeader,scanHeader,serviceHeader,effectHeader,keyId;
     public RsaEffectSigner(RSAPrivateCrtKey key,String keyId,ContractCodec codec){
         if(!java.util.Set.of(2048,3072,4096).contains(key.getModulus().bitLength())||!key.getPublicExponent().equals(java.math.BigInteger.valueOf(65537)))throw new IllegalArgumentException("Invalid permit key");
         this.keyId=keyId;this.key=key;this.codec=codec;header=encode(codec.json(new EnterprisePermitHeader("RS256","toolgate-effect-permit+jws",Ids.valid(keyId))));
@@ -21,7 +21,30 @@ public final class RsaEffectSigner implements EffectSigner {
         var scan=new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("alg","RS256").put("typ","toolgate-mcp-scan-permit+jws").put("kid",keyId);
         scanHeader=encode(scan.toString());
         serviceHeader=encode(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("alg","RS256").put("typ","olo-service-permit+jws").put("kid",keyId).toString());
+        effectHeader=encode(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("alg","RS256").put("typ","toolgate-effect-grant-v1").put("kid",keyId).toString());
         try{publicKey=KeyFactory.getInstance("RSA").generatePublic(new RSAPublicKeySpec(key.getModulus(),key.getPublicExponent()));}catch(GeneralSecurityException invalid){throw new IllegalArgumentException("Invalid permit key",invalid);}
+    }
+    public String downstreamKey(String tenant,String effectId){
+        Ids.valid(tenant);Ids.valid(effectId);
+        byte[] encoded=key.getEncoded(),derived=null;
+        if(encoded==null)throw Failure.unavailable();
+        try{
+            var digest=MessageDigest.getInstance("SHA-256");
+            digest.update("toolgate-downstream-hmac-key-v1".getBytes(StandardCharsets.UTF_8));
+            derived=digest.digest(encoded);
+            var mac=javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(derived,"HmacSHA256"));
+            return "tg-"+java.util.HexFormat.of().formatHex(mac.doFinal(codec.json(java.util.List.of(
+                "toolgate-downstream-effect-v1",tenant,effectId)).getBytes(StandardCharsets.UTF_8)));
+        }catch(GeneralSecurityException invalid){throw Failure.unavailable();}
+        finally{java.util.Arrays.fill(encoded,(byte)0);if(derived!=null)java.util.Arrays.fill(derived,(byte)0);}
+    }
+    public io.ololabs.toolgate.contracts.v2.SignedEffectGrant signEffect(io.ololabs.toolgate.contracts.v2.EffectGrantClaims claims){
+        String payload=codec.json(claims);codec.model(payload,io.ololabs.toolgate.contracts.v2.EffectGrantClaims.class);
+        return new io.ololabs.toolgate.contracts.v2.SignedEffectGrant(signed(effectHeader,payload));
+    }
+    public io.ololabs.toolgate.contracts.v2.EffectGrantClaims verifyEffect(io.ololabs.toolgate.contracts.v2.SignedEffectGrant grant){
+        return codec.model(verified(effectHeader,grant.jws()),io.ololabs.toolgate.contracts.v2.EffectGrantClaims.class);
     }
     public ServicePermit signService(ServicePermitClaims claims){String payload=codec.json(claims);codec.model(payload,ServicePermitClaims.class);return new ServicePermit(signed(serviceHeader,payload));}
     public ServicePermitClaims verifyService(ServicePermit permit){return codec.model(verified(serviceHeader,permit.jws()),ServicePermitClaims.class);}

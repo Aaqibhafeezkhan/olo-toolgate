@@ -111,6 +111,7 @@ public final class GroupGraph {
                 var p=codec.model(e.document(),ControlPolicy.class);scope(p.scope()); selection(p.teams());selection(p.agentGroups());selection(p.approverTeams());
                 if(p.decision()==Decision.ASK&&!p.approverTeams().all()&&p.approverTeams().ids().isEmpty())throw new IllegalArgumentException("ASK requires an explicit reviewer group");
             }
+            if(kind==Kind.TOOL)BusinessKeyPolicies.validatedRetention(codec.model(e.document(),ControlTool.class).definition().businessKeyPolicy());
             if(kind==Kind.BINDING)StandardAccessPresets.validateBinding(codec.model(e.document(),ControlExecutionBinding.class));
             if(kind==Kind.WORKLOAD_BINDING) {
                 var b=codec.model(e.document(),ControlWorkloadBinding.class);olo.workload(b);

@@ -1,33 +1,34 @@
-# Compatibility and upgrades
+# Current contracts and fresh builds
 
-Use the root `VERSION` for product artifacts and `packages/contracts/VERSION`
-for the generated contract set. Deploy matching Gateway, Control, console,
-Quickstart and managed-client artifacts for the intended release. The group-only
-enterprise cutover is a breaking development-version change: old individual ACL
-writers and the old Gateway evaluator are not compatibility fallbacks.
+This feature ships fresh breaking builds. Deploy matching current Control,
+Gateway, Tool Host, console, Quickstart, client, SDK and contract artifacts.
+There is no backward compatibility, mixed-version fallback, legacy runtime
+adapter, database migration, backfill or conversion path.
 
-## Check before upgrading
+Use the root VERSION for product artifacts and packages/contracts/VERSION for
+the generated contract set. Version identifiers select the matching current
+artifacts; they do not promise support for earlier formats.
 
-- Read [release notes](../../RELEASE-NOTES.md) and [Control upgrades](../control-plane/upgrades.md).
-- Verify supported package format, descriptor generation, runtime and OS/architecture
-  for each assigned tool. Unknown or unsupported contracts fail closed.
-- Preserve identity/custody, spent nonces, audit and retired IDs. Database schema
-  history is not reversed by a Helm rollback; use reviewed isolated recovery.
-- Validate both SQLite and PostgreSQL migrations when changing persistence.
-- Keep generated bindings and canonical schemas in sync through the
-  [schema workflow](../development/schema-workflow.md).
+## Prepare a deployment
 
-The [MCP version decision](../adr/018-mcp-versions-legacy-adapter.md) includes an
-amendment withdrawing the legacy adapter. Follow the current decision rather
-than assuming older protocol support from an earlier plan.
+- Initialize an empty PostgreSQL database or empty Quickstart data directory
+  using the current fresh schema. See [fresh database initialization](../control-plane/upgrades.md).
+- Verify the current package format, descriptor generation, runtime and
+  OS/architecture for every assigned tool. Unsupported inputs fail closed.
+- Preserve existing stores and evidence separately. An unsupported store is
+  rejected without conversion or deletion; application rollback cannot restore
+  authority or reset spent nonces.
+- Verify fresh initialization, current-schema recovery and obsolete-format
+  refusal on SQLite and PostgreSQL when changing persistence.
+- Keep canonical schemas, generated bindings and first-party callers aligned
+  through the [schema workflow](../development/schema-workflow.md).
 
-Use [SDK compatibility evidence](../../tool-sdk/spec/sdk-compat/README.md),
+Preserved proposals and archived fixtures are historical evidence. Earlier
+migration or compatibility decisions are superseded by the fresh-build rule.
+Archives do not define current acceptance or supply runtime fallback behavior.
+
+Use [SDK conformance evidence](../../tool-sdk/spec/sdk-compat/README.md),
 [package deployment](../client/package-deployment.md) and
-[installer limitations](../client/installers.md) for their respective support
-boundaries. Recorded conformance is tied to its pinned versions and does not
-establish a blanket N/N-1 or all-platform support promise.
-
-Closed schemas can reject additive fields or enum values. Review accepted inputs
-and security meaning when assigning a contract version; a breaking change needs
-an explicit migration/version decision. Preserve frozen compatibility fixtures
-instead of rewriting them to hide a breaking change.
+[installer limitations](../client/installers.md) for their declared current
+runtime boundaries. Pinned conformance does not establish N/N-1 or all-platform
+support.

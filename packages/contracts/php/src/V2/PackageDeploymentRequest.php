@@ -13,12 +13,13 @@ final readonly class PackageDeploymentRequest implements \JsonSerializable {
         public ?array $hostIds = null,
         public ?array $deviceGroupIds = null,
         public ?array $privateRanges = null,
-        public ?\stdClass $destinationTls = null
+        public ?\stdClass $destinationTls = null,
+        public ?array $effectPolicies = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['packageDigest', 'globals', 'hostIds', 'deviceGroupIds', 'privateRanges', 'destinationTls']) || array_diff(['packageDigest', 'globals'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['packageDigest', 'globals', 'hostIds', 'deviceGroupIds', 'privateRanges', 'destinationTls', 'effectPolicies']) || array_diff(['packageDigest', 'globals'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +28,8 @@ final readonly class PackageDeploymentRequest implements \JsonSerializable {
             array_key_exists('hostIds', $data) ? array_map(static fn ($item) => $item, $data['hostIds']) : null,
             array_key_exists('deviceGroupIds', $data) ? array_map(static fn ($item) => $item, $data['deviceGroupIds']) : null,
             array_key_exists('privateRanges', $data) ? array_map(static fn ($item) => PrivateRangeApproval::fromArray($item), $data['privateRanges']) : null,
-            array_key_exists('destinationTls', $data) ? (object) $data['destinationTls'] : null
+            array_key_exists('destinationTls', $data) ? (object) $data['destinationTls'] : null,
+            array_key_exists('effectPolicies', $data) ? array_map(static fn ($item) => RouteEffectPolicy::fromArray($item), $data['effectPolicies']) : null
         );
     }
 

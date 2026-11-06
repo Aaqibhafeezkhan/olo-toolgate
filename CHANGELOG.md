@@ -6,6 +6,46 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Distinguish unconfirmed operation outcomes in the example MCP client and stop
+  without retrying. Verify the current unqualified native boundary in the
+  LangChain image gate without presenting reported output as business success.
+
+- Patch the independent Ubuntu device base and LangChain package builder for
+  CVE-2026-109518; require the fixed APT/libapt floor before secured-device
+  package installation and inventory every production Noble root in CI.
+
+- Wait for the first durable current Tool Host check-in within the existing
+  image smoke readiness budget, avoiding an enrollment/profile startup race.
+
+- Patch APT/libapt-pkg in the pinned Ubuntu Control builder and runtime base,
+  fixing CVE-2026-109518 in composed images; disable retries during bootstrap
+  and refuse package versions below the fixed release.
+
+- Configure fresh CI rootless stores with fuse-overlayfs before pulling pinned
+  images, avoiding cold native-overlay UID-map copies within bounded create.
+
+- Keep qualification's attached probe clients alive through container removal;
+  preserve engine-operation errors and retained-journal fencing on uncertainty.
+- Recover one partial Rust component-conflict installation only inside owned CI
+  toolchain storage, retaining the pinned compiler and mandatory scan gates.
+
+- Separate OCI supervisor identity witnesses from mandatory worker/broker resource probes, fixing qualification on hosts whose root cgroup has no limit files.
+
+- Model-validation prompts: `@ModelValidation` in Java, `model_validation(...)` in Python and a `"modelValidation"`
+  block on a tool in `toolgate.json` declare test requests with their expected calls (`prompts`) and requests that
+  must call nothing (`negatives`). They go to each tool's `modelValidation` in `training/annotations.json` and the
+  tool schema, apart from the training hints: a dataset builder tests a trained model on them and never trains on
+  them. The build requires each prompt to be a complete, valid call and refuses one that repeats a training hint.
+  `core-mcp/hello-world` declares some. See `tool-sdk/spec/authoring/training.md`.
+
+- Training hints are declared on the tools and `training/annotations.json` is generated from them: `@Training`,
+  `@TrainingValues`, `@TrainingPrompt` and `@ValuePhrasing` in Java, `training(...)`, `TrainingValues` and
+  `TrainingPrompt` in Python, and `"training"` blocks on tools and inputs in `toolgate.json`. The build checks every
+  hint against the tool's inputs and types. `toolgate pack` folds them into the tool schema and writes the file beside
+  the `.tgpkg`; it refuses a hand-written annotations file. Hints never reach a descriptor, and Java and JSON packages
+  keep their digests when a hint changes. `core-mcp/hello-world` declares its hints in `HelloWorld.java`.
+  See `tool-sdk/spec/authoring/training.md`.
+
 - Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.tgpkg`
   (each tool's name, description, `useWhen`, effect, parameters with types, defaults, enums and bounds, and the
   input and output schemas), merging optional phrasing hints from the project's `training/annotations.json`.
@@ -372,6 +412,179 @@ The project follows semantic versioning once stable versioning begins.
 - Add fixed inline Python/Node/PowerShell/Shell runners inside existing OCI
   confinement; Control never executes author code. Native platform certification
   limits remain explicit in the Module 10 report.
+
+
+- Make S01–S20 a fresh breaking build: initialize current PostgreSQL/SQLite
+  schemas, reject older stores and incomplete authority contracts, and remove
+  compatibility constructors, upgrade backfills and default effect-key aliases.
+  Generic/OLO writes require explicit stable keys; Java/Python authoring and
+  same-generation lost-reply recovery preserve original dispatch deadlines.
+  Add independently reviewed target guarantees, broker-owned downstream keys,
+  guarded history-aware resend, scoped read-only target lookup and paginated
+  recovery readiness. S20 stage qualification passes; full roadmap phase and
+  production security acceptance remain pending.
+
+- Repair current-schema restore fixtures and deterministic TLS fixture addressing.
+  Use checked operation-history pagination, content-based immutable service
+  request values with redacted diagnostics, and bounded retry for macOS installer
+  disk-image service contention. Keep actual dialect SQL checks and map Oracle
+  analysis only to Oracle file suffixes.
+- Use native TEXT declarations and typed byte-length namespace guards in fresh
+  SQLite schemas. Preserve strict tenant identity and immutable archive checks
+  across empty, Unicode, NUL and binary inputs. Retain bounded worker/broker
+  startup diagnostics when mandatory OCI qualification fails. Run current
+  Quickstart security/restore tests through the shared local/CI Python gate,
+  with gate-selection checks and no duplicate workflow step.
+- Resolve mandatory OCI I/O limits from the service account's actual rootless
+  container storage and its whole block device. Reject explicit partition IDs,
+  unresolved storage and remote/rootful engines; retain storage/device evidence
+  in containment and managed-deployment qualification.
+
+- Add immutable exact-effect previews, authenticated review and atomic consent
+  slots for financial/destructive generic HTTP and native MCP calls. Preserve
+  original expiry, keep policy approvals separate and refuse changed intent,
+  exhausted slots and revoked consent.
+
+
+- Require prepared HTTP facts and owner-bound invocation proof for current OLO
+  service permits, including reads. Writes use durable claim-token consumption;
+  the direct authorization API grants read authority only. Current target claims
+  require positive expiry and fresh schema identity.
+
+- Require explicit native MCP effect review and fresh owner-bound authority for
+  tools/call, independently binding the approved target and admitted arguments.
+  Native MCP approvals require explicit effect policy; consent-required calls wait for exact-effect approval. Unix hosts
+  use the bounded send transport through JSON/SSE replies; unsupported hosts
+  refuse dispatch. S18 declared delivery is complete; full roadmap phase
+  qualification remains pending.
+
+- Add reviewed generic HTTP request intents, durable owner-bound effect grants
+  and a two-second guarded send window. Deploy matching current contract readers;
+  generic routes without reviewed intent now fail closed. Preserve required JSON
+  nulls in PHP bindings and scan worker output linearly. Native MCP and
+  legacy-write refusal now share the completed S18 delivery;
+  exact consent, generalized resend/fencing and full phase acceptance remain pending.
+
+- Require the exact delegated systemd control-group SIGKILL boundary before OCI
+  readiness. Update the service unit before adopting the host. Engine timeouts or
+  indeterminate I/O now retain lifecycle journals and identity reservations until
+  managed restart. Add source-bound owned supervisor-crash/automatic-restart drills
+  with local timing evidence; production connectivity SLO acceptance stays separate.
+
+- Reject malformed, duplicate, oversized or out-of-order qualified-worker frames
+  before authority/event handling. Check complete DNS answers and literal IPs,
+  preserve no-redirect HTTP/1.1 transport and qualify the declared-tier interface
+  matrix with source/image-bound reports. SPKI pins now require standard
+  certificate validation and match the verified leaf only: private/self-signed
+  services must supply caBundle, and intermediate-only pins must be replaced.
+
+- Run each qualified Python OCI invocation with a separate trusted broker
+  identity and network namespace. Bind private authority/transport IPC to one
+  admission, require a positive send gate and tear down/recover the worker and
+  broker together. OCI hosts must prepare a pinned static broker image, configure
+  brokerImage, and allow two subordinate identity ranges per slot. The separated
+  tier supports declared request/response ceilings up to 2 MiB; unsupported
+  policies are refused. Native and other runtime tiers require separate qualification.
+
+- Derive separate operation outcomes and bounded history across every attempt
+  and effect generation. Seal attempt manifests, retain qualified late evidence,
+  fence conflicting work and support independent revision-bound scope review.
+  Expose current-authority metadata in Gateway/MCP and human/console results.
+  Deploy fresh stores and matching current contract readers; reported success alone cannot
+  resolve ambiguous work. Full original distributed-suite acceptance remains outstanding.
+
+- Recover safe failed operations under their original deadline using immutable
+  Control proofs, fresh attempt nonces and current authorization. Default-off
+  device/pool/image qualification restricts consumed recovery to supported
+  broker-only Python OCI OLO routes with every generation released. Preserve
+  predecessor dispatches and fence stale receipts. Apply V6 and coordinate
+  Control/Tool Host upgrades; ambiguous writes remain fenced.
+
+- Enforce reviewed business-key requirements, verified namespaces and argument
+  keys across Control, Gateway and human calls. Add bounded optional dedupe
+  windows with resolved-operation proof, immutable generation history and
+  retention tombstones. Upgrade V5/Control and current contract readers before
+  publishing policy metadata; ambiguous operations never rotate on elapsed time.
+
+- Add a source-bound Zero Trust diagnostic scorecard and CI artifact/summary.
+  Authored case status supplies no acceptance; missing runners remain explicit
+  gaps. The diagnostic job is separate from security release acceptance.
+
+- Qualify actual development-stack target outcomes against Control records, with
+  source, installed-artifact and runtime-image pins. Publish a weighted delivery
+  baseline and require one commit per completed delivery stage.
+
+- Add verified-write SDK facts, claim-bound online consumption, durable target
+  outcome delivery and expiry recovery. Actual memory/RAG adapters adopt the
+  shared claim protocol with restricted SQL migrations and status-only duplicate
+  responses. Upgrade target schema and SDK together; no one-shot fallback exists.
+
+- Bound OLO write grants carry effect/generation metadata. Dedicated target
+  APIs consume with a claim token, return status on replay and retain late
+  authenticated outcomes. These APIs grant no replacement dispatch authority.
+  Upgrade target contracts before Control; shared-claim integration is separate.
+
+- Add a shared JDBC target-claim foundation with unique ownership, pre-apply
+  recovery fencing and caller-transaction completion. Control claim replay and
+  memory/RAG integration remain outstanding; see the target effect claims guide.
+
+- Bound OLO writes require recorded broker/handler ownership and one authenticated
+  AUTHORIZED-to-SENDING transition before dispatch. Target consumption refuses
+  unsent generations. Upgrade broker and Control together.
+
+- Transport-aware target verifiers refuse unbound legacy permits before online
+  consumption. Coordinate the actual OLO memory/RAG listener upgrade and trusted
+  profile bindings in olo-mono/olo-knowledge.
+
+- Independently validate pinned OLO HTTP request manifests at Control using the
+  original signed admission, current lease and immutable service profile. Refuse
+  altered destinations/route scope and v2 downgrade to unbound service permits.
+  Digest-only bound development clients must upgrade with Control.
+
+- Bind OLO service permits to the broker's prepared HTTP request fingerprint.
+  Targets recompute the fingerprint from accepted request facts before consuming
+  a write capability; missing/changed facts fail closed. Upgrade target
+  integrations and Control before deploying the updated broker.
+
+- Restrict qualified broker egress explicitly to HTTP/1.1 and verify real TLS
+  protocol negotiation against a target offering HTTP/2 first.
+
+- Tool Host prepares and fingerprints the exact buffered HTTP request before
+  sending, binds the pinned profile and route, preserves duplicate-query order,
+  excludes declared credential values, and disables hidden protocol retries.
+  Digests are observations pending the generalized Control effect-grant protocol.
+  See `docs/operations/prepared-http-requests.md`.
+
+- Control records effect authorization generations for OLO service writes, with
+  immutable bindings, single-send/consume transitions, expiry to ambiguity and
+  retained outcome evidence. Consumption remains distinct from completion;
+  target deduplication and generalized exact HTTP binding are still required.
+  See `docs/operations/effect-generations.md`.
+
+- Control keeps independent operation and permit-attempt records with immutable
+  snapshots and historical backfill on PostgreSQL/SQLite. Expired unconsumed
+  reservations can be replaced inside the original deadline; consumed unknown
+  invocations no longer auto-requeue on a downstream-idempotency declaration.
+  Consumed terminal attempts stay provisionally unknown until effect evidence
+  establishes finality. See `docs/operations/operation-attempt-journal.md`.
+
+- Explicit native Gateway and modern MCP business keys now bind durably to one
+  operation across request IDs and restarts. Changed inputs or owners conflict;
+  ambiguous outcomes cannot reopen through legacy downstream resend. See
+  `docs/operations/business-operation-keys.md` for scope and compatibility.
+- Standalone Java SDK task transitions acquire the SQLite writer lock before
+  reading, preventing read-to-write lock failures during restart recovery and
+  late completion from the previous runtime.
+
+- Python server tools can run in qualified rootless OCI pools with a signed
+  runtime-image pin, no worker network or host mounts, separate identity ranges,
+  enforced resource limits, bounded output and durable teardown recovery. The
+  tier fails closed and never falls back to native launch. See
+  `docs/operations/rootless-tool-host.md` for preparation and executed conformance.
+- Tool Hosts renew durable, device-bound execution leases against current Control
+  authority and stop supervised workers on refusal or lease expiry. Admission
+  uncertainty records and exact result reports survive restart; late evidence is
+  retained without reopening execution. See `docs/operations/execution-leases.md`.
 
 ## 0.9.0-dev
 

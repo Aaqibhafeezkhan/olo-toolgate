@@ -155,6 +155,20 @@
             "$ref": "service-profile.schema.json#/$defs/PrivateRangeApproval"
           },
           "maxItems": 64
+        },
+        "effectReviews": {
+          "type": "array",
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/RouteEffectReview"
+          },
+          "maxItems": 256
+        },
+        "nativeMcpEffects": {
+          "type": "array",
+          "items": {
+            "$ref": "mcp-proxy.schema.json#/$defs/NativeMcpEffectReview"
+          },
+          "maxItems": 64
         }
       },
       "required": [

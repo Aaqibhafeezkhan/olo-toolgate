@@ -136,7 +136,8 @@ final class ClientReleasesTest {
     static byte[] sdkPackage() throws Exception {
         return sdkPackage(false);
     }
-    static byte[] sdkPackage(boolean python) throws Exception {
+    static byte[] sdkPackage(boolean python) throws Exception { return sdkPackage(python,false); }
+    static byte[] sdkPackage(boolean python,boolean requiredKey) throws Exception {
         var jar = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(jar)) {
             zip.putNextEntry(new ZipEntry(python ? "_toolgate_index/package.json" : "META-INF/toolgate/package.json"));
@@ -162,6 +163,10 @@ final class ClientReleasesTest {
             var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
                 + "\"inputSchema\":" + schema + ",\"outputSchema\":" + output + ",\"errors\":[],\"effect\":{\"safety\":\"READ_ONLY\",\"destructive\":false,\"openWorld\":false},\"businessKey\":{\"required\":false},"
                 + "\"execution\":{\"async\":false,\"maxDurationMs\":30000},\"routes\":[],\"destinations\":[],\"httpAuth\":[],\"tcp\":[],\"variables\":{\"globals\":[],\"secrets\":[],\"claims\":[]},\"permissions\":[],\"toolsets\":[]}");
+            d.withObject("/businessKey").put("namespace","AGENT");
+            d.withObject("/execution").put("stateless",true).put("cancelIfAbandoned",true);
+            if(requiredKey&&spec[0].equals("client_greet"))
+                d.putObject("businessKey").put("required",true).put("namespace","DELEGATED_USER");
             if (spec[0].equals("client_greet")) d.putArray("permissions").add("DEVICE_FILES_READ").add("DEVICE_FILES_WRITE");
             if (spec[0].equals("fetch")) {
                 d.set("routes", JSON.readTree("[{\"id\":\"items.get\",\"destination\":\"api\",\"method\":\"GET\",\"path\":\"/items\",\"query\":[],\"headers\":[],\"requestContentTypes\":[],\"maxRequestBytes\":0,\"maxResponseBytes\":65536,\"streaming\":\"NONE\",\"timeoutMs\":5000}]"));
@@ -189,10 +194,13 @@ final class ClientReleasesTest {
         return rig(signed, credentials, false);
     }
     private Rig rig(boolean signed, String credentials, boolean python) throws Exception {
+        return rig(signed,credentials,python,false);
+    }
+    private Rig rig(boolean signed, String credentials, boolean python, boolean requiredKey) throws Exception {
         start(); String baseDigest = seedBase(python);
         var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("releases.sqlite"))), codec);
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("fleet"); var admin = TestSupport.seed(store, codec, tenant, "root");
-        byte[] bytes = sdkPackage(python);
+        byte[] bytes = sdkPackage(python,requiredKey);
         String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).upload(admin, bytes, "upload").body()).get("packageDigest").asText();
         var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var organization = generator.generateKeyPair(); var release = generator.generateKeyPair();
@@ -373,4 +381,19 @@ final class ClientReleasesTest {
         assertEquals("17.0.9", OciImages.javaVersion(JSON.createObjectNode().set("config", JSON.createObjectNode().set("Env", JSON.createArrayNode().add("JAVA_VERSION=jdk-17.0.9+9")))));
         assertThrows(Failure.class, () -> OciImages.javaVersion(JSON.createObjectNode()));
     }
+    @Test void clientKeyPolicyIsIncludedInTheSignedInstalledAuthorizationProfile() throws Exception {
+        var rig=rig(true,"robot:secret",false,true);
+        var result=JSON.readTree(rig.releases.release(rig.admin,"{\"packageDigest\":\""+rig.digest+"\"}","key-policy-release").body());
+        var document=rig.codec.model(rig.codec.json(result.path("document")),FleetPackageDocument.class);
+        var registration=document.tools().stream().filter(t->t.toolId().equals("acme.greet/client_greet")).findFirst().orElseThrow();
+        var policy=registration.authorizationProfile().tool().definition().businessKeyPolicy();
+        assertTrue(policy.required());
+        assertEquals(BusinessKeyNamespace.DELEGATED_USER,policy.namespace());
+        assertEquals(result.path("manifestDigest").asText(),FleetService.digest(rig.codec.json(document).getBytes(StandardCharsets.UTF_8)));
+        var stored=rig.codec.model(rig.store.transaction(rig.tenant,false,tx->tx.load().entries().get(
+                Ids.Kind.TOOL.id("acme.greet/client_greet"))).document(),ControlTool.class);
+        assertEquals(policy,stored.definition().businessKeyPolicy());
+        assertTrue(result.path("signed").asBoolean());
+    }
+
 }

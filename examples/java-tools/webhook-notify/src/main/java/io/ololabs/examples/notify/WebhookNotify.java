@@ -18,6 +18,11 @@ import io.ololabs.toolgate.sdk.annotations.Secret;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.RawResponse;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolBusinessError;
@@ -31,12 +36,13 @@ import java.util.Map;
  *
  * <p>Shows the parts of the SDK that matter for anything with a side effect: the API key is route auth, so under
  * ToolGate the broker adds it and the code never sees it; the tool is {@code NON_IDEMPOTENT} with a business key
- * ({@code reference}), so a retried call with the same reference returns the first result instead of alerting twice,
- * and the key is forwarded as {@code Idempotency-Key} so the receiver can deduplicate too; and the channels a model may
- * post to are an administrator's allowlist. Change the route path to match your receiver.
+ * ({@code reference}) and an explicit stable logical effect key. A caller reference does not itself prove a
+ * downstream deduplication contract. Governed retry requires current independent target review and a qualified
+ * executor; uncertain outcomes otherwise require reconciliation. Channels are an administrator's allowlist.
+ * Change the route path to match your receiver.
  */
 @ToolPackage(id = "examples.notify", name = "Webhook notify", publisher = "ToolGate Examples",
-        description = "Sends alerts and notifications to an approved JSON webhook, at most once per reference.")
+        description = "Sends alerts and notifications to an approved JSON webhook with an explicit logical effect key.")
 @Destination(id = "webhook", hostSetting = "WebhookHost")
 @HttpAuth(id = "webhook-key", type = AuthType.API_KEY, header = "X-Api-Key", secret = "WebhookApiKey")
 @HttpRoute(id = "hook.post", destination = "webhook", method = HttpMethod.POST,
@@ -50,14 +56,14 @@ import java.util.Map;
 public class WebhookNotify {
     public record Sent(
             @Param(description = "Channel posted to") String channel,
-            @Param(description = "The caller's reference, used to send at most once") String reference,
+            @Param(description = "The caller's stable logical operation reference") String reference,
             @Param(description = "HTTP status the receiver answered") int httpStatus,
             @Param(description = "Id the receiver gave the message, when it returned one") String receiptId,
             @Param(description = "When it was sent, ISO 8601") String sentAt) {}
 
     @ServerTool(name = "send", title = "Send a notification",
-            description = "Posts a notification (title, text, severity) to an allowlisted webhook channel. Sending again"
-                    + " with the same reference returns the first result instead of sending twice.",
+            description = "Posts a notification (title, text, severity) to an allowlisted webhook channel."
+                    + " A reference identifies one operation; uncertain outcomes require reconciliation.",
             useWhen = "Use it to raise an alert or tell a team about something the user asked to share.",
             effect = EffectSafety.NON_IDEMPOTENT, businessKeyArgument = "reference", routes = "hook.post",
             errors = @ErrorDecl(code = "CHANNEL_NOT_ALLOWED", description = "The channel is not in AllowedChannels."), reconciliation = Reconciliation.DOWNSTREAM_IDEMPOTENCY)
@@ -67,14 +73,86 @@ public class WebhookNotify {
             exchanges = "exchanges/sent.json")
     @Example(arguments = "{\"channel\":\"ceo-inbox\",\"title\":\"hi\",\"text\":\"hi\",\"reference\":\"r1\"}",
             expectedError = "CHANNEL_NOT_ALLOWED")
+    @Training(
+            phrasings = {
+                "Post to {channel}: {title} - {text}, reference {reference}",
+                "Notify {channel} that {text} (title {title}, ref {reference})",
+                "Send a {severity} alert to {channel} titled {title}: {text}. Id {reference}",
+                "Tell the {channel} channel {text}, headline {title}, reference {reference}",
+                "Alert {channel}, {severity}: {title}. {text} (ref {reference})",
+                "Send a notification to {channel} with title {title} and message {text}, id {reference}"
+            },
+            defaultPhrasings = "Post {title} to {channel}: {text} (ref {reference})",
+            negatives = {
+                "What is a webhook?",
+                "How do I set up a Slack incoming webhook?",
+                "Write an announcement for the team about the outage"
+            },
+            parameters = {
+                @TrainingValues(name = "channel",
+                    examples = {
+                        "ops-alerts",
+                        "deployments",
+                        "on-call",
+                        "team-backend",
+                        "support"
+                    }),
+                @TrainingValues(name = "title",
+                    examples = {
+                        "Disk almost full",
+                        "Deploy finished",
+                        "Backup failed",
+                        "Service restored",
+                        "High error rate"
+                    }),
+                @TrainingValues(name = "text",
+                    examples = {
+                        "C: on app-02 is at 95%",
+                        "Release 1.4.2 is live",
+                        "The nightly backup exited with code 1",
+                        "The API is answering again",
+                        "Error rate above 5% for 10 minutes"
+                    }),
+                @TrainingValues(name = "reference",
+                    examples = {
+                        "INC-5001",
+                        "job-20261031-02",
+                        "deploy-1.4.2",
+                        "alert-7781",
+                        "backup-1031"
+                    }),
+                @TrainingValues(name = "severity",
+                    phrasings = {
+                        @ValuePhrasing(value = "warning", phrasings = {
+                            "warning",
+                            "warning-level"
+                        }),
+                        @ValuePhrasing(value = "critical", phrasings = {
+                            "critical",
+                            "urgent"
+                        })
+                    })
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Send an urgent message to team-backend: \"Disk almost full\" - \"C: on app-02 is at 95%\" (ref INC-5001)", arguments = "{\"channel\":\"team-backend\",\"severity\":\"critical\",\"title\":\"Disk almost full\",\"text\":\"C: on app-02 is at 95%\",\"reference\":\"INC-5001\"}"),
+                @TrainingPrompt(prompt = "Post a warning to deployments: Deploy finished - \"Release 1.4.2 is live\", ref deploy-1.4.2", arguments = "{\"channel\":\"deployments\",\"severity\":\"warning\",\"title\":\"Deploy finished\",\"text\":\"Release 1.4.2 is live\",\"reference\":\"deploy-1.4.2\"}"),
+                @TrainingPrompt(prompt = "Post to on-call: High error rate - \"Error rate above 5% for 10 minutes\", reference INC-5002", arguments = "{\"channel\":\"on-call\",\"title\":\"High error rate\",\"text\":\"Error rate above 5% for 10 minutes\",\"reference\":\"INC-5002\"}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "ping support channel: Backup done - all 3 jobs ok, info level, ref job-1101", arguments = "{\"channel\":\"support\",\"severity\":\"info\",\"title\":\"Backup done\",\"text\":\"all 3 jobs ok\",\"reference\":\"job-1101\"}")
+            },
+            negatives = {
+                "How do webhooks work?"
+            })
     public Sent send(
             @Param(description = "Channel to post to, such as ops-alerts", maxLength = 64) String channel,
             @Param(description = "Short headline", minLength = 1, maxLength = 200) String title,
             @Param(description = "Message body", minLength = 1, maxLength = 4000) String text,
             @Param(description = "How urgent it is", defaultValue = "info", enumValues = {"info", "warning", "critical"})
             String severity,
-            @Param(description = "Your unique id for this notification, such as an incident or job id. A repeat with the"
-                    + " same reference is not sent again.", minLength = 1, maxLength = 128) String reference,
+            @Param(description = "Your unique id for this notification, such as an incident or job id."
+                    + " Reuse it for the same logical operation.", minLength = 1, maxLength = 128) String reference,
             ToolContext context) {
         boolean allowed = Arrays.stream(context.global().getStringValue("AllowedChannels").split(","))
                 .map(String::trim).anyMatch(channel::equals);
@@ -85,7 +163,7 @@ public class WebhookNotify {
         body.put("severity", severity);
         body.put("source", context.global().getStringValue("Source"));
         body.put("reference", reference);
-        RawResponse response = context.http().post("webhook", "/hooks/{channel}").pathVar("channel", channel).body(body).sendRaw();
+        RawResponse response = context.http().post("webhook", "/hooks/{channel}").effectKey("notification").pathVar("channel", channel).body(body).sendRaw();
         return new Sent(channel, reference, response.status(), receiptId(response.body()), Instant.now().toString());
     }
 

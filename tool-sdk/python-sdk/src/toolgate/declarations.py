@@ -22,6 +22,7 @@ __all__ = [
     "tool_package", "server_tool", "client_tool", "Param", "tool_variables", "Variable", "Global", "Secret",
     "JwtClaim", "destination", "http_auth", "http_route", "tcp_destination", "idempotency", "reconcile", "example",
     "ErrorDecl", "REGISTRY_ATTRIBUTE", "ATTACHED_ATTRIBUTE", "device_file_access", "authorization",
+    "training", "TrainingValues", "TrainingPrompt", "model_validation",
 ]
 
 #: The module-level list every declaration registers in.
@@ -383,6 +384,76 @@ class example(Declaration):
         self.expected_output = _json_text(expected_output)
         self.expected_error = expected_error or ""
         self.exchanges = exchanges or ""
+
+
+class TrainingValues:
+    """Training values for one input: realistic example values, and the words people use for particular values.
+
+    Put it in the parameter's annotation beside its Param, ``Annotated[str, Param(...), TrainingValues(...)]``, or in
+    ``training(parameters={"<input>": TrainingValues(...)})``. Examples are values of the input's type; phrasings map
+    a value (``True``, an enum member, ``"metric"``) to how people say it.
+    """
+
+    def __init__(self, *, examples: Iterable[Any] = (), phrasings: Optional[Mapping[Any, Union[str, Iterable[str]]]] = None) -> None:
+        self.examples = tuple(examples or ())
+        self.phrasings = {k: _strings(v) for k, v in (phrasings or {}).items()}
+
+    def __repr__(self) -> str:
+        return "TrainingValues(examples=%r, phrasings=%r)" % (self.examples, self.phrasings)
+
+
+class TrainingPrompt:
+    """One complete training request and the arguments of the call it makes."""
+
+    def __init__(self, prompt: str, arguments: Optional[Mapping[str, Any]] = None) -> None:
+        self.prompt = prompt
+        self.arguments = dict(arguments or {})
+
+    def __repr__(self) -> str:
+        return "TrainingPrompt(%r, %r)" % (self.prompt, self.arguments)
+
+
+class training(Declaration):
+    """Training hints for a tool: how people ask for it, and look-alike requests that must not call it.
+
+    The build checks them against the tool's inputs (a ``{city}`` placeholder must name an input, an example must
+    suit its input's type) and writes them to ``training/annotations.json`` beside the package, never into it, so
+    a changed phrasing does not change a digest (spec/authoring/training.md).
+    """
+
+    kind = "training"
+    on_class = False
+
+    def __init__(self, *, phrasings: Union[str, Iterable[str]] = (), default_phrasings: Union[str, Iterable[str]] = (),
+                 negatives: Union[str, Iterable[str]] = (), parameters: Optional[Mapping[str, TrainingValues]] = None,
+                 prompts: Iterable[Union[TrainingPrompt, Mapping[str, Any]]] = ()) -> None:
+        super().__init__()
+        self.phrasings = _strings(phrasings)
+        self.default_phrasings = _strings(default_phrasings)
+        self.negatives = _strings(negatives)
+        self.parameters = dict(parameters or {})
+        self.prompts = tuple(p if isinstance(p, TrainingPrompt) else TrainingPrompt(p.get("prompt", ""), p.get("arguments"))
+                             for p in prompts or ())
+
+
+class model_validation(Declaration):
+    """Prompts that test a model trained for the tool; the dataset builder never trains on them.
+
+    ``prompts`` are requests with the exact arguments the call must carry (a complete, valid call of the tool);
+    ``negatives`` are requests that must not call it. The build checks them against the tool's inputs, refuses one
+    that repeats a training hint, and writes them under the tool's ``modelValidation`` in
+    ``training/annotations.json`` (spec/authoring/training.md).
+    """
+
+    kind = "model_validation"
+    on_class = False
+
+    def __init__(self, *, prompts: Iterable[Union[TrainingPrompt, Mapping[str, Any]]] = (),
+                 negatives: Union[str, Iterable[str]] = ()) -> None:
+        super().__init__()
+        self.prompts = tuple(p if isinstance(p, TrainingPrompt) else TrainingPrompt(p.get("prompt", ""), p.get("arguments"))
+                             for p in prompts or ())
+        self.negatives = _strings(negatives)
 
 
 class ToolDeclaration(Declaration):

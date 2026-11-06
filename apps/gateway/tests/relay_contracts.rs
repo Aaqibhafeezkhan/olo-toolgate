@@ -14,6 +14,7 @@ fn real_control_catalog_and_response_models_are_registered_and_closed() {
     for name in [
         "RemoteToolSubmission",
         "RemoteToolResponse",
+        "EnterpriseOperationHistoryPage",
         "CancellationAccepted",
     ] {
         assert!(contracts.valid(name, &fixtures[name]), "{name}");

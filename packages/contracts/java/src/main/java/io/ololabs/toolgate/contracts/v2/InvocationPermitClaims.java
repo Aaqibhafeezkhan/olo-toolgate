@@ -28,6 +28,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param approvalIds canonical approvalIds value
  * @param deadlineUnixMs canonical deadlineUnixMs value
  * @param mcpVerification canonical mcpVerification value
+ * @param effectConsent canonical effectConsent value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record InvocationPermitClaims(
@@ -53,7 +54,8 @@ public record InvocationPermitClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "businessKeyNamespace", required = false) KeyNamespace businessKeyNamespace,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "approvalIds", required = true) java.util.List<String> approvalIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deadlineUnixMs", required = true) Long deadlineUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "mcpVerification", required = false) McpPermitVerification mcpVerification
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "mcpVerification", required = false) McpPermitVerification mcpVerification,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "effectConsent", required = false) EffectConsentBinding effectConsent
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -80,6 +82,7 @@ public record InvocationPermitClaims(
      * @param approvalIds canonical approvalIds value
      * @param deadlineUnixMs canonical deadlineUnixMs value
      * @param mcpVerification canonical mcpVerification value
+     * @param effectConsent canonical effectConsent value
      */
     public InvocationPermitClaims {
         java.util.Objects.requireNonNull(jti, "jti");

@@ -7,6 +7,7 @@ replay supported jobs. It reports coverage gaps explicitly.
 | Scope | Entry point |
 |---|---|
 | Full repository | `python tools/check.py` |
+| Shared Python/current Quickstart/contract/PHP/Helm gate | `python tools/check.py --ci-common --ci-part python` |
 | Contract generation and fixtures | `python tools/contracts/generate.py --check`; `python tools/contracts/fixtures.py --check` |
 | Contract regression tests | `python -m unittest discover -s tests/contracts -v` |
 | Java modules | `./gradlew javaCheck` or `gradlew.bat javaCheck` |
@@ -17,10 +18,19 @@ replay supported jobs. It reports coverage gaps explicitly.
 | SDK conformance | [Cases and runner contract](../../tool-sdk/conformance/README.md) |
 | Performance | [Gateway methodology](../gateway/performance.md) |
 | Release checks and scans | [Release process](../development/release-process.md) |
+| Zero Trust diagnostic scorecard | [Runner, nonzero results and CI publication](zero-trust-scorecard.md) |
 | Documentation | `make docs` |
 
 Use deterministic fixtures for unit tests and real service boundaries for
 integration/E2E checks. Run persistence changes against SQLite and PostgreSQL.
+Sonar's PL/SQL mapping is restricted to Oracle-specific file suffixes. This
+repository's .sql files use PostgreSQL and SQLite semantics, including SQLite
+empty strings; the executable engine/schema tests verify those dialects.
+Sonar's separate automatic-analysis service may ignore Gradle scanner settings.
+Fresh SQLite schemas use native TEXT types and explicit typed byte-length
+namespace checks, including Unicode, NUL and binary-value rejection coverage.
+Backward-format preservation is not required for the current breaking build;
+current initialization, denial behavior and containment checks remain required.
 The [foundation guide](../development/foundation.md) lists required tools and
 container-backed checks; dependencies that are missing must be reported.
 
@@ -55,3 +65,21 @@ Record the source revision, command, environment and result. Keep generated logs
 under ignored build output. A conformance case marked `authored` is a requirement,
 not a passing test. Historical compatibility records and enterprise evidence
 remain useful only with their recorded scope and limitations.
+
+## Actual knowledge target qualification
+
+Run tools/security/knowledge.py --knowledge-source /path/to/olo-mono/olo-knowledge
+--gradle /path/to/gradle-8.12/bin/gradle after checking out the coordinated target
+feature branch. It publishes this SDK and runs real PostgreSQL/TLS/vector/corpus
+component qualification, retaining source/SDK-bound evidence under
+build/security/knowledge/conformance.json. The component uses scripted Control;
+full-stack and production SLO acceptance remain separate. The --verify-only mode
+checks previously executed evidence against current component/verifier source and
+the exact published SDK artifact, and refuses stale or skipped evidence.
+
+
+The shared Python group runs the current Quickstart security/restore unit suite
+in both local and CI verification. CI invokes the shared command once and keeps
+it mandatory. Contract-only mode omits runtime fixture tests. Current-format
+restore and crash recovery remain required; preserving older database or wire
+formats is not a quality-gate requirement for this fresh breaking build.

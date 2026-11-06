@@ -1,0 +1,864 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/effect-authorization.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "General effect authorization",
+  "$ref": "#/$defs/EffectGrantIssue",
+  "$defs": {
+    "EffectClassification": {
+      "type": "string",
+      "enum": [
+        "READ",
+        "WRITE",
+        "DESTRUCTIVE",
+        "FINANCIAL"
+      ]
+    },
+    "EffectBodyMode": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "CANONICAL_JSON"
+      ]
+    },
+    "EffectIntentBlueprint": {
+      "type": "object",
+      "description": "Reviewed request blueprint. Values are constants or closed $arg JSON-pointer references; resolved argument data is never interpreted as a template.",
+      "additionalProperties": false,
+      "properties": {
+        "path": {},
+        "query": {
+          "type": "object",
+          "maxProperties": 64
+        },
+        "headers": {
+          "type": "object",
+          "maxProperties": 64
+        },
+        "contentType": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "bodyMode": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectBodyMode"
+        },
+        "body": {}
+      },
+      "required": [
+        "path",
+        "query",
+        "headers",
+        "contentType",
+        "bodyMode",
+        "body"
+      ]
+    },
+    "RouteEffectPolicy": {
+      "type": "object",
+      "description": "Operator-reviewed generic route intent. Financial/destructive and declared consent-required routes require immutable exact-effect approval and atomic slot authority.",
+      "additionalProperties": false,
+      "properties": {
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "classification": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        },
+        "consentRequired": {
+          "type": "boolean"
+        },
+        "acknowledgedUnfencedRisk": {
+          "type": "boolean"
+        },
+        "intent": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectIntentBlueprint"
+        },
+        "targetDedupeGuarantee": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeGuarantee"
+        }
+      },
+      "required": [
+        "routeId",
+        "classification",
+        "consentRequired",
+        "acknowledgedUnfencedRisk",
+        "intent"
+      ]
+    },
+    "RouteEffectReview": {
+      "type": "object",
+      "description": "Review stamp created by Control, never accepted from package or worker input.",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "$ref": "effect-authorization.schema.json#/$defs/RouteEffectPolicy"
+        },
+        "reviewedBy": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "reviewedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "policy",
+        "reviewedBy",
+        "reviewedAtUnixMs"
+      ]
+    },
+    "EffectGrantIssue": {
+      "type": "object",
+      "description": "Request for fresh owner-bound authority. Control independently verifies the signed argument preimage and reconstructs the reviewed request.",
+      "additionalProperties": false,
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "invocationPermit": {
+          "$ref": "permit.schema.json#/$defs/SignedInvocationPermit"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "arguments": {
+          "type": "object",
+          "maxProperties": 1024
+        },
+        "httpRequestDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "httpRequestManifest": {
+          "$ref": "../v1/enterprise.schema.json#/$defs/PreparedHttpRequestManifest"
+        },
+        "effectKey": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectKey",
+          "description": "Required for non-READ effects; READ identities may derive from the current owner. No write-key fallback."
+        }
+      },
+      "required": [
+        "invocationId",
+        "fencingToken",
+        "invocationPermit",
+        "brokerInstanceId",
+        "handlerId",
+        "arguments",
+        "httpRequestDigest",
+        "httpRequestManifest"
+      ]
+    },
+    "EffectGrantClaims": {
+      "type": "object",
+      "description": "Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.",
+      "additionalProperties": false,
+      "properties": {
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "aud": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "iat": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "nbf": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "exp": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "authorizationEpoch": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "authNonce": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "httpRequestDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "classification": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        },
+        "downstreamKey": {
+          "$ref": "effect-authorization.schema.json#/$defs/DownstreamEffectKey"
+        }
+      },
+      "required": [
+        "iss",
+        "aud",
+        "iat",
+        "nbf",
+        "exp",
+        "tenantId",
+        "invocationId",
+        "fencingToken",
+        "authorizationEpoch",
+        "effectId",
+        "generation",
+        "authNonce",
+        "brokerInstanceId",
+        "handlerId",
+        "httpRequestDigest",
+        "profileDigest",
+        "routeId",
+        "classification"
+      ]
+    },
+    "SignedEffectGrant": {
+      "type": "object",
+      "description": "JWS with the fixed toolgate-effect-grant-v1 type; not interchangeable with admission or service permits.",
+      "additionalProperties": false,
+      "properties": {
+        "jws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        }
+      },
+      "required": [
+        "jws"
+      ]
+    },
+    "EffectGrant": {
+      "type": "object",
+      "description": "Issued authority and conservative monotonic send budget, measured from before the issuance request.",
+      "additionalProperties": false,
+      "properties": {
+        "grant": {
+          "$ref": "effect-authorization.schema.json#/$defs/SignedEffectGrant"
+        },
+        "validForMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "downstreamKey": {
+          "$ref": "effect-authorization.schema.json#/$defs/DownstreamEffectKey"
+        }
+      },
+      "required": [
+        "grant",
+        "validForMs"
+      ]
+    },
+    "EffectGrantDispatch": {
+      "type": "object",
+      "description": "One owner may claim the SENDING transition once.",
+      "additionalProperties": false,
+      "properties": {
+        "grant": {
+          "$ref": "effect-authorization.schema.json#/$defs/SignedEffectGrant"
+        },
+        "brokerInstanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "handlerId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "grant",
+        "brokerInstanceId",
+        "handlerId"
+      ]
+    },
+    "EffectGrantDispatchAllowed": {
+      "type": "object",
+      "description": "Only explicit true permits the single transport send.",
+      "additionalProperties": false,
+      "properties": {
+        "authorized": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "authorized"
+      ]
+    },
+    "EffectConsentMappingKind": {
+      "type": "string",
+      "enum": [
+        "MAPPED_HTTP",
+        "NATIVE_MCP"
+      ]
+    },
+    "EffectConsentMappedRequest": {
+      "type": "object",
+      "description": "Control-reconstructed outbound business request. Contains resolved mapped values, never credentials. Native MCP excludes handler ID and opaque session/protocol headers; these remain bound by the execution grant.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectConsentMappingKind"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "classification": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectClassification"
+        },
+        "scheme": {
+          "type": "string",
+          "const": "https"
+        },
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "method": {
+          "type": "string",
+          "pattern": "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 8192
+        },
+        "headers": {
+          "type": "object",
+          "maxProperties": 128,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "maxLength": 8192
+            }
+          }
+        },
+        "contentType": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "bodyMode": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectBodyMode"
+        },
+        "body": {}
+      },
+      "required": [
+        "kind",
+        "routeId",
+        "classification",
+        "scheme",
+        "host",
+        "port",
+        "method",
+        "path",
+        "query",
+        "headers",
+        "contentType",
+        "bodyMode",
+        "body"
+      ]
+    },
+    "EffectConsentSlot": {
+      "type": "object",
+      "description": "Explicit bounded route allowance. Each distinct effect identity reserves one use atomically with its authorization; another generation of the same identity reuses that use.",
+      "additionalProperties": false,
+      "properties": {
+        "slotIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 63
+        },
+        "request": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectConsentMappedRequest"
+        },
+        "permittedCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
+      },
+      "required": [
+        "slotIndex",
+        "request",
+        "permittedCount"
+      ]
+    },
+    "EffectConsentPreview": {
+      "type": "object",
+      "description": "Immutable exact-effect preview created by Control from authenticated original arguments and pinned reviewed mappings. Its canonical digest must be explicitly approved; ordinary invocation approval is not exact consent. Validity never exceeds original operation and credential deadlines.",
+      "additionalProperties": false,
+      "properties": {
+        "consentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tenantId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "operationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "runId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "argumentsDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "../v1/resource.schema.json#/$defs/ResourceDescriptor"
+          },
+          "maxItems": 512
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "notBeforeUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/EffectConsentSlot"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "consentId",
+        "tenantId",
+        "operationId",
+        "runId",
+        "toolId",
+        "action",
+        "argumentsDigest",
+        "resources",
+        "profileDigest",
+        "notBeforeUnixMs",
+        "expiresAtUnixMs",
+        "slots"
+      ]
+    },
+    "EffectConsentApprovalRequest": {
+      "type": "object",
+      "description": "Authenticated explicit approval of one immutable preview and revision. No worker-provided replacement intent or validity window is accepted.",
+      "additionalProperties": false,
+      "properties": {
+        "previewDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "expectedRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        }
+      },
+      "required": [
+        "previewDigest",
+        "expectedRevision"
+      ]
+    },
+    "EffectConsentState": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REVOKED"
+      ]
+    },
+    "EffectConsentBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Signed admission reference to exact approved consent; never substitutes for current Control authority at the effect boundary.",
+      "properties": {
+        "consentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "previewDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "consentId",
+        "previewDigest"
+      ]
+    },
+    "EffectConsentView": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scoped exact-effect review presentation, with a revision that changes on approval or revocation.",
+      "properties": {
+        "preview": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectConsentPreview"
+        },
+        "previewDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "state": {
+          "$ref": "effect-authorization.schema.json#/$defs/EffectConsentState"
+        },
+        "revision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "reviewedBy": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "approvedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "preview",
+        "previewDigest",
+        "state",
+        "revision"
+      ]
+    },
+    "EffectKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Explicit current logical write key scoped to tenant, operation and route. No default or historical aliases. Keys never grant authority."
+    },
+    "TargetDedupeScope": {
+      "type": "string",
+      "enum": [
+        "GLOBAL",
+        "ACCOUNT",
+        "API_KEY"
+      ]
+    },
+    "TargetDedupeDifferentBody": {
+      "type": "string",
+      "enum": [
+        "REJECT",
+        "REPLAY_FIRST"
+      ]
+    },
+    "TargetDedupeGuarantee": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Explicit operator-reviewed target contract; its presence alone never authorizes resend.",
+      "properties": {
+        "documentationUrl": {
+          "type": "string",
+          "pattern": "^https://[^\\s]+$",
+          "maxLength": 2048
+        },
+        "retentionMs": {
+          "type": "integer",
+          "minimum": 3600001,
+          "maximum": 31536000000
+        },
+        "scope": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeScope"
+        },
+        "scopeBindingDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "differentBody": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeDifferentBody"
+        },
+        "reviewExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "header": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "maxLength": 64
+        },
+        "credentialVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "statusRouteId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId",
+          "description": "Optional reviewed read-only per-effect lookup route in the same profile; never resend authority."
+        }
+      },
+      "required": [
+        "documentationUrl",
+        "retentionMs",
+        "scope",
+        "scopeBindingDigest",
+        "differentBody",
+        "reviewExpiresAtUnixMs",
+        "header"
+      ]
+    },
+    "RouteDedupeConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Tool configuration review binds the exact declaration to an immutable profile/route. Direct or self-reviewed metadata is insufficient.",
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "guarantee": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeGuarantee"
+        }
+      },
+      "required": [
+        "profileDigest",
+        "routeId",
+        "guarantee"
+      ]
+    },
+    "DownstreamEffectKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Supervisor-only broker-injected key. Persisted once per effect; tools cannot select its value.",
+      "properties": {
+        "header": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "maxLength": 64
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^tg-[a-f0-9]{64}$",
+          "maxLength": 67
+        }
+      },
+      "required": [
+        "header",
+        "value"
+      ]
+    },
+    "TargetEffectStatus": {
+      "type": "string",
+      "enum": [
+        "UNKNOWN",
+        "PENDING",
+        "COMPLETED",
+        "FAILED"
+      ]
+    },
+    "TargetEffectStatusReply": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Current target lookup response. Terminal evidence must match the stored key/body and include a stable business receipt and result digest; unknown/pending never authorize execution. FAILED means a durable target witness that the effect was not applied; an ordinary failed HTTP/business response is insufficient.",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^tg-[a-f0-9]{64}$",
+          "maxLength": 67
+        },
+        "state": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetEffectStatus"
+        },
+        "bodyDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "businessReceipt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "resultDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "key",
+        "state"
+      ]
+    },
+    "TargetEffectLookupResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Scoped operator result for one read-only target lookup. Effect status does not imply whole-operation completion; no target key, receipt or credential is exposed.",
+      "properties": {
+        "invocationId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "effectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "$ref": "effect-authorization.schema.json#/$defs/TargetEffectStatus"
+        },
+        "outcomeRevision": {
+          "$ref": "identifiers.schema.json#/$defs/Revision"
+        },
+        "evidenceDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "invocationId",
+        "effectId",
+        "state",
+        "outcomeRevision"
+      ]
+    },
+    "RecoveryReadinessReason": {
+      "type": "string",
+      "enum": [
+        "ELIGIBLE",
+        "DISABLED",
+        "MISSING_PROFILE",
+        "PROFILE_CHANGED",
+        "NO_WRITE_ROUTES",
+        "UNREVIEWED_ROUTE",
+        "MISSING_GUARANTEE",
+        "REVIEW_EXPIRED",
+        "INDEPENDENT_REVIEW_REQUIRED",
+        "UNSUPPORTED_CREDENTIAL",
+        "UNQUALIFIED_EXECUTOR"
+      ]
+    },
+    "RouteRecoveryReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Current reviewed contract facts for one write route; no operation-specific retry authority.",
+      "properties": {
+        "routeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "reason": {
+          "$ref": "effect-authorization.schema.json#/$defs/RecoveryReadinessReason"
+        },
+        "lookupAvailable": {
+          "type": "boolean"
+        },
+        "reviewExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "routeId",
+        "reason",
+        "lookupAvailable"
+      ]
+    },
+    "ToolRecoveryReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Fresh-build preflight for tools declaring downstream idempotency. Eligibility is configured capability only; each retry independently needs qualified complete history, current policy/consent and its original window. No key, receipt or credential is exposed.",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+          "maxLength": 36
+        },
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "automaticResendEligible": {
+          "type": "boolean"
+        },
+        "effectiveMethod": {
+          "$ref": "../v1/tool.schema.json#/$defs/ReconciliationMethod"
+        },
+        "reason": {
+          "$ref": "effect-authorization.schema.json#/$defs/RecoveryReadinessReason"
+        },
+        "routes": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/RouteRecoveryReadiness"
+          }
+        }
+      },
+      "required": [
+        "tenantId",
+        "toolId",
+        "name",
+        "automaticResendEligible",
+        "effectiveMethod",
+        "reason",
+        "routes"
+      ]
+    },
+    "RecoveryPreflightPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Bounded current-only preflight. Opaque cursors fence a changed tenant directory; observed facts never authorize a resend.",
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "effect-authorization.schema.json#/$defs/ToolRecoveryReadiness"
+          }
+        },
+        "nextCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "observedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "buildMode": {
+          "type": "string",
+          "const": "CURRENT_ONLY"
+        }
+      },
+      "required": [
+        "items",
+        "observedAtUnixMs",
+        "buildMode"
+      ]
+    }
+  }
+}

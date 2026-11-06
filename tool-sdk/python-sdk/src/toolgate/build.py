@@ -47,6 +47,12 @@ def stage(root=None, output=None):
         project, modules, result = build_project(root)
     if re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", project.version) is None:
         raise ValueError("The package version must be SemVer")
+    runtime = {"runtimeId": "python", "language": "python", "version": "3.10"}
+    image = project.settings.get("runtime_image_digest")
+    if image is not None:
+        if not isinstance(image, str) or re.fullmatch(r"sha256:[a-f0-9]{64}", image) is None:
+            raise ValueError("runtime_image_digest must be an immutable sha256 digest")
+        runtime["baseImageDigest"] = image
     out = Path(output or project.build_dir / "staging").resolve()
     out.mkdir(parents=True, exist_ok=True)
     (out / "artifacts").mkdir(exist_ok=True)
@@ -131,7 +137,7 @@ def stage(root=None, output=None):
                 "publisher": result.index["publisher"], "sdk": {"language": "PYTHON", "version": SDK_VERSION,
                     "protocol": {"min": 2, "max": 2}, "descriptorGeneration": 1},
                 "compatibility": {"contractsVersion": CONTRACTS_VERSION},
-                "runtimes": [{"runtimeId": "python", "language": "python", "version": "3.10"}],
+                "runtimes": [runtime],
                 "tools": [{"descriptor": d, "runtimeId": "python", "entryPoint": "toolgate.runtime",
                            "artifactIds": ["tool"]} for d in result.descriptors.values()],
                 "artifacts": [{"artifactId": "tool", "path": "artifacts/tool.pyz", "mediaType": "application/zip",
@@ -139,6 +145,13 @@ def stage(root=None, output=None):
                 "composition": [], "limits": {"maxTools": 64, "maxDescriptorBytes": 1048576}}
     # Match the source contract version at SDK build time, never a moving repository at execution time.
     (out / "toolgate-package.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
+    # Training hints sit beside the manifest, never in the package, so a changed phrasing does not change a digest.
+    hints = out / "training" / "annotations.json"
+    if result.training:
+        hints.parent.mkdir(exist_ok=True)
+        hints.write_text(json.dumps({"generatedBy": "toolgate-sdk-python", "tools": result.training}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    elif hints.exists():
+        hints.unlink()
     return out
 
 

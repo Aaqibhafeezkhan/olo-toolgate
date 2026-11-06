@@ -32,6 +32,8 @@ describe('ToolTest', () => {
   it('runs the verified default through the normal invocation API and shows the actual responses in cursor order', async () => {
     let polls = 0; const keys: string[] = []; const bodies: unknown[] = [];
     const transport = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false});
+
       if (input.includes('/directory/bindings') || input.includes('/bindings')) return response({ items: [{ id: 'hello-binding', name: 'Hello binding', enabled: true, revision: 1, toolGroupId: 'g', deviceGroupId: 'd', actions: [], allowedPackageDigests: [], requireOnline: false, ownerDependency: false }] });
       if (input.includes('/devices')) return response({ items: [{ id: 'tool-host-1', name: 'Tool Host', enabled: true, revision: 1, ownerUserId: 'root' }] });
       if (input.endsWith('/human/catalog')) return response({ tools: [tool] });
@@ -65,11 +67,14 @@ describe('ToolTest', () => {
     expect(bodies[0]).toEqual({ bindingId: 'hello-binding', deviceId: 'tool-host-1', request: { toolId: 'ololabs.hello-world/server_greet', action: 'invoke', arguments: { text: 'World' } } });
     const items = screen.getByRole('list', { name: 'Run timeline' }).querySelectorAll('li');
     expect([...items].map(li => li.textContent?.replace(/^\S+ /, ''))).toEqual([
-      'Control Invocation queued', 'Control Invocation executing', 'Executor tool-host-1 info: greeting <b>World</b>', 'Executor tool-host-1 Result: Hello World', 'Control Invocation succeeded']);
+      'Control Invocation queued', 'Control Invocation executing', 'Executor tool-host-1 info: greeting <b>World</b>', 'Executor tool-host-1 Result: Hello World', 'Control Executor reported succeeded']);
     // Tool output is text, never markup.
     expect(document.querySelector('.run-timeline b')).toBeNull();
     expect(screen.getByRole('region', { name: 'Response' }).textContent).toContain('Hello World');
     expect(polls).toBe(2);
+    expect(await screen.findByText('Business outcome')).toBeTruthy();
+    expect(screen.getByText('OUTCOME_UNKNOWN')).toBeTruthy();
+    expect(screen.getByText('Disabled')).toBeTruthy();
 
     // Edited input gives a new request key; the same input keeps its key for an exact retry.
     fireEvent.change(screen.getByLabelText(/Input/), { target: { value: '{"text":"Anupriya"}' } });
@@ -79,9 +84,51 @@ describe('ToolTest', () => {
     expect((bodies[1] as { request: { arguments: unknown } }).request.arguments).toEqual({ text: 'Anupriya' });
   });
 
+  it.each([false, true])('uses the declared business key and refuses malformed keys locally (malformed=%s)', async malformed => {
+    const keys: string[] = [];
+    const policyTool = { ...tool, businessKeyPolicy: { required: true, namespace: 'DELEGATED_USER', argument: 'paymentKey' },
+      inputSchema: { type: 'object', properties: { paymentKey: { type: 'string', default: 'workflow-42' }, text: { type: 'string', default: 'first' } } } };
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false});
+
+      if (input.includes('/bindings')) return response({ items: [{ id: 'b', name: 'B', enabled: true }] });
+      if (input.endsWith('/human/catalog')) return response({ tools: [policyTool] });
+      if (input.endsWith('/human/invocations')) {
+        keys.push(new Headers(init?.headers).get('Idempotency-Key') ?? '');
+        return response({ invocation: { id: 'canonical-operation', state: 'QUEUED' } });
+      }
+      if (input.includes('/events')) return response({ invocationId: 'canonical-operation', state: 'SUCCEEDED',
+        terminal: true, events: [], nextCursor: 0, more: false, truncated: false, droppedFrames: 0, expired: false, gaps: [] });
+      return response({}, 404);
+    }));
+    render(<ToolTest client={new ControlClient('session', () => {})} deviceId="host" />);
+    await screen.findByRole('option', { name: 'B' });
+    fireEvent.change(screen.getByLabelText('Execution binding'), { target: { value: 'b' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show available tools' }));
+    await screen.findByRole('button', { name: 'Test' });
+    if (malformed) {
+      for (const paymentKey of [123, 'invalid/key', '']) {
+        fireEvent.change(screen.getByLabelText(/Input/), { target: { value: JSON.stringify({ paymentKey }) } });
+        fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+        await screen.findByRole('alert');
+        expect(keys).toEqual([]);
+      }
+      return;
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Test' }).hasAttribute('disabled')).toBe(false));
+    expect(keys).toEqual(['workflow-42']);
+    // An edit keeps the declared business operation key, so Control can reject a fingerprint conflict.
+    fireEvent.change(screen.getByLabelText(/Input/), { target: { value: '{"paymentKey":"workflow-42","text":"changed"}' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Test' }));
+    await waitFor(() => expect(keys).toEqual(['workflow-42', 'workflow-42']));
+  });
+
   it('stops following when access is revoked and reports gaps, truncation and drops explicitly', async () => {
     let calls = 0;
     vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false});
+
       if (input.includes('/bindings')) return response({ items: [{ id: 'b', name: 'B', enabled: true }] });
       if (input.includes('/devices')) return response({ items: [{ id: 'host', name: 'Host', enabled: true }] });
       if (input.endsWith('/human/catalog')) return response({ tools: [tool] });

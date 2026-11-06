@@ -37,9 +37,25 @@ pub struct Host {
     store: Store,
     control: Arc<Control>,
     slots: Arc<Semaphore>,
+    outbox: crate::outbox::Outbox,
+    intents: crate::outbox::Outbox,
+    sandbox: Option<Arc<crate::sandbox::Sandbox>>,
 }
 
 impl Host {
+    pub async fn qualify_execution(&self) -> Result<(), String> {
+        if let Some(pool) = &self.sandbox {
+            pool.qualify().await?;
+        }
+        Ok(())
+    }
+    fn execution_tier(&self) -> olo_toolgate_contracts::v2::RuntimeTier {
+        if self.sandbox.is_some() {
+            olo_toolgate_contracts::v2::RuntimeTier::OciSandbox
+        } else {
+            olo_toolgate_contracts::v2::RuntimeTier::HostNative
+        }
+    }
     /// The Control client dispatch uses; enrollment swaps its certificate in place.
     pub fn control(&self) -> Arc<Control> {
         self.control.clone()
@@ -68,6 +84,21 @@ impl Host {
             .map_err(|e| format!("{}: {e}", config.work_dir.display()))?;
         let control = Control::new(&config.control)?;
         control.validate_host(&config.host_id)?;
+        let outbox = crate::outbox::Outbox::open(config.work_dir.join("result-outbox"))?;
+        let intents = crate::outbox::Outbox::open(config.work_dir.join("admission-spool"))?;
+        intents.recover_into(&outbox)?;
+        let sandbox = config
+            .sandbox
+            .clone()
+            .map(|sandbox| {
+                crate::sandbox::Sandbox::open(
+                    sandbox,
+                    &config.work_dir,
+                    &format!("{}:{}", config.control.tenant_id, config.host_id),
+                    config.limits.max_concurrent,
+                )
+            })
+            .transpose()?;
         Ok(Arc::new(Host {
             verifier: Verifier::new(
                 keys,
@@ -79,6 +110,9 @@ impl Host {
             store: Store::new(config.store_dir.clone(), config.work_dir.clone()),
             control: Arc::new(control),
             slots: Arc::new(Semaphore::new(config.limits.max_concurrent)),
+            outbox,
+            intents,
+            sandbox,
             config,
         }))
     }
@@ -94,12 +128,22 @@ pub fn router(host: Arc<Host>) -> Router {
 }
 
 async fn health(State(host): State<Arc<Host>>) -> Response {
+    let ready = host.sandbox.as_ref().is_none_or(|pool| pool.available());
     let body = serde_json::json!({
-        "ready": true,
+        "ready": ready,
         "hostId": host.config.host_id,
         "available": host.slots.available_permits(),
     });
-    ([(header::CACHE_CONTROL, "no-store")], axum::Json(body)).into_response()
+    (
+        if ready {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        },
+        [(header::CACHE_CONTROL, "no-store")],
+        axum::Json(body),
+    )
+        .into_response()
 }
 
 fn line<T: serde::Serialize>(value: &T) -> Bytes {
@@ -146,6 +190,14 @@ fn valid_identifier(id: &str) -> bool {
 
 /// The invocation id a refused permit claims, unverified, only to label the refusal.
 fn claimed_id(jws: &str) -> String {
+    claimed_field(jws, "invocationId").unwrap_or_default()
+}
+
+fn claimed_nonce(jws: &str) -> Option<String> {
+    claimed_field(jws, "nonce").filter(|nonce| valid_identifier(nonce))
+}
+
+fn claimed_field(jws: &str, field: &str) -> Option<String> {
     use base64::Engine;
     jws.split('.')
         .nth(1)
@@ -155,12 +207,7 @@ fn claimed_id(jws: &str) -> String {
                 .ok()
         })
         .and_then(|p| serde_json::from_slice::<Value>(&p).ok())
-        .and_then(|v| {
-            v.get("invocationId")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        })
-        .unwrap_or_default()
+        .and_then(|v| v.get(field).and_then(Value::as_str).map(str::to_string))
 }
 
 async fn dispatch(State(host): State<Arc<Host>>, body: Bytes) -> Response {
@@ -291,6 +338,23 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
             return Err(refusal(&id, RefusalReason::UnsupportedTier));
         }
     };
+    let supported = match &host.sandbox {
+        Some(pool) => {
+            pool.accepts(
+                &prepared.runtime.runtime_id,
+                prepared.runtime.base_image_digest.as_deref(),
+            ) && crate::broker_process::supports_routes(
+                &prepared.routes,
+                &prepared.profile.destinations,
+            ) && prepared.profile.private_ranges.len() <= 64
+                && prepared.tool.descriptor.http_auth.len() <= 128
+                && prepared.tool.descriptor.variables.secrets.len() <= 128
+        }
+        None => prepared.runtime.base_image_digest.is_none(),
+    };
+    if !supported {
+        return Err(refusal(&id, RefusalReason::UnsupportedTier));
+    }
     let input_cap = prepared
         .tool
         .limits
@@ -328,6 +392,17 @@ pub async fn admit(host: &Arc<Host>, dispatch: Dispatch) -> Result<Admitted, Adm
             return Err(refusal(&id, RefusalReason::StoreUnavailable));
         }
     };
+    if host
+        .intents
+        .enqueue(&admission_intent(
+            &id,
+            &consumed.fencing_token,
+            host.execution_tier(),
+        ))
+        .is_err()
+    {
+        return Err(refusal(&id, RefusalReason::StoreUnavailable));
+    }
     tracing::info!(
         target: "toolgate::audit",
         invocation_id = %id,
@@ -374,6 +449,39 @@ fn error_frame(code: &str, message: &str, retryable: bool) -> ResultFrame {
 
 /// Runs an admitted invocation and reports its outcome to Control.
 pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
+    let id = admitted.claims.invocation_id.clone();
+    let fence = admitted.fencing_token.clone();
+    let deadline = admitted.claims.deadline_unix_ms;
+    let initial = host.control.heartbeat(&id, &fence).await;
+    if let Ok(initial) = initial {
+        let supervision = crate::lease::supervise(&host.control, &id, &fence, deadline, initial);
+        tokio::select! {
+            biased;
+            _=supervision=>{},
+            result=run_authorized(host.clone(),admitted)=>return result,
+        }
+    }
+    if let Some(pool) = &host.sandbox {
+        pool.stop(&id).await;
+    }
+    // Dropping the worker future kills its process. A revoked or partitioned run
+    // may already have produced effects; never turn lost authority into FAILED.
+    finish(
+        &host,
+        id,
+        fence,
+        InvocationOutcome::OutcomeUnknown,
+        error_frame(
+            "OUTCOME_UNKNOWN",
+            "Execution authority ended; reconcile any effects",
+            false,
+        ),
+        None,
+    )
+    .await
+}
+
+async fn run_authorized(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
     let Admitted {
         claims,
         prepared,
@@ -422,10 +530,12 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
             });
         }
     }
-    let invocation = Arc::new(Invocation::new(
+    let mut invocation = Invocation::new(
         id.clone(),
         fencing_token.clone(),
         deadline,
+        prepared.profile.profile_id.clone(),
+        claims.target.service_profile_digest.clone(),
         prepared.routes.clone(),
         prepared.profile.destinations.clone(),
         prepared.profile.private_ranges.clone(),
@@ -434,7 +544,41 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
         handles,
         host.config.development_loopback_http,
         host.control.clone(),
-    ));
+    );
+    invocation.effect_key_headers = prepared
+        .profile
+        .effect_reviews
+        .iter()
+        .flatten()
+        .filter_map(|review| {
+            review
+                .policy
+                .target_dedupe_guarantee
+                .as_ref()
+                .map(|g| (review.policy.route_id.clone(), g.header.clone()))
+        })
+        .collect();
+    invocation.invocation_permit = Some(dispatch.permit.clone());
+    // The arguments were already checked against the signed admission above.
+    if invocation
+        .bind_effect_arguments(dispatch.arguments.clone())
+        .is_err()
+    {
+        return finish(
+            &host,
+            id,
+            fencing_token,
+            InvocationOutcome::Failed,
+            error_frame(
+                "TOOL_HOST_UNAVAILABLE",
+                "Effect admission unavailable",
+                false,
+            ),
+            Some(RefusalReason::StoreUnavailable),
+        )
+        .await;
+    }
+    let invocation = Arc::new(invocation);
 
     let (outcome, result, not_started) = match std::fs::create_dir_all(&sandbox) {
         Err(e) => {
@@ -497,6 +641,7 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 max_output_bytes: output,
             };
             let (sink, source) = crate::events::channel();
+            let sink = Arc::new(sink);
             let forwarder = tokio::spawn(crate::events::forward(
                 host.control.clone(),
                 id.clone(),
@@ -504,7 +649,20 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 claims.attempt,
                 source,
             ));
-            let ran = runner::run(&launch, &input, deadline, Some(&sink), &invocation).await;
+            let ran = if let Some(pool) = &host.sandbox {
+                pool.run(
+                    &id,
+                    &prepared.executable,
+                    &input,
+                    memory,
+                    output,
+                    sink.clone(),
+                    invocation.clone(),
+                )
+                .await
+            } else {
+                runner::run(&launch, &input, deadline, Some(&sink), &invocation).await
+            };
             // Frames reach Control before the result, so the stream's terminal event follows them.
             drop(sink);
             if tokio::time::timeout(std::time::Duration::from_secs(5), forwarder)
@@ -520,7 +678,9 @@ pub async fn run(host: Arc<Host>, admitted: Admitted) -> ResultMessage {
                 .map(|e| e.clone())
                 .unwrap_or_default();
             let service_write = invocation.service_effect_started.load(Ordering::SeqCst);
-            let unknown = claims.requires_execution_ledger || service_write;
+            let unknown = claims.requires_execution_ledger
+                || service_write
+                || host.sandbox.as_ref().is_some_and(|pool| !pool.available());
             match ran {
                 Ran::Frame(frame)
                     if frame.is_error
@@ -652,6 +812,21 @@ fn send_spans(
 }
 
 /// Reports an invocation's outcome to Control and answers the dispatch with it.
+fn admission_intent(
+    id: &str,
+    fence: &str,
+    tier: olo_toolgate_contracts::v2::RuntimeTier,
+) -> InvocationResultReport {
+    InvocationResultReport {
+        invocation_id: id.into(),
+        fencing_token: fence.into(),
+        outcome: InvocationOutcome::OutcomeUnknown,
+        result: None,
+        not_started: None,
+        execution_tier: tier,
+    }
+}
+
 async fn finish(
     host: &Arc<Host>,
     id: String,
@@ -667,9 +842,26 @@ async fn finish(
         outcome: outcome.clone(),
         result: Some(result.clone()),
         not_started,
+        execution_tier: host.execution_tier(),
     };
-    if let Err(e) = host.control.report(&report).await {
-        tracing::warn!(invocation_id = %id, error = ?e, "Control did not take the result report");
+    match host.outbox.enqueue(&report) {
+        Ok(path) => {
+            if let Err(e) = host.intents.remove_report(&admission_intent(
+                &id,
+                &fencing_token,
+                host.execution_tier(),
+            )) {
+                tracing::warn!(invocation_id=%id,error=%e,"admission intent cleanup incomplete");
+            }
+            if host.control.report(&report).await.is_ok() {
+                if let Err(e) = host.outbox.acknowledge(&path) {
+                    tracing::warn!(invocation_id=%id,error=%e,"result acknowledgement not persisted");
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!(invocation_id=%id,error=%e,"result evidence could not be persisted");
+        }
     }
     ResultMessage {
         invocation_id: id,
@@ -681,6 +873,16 @@ async fn finish(
 
 /// How long pull mode waits before asking Control again when nothing is waiting.
 const PULL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Retry evidence independently of execution authority, including after restart.
+pub async fn deliver_evidence(host: Arc<Host>) {
+    loop {
+        if let Err(e) = host.outbox.drain(&host.control).await {
+            tracing::warn!(error=%e,"result outbox delivery incomplete");
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+}
 
 /// Pull mode: takes the calls Control holds for this host and answers each through Control, as
 /// [`dispatch`] answers the Gateway. Until the host is enrolled and registered Control refuses,
@@ -704,9 +906,12 @@ async fn answer(host: Arc<Host>, dispatch: Dispatch) {
     // Control queued the call under the invocation id its permit names; answer under that id even
     // when the permit is refused, so the Gateway hears the refusal.
     let id = claimed_id(&dispatch.permit.jws);
+    let nonce = claimed_nonce(&dispatch.permit.jws);
     match admit(&host, dispatch).await {
         Err(mut refused) => {
             refused.invocation_id = id;
+            // Correlates a refused dispatch; it is not evidence of permit consumption.
+            refused.fencing_token = nonce;
             if let Err(e) = host.control.admission(&refused).await {
                 tracing::warn!(invocation_id = %refused.invocation_id, error = %e, "Control did not take the refusal");
             }

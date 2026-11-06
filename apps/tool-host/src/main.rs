@@ -6,12 +6,44 @@
 use std::process::ExitCode;
 use tool_host::config::Config;
 
-#[tokio::main]
+#[tokio::main(worker_threads = 2)]
 async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .json()
         .with_writer(std::io::stderr)
         .init();
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments == [std::ffi::OsString::from("--isolation-probe")] {
+        return match tool_host::sandbox::isolation_probe() {
+            Ok(value) => {
+                println!("{value}");
+                // Pin this process's namespaces until the supervisor has
+                // compared both live probes, then close on private stdin.
+                use tokio::io::AsyncReadExt;
+                let _ = tokio::io::stdin().read_u8().await;
+                ExitCode::SUCCESS
+            }
+            Err(_) => ExitCode::from(78),
+        };
+    }
+    if arguments == [std::ffi::OsString::from("--invocation-broker")] {
+        return match tool_host::broker_process::serve(
+            tokio::io::BufReader::new(tokio::io::stdin()),
+            tokio::io::stdout(),
+        )
+        .await
+        {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("invocation broker stopped: {error}");
+                ExitCode::from(78)
+            }
+        };
+    }
+    if !arguments.is_empty() {
+        eprintln!("unsupported Tool Host mode");
+        return ExitCode::from(78);
+    }
     let Some(path) = std::env::var_os("TOOLGATE_TOOL_HOST_CONFIG") else {
         eprintln!("TOOLGATE_TOOL_HOST_CONFIG must name the Tool Host configuration file");
         return ExitCode::from(78);
@@ -30,10 +62,15 @@ async fn main() -> ExitCode {
             return ExitCode::from(78);
         }
     };
+    if let Err(failure) = host.qualify_execution().await {
+        eprintln!("execution tier refused: {failure}");
+        return ExitCode::from(78);
+    }
     if let Err(failure) = host.control().qualify().await {
         eprintln!("workload identity refused: {failure}");
         return ExitCode::from(78);
     }
+    tokio::spawn(tool_host::server::deliver_evidence(host.clone()));
     if config.enrollment.is_some() {
         match tool_host::device::Device::open(&config, host.control()) {
             Ok(device) => {

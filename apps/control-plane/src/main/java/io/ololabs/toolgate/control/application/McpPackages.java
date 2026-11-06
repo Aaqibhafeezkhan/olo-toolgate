@@ -34,6 +34,10 @@ final class McpPackages {
         for (var approval : tools) {
             var upstream = definitions.get(approval.upstreamName()).get("tool");
             var descriptor = descriptor(slug, approval.name(), upstream);
+            McpEffectValidation.review(approval.effectPolicy());
+            var effect=(ObjectNode)descriptor.path("effect");
+            effect.put("safety",approval.effectPolicy().classification()==io.ololabs.toolgate.contracts.v2.EffectClassification.READ?"READ_ONLY":"UNKNOWN");
+            effect.put("destructive",approval.effectPolicy().classification()==io.ololabs.toolgate.contracts.v2.EffectClassification.DESTRUCTIVE);
             byte[] canonical = Canonical.bytes(descriptor); String digest = Canonical.sha256(canonical);
             files.put("tools/" + approval.name() + ".json", canonical);
             var entry = entries.addObject(); entry.set("descriptor", descriptor);
@@ -53,18 +57,18 @@ final class McpPackages {
         return zip(files);
     }
 
-    /** A SERVER descriptor for one approved upstream tool. Upstream annotations are the hints an administrator approved. */
+    /** A SERVER descriptor for one approved upstream tool. Effect authority comes only from the explicit current approval policy. */
     static ObjectNode descriptor(String slug, String name, JsonNode upstream) {
         var annotations = upstream.path("annotations");
-        boolean readOnly = annotations.path("readOnlyHint").asBoolean(false), idempotent = annotations.path("idempotentHint").asBoolean(false);
+
         var descriptor = JSON.objectNode().put("descriptorGeneration", 1).put("toolId", "mcp." + slug + "/" + name).put("mcpName", "mcp." + slug + "." + name)
             .put("kind", "SERVER").put("title", clip(upstream.path("title").asText(upstream.path("annotations").path("title").asText(name)), 100))
             .put("description", clip(upstream.path("description").asText(name), 2048));
         descriptor.set("inputSchema", upstream.get("inputSchema"));
         if (upstream.has("outputSchema")) descriptor.set("outputSchema", upstream.get("outputSchema"));
         descriptor.putArray("errors");
-        descriptor.putObject("effect").put("safety", readOnly ? "READ_ONLY" : idempotent ? "IDEMPOTENT" : "UNKNOWN")
-            .put("destructive", !readOnly && annotations.path("destructiveHint").asBoolean(true)).put("openWorld", annotations.path("openWorldHint").asBoolean(true));
+        descriptor.putObject("effect").put("safety", "UNKNOWN")
+            .put("destructive", true).put("openWorld", annotations.path("openWorldHint").asBoolean(true));
         descriptor.putObject("businessKey").put("required", false).put("namespace", "TENANT");
         descriptor.putObject("execution").put("async", false).put("maxDurationMs", 60_000).put("stateless", true).put("cancelIfAbandoned", true);
         for (var field : List.of("routes", "destinations", "httpAuth", "tcp")) descriptor.putArray(field);

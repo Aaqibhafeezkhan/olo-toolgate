@@ -48,7 +48,12 @@ final class SqliteTaskStore implements TaskStore, AutoCloseable {
         } catch (IOException e) {
             throw new SQLException("cannot create " + file.getParent() + ": " + e.getMessage(), e);
         }
-        Connection db = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath());
+        // Reserve the writer before reading a transition. Deferred read-to-write upgrades
+        // can fail SQLITE_BUSY immediately despite busy_timeout when a stale process polls.
+        var config = new org.sqlite.SQLiteConfig();
+        config.setBusyTimeout(5000);
+        config.setTransactionMode(org.sqlite.SQLiteConfig.TransactionMode.IMMEDIATE);
+        Connection db = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath(), config.toProperties());
         SqliteTaskStore store = new SqliteTaskStore(db);
         try (Statement s = db.createStatement()) {
             s.execute("PRAGMA journal_mode=WAL");

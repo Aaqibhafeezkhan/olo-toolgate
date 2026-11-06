@@ -18,6 +18,7 @@ public @interface HttpAuth {
     String id();
     AuthType type();
     String header() default "";
+    /** Vault reference resolved by the broker. A separate @Secret declaration opts into worker-readable metadata. */
     String secret() default "";
     String connection() default "";
     String[] scopes() default {};

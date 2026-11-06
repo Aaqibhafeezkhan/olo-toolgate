@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Strict JSON authoring model. JSON is source, never an executable runtime registration. */
@@ -27,12 +28,30 @@ public final class JsonProject {
             properties.load(in); return properties.getProperty("sdkVersion");
         } catch (IOException failure) { throw new java.io.UncheckedIOException(failure); }
     }
-    public record Input(String name, String description, String defaultValue, int maxLength) {}
+    public record Input(String name, String description, String defaultValue, int maxLength, Values training) {
+        public Input(String name, String description, String defaultValue, int maxLength) { this(name, description, defaultValue, maxLength, null); }
+    }
+    /** An input's training values: example values and the words people use for some values. */
+    public record Values(List<String> examples, Map<String, List<String>> phrasings) {}
+    /** One complete training request and its arguments, as a JSON object. */
+    public record Prompt(String prompt, String arguments) {}
+    /** A tool's training hints; the Java processor checks them against the inputs (tool-sdk/spec/authoring/training.md). */
+    public record Training(List<String> phrasings, List<String> defaultPhrasings, List<String> negatives, List<Prompt> prompts) {}
+    /** A tool's model-validation prompts: test requests with their expected calls, and requests that call nothing. */
+    public record Validation(List<Prompt> prompts, List<String> negatives) {}
     public record Part(String literal, String input) {}
     public record Output(String name, List<Part> parts) {}
     public record Event(String level, String message, Double fraction) {}
     public record Tool(String name, String kind, String title, String description,
-                       List<Input> inputs, List<Output> outputs, List<Event> events) {}
+                       List<Input> inputs, List<Output> outputs, List<Event> events, Training training, Validation modelValidation) {
+        public Tool(String name, String kind, String title, String description, List<Input> inputs, List<Output> outputs, List<Event> events) {
+            this(name, kind, title, description, inputs, outputs, events, null, null);
+        }
+        public Tool(String name, String kind, String title, String description, List<Input> inputs, List<Output> outputs,
+                    List<Event> events, Training training) {
+            this(name, kind, title, description, inputs, outputs, events, training, null);
+        }
+    }
     private final JsonNode document;
     private final List<Tool> tools;
 
@@ -63,7 +82,7 @@ public final class JsonProject {
         var tools = new ArrayList<Tool>();
         var names = new HashSet<String>();
         for (JsonNode t : declarations) {
-            fields(t, Set.of("name", "kind", "title", "description", "inputs", "output", "events"));
+            fields(t, Set.of("name", "kind", "title", "description", "inputs", "output", "events", "training", "modelValidation"));
             String name = text(t, "name", 64);
             id(name, "[a-zA-Z][a-zA-Z0-9._-]*", "tool name");
             if (!names.add(name)) throw invalid("duplicate tool");
@@ -79,7 +98,7 @@ public final class JsonProject {
                 id(key, "[a-zA-Z][a-zA-Z0-9_]{0,63}", "input name");
                 inputNames.add(key);
                 JsonNode spec = property.getValue();
-                fields(spec, Set.of("type", "description", "default", "maxLength"));
+                fields(spec, Set.of("type", "description", "default", "maxLength", "training"));
                 if (!"STRING".equals(text(spec, "type", 16))) throw invalid("unsupported input type");
                 int max = spec.path("maxLength").asInt(-1);
                 if (!spec.path("maxLength").isIntegralNumber() || !spec.path("maxLength").canConvertToInt() || max < 1 || max > 4096) throw invalid("maxLength");
@@ -90,7 +109,7 @@ public final class JsonProject {
                     unicode(value);
                     if (value.isEmpty() || value.length() > max || value.indexOf('\0') >= 0) throw invalid("default bounds");
                 }
-                inputs.add(new Input(key, text(spec, "description", 1024), value, max));
+                inputs.add(new Input(key, text(spec, "description", 1024), value, max, spec.has("training") ? values(spec.get("training")) : null));
             }
             var output = t.path("output");
             if (!output.isObject() || output.isEmpty() || output.size() > 16) throw invalid("output");
@@ -138,11 +157,64 @@ public final class JsonProject {
                 }
             }
             tools.add(new Tool(name, kind, text(t, "title", 100), text(t, "description", 2048),
-                    List.copyOf(inputs), List.copyOf(outputs), List.copyOf(events)));
+                    List.copyOf(inputs), List.copyOf(outputs), List.copyOf(events), t.has("training") ? training(t.get("training")) : null,
+                    t.has("modelValidation") ? validation(t.get("modelValidation")) : null));
         }
         var project = new JsonProject(root, tools);
         project.source(); // Every accepted source export must itself remain a valid bounded project.
         return project;
+    }
+
+    private static Training training(JsonNode node) {
+        fields(node, Set.of("phrasings", "defaultPhrasings", "negatives", "examples"));
+        return new Training(strings(node, "phrasings"), strings(node, "defaultPhrasings"), strings(node, "negatives"),
+                prompts(node, "examples", "training example", 64));
+    }
+    private static Validation validation(JsonNode node) {
+        fields(node, Set.of("prompts", "negatives"));
+        return new Validation(prompts(node, "prompts", "modelValidation prompt", 200), strings(node, "negatives"));
+    }
+    /** An optional array of {"prompt": ..., "arguments": {...}} pairs. */
+    private static List<Prompt> prompts(JsonNode node, String key, String what, int max) {
+        var prompts = new ArrayList<Prompt>();
+        if (node.has(key)) {
+            if (!node.get(key).isArray() || node.get(key).size() > max) throw invalid(what + "s");
+            for (JsonNode example : node.get(key)) {
+                fields(example, Set.of("prompt", "arguments"));
+                JsonNode arguments = example.path("arguments");
+                if (example.has("arguments") && !arguments.isObject()) throw invalid(what + " arguments");
+                try {
+                    prompts.add(new Prompt(text(example, "prompt", 1024), example.has("arguments") ? JSON.writeValueAsString(arguments) : "{}"));
+                } catch (IOException impossible) { throw new IllegalStateException(impossible); }
+            }
+        }
+        return List.copyOf(prompts);
+    }
+    private static Values values(JsonNode node) {
+        fields(node, Set.of("examples", "phrasings"));
+        var phrasings = new java.util.LinkedHashMap<String, List<String>>();
+        if (node.has("phrasings")) {
+            if (!node.get("phrasings").isObject()) throw invalid("training phrasings");
+            for (var iterator = node.get("phrasings").properties().iterator(); iterator.hasNext();) {
+                var entry = iterator.next();
+                if (entry.getKey().isEmpty() || entry.getKey().length() > 4096) throw invalid("training phrasing value");
+                phrasings.put(entry.getKey(), strings(node.get("phrasings"), entry.getKey()));
+            }
+        }
+        return new Values(strings(node, "examples"), java.util.Collections.unmodifiableMap(phrasings));
+    }
+    /** An optional array of non-empty strings. */
+    private static List<String> strings(JsonNode object, String key) {
+        if (!object.has(key)) return List.of();
+        JsonNode array = object.get(key);
+        if (!array.isArray() || array.size() > 200) throw invalid("training " + key);
+        var values = new ArrayList<String>();
+        for (JsonNode value : array) {
+            if (!value.isTextual() || value.textValue().isBlank() || value.textValue().length() > 1024) throw invalid("training " + key);
+            unicode(value.textValue());
+            values.add(value.textValue());
+        }
+        return List.copyOf(values);
     }
 
     static void fields(JsonNode object, Set<String> allowed) {

@@ -478,7 +478,7 @@ final class EndpointTest {
     @Test void currentDeviceProofIsSessionBoundSingleUseAndNeverApprovesAccess(@org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)throws Exception{
         var s=configured(new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("console-proof.sqlite"))),codec));
         s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
-            TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("self-user","Self user",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"self-user");
+            TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("self-user","Self user",true,1L, null, null, null));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"self-user");
             TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("self-devices","Self devices",true,1L,List.of()));
             var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
             var rule=new EnterpriseManagementRule(List.of("device.read","device.enroll","device.approve"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("self-devices"),false),List.of(),conditions,"CURRENT");
@@ -510,7 +510,7 @@ final class EndpointTest {
             var rules=new ArrayList<EnterpriseManagementRule>();for(var kind:EnterpriseGroupType.values())rules.add(new EnterpriseManagementRule(ManagementPermissionCatalog.ALL.stream().filter(p->p.endsWith(".read")&&!p.equals("device.read")).sorted().toList(),kind,all,List.of(),conditions,null));
             rules.add(new EnterpriseManagementRule(List.of("device.approve","device.enroll","device.read"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("visitor-devices"),false),List.of(),conditions,"OWNED"));
             TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("visitor-devices","Visitor devices",true,1L,List.of()));
-            for(var user:List.of("visitor-a","visitor-b"))TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser(user,user,true,1L));
+            for(var user:List.of("visitor-a","visitor-b"))TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser(user,user,true,1L, null, null, null));
             TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("visitor-role","Visitor",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
             TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("visitors","Visitors",true,1L,List.of("visitor-a","visitor-b"),List.of("visitor-role")));
             tx.save(before,new Directory(before.revision()+1,entries));return null;});

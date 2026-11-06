@@ -20,7 +20,7 @@ final class ManagementPermissionTest {
  private PostgresStore setup(String... permissions){
   var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve(UUID.randomUUID()+".sqlite"))),codec);TestSupport.seed(store,codec,tenant,"root");
   store.transaction(tenant,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());
-   TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("viewer","Viewer",true,1L));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"viewer");
+   TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("viewer","Viewer",true,1L, null, null, null));GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"viewer");
    TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("viewer-role","Viewer role",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of(new EnterpriseManagementRule(List.of(permissions),EnterpriseGroupType.TEAM,new GroupSelection(List.of(),true),List.of(),conditions(),null))));
    TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("viewers","Viewers",true,1L,List.of("viewer"),List.of("viewer-role")));
    tx.save(before,new Directory(before.revision()+1,entries));return null;});return store;

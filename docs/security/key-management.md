@@ -28,3 +28,13 @@ Server-tool request-state and emergency operator keys are specified in
 [ADR 013](../adr/013-tool-host-egress-broker-secrets.md) and
 [ADR 017](../adr/017-kill-switch.md). Check the executor guides for current
 runtime support; specifications alone do not establish deployment support.
+
+
+## Execution trust limits
+
+The [adopted Zero Trust Execution model](zero-trust-boundaries.md) distinguishes healthy hosts,
+root-compromised hosts and compromised Control/identity/kernel trust roots.
+Lease expiry cannot constrain root controlling the supervisor or revoke already
+delivered credentials at unfenced targets. Current qualified Python OCI and OLO
+fenced-write guarantees do not imply generalized route/consent enforcement,
+sender-constrained agent credentials, externally anchored audit or production SLOs.

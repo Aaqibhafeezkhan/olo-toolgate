@@ -24,7 +24,7 @@ class PostgresDirectoryCacheTest {
         var codec = new ContractCodec(); var a = io.ololabs.toolgate.control.fixtures.Tenants.id("a"); var b = io.ololabs.toolgate.control.fixtures.Tenants.id("b");
         try (var c = source.getConnection(); var s = c.prepareStatement("INSERT INTO control_records(tenant_id,kind,record_id,revision,document) VALUES(?,'USER','same',1,?::jsonb)")) {
             io.ololabs.toolgate.control.fixtures.Tenants.provision(c);
-            for (String tenant : new String[] {"a", "b"}) { scope(c, tenant); s.setString(1, io.ololabs.toolgate.control.fixtures.Tenants.id(tenant).value()); s.setString(2, codec.json(new ControlUser("same", tenant, true, 1L))); s.executeUpdate(); c.commit(); }
+            for (String tenant : new String[] {"a", "b"}) { scope(c, tenant); s.setString(1, io.ololabs.toolgate.control.fixtures.Tenants.id(tenant).value()); s.setString(2, codec.json(new ControlUser("same", tenant, true, 1L, null, null, null))); s.executeUpdate(); c.commit(); }
         }
         String cachePort = System.getenv("CONTROL_TEST_CACHE_PORT");
         var shared = cachePort == null ? null : new SharedDirectoryCache(
@@ -37,7 +37,7 @@ class PostgresDirectoryCacheTest {
         assertNotEquals(old, first.transaction(b, false, tx -> tx.load()));
         var oldDigest = first.transaction(a, false, tx -> tx.adoptionDigest(a, codec));
         try (var c = source.getConnection(); var s = c.prepareStatement("UPDATE control_records SET revision=2,document=?::jsonb WHERE tenant_id='529412c1-b43f-3a2c-b564-990280da12a0'")) {
-            scope(c, "a"); s.setString(1, codec.json(new ControlUser("same", "Revoked", false, 2L))); s.executeUpdate(); c.commit();
+            scope(c, "a"); s.setString(1, codec.json(new ControlUser("same", "Revoked", false, 2L, null, null, null))); s.executeUpdate(); c.commit();
         }
         var current = first.transaction(a, false, tx -> tx.load());
         assertEquals(old.revision(), current.revision()); assertFalse(current.entries().get(Ids.Kind.USER.id("same")).enabled());

@@ -292,8 +292,8 @@ paths:
       operationId: renewInvocationLease
       security:
       - workloadCertificate: []
-      description: Lease renewal for a running v2 invocation, carrying progress and input requests and returning cancellation
-        and task input (invocation-state-v2.md T6-T8); refused once the fencing token is invalid or a kill covers it.
+      description: Extends the existing endpoint with progress and input requests and returned task input
+        (invocation-state-v2.md T6-T8). The served lease-only endpoint currently refuses those fields.
       parameters:
       - name: id
         in: path

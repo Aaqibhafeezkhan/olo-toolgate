@@ -1198,7 +1198,7 @@
     },
     "RemoteToolResponse": {
       "type": "object",
-      "description": "Gateway-private queued request/result response.",
+      "description": "Authorized queued executor report/result. operationOutcome separately records the Control-derived business outcome; reported DONE alone does not prove completion.",
       "additionalProperties": false,
       "properties": {
         "record": {
@@ -1206,6 +1206,9 @@
         },
         "result": {
           "$ref": "endpoint.schema.json#/$defs/RemoteToolResult"
+        },
+        "operationOutcome": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseOperationOutcome"
         }
       },
       "required": [

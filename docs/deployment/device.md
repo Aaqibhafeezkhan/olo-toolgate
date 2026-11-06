@@ -11,6 +11,12 @@ release jobs publish it alongside Control, Gateway and Quickstart, using the sam
 commit and `dev` tags. The current published platform is Linux AMD64; the Dockerfile
 also supports extracting the ARM64 client when built for that platform.
 
+The device runtime starts from its own Ubuntu Noble base; it extracts only the
+matching native client from Quickstart. Its build patches APT/libapt-pkg to at
+least 2.8.4ubuntu0.1 before installing other packages. The secured-device build
+requires that fixed package floor in its supplied device base. Both final images
+must pass HIGH/CRITICAL vulnerability scans before release.
+
 Run either deployment script from any directory:
 
 ```bat

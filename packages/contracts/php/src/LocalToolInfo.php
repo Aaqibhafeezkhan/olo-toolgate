@@ -14,12 +14,13 @@ final readonly class LocalToolInfo implements \JsonSerializable {
         public bool $enabled,
         public \stdClass $inputSchema,
         public string $toolDigest,
-        public string $packageDigest
+        public string $packageDigest,
+        public ?BusinessKeyPolicy $businessKeyPolicy = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['toolId', 'action', 'description', 'enabled', 'inputSchema', 'toolDigest', 'packageDigest']) || array_diff(['toolId', 'action', 'description', 'enabled', 'inputSchema', 'toolDigest', 'packageDigest'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['toolId', 'action', 'description', 'enabled', 'inputSchema', 'toolDigest', 'packageDigest', 'businessKeyPolicy']) || array_diff(['toolId', 'action', 'description', 'enabled', 'inputSchema', 'toolDigest', 'packageDigest'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -29,7 +30,8 @@ final readonly class LocalToolInfo implements \JsonSerializable {
             $data['enabled'],
             (object) $data['inputSchema'],
             $data['toolDigest'],
-            $data['packageDigest']
+            $data['packageDigest'],
+            array_key_exists('businessKeyPolicy', $data) ? BusinessKeyPolicy::fromArray($data['businessKeyPolicy']) : null
         );
     }
 

@@ -42,9 +42,9 @@ def command(args):
     return [exe,*rest]
 
 
-def run(args, capture=False, expect_failure=False):
+def run(args, capture=False, expect_failure=False, env=None):
     print('+ ' + ' '.join(args), flush=True)
-    result = subprocess.run(command(args), cwd=ROOT, text=True, capture_output=capture or expect_failure)
+    result = subprocess.run(command(args), cwd=ROOT, text=True, capture_output=capture or expect_failure, env=env)
     if expect_failure:
         if result.returncode == 0: raise SystemExit('Expected rejection but command passed: '+args[0])
         print('Expected negative-path rejection verified')
@@ -159,6 +159,12 @@ def main():
         python('tools/quality.py')
         python('-m','unittest','discover','-s','tests/contracts','-v')
         python('-m','unittest','discover','-s','tool-sdk/python-sdk/tests','-v')
+        if not args.contracts_only:
+            quickstart_path = str(ROOT/'apps/quickstart')
+            inherited_path = os.environ.get('PYTHONPATH')
+            if inherited_path: quickstart_path += os.pathsep + inherited_path
+            run([sys.executable,'-m','unittest','discover','-s','tests/quickstart','-v'],
+                env=dict(os.environ, PYTHONPATH=quickstart_path))
     if args.ci_common and part('ui'):
         run(['npm','ci','--ignore-scripts'])
         run(['npm','run','contracts:check'])

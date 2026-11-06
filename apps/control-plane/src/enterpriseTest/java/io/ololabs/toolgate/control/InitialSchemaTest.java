@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** First-release initialization and current runtime privilege boundaries. */
 @EnabledIfEnvironmentVariable(named="CONTROL_TEST_URL",matches=".+")
 class InitialSchemaTest {
-    @Test void initializesOnlyV1AndCurrentWritesAdvanceAuthorityAtomically() throws Exception {
+    @Test void initializesCurrentMigrationsAndWritesAdvanceAuthorityAtomically() throws Exception {
         String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
         assertNotNull(password);
         String name="initial_"+java.util.UUID.randomUUID().toString().replace("-","");
@@ -24,8 +24,9 @@ class InitialSchemaTest {
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         org.flywaydb.core.Flyway.configure().dataSource(url,"control_migrator",password).load().migrate();
         try(var c=java.sql.DriverManager.getConnection(url,"control_migrator",password);var s=c.createStatement();
-            var rows=s.executeQuery("SELECT version FROM flyway_schema_history")){
-            assertTrue(rows.next());assertEquals("1",rows.getString(1));assertFalse(rows.next());
+            var rows=s.executeQuery("SELECT version FROM flyway_schema_history ORDER BY installed_rank")){
+            for(int version=1;version<=1;version++){assertTrue(rows.next());assertEquals(Integer.toString(version),rows.getString(1));}
+            assertFalse(rows.next());
         }
         var source=new PGSimpleDataSource();source.setURL(url);source.setUser("control_app");source.setPassword(password);
         var codec=new ContractCodec();var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source),codec);

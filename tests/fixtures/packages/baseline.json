@@ -114,11 +114,8 @@
       "status" : 400
     },
     "tests/fixtures/packages/cases/manifest-invalid-utf8.tgpkg" : {
-      "result" : "accept",
-      "packageId" : "examples.notify",
-      "packageDigest" : "sha256:93c2db234dffe272305b6f354dcce898c51474e6716595a85eb2e4cfeda993d6",
-      "descriptorSetDigest" : "sha256:375830e77ebd66d938d238e58afbbb077ec8dac6f68e47d9def95143771ec1c1",
-      "files" : 4
+      "result" : "reject",
+      "status" : 400
     },
     "tests/fixtures/packages/cases/manifest-not-json.tgpkg" : {
       "result" : "reject",

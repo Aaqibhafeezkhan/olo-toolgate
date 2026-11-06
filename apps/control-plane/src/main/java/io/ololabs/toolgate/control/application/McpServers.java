@@ -207,7 +207,9 @@ public final class McpServers {
                 if (definition == null || !upstream.add(tool.upstreamName()) || !names.add(tool.name())) throw Failure.validation();
                 String toolId = "mcp." + slug + "/" + tool.name();
                 if (("mcp." + slug + "." + tool.name()).length() > 128) throw Failure.validation();
-                approved.addObject().put("toolId", toolId).put("upstreamName", tool.upstreamName()).put("definitionDigest", definition.get("definitionDigest").asText());
+                var approvedTool=approved.addObject().put("toolId", toolId).put("upstreamName", tool.upstreamName()).put("definitionDigest", definition.get("definitionDigest").asText());
+                McpEffectValidation.review(tool.effectPolicy());
+                approvedTool.set("effectPolicy",node(codec.json(tool.effectPolicy())));
             }
             long sequence = registration.path("approvalSequence").asLong(0);
             if (registration.get("state").asText().equals("APPROVED") && sequence > 0) {

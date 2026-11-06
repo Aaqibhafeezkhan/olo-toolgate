@@ -73,9 +73,10 @@ that declare nothing keep `invoke` on `tool://<toolId>`.
 - **Reconciliation method.** Every tool with side effects (`IDEMPOTENT`, `NON_IDEMPOTENT`) declares how an unknown outcome is
   settled: `DOWNSTREAM_IDEMPOTENCY` (needs `@Idempotency` or an idempotent effect), `STATUS_LOOKUP` (needs a `@Reconcile` tool)
   or `MANUAL`. SDK builds and deployment refuse a missing or inconsistent declaration; read-only tools declare none, and an
-  undeclared `UNKNOWN` effect is `MANUAL`. Each invocation records the method. Replaying the key of an `OUTCOME_UNKNOWN`
-  `DOWNSTREAM_IDEMPOTENCY` call queues it again under the same invocation and arguments, so the target deduplicates;
-  `STATUS_LOOKUP` and `MANUAL` calls stay unknown, and the reply names the method.
+  undeclared `UNKNOWN` effect is `MANUAL`. Each invocation records the method. Replaying any `OUTCOME_UNKNOWN` call leaves it unknown,
+  including `DOWNSTREAM_IDEMPOTENCY`; the reply still names its declared method. Automatic consumed-attempt resend is
+  disabled until the target-deduplicated effect protocol is implemented. See
+  [the operation/attempt journal](../operations/operation-attempt-journal.md).
 - **Approvals.** `toolgate.control.approval.expiry-ms` (at most 7 days; OLO uses 604800000) bounds how long an operation
   waits. Approval moves the original invocation to `QUEUED` with a fresh dispatch window, and replaying its key runs it.
 

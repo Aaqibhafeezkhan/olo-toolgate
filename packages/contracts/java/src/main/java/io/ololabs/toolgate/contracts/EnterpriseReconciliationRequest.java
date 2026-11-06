@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts;
  * @param completedResources canonical completedResources value
  * @param evidenceDigest canonical evidenceDigest value
  * @param resultDigest canonical resultDigest value
+ * @param attemptSettlement canonical attemptSettlement value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EnterpriseReconciliationRequest(
@@ -17,7 +18,8 @@ public record EnterpriseReconciliationRequest(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "state", required = true) EnterpriseReconciledState state,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "completedResources", required = true) java.util.List<ResourceDescriptor> completedResources,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "evidenceDigest", required = true) String evidenceDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "resultDigest", required = false) String resultDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "resultDigest", required = false) String resultDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "attemptSettlement", required = false) EnterpriseAttemptSettlementReview attemptSettlement
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,6 +28,7 @@ public record EnterpriseReconciliationRequest(
      * @param completedResources canonical completedResources value
      * @param evidenceDigest canonical evidenceDigest value
      * @param resultDigest canonical resultDigest value
+     * @param attemptSettlement canonical attemptSettlement value
      */
     public EnterpriseReconciliationRequest {
         java.util.Objects.requireNonNull(expectedRevision, "expectedRevision");

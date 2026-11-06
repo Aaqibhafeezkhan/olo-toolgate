@@ -38,6 +38,9 @@ sonar {
             property("sonar.organization", it)
         }
         property("sonar.qualitygate.wait", "false")
+        // Our .sql files target PostgreSQL/SQLite, not Oracle (where '' is NULL).
+        // Keep Oracle analysis on Oracle suffixes; both actual SQL engines have executable gates.
+        property("sonar.plsql.file.suffixes", "pks,pkb,pls,plb")
         property("sonar.sources", "tools,apps/admin-ui/src,apps/browser-extension,apps/quickstart,apps/gateway/src,apps/endpoint-client/src,apps/tool-host/src,tool-sdk/cli/src,tool-sdk/python-sdk/src,packages/contracts/typescript/src,packages/contracts/rust/src,packages/tenant-identity")
         property("sonar.exclusions", "**/tests/**,**/test/**,**/*.test.*,**/*.d.ts,**/build/**,**/dist/**,**/node_modules/**")
         property("sonar.javascript.lcov.reportPaths", "build/coverage/typescript/lcov.info,build/coverage/javascript/lcov.info")
@@ -130,6 +133,7 @@ tasks.register("javaCheck") {
     description = "Runs checks for all Java/Gradle modules."
     dependsOn(
         ":contracts-java:check",
+        ":service-authorization:check",
         ":package-archive:check",
         ":control-plane:check",
         ":sdk-java-api:check",

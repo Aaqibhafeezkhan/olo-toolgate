@@ -115,7 +115,7 @@ class SdkBuilderTest {
     private DirectoryService.Actor editor(Store store) {
         store.transaction(tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
-            TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("editor", "SDK author", true, 1L)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "editor");
+            TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("editor", "SDK author", true, 1L, null, null, null)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "editor");
             var conditions = new EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null);
             var rule = new EnterpriseManagementRule(List.of("tool_builder.read", "tool_builder.build"), EnterpriseGroupType.TOOL_GROUP, new GroupSelection(List.of("default-tools"), false), List.of(), conditions, null);
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("sdk-author", "SDK author", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, List.of(rule)));

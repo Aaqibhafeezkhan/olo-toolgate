@@ -154,22 +154,29 @@ impl Control {
         reqwest::Identity::from_pem(pem.as_deref().ok_or("executor mTLS identity required")?)
             .map_err(|_| "invalid executor identity".into())
     }
+    pub async fn effect_grant(
+        &self,
+        request: &olo_toolgate_contracts::v2::EffectGrantIssue,
+    ) -> Result<olo_toolgate_contracts::v2::EffectGrant, ControlError> {
+        self.post("/effects/authorize", request, None).await
+    }
+    pub async fn effect_sending(
+        &self,
+        request: &olo_toolgate_contracts::v2::EffectGrantDispatch,
+    ) -> Result<olo_toolgate_contracts::v2::EffectGrantDispatchAllowed, ControlError> {
+        self.post("/effects/sending", request, None).await
+    }
     pub async fn service_permit(
         &self,
-        invocation: &str,
-        fence: &str,
-        audience: olo_toolgate_contracts::ServiceAudience,
+        request: &olo_toolgate_contracts::ServicePermitIssue,
     ) -> Result<olo_toolgate_contracts::ServicePermit, ControlError> {
-        self.post(
-            "/service-permits/issue",
-            &olo_toolgate_contracts::ServicePermitIssue {
-                invocation_id: invocation.into(),
-                fencing_token: fence.into(),
-                audience,
-            },
-            None,
-        )
-        .await
+        self.post("/service-permits/issue", request, None).await
+    }
+    pub async fn service_sending(
+        &self,
+        request: &olo_toolgate_contracts::ServicePermitDispatch,
+    ) -> Result<olo_toolgate_contracts::ServicePermitDispatchAllowed, ControlError> {
+        self.post("/service-permits/sending", request, None).await
     }
     fn client(&self) -> reqwest::Client {
         self.client
@@ -201,6 +208,24 @@ impl Control {
             .post("/secrets/deliver", &request, Some(fencing_token))
             .await?;
         Ok(delivery.value)
+    }
+
+    pub async fn heartbeat(
+        &self,
+        invocation_id: &str,
+        fencing_token: &str,
+    ) -> Result<olo_toolgate_contracts::v2::LeaseRenewal, ControlError> {
+        self.post(
+            &format!("/invocations/{invocation_id}/heartbeat"),
+            &olo_toolgate_contracts::v2::LeaseHeartbeat {
+                invocation_id: invocation_id.into(),
+                fencing_token: fencing_token.into(),
+                progress: None,
+                input_request: None,
+            },
+            Some(fencing_token),
+        )
+        .await
     }
 
     pub async fn report(&self, report: &InvocationResultReport) -> Result<(), ControlError> {

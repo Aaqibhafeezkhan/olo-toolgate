@@ -12,7 +12,7 @@ olo-toolgate-tenant-identity.workspace = true
 olo-toolgate-contracts.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["query"] }
 tokio.workspace = true
 jsonschema.workspace = true
 sha2.workspace = true

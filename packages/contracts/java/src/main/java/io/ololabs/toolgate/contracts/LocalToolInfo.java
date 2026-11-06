@@ -12,6 +12,7 @@ package io.ololabs.toolgate.contracts;
  * @param inputSchema canonical inputSchema value
  * @param toolDigest canonical toolDigest value
  * @param packageDigest canonical packageDigest value
+ * @param businessKeyPolicy canonical businessKeyPolicy value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record LocalToolInfo(
@@ -21,7 +22,8 @@ public record LocalToolInfo(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "enabled", required = true) Boolean enabled,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "inputSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> inputSchema,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolDigest", required = true) String toolDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "packageDigest", required = true) String packageDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "packageDigest", required = true) String packageDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "businessKeyPolicy", required = false) BusinessKeyPolicy businessKeyPolicy
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +34,7 @@ public record LocalToolInfo(
      * @param inputSchema canonical inputSchema value
      * @param toolDigest canonical toolDigest value
      * @param packageDigest canonical packageDigest value
+     * @param businessKeyPolicy canonical businessKeyPolicy value
      */
     public LocalToolInfo {
         java.util.Objects.requireNonNull(toolId, "toolId");

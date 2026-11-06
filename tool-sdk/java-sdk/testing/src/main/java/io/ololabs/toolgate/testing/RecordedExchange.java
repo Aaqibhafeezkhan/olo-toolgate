@@ -28,7 +28,7 @@ public final class RecordedExchange {
     public enum Failure { CONNECTION_REFUSED, RESET_AFTER_SEND, TIMEOUT_AFTER_SEND }
 
     static final ObjectMapper JSON = new ObjectMapper();
-    private static final Set<String> REQUEST_FIELDS = Set.of("route", "method", "variables", "query", "headers", "body", "bodyText", "bodyBase64");
+    private static final Set<String> REQUEST_FIELDS = Set.of("route", "effectKey", "method", "variables", "query", "headers", "body", "bodyText", "bodyBase64");
     private static final Set<String> RESPONSE_FIELDS = Set.of("status", "headers", "body", "bodyText", "bodyBase64", "failure");
 
     private final ObjectNode request;
@@ -43,6 +43,13 @@ public final class RecordedExchange {
     public static RecordedExchange on(String routeId) {
         ObjectNode request = JSON.createObjectNode().put("route", routeId);
         return new RecordedExchange(request, JSON.createObjectNode().put("status", 200));
+    }
+
+    /** The exact logical effect key expected in broker metadata. */
+    public RecordedExchange effectKey(String key) {
+        if (key == null || !key.matches("[A-Za-z0-9._:-]{1,128}")) throw new IllegalArgumentException("Invalid logical effect key");
+        request.put("effectKey", key);
+        return this;
     }
 
     public RecordedExchange method(String method) {

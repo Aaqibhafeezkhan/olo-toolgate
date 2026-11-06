@@ -9,6 +9,11 @@ import io.ololabs.toolgate.sdk.annotations.Param;
 import io.ololabs.toolgate.sdk.annotations.ServerTool;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
 import io.ololabs.toolgate.sdk.annotations.ValueType;
+import io.ololabs.toolgate.sdk.annotations.ModelValidation;
+import io.ololabs.toolgate.sdk.annotations.Training;
+import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
+import io.ololabs.toolgate.sdk.annotations.TrainingValues;
+import io.ololabs.toolgate.sdk.annotations.ValuePhrasing;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolConfigurationError;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
@@ -54,6 +59,47 @@ public class CsvQuery {
 
     @ServerTool(name = "files", title = "List CSV files",
             description = "Lists the CSV files that csv.query can read, with their columns.", effect = EffectSafety.READ_ONLY)
+    @Training(
+            phrasings = {
+                "Which CSV files can you read?",
+                "List the CSV files available",
+                "What data files do you have, and their columns?",
+                "Show me the columns of the CSV files",
+                "What spreadsheets can I query?",
+                "Which CSVs are in the data folder?",
+                "What CSV data can you query?",
+                "Show me the available CSV files and their headers",
+                "Which columns does each CSV have?",
+                "list csv files",
+                "What tables of CSV data are there?",
+                "Before I query anything: which CSV files exist?",
+                "What files are in the CSV data directory?",
+                "Which CSV exports can I search?",
+                "Do you have an orders CSV? List the files",
+                "What fields are in the CSV files?",
+                "Show the CSV catalogue",
+                "csv files?",
+                "What data do you have in CSV form?",
+                "Which CSVs can csv.query read?",
+                "Give me an overview of the CSV files",
+                "I want to query a CSV - which ones are there?",
+                "Name the CSV files you can open",
+                "What's the column list for the CSV data?",
+                "Which data sets are available as CSV?",
+                "Show CSV files with columns"
+            },
+            negatives = {
+                "How do I open a CSV file in Excel?",
+                "What's the difference between CSV and TSV?",
+                "Convert this list to CSV for me: apples, pears, plums"
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "which csv files can you query?", arguments = "{}")
+            },
+            negatives = {
+                "What does CSV stand for?"
+            })
     public CsvFiles files(ToolContext context) {
         Path dir = dataDir(context);
         try (Stream<Path> list = Files.list(dir)) {
@@ -89,6 +135,112 @@ public class CsvQuery {
             effect = EffectSafety.READ_ONLY)
     @Example(arguments = "{\"file\":\"../../etc/shadow\"}", expectedError = "INVALID_ARGUMENT")
     @Example(arguments = "{\"file\":\"orders.csv\",\"where\":[\"amount ?? 5\"]}", expectedError = "INVALID_ARGUMENT")
+    @Training(
+            phrasings = {
+                "Show the rows of {file} where {where}",
+                "From {file}, get {columns} where {where}",
+                "In {file}, count rows grouped by {groupBy}",
+                "Total {sum} per {groupBy} in {file}",
+                "Read {file} and sort by {sortBy}, {descending}",
+                "Top {limit} rows of {file} sorted by {sortBy} {descending}",
+                "Filter {file} on {where}",
+                "From {file} give me only {columns}",
+                "How many rows in {file} per {groupBy}?",
+                "Query {file}: {where}, first {limit}",
+                "Show me {file}",
+                "Which rows in {file} match {where}?",
+                "Sort {file} by {sortBy}, top {limit}",
+                "Filter {file} where {where}",
+                "Total {sum} by {groupBy} in {file}"
+            },
+            defaultPhrasings = {
+                "Show me the rows in {file}",
+                "Read {file}"
+            },
+            negatives = {
+                "How do I filter rows in pandas?",
+                "Write a SQL query that groups orders by status",
+                "What is a CSV delimiter?"
+            },
+            parameters = {
+                @TrainingValues(name = "file",
+                    examples = {
+                        "orders.csv",
+                        "customers.csv",
+                        "sales-2026.csv",
+                        "inventory.csv",
+                        "employees.csv",
+                        "export-10.csv"
+                    }),
+                @TrainingValues(name = "where",
+                    examples = {
+                        "[\"status=shipped\"]",
+                        "[\"country=DE\"]",
+                        "[\"amount>100\"]",
+                        "[\"status=open\",\"priority=high\"]",
+                        "[\"region=EMEA\",\"amount>=500\"]",
+                        "[\"quantity<10\"]"
+                    }),
+                @TrainingValues(name = "columns",
+                    examples = {
+                        "[\"id\",\"status\"]",
+                        "[\"name\",\"email\"]",
+                        "[\"order_id\",\"amount\",\"status\"]",
+                        "[\"sku\",\"quantity\"]",
+                        "[\"country\",\"total\"]"
+                    }),
+                @TrainingValues(name = "groupBy",
+                    examples = {
+                        "status",
+                        "country",
+                        "region",
+                        "category",
+                        "customer_id"
+                    }),
+                @TrainingValues(name = "sum",
+                    examples = {
+                        "amount",
+                        "quantity",
+                        "total",
+                        "price"
+                    }),
+                @TrainingValues(name = "sortBy",
+                    examples = {
+                        "amount",
+                        "date",
+                        "count",
+                        "sum",
+                        "name",
+                        "quantity"
+                    }),
+                @TrainingValues(name = "limit",
+                    examples = {
+                        "5",
+                        "10",
+                        "20",
+                        "50",
+                        "200"
+                    }),
+                @TrainingValues(name = "descending",
+                    phrasings = @ValuePhrasing(value = "true", phrasings = {
+                            "largest first",
+                            "descending",
+                            "highest first"
+                        }))
+            },
+            prompts = {
+                @TrainingPrompt(prompt = "Which rows in sales-2026.csv match region=EMEA, amount>=500?", arguments = "{\"file\":\"sales-2026.csv\",\"where\":[\"region=EMEA\",\"amount>=500\"]}"),
+                @TrainingPrompt(prompt = "Sort inventory.csv by name, top 20", arguments = "{\"file\":\"inventory.csv\",\"sortBy\":\"name\",\"limit\":20}"),
+                @TrainingPrompt(prompt = "Query inventory.csv grouped by region, sorted by quantity descending, top 5", arguments = "{\"file\":\"inventory.csv\",\"groupBy\":\"region\",\"sortBy\":\"quantity\",\"descending\":true,\"limit\":5}")
+            })
+    @ModelValidation(
+            prompts = {
+                @TrainingPrompt(prompt = "in employees.csv show rows where team=ops", arguments = "{\"file\":\"employees.csv\",\"where\":[\"team=ops\"]}"),
+                @TrainingPrompt(prompt = "sum amount by region from sales-2026.csv", arguments = "{\"file\":\"sales-2026.csv\",\"sum\":\"amount\",\"groupBy\":\"region\"}")
+            },
+            negatives = {
+                "Out of curiosity, how do I open a CSV file in Excel?"
+            })
     public QueryResult query(
             @Param(description = "File name in the data directory, such as orders.csv", maxLength = 200) String file,
             @Param(description = "Conditions, all of which must hold. Each is <column><op><value> with op one of"

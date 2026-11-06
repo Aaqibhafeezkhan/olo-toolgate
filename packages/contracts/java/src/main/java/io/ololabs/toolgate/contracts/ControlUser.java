@@ -40,12 +40,4 @@ public record ControlUser(
         java.util.Objects.requireNonNull(revision, "revision");
         claims = claims == null ? null : java.util.Map.copyOf(claims);
     }
-    /** Construct a record without optional installation metadata.
-     *
-     * @param id canonical id value
-     * @param name canonical name value
-     * @param enabled canonical enabled value
-     * @param revision canonical revision value
-     */
-    public ControlUser(String id, String name, Boolean enabled, Long revision) { this(id, name, enabled, revision, null, null, null); }
 }

@@ -52,7 +52,7 @@ public final class McpService {
                 var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))continue;var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));
                 for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
                     var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
-                    if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(t);
+                    if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(new LocalToolInfo(t.toolId(),t.action(),t.description(),t.enabled(),t.inputSchema(),t.toolDigest(),t.packageDigest(),BusinessKeyPolicies.configured(tx,codec,t.toolId())));
                 }
             }return reply(new LocalToolCatalog(tools));});}
     public Store.Reply submit(DirectoryService.Actor actor,boolean gateway,String body,String requestId){gateway(actor,gateway);var submission=codec.model(body,RemoteToolSubmission.class);
@@ -60,7 +60,7 @@ public final class McpService {
             var evaluation=new RuntimeAccess(codec).evaluation(tenant,tx.load(),submission.context(),i.evaluation().context().deviceId(),submission.request(),i.evaluation().toolDigest(),i.evaluation().packageDigest(),now);
             var e=i.evaluation();if(!evaluation.context().equals(e.context())||!evaluation.argumentsDigest().equals(e.argumentsDigest())||!evaluation.resources().equals(e.resources())||!evaluation.toolId().equals(e.toolId())||!evaluation.action().equals(e.action()))throw forbidden();
             operations.requireFresh(tenant,tx,i);installed(tx,i,submission.request());var previous=tx.mcp().get(i.id());
-            if(previous!=null){if(!task(previous).request().equals(submission.request()))throw Failure.conflict();return reply(new RemoteToolResponse(record(previous),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record(previous).state())&&previous.result()!=null?codec.model(previous.result(),RemoteToolResult.class):null));}
+            if(previous!=null){if(!task(previous).request().equals(submission.request()))throw Failure.conflict();return reply(new RemoteToolResponse(record(previous),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record(previous).state())&&previous.result()!=null?codec.model(previous.result(),RemoteToolResult.class):null, null));}
             if(i.state()!=EnterpriseInvocationState.QUEUED||submission.expiresAtUnixMs()<=now||submission.expiresAtUnixMs()>now+30000)throw Failure.conflict();
             var d=device(tx,submission.context(),e.context().deviceId());if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))throw Failure.unavailable();
             long expires=Math.min(i.expiresAtUnixMs(),submission.expiresAtUnixMs());if(d.connectionExpiresAtUnixMs()!=null)expires=Math.min(expires,d.connectionExpiresAtUnixMs());
@@ -71,7 +71,7 @@ public final class McpService {
             tx.mcp().prune(Math.max(0,now-86400000));if(tx.mcp().count()>=1000||tx.mcp().pending(d.deviceId(),17).size()>=16)throw Failure.conflict();
             var record=new RemoteToolRecord(i.id(),d.deviceId(),e.context().agentId(),e.toolId(),RemoteToolState.WAITING_FOR_POLL,now,expires,null,null,null,null);
             tx.mcp().save(new McpStore.Row(record.requestId(),record.deviceId(),record.state().name(),expires,codec.json(record),codec.json(task),null));
-            tx.audit(actor.id(),"MCP_RECEIVED",record.requestId(),i.revision(),requestId,i.requestDigest());return reply(new RemoteToolResponse(record,null));});}
+            tx.audit(actor.id(),"MCP_RECEIVED",record.requestId(),i.revision(),requestId,i.requestDigest());return reply(new RemoteToolResponse(record,null, null));});}
     private RemoteToolRecord transition(Store.Session tx,McpStore.Row row,RemoteToolState state,long now,ErrorCode error,String result,String requestId){
         var old=record(row);var next=new RemoteToolRecord(old.requestId(),old.deviceId(),old.agentId(),old.toolId(),state,old.receivedAtUnixMs(),old.expiresAtUnixMs(),state==RemoteToolState.SUBMITTED?Long.valueOf(now):old.submittedAtUnixMs(),state==RemoteToolState.RESPONSE_RECEIVED?Long.valueOf(now):old.responseAtUnixMs(),Set.of(RemoteToolState.DONE,RemoteToolState.FAILED,RemoteToolState.EXPIRED).contains(state)?Long.valueOf(now):old.completedAtUnixMs(),error);
         tx.mcp().save(new McpStore.Row(row.id(),row.deviceId(),state.name(),row.expiresAt(),codec.json(next),row.task(),result));
@@ -102,11 +102,11 @@ public final class McpService {
     public Store.Reply response(DirectoryService.Actor actor,boolean gateway,String body,String requestId){gateway(actor,gateway);var c=codec.model(body,RequestContext.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);var row=tx.mcp().get(c.requestId());if(row==null)throw forbidden();var task=task(row);var i=invocation(tx,row.id());
             var evaluation=new RuntimeAccess(codec).evaluation(tenant,tx.load(),c,i.evaluation().context().deviceId(),task.request(),i.evaluation().toolDigest(),i.evaluation().packageDigest(),now);if(!evaluation.context().equals(i.evaluation().context()))throw forbidden();
-            device(tx,c,i.evaluation().context().deviceId());operations.requireFresh(tenant,tx,i);var record=record(row);
+            device(tx,c,i.evaluation().context().deviceId());operations.requireMetadataFresh(tenant,tx,i);var record=record(row);
             if(record.state()==RemoteToolState.RESPONSE_RECEIVED)record=transition(tx,row,record.error()==null?RemoteToolState.DONE:RemoteToolState.FAILED,now,record.error(),row.result(),requestId);
             else if((record.state()==RemoteToolState.WAITING_FOR_POLL||record.state()==RemoteToolState.SUBMITTED)&&row.expiresAt()<=now)record=transition(tx,row,RemoteToolState.EXPIRED,now,ErrorCode.TIMEOUT,null,requestId);
-            return reply(new RemoteToolResponse(record,Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record.state())&&row.result()!=null?codec.model(row.result(),RemoteToolResult.class):null));});}
+            return reply(new RemoteToolResponse(record,Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(record.state())&&row.result()!=null?codec.model(row.result(),RemoteToolResult.class):null,new OperationFinalizer(codec).refresh(tx,i.id(),now)));});}
     public Store.Reply page(DirectoryService.Actor actor,String requestId){return store.transaction(tenant,true,tx->{var items=new ArrayList<RemoteToolRecord>();for(var row:tx.mcp().page(100))try{scope(tx,actor,invocation(tx,row.id()),"read");items.add(record(row));}catch(Failure denied){if(denied.status()!=403)throw denied;}return reply(new RemoteToolPage(items));});}
-    public Store.Reply inspect(DirectoryService.Actor actor,String requestId){return store.transaction(tenant,true,tx->{var row=tx.mcp().get(Ids.valid(requestId));if(row==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Request not found");var i=invocation(tx,row.id());scope(tx,actor,i,"read");operations.requireFresh(tenant,tx,i);
+    public Store.Reply inspect(DirectoryService.Actor actor,String requestId){return store.transaction(tenant,true,tx->{var row=tx.mcp().get(Ids.valid(requestId));if(row==null)throw new Failure(ErrorCode.NOT_FOUND,404,"Request not found");var i=invocation(tx,row.id());scope(tx,actor,i,"read");operations.requireMetadataFresh(tenant,tx,i);
         var progress=record(row);var result=Set.of(RemoteToolState.DONE,RemoteToolState.FAILED).contains(progress.state())&&row.result()!=null?codec.model(row.result(),RemoteToolResult.class):null;return reply(new RemoteToolInspection(progress,result==null?null:result.output()));});}
 }

@@ -152,7 +152,7 @@ A violation is a compile error at the declaration:
 - variable names unique per tool across inputs, globals, secrets and claims, ignoring case, and no tool-level declaration with the name of a package- or class-level one;
 - client tools without routes, TCP, secrets or `@HttpAuth`, and `@DeviceFileAccess` only on client tools;
 - routes: declared destination and auth, no `Authorization`, `Proxy-Authorization`, `Cookie`, `Host`, `X-Forwarded-*` or auth header in the allowlist, path variables that are variable names with patterns other than `.*` and `.+`;
-- a reachable auth's secret declared by the tool, `businessKeyArgument` naming an input, at most 8 examples;
+- reachable auth references validated as vault names (no raw worker declaration is required), `businessKeyArgument` naming an input, at most 8 examples;
 - constraint keywords that fit the value type, defaults that parse as the type, and patterns that compile.
 
 ## What the analyser checks

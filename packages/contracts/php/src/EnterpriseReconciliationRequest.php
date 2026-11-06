@@ -12,12 +12,13 @@ final readonly class EnterpriseReconciliationRequest implements \JsonSerializabl
         public EnterpriseReconciledState $state,
         public array $completedResources,
         public string $evidenceDigest,
-        public ?string $resultDigest = null
+        public ?string $resultDigest = null,
+        public ?EnterpriseAttemptSettlementReview $attemptSettlement = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['expectedRevision', 'state', 'completedResources', 'evidenceDigest', 'resultDigest']) || array_diff(['expectedRevision', 'state', 'completedResources', 'evidenceDigest'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['expectedRevision', 'state', 'completedResources', 'evidenceDigest', 'resultDigest', 'attemptSettlement']) || array_diff(['expectedRevision', 'state', 'completedResources', 'evidenceDigest'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class EnterpriseReconciliationRequest implements \JsonSerializabl
             EnterpriseReconciledState::from($data['state']),
             array_map(static fn ($item) => ResourceDescriptor::fromArray($item), $data['completedResources']),
             $data['evidenceDigest'],
-            array_key_exists('resultDigest', $data) ? $data['resultDigest'] : null
+            array_key_exists('resultDigest', $data) ? $data['resultDigest'] : null,
+            array_key_exists('attemptSettlement', $data) ? EnterpriseAttemptSettlementReview::fromArray($data['attemptSettlement']) : null
         );
     }
 

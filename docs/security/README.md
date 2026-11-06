@@ -5,16 +5,20 @@ for current limitations and their open enhancement tickets.
 
 Control is the authority for runtime decisions and effect permits. Default
 membership, tool installation, device approval and management roles do not grant
-runtime access. Protected effects require current authorization; unavailable or
-invalid authority fails closed.
+runtime access. Implemented protected boundaries require current authorization; unavailable or
+invalid authority fails closed. Generalized per-effect authorization and exact
+consent are still pending; admission is not permission for arbitrary later effects.
 
 ## Review the model
 
+- [Zero Trust Execution boundaries, A1–A9 threats and C1–C8 claims](zero-trust-boundaries.md)
+- [Live implementation and qualification scope](zero-trust-execution-status.md)
+- [Zero Trust diagnostic scorecard](../testing/zero-trust-scorecard.md)
 - [Security invariants](security-invariants.md)
 - [Enterprise access control](enterprise-access-control.md) and [user roles](user-roles.md)
 - [Trust boundaries](../architecture/trust-boundaries.md)
 - [Threat model](threat-model.md), [Tool Host threat model](threat-models/tool-host.md) and
-  [OLO integration threat model](threat-models/olo-integration.md) (proposed)
+  [OLO integration threat model](threat-models/olo-integration.md) (scoped implementation)
 - [Device enforcement](endpoint-enforcement.md) and [key management](key-management.md)
 - [Enterprise evidence and limitations](../enterprise-access-control/README.md)
 

@@ -1,7 +1,11 @@
 # Tool Host
 
-**Status:** ToolGate is in Beta Release. Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Sandbox isolation (network namespace, container) and durable result delivery are tracked in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
+**Status:** ToolGate is in Beta Release. Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Renewable leases, admission spooling and durable result delivery are described in the [execution recovery guide](../../docs/operations/execution-leases.md). Python OCI containment is available on qualified pools; per-effect authorization and the later roadmap remain tracked in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
 **Primary stack:** Rust
+
+Qualified Python pools can use the [rootless OCI tier](../../docs/operations/rootless-tool-host.md),
+with a permit-bound runtime image, enforced limits and container teardown.
+`HOST_NATIVE` remains the legacy compatibility tier and provides no container isolation.
 
 ## Responsibility
 
@@ -46,6 +50,7 @@ One JSON file, refused at startup if anything is wrong.
 | `enrollment` | `{identityDir, poolId?}`: enroll with Control as a device and fetch assignments (below). `identityDir` holds the device key, its certificate and the check-in sequence. |
 | `runtimes.javaPath` | The `java` the JVM launcher runs (default `java`, Java 17 or later). A bare name is looked up on the host's `PATH` at startup, because tool processes start with an empty environment. |
 | `runtimes.pythonPath` | Python 3.10+ for SDK `tool.pyz` artifacts (default `python3`, or `python` on Windows). Resolved at startup and launched with `-I` in the same clean environment and v2 broker protocol as Java. |
+| `sandbox` | Optional Linux rootless OCI tier; requires immutable pythonImage and brokerImage pins and delegated cgroups. See the [operator guide](../../docs/operations/rootless-tool-host.md). No in-process broker fallback. |
 | `limits` | `maxConcurrent`, `maxInputBytes`, `maxOutputBytes`, `syncDeadlineMs`, `memoryBytes`, `maxPermitWindowMs`. Each may only be lowered below the platform ceiling (platform-requirements.md §13.5). |
 | `developmentLoopbackHttp` | Lets the broker send plain http to loopback destinations. For development and tests only. |
 

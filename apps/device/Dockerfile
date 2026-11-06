@@ -21,7 +21,13 @@ LABEL org.opencontainers.image.title="OLO ToolGate Linux device" \
       org.opencontainers.image.revision=$REVISION \
       org.opencontainers.image.source="https://github.com/olo-labs/olo-toolgate" \
       org.opencontainers.image.licenses="Apache-2.0"
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 ca-certificates && \
+# Patch the independent Noble base before installing other packages.
+# Zero retries mitigates CVE-2026-109518 while bootstrapping patched APT.
+RUN apt-get -o Acquire::Retries=0 update && \
+    apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0t64 && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 2.8.4ubuntu0.1 && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg6.0t64)" ge 2.8.4ubuntu0.1 && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 ca-certificates && \
     rm -rf /var/lib/apt/lists/* && ln -s /usr/bin/python3 /usr/local/bin/python && \
     mkdir -p /etc/systemd/system /etc/olo-toolgate /var/lib/olo-toolgate /usr/local/lib/olo-toolgate && \
     ln -s /usr/local/lib/olo-toolgate/olo-toolgate-client /usr/local/bin/olo-toolgate-client && \

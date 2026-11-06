@@ -22,27 +22,93 @@ class ServicePermitVerifierTest {
         time=new AtomicLong(100000);epoch=new AtomicLong(7);commits=new AtomicInteger();
         Clock clock=new Clock(){public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId z){return this;}public Instant instant(){return Instant.ofEpochMilli(time.get());}};
         verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("effect-key",key.getPublic()),clock,
-            tenant->new ServicePermitVerifier.Epoch(epoch.get(),100000),(audience,request)->commits.incrementAndGet()==1);
+            tenant->new ServicePermitVerifier.Epoch(epoch.get(),100000));
     }
     ServicePermit permit(String operation)throws Exception{
         var claims=new ServicePermitClaims("control",ServiceAudience.olo_memory,TENANT,"alice",null,RequestMode.HUMAN,operation,RESOURCES,
-            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY)),EXECUTOR,"inv-1","nonce-1",7L,100000L,115000L,"execution-1");
+            HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(BODY)),EXECUTOR,"inv-1","nonce-1",7L,100000L,115000L,"execution-1",transportDigest(),null,null);
         return signed("olo-service-permit+jws","effect-key",claims);
     }
-    ServicePermit signed(String type,String kid,ServicePermitClaims claims)throws Exception{
+    ServicePermit signed(String type,String kid,Object claims)throws Exception{
         var json=new com.fasterxml.jackson.databind.ObjectMapper();var b64=Base64.getUrlEncoder().withoutPadding();
         String message=b64.encodeToString(json.writeValueAsBytes(Map.of("alg","RS256","typ",type,"kid",kid)))+"."+b64.encodeToString(json.writeValueAsBytes(claims));
         var signature=Signature.getInstance("SHA256withRSA");signature.initSign(key.getPrivate());signature.update(message.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
         return new ServicePermit(message+"."+b64.encodeToString(signature.sign()));
     }
-    ServicePermitVerifier.Request request(String op){return new ServicePermitVerifier.Request(TENANT,op,RESOURCES,BODY);}
+    ServicePermitVerifier.Request request(String op){return new ServicePermitVerifier.Request(TENANT,op,RESOURCES,BODY,transport("alice"));}
+    @Test void requestValueSemanticsUseDefensiveBodyContentWithoutLoggingCredentials(){
+        byte[] body=BODY.clone();
+        var first=new ServicePermitVerifier.Request(TENANT,"memory.read",RESOURCES,body,transport("alice"));
+        var same=request("memory.read");
+        assertEquals(first,same);assertEquals(first.hashCode(),same.hashCode());
+        body[0]^=1;first.exactBody()[0]^=1;
+        assertEquals(first,same);
+        var changed=BODY.clone();changed[0]^=1;
+        assertNotEquals(first,new ServicePermitVerifier.Request(TENANT,"memory.read",RESOURCES,changed,transport("alice")));
+        assertNotEquals(first,request("memory.append"));
+        assertFalse(first.toString().contains("private"));
+        assertFalse(first.toString().contains("actual-signed-permit"));
+        assertFalse(first.toString().contains("alice"));
+        assertTrue(first.toString().contains("exactBodyBytes="+BODY.length));
+    }
+    String transportDigest(){var t=transport("alice");return HttpRequestFingerprint.digest(t.profile(),t.uri(),t.method(),t.headers(),BODY);}
+    ServicePermit boundPermit(String operation,String digest)throws Exception{
+        var original=permit(operation);var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
+        return signed("olo-service-permit+jws","effect-key",new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),c.act(),
+            c.mode(),c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),
+            c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),digest,"effect-1",1L));
+    }
+    ServicePermitVerifier.Transport transport(String recipient){
+        return new ServicePermitVerifier.Transport(
+            new HttpRequestFingerprint.Profile("profile","sha256:"+"a".repeat(64),"write","toolgate-service-permit:olo-memory",List.of("toolgate-service-permit")),
+            java.net.URI.create("https://memory.test/v1/memory.append"),"POST",
+            Map.of("content-type",List.of("application/json"),"accept",List.of("*/*"),"x-recipient",List.of(recipient),
+                "toolgate-service-permit",List.of("actual-signed-permit")));
+    }
+    @Test void verifiedWritesNeverConsumeAndKeepTheirOriginalDeadline()throws Exception{
+        var facts=transport("alice");String digest=HttpRequestFingerprint.digest(facts.profile(),facts.uri(),facts.method(),facts.headers(),BODY);
+        var permit=boundPermit("memory.append",digest);
+        var request=new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,facts);
+        var verified=verifier.verifyWriteKey(permit,request,EXECUTOR);
+        assertEquals(0,commits.get());assertEquals("effect-1",verified.binding().effectId());
+        assertEquals(digest,verified.binding().requestDigest());assertEquals("nonce-1",verified.binding().authNonce());
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(permit,request,"0".repeat(64)));
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(permit("memory.append"),request,EXECUTOR));
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(permit("memory.read"),request("memory.read"),EXECUTOR));
+        assertEquals(0,commits.get());time.set(115001);
+        assertThrows(SecurityException.class,verified::checkDeadline);
+    }
+    @Test void directAuthorizationNeverGrantsWriteCommitAuthority()throws Exception{
+        var p=boundPermit("memory.append",transportDigest());
+        assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.append"),EXECUTOR));
+        assertDoesNotThrow(()->verifier.verifyWriteKey(p,request("memory.append"),EXECUTOR));
+    }
+    @Test void boundPermitRequiresActualTransportFactsBeforeClaimVerification()throws Exception{
+        var p=boundPermit("memory.append",transportDigest());
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(p,
+            new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,null),EXECUTOR));
+        assertThrows(SecurityException.class,()->verifier.verifyWriteKey(p,
+            new ServicePermitVerifier.Request(TENANT,"memory.append",RESOURCES,BODY,transport("bob")),EXECUTOR));
+    }
+    @Test void oldUnboundClaimsAreRejectedRatherThanConverted()throws Exception{
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var c=json.readTree(Base64.getUrlDecoder().decode(permit("memory.read").jws().split("\\.")[1]));
+        ((com.fasterxml.jackson.databind.node.ObjectNode)c).remove("httpRequestDigest");
+        var p=signed("olo-service-permit+jws","effect-key",c);
+        assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR));
+    }
+    @Test void transportHeadersAndBodyAreDefensivelyCopied(){
+        var headers=new HashMap<String,List<String>>();var values=new ArrayList<>(List.of("alice"));
+        headers.put("x-recipient",values);
+        var facts=new ServicePermitVerifier.Transport(transport("alice").profile(),transport("alice").uri(),"POST",headers);
+        values.set(0,"bob");headers.clear();
+        assertEquals(List.of("alice"),facts.headers().get("x-recipient"));
+        assertThrows(UnsupportedOperationException.class,()->facts.headers().clear());
+    }
     @Test void directUserReadNeedsNoAgentAndNeverConsumesAWriteNonce()throws Exception{
         var auth=verifier.authorizeKey(permit("memory.read"),request("memory.read"),EXECUTOR);
         assertEquals("alice",auth.claims().sub());assertNull(auth.claims().act());assertEquals(0,commits.get());
-    }
-    @Test void writesConsumeOnlineAndAReplayedNonceCannotCommitTwice()throws Exception{
-        var p=permit("memory.append");verifier.authorizeKey(p,request("memory.append"),EXECUTOR).checkCommitDeadline();
-        assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.append"),EXECUTOR));assertEquals(2,commits.get());
     }
     @Test void revocationOrStaleFeedStopsReadRelease()throws Exception{
         var p=permit("memory.read");epoch.set(8);assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.read"),EXECUTOR));
@@ -67,12 +133,11 @@ class ServicePermitVerifierTest {
     }
     @Test void writeRefusalDoesNotRefreshOrRepeatConsumption()throws Exception{
         verifier=new ServicePermitVerifier("control",ServiceAudience.olo_memory,Map.of("effect-key",key.getPublic()),
-            Clock.fixed(Instant.ofEpochMilli(100000),ZoneOffset.UTC),tenant->new ServicePermitVerifier.Epoch(7,100000),
-            (audience,request)->{commits.incrementAndGet();return false;});
+            Clock.fixed(Instant.ofEpochMilli(100000),ZoneOffset.UTC),tenant->new ServicePermitVerifier.Epoch(7,100000));
         var p=permit("memory.append");var refreshes=new AtomicInteger();
         assertThrows(SecurityException.class,()->ControlServiceAuthorization.withFreshEpoch(
             ()->verifier.authorizeKey(p,request("memory.append"),EXECUTOR),refreshes::incrementAndGet));
-        assertEquals(1,commits.get());assertEquals(0,refreshes.get());
+        assertEquals(0,commits.get());assertEquals(0,refreshes.get());
     }
     @Test void failedEpochRefreshNeverFallsBackToTheCachedAuthorization()throws Exception{
         var p=permit("memory.read");epoch.set(6);var refreshes=new AtomicInteger();
@@ -81,15 +146,15 @@ class ServicePermitVerifierTest {
         assertEquals(1,refreshes.get());assertEquals(0,commits.get());
     }
     @Test void delayedCommitMustRollBackAfterPermitDeadline()throws Exception{
-        var authorization=verifier.authorizeKey(permit("memory.append"),request("memory.append"),EXECUTOR);
-        time.set(115000);assertThrows(SecurityException.class,authorization::checkCommitDeadline);
+        var authorization=verifier.verifyWriteKey(boundPermit("memory.append",transportDigest()),request("memory.append"),EXECUTOR);
+        time.set(115000);assertThrows(SecurityException.class,authorization::checkDeadline);
     }
     @Test void substitutedBodyResourceTenantAndExecutorAreRefused()throws Exception{
         var p=permit("memory.read");
-        for(var request:List.of(new ServicePermitVerifier.Request(TENANT,"memory.read",RESOURCES,"{}".getBytes()),
-            new ServicePermitVerifier.Request("other","memory.read",RESOURCES,BODY),
-            new ServicePermitVerifier.Request(TENANT,"memory.delete",RESOURCES,BODY),
-            new ServicePermitVerifier.Request(TENANT,"memory.read",List.of(new ResourceDescriptor(ResourceKind.CUSTOM,"olo://"+TENANT+"/conversation/c2")),BODY)))
+        for(var request:List.of(new ServicePermitVerifier.Request(TENANT,"memory.read",RESOURCES,"{}".getBytes(), null),
+            new ServicePermitVerifier.Request("other","memory.read",RESOURCES,BODY, null),
+            new ServicePermitVerifier.Request(TENANT,"memory.delete",RESOURCES,BODY, null),
+            new ServicePermitVerifier.Request(TENANT,"memory.read",List.of(new ResourceDescriptor(ResourceKind.CUSTOM,"olo://"+TENANT+"/conversation/c2")),BODY, null)))
             assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request,EXECUTOR));
         assertThrows(SecurityException.class,()->verifier.authorizeKey(p,request("memory.read"),"f".repeat(64)));
     }
@@ -105,7 +170,7 @@ class ServicePermitVerifierTest {
         var c=json.readValue(Base64.getUrlDecoder().decode(original.jws().split("\\.")[1]),ServicePermitClaims.class);
         for(var mode:List.of(RequestMode.DELEGATED,RequestMode.SERVICE)) {
             var bad=new ServicePermitClaims(c.iss(),c.aud(),c.tenantId(),c.sub(),mode==RequestMode.DELEGATED?"agent":null,
-                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce());
+                mode,c.operation(),c.resources(),c.requestFingerprint(),c.executorKeySha256(),c.invocationId(),c.nonce(),c.authorizationEpoch(),c.iat(),c.exp(),c.executionNonce(),c.httpRequestDigest(),null,null);
             var token=signed("olo-service-permit+jws","effect-key",bad);
             assertThrows(SecurityException.class,()->verifier.authorizeKey(token,request("memory.read"),EXECUTOR));
         }

@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** The regression baseline for Control's package rules: what upload decides for every fixture, with the digests of
  *  the ones it accepts. tests/fixtures/packages/baseline.json was recorded before PackageArchive moved into
  *  backend-libs/package-archive, and must not change without a reason. Set TOOLGATE_WRITE_PACKAGE_BASELINE=true to
- *  rewrite it. */
+ *  rewrite it. S20 intentionally rejects malformed UTF-8 instead of replacement decoding. */
 final class PackageArchiveBaselineTest {
     private static final ObjectMapper JSON = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 

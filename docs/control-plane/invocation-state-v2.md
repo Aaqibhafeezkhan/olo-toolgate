@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This is the reviewed state-machine specification behind design gate D2 (platform-requirements.md §12.7, §12.8). It says how the v2 task, execution-ledger, lease and business-key state described in platform-requirements.md §11.3, §11.7 and §12 lives in Control's existing invocation storage. It also fixes the exact migrations that add it.
+This is the reviewed state-machine specification behind design gate D2 (platform-requirements.md §12.7, §12.8). It says how the v2 task, execution-ledger, lease and business-key state described in platform-requirements.md §11.3, §11.7 and §12 lives in Control's existing invocation storage. It defines the current fresh schema that contains it.
 
 It is normative. Milestone code implements it. A change after D2 passes needs an amendment to ADR 016.
 
-The schema shapes are in `packages/contracts/schemas/v2/invocation.schema.json` and `permit.schema.json`. Current invocation storage is included in the V1 initial schemas. Prospective kill-switch migrations are in [migrations-v2/](migrations-v2/). [`tests/contracts/test_migration_specs_v2.py`](../../tests/contracts/test_migration_specs_v2.py) applies them to both database trees and runs the same scenarios on each.
+The schema shapes are in `packages/contracts/schemas/v2/invocation.schema.json` and `permit.schema.json`. Current invocation storage is included in the V1 initial schemas. Unshipped kill-switch design fragments are in [schema-specifications/](schema-specifications/). [`tests/contracts/test_current_schema_specs.py`](../../tests/contracts/test_current_schema_specs.py) applies them to both database trees and runs the same scenarios on each.
 
 ## 1. Authority
 
@@ -85,6 +85,16 @@ T1 runs these steps under the tenant lock, in one transaction:
 
 ### 4.3 Outcomes for an existing row
 
+**Current implementation amendment:** [ADR 046](../adr/046-business-key-policy-retention.md)
+implements required keys, verified namespaces, argument derivation, retention and
+optional windows. The table below remains the broader design target. Current
+owner checks also bind the original agent in DELEGATED_USER; cross-agent result
+reuse and tenant result sharing are not enabled. Expired windows require positive
+non-legacy resolved-operation evidence and immutable history, rather than elapsed
+time alone. Explicit-key expiry returns conflict and cannot start new work.
+Whole-invocation rebinding in §4.4 remains a separate delivery stage; a worker's
+not-started report alone cannot establish its positive proof.
+
 Evaluated in this order:
 
 | Situation | Result | Returned |
@@ -140,15 +150,38 @@ The trigger `control_business_key_guard` allows a rebind only from outcome `EXPI
 |---|---|---|---|
 | Flyway (PostgreSQL) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql) | Applied once to an empty database | Invocation/task columns, constraints and indexes; business keys; result payloads; guard triggers; grants |
 | Quickstart (SQLite) | [V1 initial schema](../../apps/control-plane/src/main/resources/db/quickstart/V1.sql) | Applied once to an empty database | Same state; cross-column checks use triggers |
-| Flyway | [Prospective V2 kill switch](migrations-v2/flyway/V2__kill_switch.sql) | Ships when implemented | [kill-switch.md](kill-switch.md) §2 |
-| Quickstart | [Prospective V2 kill switch](migrations-v2/quickstart/V2.sql) | Ships when implemented | Same |
+| Flyway | [Fresh-schema kill-switch fragment](schema-specifications/postgresql/kill-switch.sql) | Fold into fresh initialization when implemented | [kill-switch.md](kill-switch.md) §2 |
+| Quickstart | [Fresh-schema kill-switch fragment](schema-specifications/sqlite/kill-switch.sql) | Fold into fresh initialization when implemented | Same |
 
 **Rules:**
-- **Frozen content.** Released migration files are immutable. Future schema changes append a new version. The initial schema supports only the current application model; pre-release database histories are unsupported.
-- **Verified.** `tests/contracts/test_migration_specs_v2.py` applies the current trees plus these files, on SQLite always and on PostgreSQL when `TOOLGATE_D2_POSTGRES=host:port` is set, then runs the same accept/refuse scenarios on both. It was run against PostgreSQL 16 and SQLite 3.45 for this gate.
+- **Current-only initialization.** The initial schema supports the current application model only. Future feature schema changes fold into fresh initialization with a matching current checksum; no upgrade chain, conversion or backward store support is provided.
+- **Verified.** `tests/contracts/test_current_schema_specs.py` applies the current trees plus these files, on SQLite always and on PostgreSQL when `TOOLGATE_D2_POSTGRES=host:port` is set, then runs the same accept/refuse scenarios on both. It was run against PostgreSQL 16 and SQLite 3.45 for this gate.
 
 ## 9. What this does not cover
 
 - Gateway and Tool Host spools, and their full-disk behaviour: platform-requirements.md §12.7 row 11 and [the Tool Host threat model](../security/threat-models/tool-host.md).
 - Kill events: [kill-switch.md](kill-switch.md).
 - Permit format and keys: ADR 013.
+
+## S20 current-only recovery amendment
+
+All S01–S20 execution/storage contracts ship as one fresh breaking build. Old
+databases, incomplete permit/report shapes and implicit write keys are rejected;
+there is no conversion or compatibility path. Current crash recovery and late
+evidence stay enabled.
+
+TARGET_DEDUPLICATION recovery is a narrow exception to ambiguous-write fencing:
+an independently reviewed current target contract covers each existing effect,
+its stable broker-owned downstream key, exact immutable content and original
+first-authorization window. A new permit attempt cannot add effects or extend
+deadlines. Qualified generic HTTP includes explicit reviewed non-streaming routes
+and broker-only API-key references; raw worker secrets, other auth modes, sockets,
+unqualified executors and unsupported routes cannot inherit this proof.
+
+An optional current read-only status route can append a TARGET_LOOKUP witness
+after scoped authority/profile/epoch/credential/generation rechecks. Original
+generation rows remain immutable history. Unknown/pending/HTTP errors preserve
+uncertainty; positive matching terminal receipts feed complete all-generation
+derivation and fence further resend. Conflicting receipts force reconciliation.
+A terminal effect alone does not prove successful completion of the whole worker
+operation. See [the operator guide](../operations/target-deduplicated-recovery.md).

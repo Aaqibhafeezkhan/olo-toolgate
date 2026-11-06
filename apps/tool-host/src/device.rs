@@ -60,6 +60,7 @@ pub struct Device {
     /// The certificate `control` presents now.
     presented: Option<String>,
     registered: bool,
+    tier: RuntimeTier,
 }
 
 impl Device {
@@ -149,6 +150,11 @@ impl Device {
             journal,
             presented: None,
             registered: false,
+            tier: if config.sandbox.is_some() {
+                RuntimeTier::OciSandbox
+            } else {
+                RuntimeTier::HostNative
+            },
         };
         device.save()?;
         Ok(device)
@@ -219,7 +225,7 @@ impl Device {
                 version: VERSION.into(),
                 protocol: ProtocolRange { min: 2, max: 2 },
                 launcher_version: VERSION.into(),
-                tiers: vec![RuntimeTier::HostNative],
+                tiers: vec![self.tier.clone()],
             };
             let _: serde_json::Value = self
                 .control
@@ -262,6 +268,7 @@ impl Device {
                     enabled: tool.enabled,
                     input_schema: tool.input_schema,
                     tool_digest: tool.tool_digest,
+                    business_key_policy: None, // Control supplies current policy in its catalog.
                 })
             })
             .collect();

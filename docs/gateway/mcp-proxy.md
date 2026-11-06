@@ -20,11 +20,11 @@ and [v2 schemas](../../packages/contracts/schemas/v2/mcp-proxy.schema.json) defi
    pin), runs `initialize` and pages through `tools/list` within the limits: 16 pages, 1 MiB per page, 4 MiB, 256
    tools, 64 KiB of schema per tool, depth 32, and a 30 s deadline. Control stores an immutable snapshot with a
    definition digest per tool.
-3. **Approve** at most 64 tools of one snapshot, each with a ToolGate local name. Control generates the package
+3. **Approve** at most 64 tools of one snapshot, each with a ToolGate local name and an explicit effect classification (READ, WRITE, FINANCIAL or DESTRUCTIVE). Financial and destructive effects require acknowledgement of the unfenced upstream risk. Control generates the package
    `mcp.<slug>` version `1.0.<approval sequence>` and deploys it to the pool. New tools start **disabled**; enable,
    group and grant them like any tool. Tools that a new approval omits are retired at once.
 4. **Call.** Agents call the tools through the Gateway as usual. The Tool Host validates the arguments, connects with
-   the approved key pins, and calls the upstream. Results are marked `io.toolgate/untrusted-upstream` in `_meta`.
+   the approved key pins, obtains fresh Control effect authority and calls the upstream through a single-owner send window. Results are marked `io.toolgate/untrusted-upstream` in `_meta`.
 
 ## Freshness and quarantine
 
@@ -51,3 +51,73 @@ and [v2 schemas](../../packages/contracts/schemas/v2/mcp-proxy.schema.json) defi
 
 OAuth and per-user upstream credentials, upstream resources and prompts, upstream tasks and input requests, more
 than 64 tools per approval, and long-lived `list_changed` listeners. See the plan's T9.
+
+
+## Effect review and upgrade
+
+Reapprove existing tools with an explicit effect policy before using native MCP
+business calls. Old approval records remain readable; an absent policy cannot
+authorize tools/call. Upstream annotations do not replace the administrator's
+review. Control records the reviewing actor and time in the immutable deployment
+profile; clients cannot supply those stamps.
+
+Control independently reconstructs the fixed upstream URL, approved tool name
+and original admitted arguments before granting an effect. Dispatch requires a
+second current-authority check and a single recorded owner. The Unix Tool Host
+guards outbound writes with a monotonic window of at most two seconds; response
+streaming may continue under the original invocation deadline. Unsupported
+platforms fail closed. This transport does not establish an OCI containment
+guarantee.
+
+Consent-required policies remain blocked until exact-effect consent is
+implemented. A received upstream reply is broker evidence, not proof of an
+atomic target commit or a deduplication guarantee. Ambiguous sends cannot be
+retried with another native MCP grant for the same effect.
+
+
+Financial and destructive tools always require exact effect consent, including
+older policies whose consent flag was false. Acknowledging unfenced execution
+risk does not authorize an individual payment or deletion. Such calls wait for exact-effect review in the Approvals page before dispatch.
+Review the mapped outbound values and effect count, then approve the immutable
+preview. Any policy ASK obligations also need their independent approvals.
+Internal resolved previews and an unfenced-risk acknowledgement alone do not
+grant execution authority. Revocation and original expiry are checked again
+before the business request is sent.
+
+Mapped numeric preview values must stay within the browser's safe integer range
+(absolute value at most 9007199254740991). Larger identifiers need a reviewed
+string representation supported by the tool and target; an unrepresentable
+numeric preview is refused. Complete previews are capped at 1 MiB, including
+the aggregate across all routes.
+
+Exact review follows operation-review independence: the requester and agent
+owners need an independent scoped reviewer. The existing verified Super Admin
+exception remains. This workflow does not accept unsigned caller self-consent
+as a substitute for an application-signed user intent.
+
+Resolved previews contain outbound business values. The requester and eligible
+scoped reviewers can read them; operation metadata-read access alone does not
+grant access to full preview payloads. Audit refusals retain digests and reason
+codes rather than those values.
+
+### Current per-effect keys (S20 work in progress)
+
+Each logical write requires an explicit stable effectKey (ASCII letters, digits,
+dot, underscore, colon or hyphen; 1–128 characters). The same tenant, operation,
+route and key identify the same effect across attempts. Missing keys are
+rejected for writes. The literal keys default and service-write are ordinary
+distinct keys, with no historical aliases. Keys never supply consent or
+execution authority; each distinct effect consumes its own approved consent use.
+
+Java RouteCall.effectKey and Python effect_key feed this broker metadata.
+Standalone direct-network paths refuse explicit keys. The trusted native MCP
+adapter supplies its fixed mcp-call key and requires explicit reviewed effect
+policy; upstream read-only/idempotency hints grant no authority. Current OLO
+service permits require the prepared HTTP manifest, signed invocation proof
+and broker/handler owner. Reads also bind exact transport facts. Writes require
+the durable target-claim consumption workflow.
+
+Current-only initialization rejects older databases and incomplete contracts
+without migration. Reviewed target guarantees, stable downstream key injection
+and history-aware resend are under qualification; reconciliation adapters and
+complete S20 gates remain outstanding.
