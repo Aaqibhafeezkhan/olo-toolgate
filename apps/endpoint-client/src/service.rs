@@ -1105,6 +1105,7 @@ impl ClientService {
                     })
                     .map(|p| p.digest.clone()),
                 local_tools: Some(self.local_catalog()),
+                triggers: None,
             };
             self.journal.pending_report = Some(request);
             self.save()?;
@@ -1390,6 +1391,7 @@ mod tests {
                     adoption: None,
                     task: None,
                     server_name: None,
+                    triggers: None,
                 })
             })
         }

@@ -1,0 +1,1682 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/trigger.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Triggers",
+  "description": "Trigger descriptors, stdio frames, CloudEvents envelope, signed desired state, Trigger Sync and checkpoint transfer (ADR 058). Every string declares maxLength and every array maxItems; opaque values declare x-toolgate-max-bytes.",
+  "$ref": "#/$defs/TriggerSync",
+  "$defs": {
+    "TriggerId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]{1,30}(\\.[a-z][a-z0-9-]{1,30}){1,3}/[a-z][a-z0-9_-]{0,47}$",
+      "description": "<packageId>/<trigger name>; trigger names share the package export namespace with tools."
+    },
+    "TriggerInstanceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "description": "Control-assigned instance identity."
+    },
+    "TriggerExecutorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$",
+      "description": "Enrolled device or Tool Host identity."
+    },
+    "TriggerEventType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+\\.v[1-9][0-9]{0,3}$",
+      "description": "Reverse-DNS event type ending with a major version."
+    },
+    "TriggerEventId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Stable source-level event identity, unique per source."
+    },
+    "TriggerReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z][A-Za-z0-9]{0,63}$",
+      "description": "Machine-readable PascalCase reason."
+    },
+    "TriggerMessage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Bounded human-readable detail; never contains secrets."
+    },
+    "TriggerLeaseToken": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43,
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "description": "256-bit random bearer secret, base64url without padding."
+    },
+    "TriggerTimestamp": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 35,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$",
+      "description": "RFC 3339 timestamp."
+    },
+    "TriggerSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "A positive sequence number in one named namespace (plan section 6.2.1)."
+    },
+    "TriggerCheckpointBody": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 5464,
+      "pattern": "^[A-Za-z0-9+/]*={0,2}$",
+      "description": "Base64 checkpoint body; inline only up to 4 KiB decoded."
+    },
+    "TriggerKind": {
+      "type": "string",
+      "enum": [
+        "SERVER_TRIGGER",
+        "CLIENT_TRIGGER"
+      ],
+      "description": "Trigger export kind."
+    },
+    "TriggerMode": {
+      "type": "string",
+      "enum": [
+        "POLL",
+        "PUSH"
+      ],
+      "description": "How the SDK drives the trigger."
+    },
+    "TriggerExecutor": {
+      "type": "string",
+      "enum": [
+        "SERVER",
+        "CLIENT"
+      ],
+      "description": "Executor class: Tool Host or endpoint device."
+    },
+    "TriggerSourceReplay": {
+      "type": "string",
+      "enum": [
+        "EVENT_LOG",
+        "STATE_SNAPSHOT",
+        "NON_REPLAYABLE"
+      ],
+      "description": "What the source can replay after downtime (plan 6.5)."
+    },
+    "TriggerOverflow": {
+      "type": "string",
+      "enum": [
+        "BLOCK",
+        "DROP_OLDEST",
+        "DROP_NEWEST"
+      ],
+      "description": "Outbox overflow policy; DROP_* only for loss-tolerant event types."
+    },
+    "TriggerTerminalRejectionPolicy": {
+      "type": "string",
+      "enum": [
+        "HALT",
+        "SKIP_AND_RECORD"
+      ],
+      "description": "Reviewed reaction to a terminal emit rejection (plan 6.6)."
+    },
+    "TriggerDesiredState": {
+      "type": "string",
+      "enum": [
+        "Running",
+        "Paused",
+        "Stopped"
+      ],
+      "description": "Resolved desired state of one instance."
+    },
+    "TriggerPhase": {
+      "type": "string",
+      "enum": [
+        "Pending",
+        "Starting",
+        "Running",
+        "Paused",
+        "Stopped",
+        "Failed",
+        "Unsupported",
+        "Removed"
+      ],
+      "description": "Observed instance phase."
+    },
+    "TriggerConditionType": {
+      "type": "string",
+      "enum": [
+        "Installed",
+        "Leased",
+        "Ready",
+        "Degraded",
+        "Reconciled",
+        "Stale",
+        "Unexpected"
+      ],
+      "description": "Instance condition type."
+    },
+    "TriggerConditionStatus": {
+      "type": "string",
+      "enum": [
+        "True",
+        "False",
+        "Unknown"
+      ],
+      "description": "Condition status."
+    },
+    "TriggerCheckpointLevel": {
+      "type": "string",
+      "enum": [
+        "LOCAL",
+        "ACCEPTED"
+      ],
+      "description": "Checkpoint durability level (plan 6.6)."
+    },
+    "TriggerEmitStatus": {
+      "type": "string",
+      "enum": [
+        "LOCAL_DURABLE",
+        "RETRYABLE_REJECTION",
+        "TERMINAL_REJECTION"
+      ],
+      "description": "Outcome class of one emit."
+    },
+    "TriggerHealthStatus": {
+      "type": "string",
+      "enum": [
+        "HEALTHY",
+        "DEGRADED",
+        "UNHEALTHY"
+      ],
+      "description": "Author-reported health."
+    },
+    "TriggerEventKind": {
+      "type": "string",
+      "enum": [
+        "fired",
+        "state",
+        "rejected"
+      ],
+      "description": "CloudEvent tgkind: a fired event, a state change, or a loss record."
+    },
+    "TriggerDispositionKind": {
+      "type": "string",
+      "enum": [
+        "REJECTED_TERMINAL"
+      ],
+      "description": "Control-side terminal disposition."
+    },
+    "TriggerRejectionReason": {
+      "type": "string",
+      "enum": [
+        "UnknownInstance",
+        "NotAssigned",
+        "StaleLeaseEpoch",
+        "StaleConfigRevision"
+      ],
+      "description": "Why Control tells the executor to drop records and resync."
+    },
+    "TriggerRevocationReason": {
+      "type": "string",
+      "enum": [
+        "AssignmentStopped",
+        "AssignmentRemoved",
+        "PackageSuspended",
+        "KillSwitch",
+        "ExecutorDeregistered",
+        "DeviceRevoked",
+        "Compromised",
+        "Reassigned"
+      ],
+      "description": "Why a lease was revoked."
+    },
+    "TriggerProducerKind": {
+      "type": "string",
+      "enum": [
+        "DEVICE",
+        "TOOL_HOST",
+        "SCHEDULE"
+      ],
+      "description": "Verified producer class."
+    },
+    "TriggerLifecycleAction": {
+      "type": "string",
+      "enum": [
+        "Deploy",
+        "Run",
+        "Pause",
+        "Stop",
+        "Remove",
+        "Clear"
+      ],
+      "description": "Scoped lifecycle action (plan 10.3)."
+    },
+    "TriggerFrameKind": {
+      "type": "string",
+      "enum": [
+        "TRIGGER_START",
+        "EMIT_ACK",
+        "ACCEPTED_UPTO",
+        "CHECKPOINT_ACK",
+        "RECONCILE",
+        "PAUSE",
+        "RESUME",
+        "STOP",
+        "READY",
+        "EMIT",
+        "CHECKPOINT",
+        "HEALTH",
+        "HEARTBEAT",
+        "EXIT"
+      ],
+      "description": "Trigger-mode frame kinds of tool protocol v2. LOG and BROKER_* frames are unchanged."
+    },
+    "TriggerLimits": {
+      "type": "object",
+      "description": "Declared per-instance limits.",
+      "additionalProperties": false,
+      "properties": {
+        "maxEventsPerHour": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "maxEventBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "maxCheckpointBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "memoryMiB": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 4096
+        },
+        "maxBrokerCallsPerMinute": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6000
+        },
+        "stopGraceMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000
+        },
+        "emitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000
+        }
+      },
+      "required": [
+        "maxEventsPerHour",
+        "maxEventBytes",
+        "maxCheckpointBytes",
+        "stopGraceMs"
+      ]
+    },
+    "TriggerSchedule": {
+      "type": "object",
+      "description": "POLL interval or PUSH resync interval.",
+      "additionalProperties": false,
+      "properties": {
+        "intervalMs": {
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 86400000
+        },
+        "resyncIntervalMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        }
+      },
+      "required": []
+    },
+    "TriggerSnapshotCapacity": {
+      "type": "object",
+      "description": "Declared SnapshotState bounds (plan 5.6).",
+      "additionalProperties": false,
+      "properties": {
+        "capacity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "maxKeyBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        }
+      },
+      "required": [
+        "capacity",
+        "maxKeyBytes"
+      ]
+    },
+    "TriggerDescriptor": {
+      "type": "object",
+      "description": "Signed semantic descriptor of one trigger export (plan 5.9).",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "trigger.schema.json#/$defs/TriggerKind"
+        },
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "mode": {
+          "$ref": "trigger.schema.json#/$defs/TriggerMode"
+        },
+        "executors": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerExecutor"
+          },
+          "maxItems": 2,
+          "minItems": 1
+        },
+        "eventType": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventType"
+        },
+        "lossTolerant": {
+          "type": "boolean"
+        },
+        "configSchema": {
+          "type": "object",
+          "description": "JSON Schema 2020-12 for the assignment config.",
+          "x-toolgate-max-bytes": 65536
+        },
+        "eventSchema": {
+          "type": "object",
+          "description": "JSON Schema 2020-12 for event data; fields may carry x-toolgate-classification.",
+          "x-toolgate-max-bytes": 65536
+        },
+        "checkpointSchemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "sourceReplay": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSourceReplay"
+        },
+        "schedule": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSchedule"
+        },
+        "limits": {
+          "$ref": "trigger.schema.json#/$defs/TriggerLimits"
+        },
+        "overflow": {
+          "$ref": "trigger.schema.json#/$defs/TriggerOverflow"
+        },
+        "onTerminalRejection": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTerminalRejectionPolicy"
+        },
+        "snapshot": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSnapshotCapacity"
+        },
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "maxItems": 64
+        },
+        "tcpDestinations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "maxItems": 64
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "maxItems": 64
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "maxItems": 16
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "maxItems": 4
+        },
+        "selfTests": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "kind",
+        "triggerId",
+        "mode",
+        "executors",
+        "eventType",
+        "configSchema",
+        "eventSchema",
+        "checkpointSchemaVersion",
+        "sourceReplay",
+        "schedule",
+        "limits",
+        "overflow",
+        "onTerminalRejection"
+      ]
+    },
+    "TriggerCloudEvent": {
+      "type": "object",
+      "description": "CloudEvents 1.0 JSON envelope written by the supervisor; authors never set source, type, dataschema or tg* attributes (plan 6.4).",
+      "additionalProperties": false,
+      "properties": {
+        "specversion": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "id": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventId"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "time": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "datacontenttype": {
+          "type": "string",
+          "const": "application/json"
+        },
+        "dataschema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "data": {
+          "description": "Event data validated against the signed eventSchema.",
+          "x-toolgate-max-bytes": 16384
+        },
+        "tgleaseepoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "tgsequence": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "tgkind": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventKind"
+        },
+        "traceparent": {
+          "type": "string",
+          "minLength": 55,
+          "maxLength": 55,
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        }
+      },
+      "required": [
+        "specversion",
+        "id",
+        "source",
+        "type",
+        "datacontenttype",
+        "data",
+        "tgleaseepoch",
+        "tgsequence",
+        "tgkind"
+      ]
+    },
+    "TriggerProducer": {
+      "type": "object",
+      "description": "Producer identity Control attaches from the mTLS certificate, lease and signed package; never from the payload.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "trigger.schema.json#/$defs/TriggerProducerKind"
+        },
+        "executorId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
+        },
+        "deviceGroups": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "maxItems": 64
+        },
+        "assignment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "triggerDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "kind",
+        "assignment",
+        "instanceId"
+      ]
+    },
+    "TriggerDesiredInstance": {
+      "type": "object",
+      "description": "One resolved instance in the desired document (plan 8.1).",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "triggerDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "configRevision": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "config": {
+          "type": "object",
+          "description": "Assignment config, validated against configSchema; at most 8 KiB.",
+          "x-toolgate-max-bytes": 8192
+        },
+        "bindingDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "desiredState": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredState"
+        }
+      },
+      "required": [
+        "instanceId",
+        "triggerId",
+        "packageDigest",
+        "triggerDescriptorDigest",
+        "configRevision",
+        "config",
+        "bindingDigest",
+        "desiredState"
+      ]
+    },
+    "TriggerDesiredDocument": {
+      "type": "object",
+      "description": "Signed desired trigger state for one executor; the payload of a compact JWS by the organization deployment key.",
+      "additionalProperties": false,
+      "properties": {
+        "formatVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "tenantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "executorId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
+        },
+        "executor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutor"
+        },
+        "generation": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "issuedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerDesiredInstance"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "formatVersion",
+        "tenantId",
+        "executorId",
+        "executor",
+        "generation",
+        "issuedAtUnixMs",
+        "expiresAtUnixMs",
+        "instances"
+      ]
+    },
+    "TriggerDesiredJws": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4194304,
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+      "description": "Compact JWS over TriggerDesiredDocument; at most 4 MiB."
+    },
+    "SignedTriggerDesiredDocument": {
+      "type": "object",
+      "description": "Response of GET /api/control/v1/endpoint/triggers/desired.",
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredJws"
+        }
+      },
+      "required": [
+        "document"
+      ]
+    },
+    "TriggerCondition": {
+      "type": "object",
+      "description": "One instance condition.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "$ref": "trigger.schema.json#/$defs/TriggerConditionType"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerConditionStatus"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        },
+        "message": {
+          "$ref": "trigger.schema.json#/$defs/TriggerMessage"
+        },
+        "lastTransitionTime": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reason",
+        "lastTransitionTime"
+      ]
+    },
+    "TriggerCounters": {
+      "type": "object",
+      "description": "Monotonic counters for the current process lifetime of one instance.",
+      "additionalProperties": false,
+      "properties": {
+        "emitted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rejected": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "emitTimeouts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "restarts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "brokerCalls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "possibleLossOnCrash": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "emitted",
+        "rejected",
+        "dropped",
+        "restarts"
+      ]
+    },
+    "TriggerOutboxStatus": {
+      "type": "object",
+      "description": "Outbox depth for one instance.",
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "oldestAgeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "depth",
+        "oldestAgeMs"
+      ]
+    },
+    "TriggerInstanceReport": {
+      "type": "object",
+      "description": "Executor snapshot entry for one held instance (plan 8.2).",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "configRevision": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "phase": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPhase"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerCondition"
+          },
+          "maxItems": 7
+        },
+        "lastEventAt": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "lastReconcileAt": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "counters": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCounters"
+        },
+        "outbox": {
+          "$ref": "trigger.schema.json#/$defs/TriggerOutboxStatus"
+        }
+      },
+      "required": [
+        "instanceId",
+        "configRevision",
+        "phase",
+        "conditions",
+        "counters",
+        "outbox"
+      ]
+    },
+    "TriggerSnapshotPage": {
+      "type": "object",
+      "description": "One page of a frozen executor snapshot (plan 8.5). Pages from different generations are never combined.",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotGeneration": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "snapshotDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "pageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "instances": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerInstanceReport"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "snapshotGeneration",
+        "snapshotDigest",
+        "page",
+        "pageCount",
+        "pageDigest",
+        "instances"
+      ]
+    },
+    "TriggerCheckpointReport": {
+      "type": "object",
+      "description": "Checkpoint metadata changed since the last ack; the body is inline only up to 4 KiB (plan 8.6).",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "afterOutboxSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "level": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointLevel"
+        },
+        "version": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "digest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 131072
+        },
+        "inline": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointBody"
+        }
+      },
+      "required": [
+        "instanceId",
+        "leaseEpoch",
+        "afterOutboxSeq",
+        "level",
+        "version",
+        "digest",
+        "sizeBytes"
+      ]
+    },
+    "TriggerOutboxRecord": {
+      "type": "object",
+      "description": "One outbox record sent to Control, oldest unacknowledged first.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "event": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCloudEvent"
+        }
+      },
+      "required": [
+        "instanceId",
+        "event"
+      ]
+    },
+    "TriggerSync": {
+      "type": "object",
+      "description": "Trigger block of every executor check-in (plan 8.2, 8.5).",
+      "additionalProperties": false,
+      "properties": {
+        "observedGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "snapshot": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSnapshotPage"
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerCheckpointReport"
+          },
+          "maxItems": 256
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerOutboxRecord"
+          },
+          "maxItems": 512
+        },
+        "pending": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      },
+      "required": [
+        "observedGeneration",
+        "pending"
+      ]
+    },
+    "TriggerOutboxAck": {
+      "type": "object",
+      "description": "Highest contiguous resolved outboxSeq for one (instance, epoch).",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "outboxSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "instanceId",
+        "leaseEpoch",
+        "outboxSeq"
+      ]
+    },
+    "TriggerDisposition": {
+      "type": "object",
+      "description": "Control-side terminal rejection of one record.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "outboxSeq": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "id": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventId"
+        },
+        "disposition": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDispositionKind"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        }
+      },
+      "required": [
+        "instanceId",
+        "leaseEpoch",
+        "outboxSeq",
+        "id",
+        "disposition",
+        "reason"
+      ]
+    },
+    "TriggerRetryLater": {
+      "type": "object",
+      "description": "Retryable rejection; records from fromOutboxSeq are kept and re-sent.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "fromOutboxSeq": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600000
+        }
+      },
+      "required": [
+        "instanceId",
+        "leaseEpoch",
+        "fromOutboxSeq",
+        "retryAfterMs"
+      ]
+    },
+    "TriggerLease": {
+      "type": "object",
+      "description": "Run lease for one instance (plan 7). It authorizes running and reporting only.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "leaseToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerLeaseToken"
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "instanceId",
+        "leaseEpoch",
+        "leaseToken",
+        "expiresAtUnixMs"
+      ]
+    },
+    "TriggerRevocation": {
+      "type": "object",
+      "description": "Revoked lease.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerRevocationReason"
+        }
+      },
+      "required": [
+        "instanceId",
+        "reason"
+      ]
+    },
+    "TriggerRejection": {
+      "type": "object",
+      "description": "Drop these outbox entries, stop the instance and resync.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerRejectionReason"
+        }
+      },
+      "required": [
+        "instanceId",
+        "reason"
+      ]
+    },
+    "TriggerSnapshotPageAck": {
+      "type": "object",
+      "description": "Acknowledged snapshot page.",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotGeneration": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      },
+      "required": [
+        "snapshotGeneration",
+        "page"
+      ]
+    },
+    "TriggerSyncAck": {
+      "type": "object",
+      "description": "Trigger block of the check-in ack (plan 8.3, 8.5).",
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maxCheckInBytes": {
+          "type": "integer",
+          "minimum": 16384,
+          "maximum": 262144
+        },
+        "checkInNow": {
+          "type": "boolean"
+        },
+        "acked": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerOutboxAck"
+          },
+          "maxItems": 512
+        },
+        "dispositions": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerDisposition"
+          },
+          "maxItems": 512
+        },
+        "retryLater": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerRetryLater"
+          },
+          "maxItems": 256
+        },
+        "leases": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerLease"
+          },
+          "maxItems": 256
+        },
+        "revoked": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerRevocation"
+          },
+          "maxItems": 256
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerRejection"
+          },
+          "maxItems": 256
+        },
+        "snapshotPages": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerSnapshotPageAck"
+          },
+          "maxItems": 256
+        },
+        "snapshotRequested": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "generation",
+        "maxCheckInBytes"
+      ]
+    },
+    "TriggerCheckpointUploadRequest": {
+      "type": "object",
+      "description": "Start a checkpoint upload; idempotent on (instanceId, version).",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "afterOutboxSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "level": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointLevel"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "digest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "version",
+        "leaseEpoch",
+        "afterOutboxSeq",
+        "level",
+        "sizeBytes",
+        "digest"
+      ]
+    },
+    "TriggerCheckpointUpload": {
+      "type": "object",
+      "description": "Started upload.",
+      "additionalProperties": false,
+      "properties": {
+        "uploadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "chunkBytes": {
+          "type": "integer",
+          "const": 65536
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "uploadId",
+        "chunkBytes",
+        "expiresAtUnixMs"
+      ]
+    },
+    "TriggerCheckpointMetadata": {
+      "type": "object",
+      "description": "Committed checkpoint of one instance.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "afterOutboxSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "level": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointLevel"
+        },
+        "version": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "digest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 131072
+        },
+        "chunkCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "instanceId",
+        "leaseEpoch",
+        "afterOutboxSeq",
+        "level",
+        "version",
+        "digest",
+        "sizeBytes",
+        "chunkCount"
+      ]
+    },
+    "TriggerStartFrame": {
+      "type": "object",
+      "description": "First stdin line, exactly once.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "TRIGGER_START"
+        },
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "configRevision": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "config": {
+          "type": "object",
+          "x-toolgate-max-bytes": 8192
+        },
+        "globals": {
+          "type": "object",
+          "x-toolgate-max-bytes": 8192
+        },
+        "secretHandles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "maxItems": 64
+        },
+        "checkpoint": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointBody"
+        }
+      },
+      "required": [
+        "kind",
+        "triggerId",
+        "instanceId",
+        "configRevision",
+        "leaseEpoch",
+        "config"
+      ]
+    },
+    "TriggerEmitAckFrame": {
+      "type": "object",
+      "description": "Completes or fails one emit() future.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "EMIT_ACK"
+        },
+        "emitSeq": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEmitStatus"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        },
+        "outboxSeq": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        }
+      },
+      "required": [
+        "kind",
+        "emitSeq",
+        "status"
+      ]
+    },
+    "TriggerAcceptedUpToFrame": {
+      "type": "object",
+      "description": "Every emit of this process up to emitSeq is resolved at Control.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "ACCEPTED_UPTO"
+        },
+        "emitSeq": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        }
+      },
+      "required": [
+        "kind",
+        "emitSeq"
+      ]
+    },
+    "TriggerCheckpointAckFrame": {
+      "type": "object",
+      "description": "Barrier advanced to that checkpoint at that level.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "CHECKPOINT_ACK"
+        },
+        "checkpointId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "level": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointLevel"
+        }
+      },
+      "required": [
+        "kind",
+        "checkpointId",
+        "level"
+      ]
+    },
+    "TriggerReconcileFrame": {
+      "type": "object",
+      "description": "Run reconcile().",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "RECONCILE"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "TriggerPauseFrame": {
+      "type": "object",
+      "description": "Pause the instance.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "PAUSE"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "TriggerResumeFrame": {
+      "type": "object",
+      "description": "Resume the instance.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "RESUME"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "TriggerStopFrame": {
+      "type": "object",
+      "description": "Graceful stop.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "STOP"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        },
+        "graceMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000
+        }
+      },
+      "required": [
+        "kind",
+        "reason",
+        "graceMs"
+      ]
+    },
+    "TriggerReadyFrame": {
+      "type": "object",
+      "description": "start() completed (push) or config validated (poll).",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "READY"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "TriggerEmitFrame": {
+      "type": "object",
+      "description": "One event; the supervisor wraps it in the CloudEvents envelope.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "EMIT"
+        },
+        "emitSeq": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "id": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventId"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "time": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "data": {
+          "description": "Author event data.",
+          "x-toolgate-max-bytes": 16384
+        },
+        "position": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCheckpointBody"
+        }
+      },
+      "required": [
+        "kind",
+        "emitSeq",
+        "data"
+      ]
+    },
+    "TriggerCheckpointFrame": {
+      "type": "object",
+      "description": "Explicit checkpoint; subject to the same barrier as position.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "CHECKPOINT"
+        },
+        "checkpointId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "afterEmitSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 174764,
+          "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+        }
+      },
+      "required": [
+        "kind",
+        "checkpointId",
+        "afterEmitSeq",
+        "state"
+      ]
+    },
+    "TriggerHealthFrame": {
+      "type": "object",
+      "description": "From reportHealth.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "HEALTH"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerHealthStatus"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerMessage"
+        }
+      },
+      "required": [
+        "kind",
+        "status"
+      ]
+    },
+    "TriggerHeartbeatFrame": {
+      "type": "object",
+      "description": "Sent every 10 s by the SDK runtime.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "HEARTBEAT"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "TriggerExitFrame": {
+      "type": "object",
+      "description": "Last frame on a clean stop.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "EXIT"
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        }
+      },
+      "required": [
+        "kind",
+        "code"
+      ]
+    }
+  }
+}

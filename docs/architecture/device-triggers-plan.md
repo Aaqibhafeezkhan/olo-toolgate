@@ -958,7 +958,7 @@ guarantee.
 
 **Verification (gate G-STATE):**
 
-1. **TLA+ specification** `docs/specs/trigger-delivery.tla` of the states and transitions T1–T15, with:
+1. **TLA+ specification** `docs/specs/trigger_delivery.tla` of the states and transitions T1–T15, with:
    - crashes at every step, lost and duplicated messages, and epoch changes;
    - outbox pruning, retention expiry, checkpoint migration, removal and reinstallation, failover with unaccepted
      old-host records, and compromise quarantine.
@@ -2604,7 +2604,7 @@ order, and **M12 is the release gate**.
 
 | Gate | Defined in | Evidence |
 |---|---|---|
-| **G-STATE** | Section 6.6.1 | TLC model check of `trigger-delivery.tla`, the stateful property tests, and the nightly deterministic simulation with no open failing seeds |
+| **G-STATE** | Section 6.6.1 | TLC model check of `trigger_delivery.tla`, the stateful property tests, and the nightly deterministic simulation with no open failing seeds |
 | **G-IFC** | Section 12.3 | Conformance corpus at every enforcement point, the adversarial tool-chain suite, and security owner sign-off. Otherwise ship in coarse mode |
 | **M12 scenarios** | Section 21 | All end-to-end scenarios pass in CI against Quickstart, and the PostgreSQL profile for the multi-tenant ones |
 
@@ -2622,7 +2622,7 @@ latency or throughput target.
   broker, tunnels and secrets), and ADR 027 (trigger frames, `FILES_WATCH`).
 - `v2/trigger.schema.json` and protocol frames; CloudEvents JSON schema reference; fixtures; proposed OpenAPI.
 - Decide how Tool Hosts verify the desired document.
-- `docs/specs/trigger-delivery.tla` (section 6.6.1), model-checked before M4 starts.
+- `docs/specs/trigger_delivery.tla` (section 6.6.1), model-checked before M4 starts.
 - Descriptor amendment for `x-toolgate-classification`, `x-toolgate-max-classification`, `dataClassification` and
   `effectDomain`. Verify that the Java and Python descriptor generators and the MCP proxy importer can carry these
   keywords on nested, array and map schemas, and record the gaps.
@@ -3033,7 +3033,7 @@ point is to test each piece once, when it is built, and not re-test half-finishe
 
 | # | Module | Effort | Cumulative | Builds | Depends on | Done when |
 |---|---|---|---|---|---|---|
-| 1 | **Contracts, ADR and model** | 5% | 5% | ADR 058; `v2/trigger.schema.json` and protocol frames; generated Java, Rust, PHP and TS bindings; fixtures; proposed OpenAPI; descriptor keyword amendment; `trigger-delivery.tla` | — | Gate D0 approved; contract round-trip tests pass; the check-in and ack worst-case size contract test passes (8.5); TLC passes on the model (6.6.1) |
+| 1 | **Contracts, ADR and model** | 5% | 5% | ADR 058; `v2/trigger.schema.json` and protocol frames; generated Java, Rust, PHP and TS bindings; fixtures; proposed OpenAPI; descriptor keyword amendment; `trigger_delivery.tla` | — | Gate D0 approved; contract round-trip tests pass; the check-in and ack worst-case size contract test passes (8.5); TLC passes on the model (6.6.1) |
 | 2 | **Java SDK, POLL** | 6% | 11% | `@ClientTrigger` and `@ServerTrigger` (POLL), processor rules, `PollContext`, runtime loop and frames, `toolgate check` and `toolgate pack`, harness; sample `inbox-watch` in POLL form | 1 | Processor compile-error tests (5.8), runtime frame tests, harness tests for the sample; the package packs and verifies |
 | 3 | **Supervisor crate** | 8% | 19% | `crates/trigger-supervisor`: process lifecycle, frames, outbox with `outboxSeq`, the `LOCAL` barrier, rejection classes, loss records, backoff and crash loop, health, the sequence namespaces | 1 | Stateful property tests against the model (G-STATE item 2) with a fake runtime and a fake Control; crash-point tests T1–T5 and T10 |
 | 4 | **Control core for client triggers** | 8% | 27% | Package acceptance of trigger exports and the security delta; the definitions API; `TriggerAssignment` CRUD for **client** targets (ETag, idempotency, dry run); instances; the signed `TriggerDesiredDocument`; client leases; permissions; audit; tenant tables | 1, 2 | API tests including cross-tenant negatives; desired-document signing and verification tests |
@@ -3092,7 +3092,7 @@ grouped into tracks that can run at the same time:
 
 | Track | Modules, in order | Main code areas | Can start |
 |---|---|---|---|
-| A — Contracts and model | 1 | `packages/contracts/schemas/v2`, generated Java/Rust/PHP/TS bindings, `generated-manifest.json`, `docs/adr/058-*`, `docs/specs/trigger-delivery.tla` | Now |
+| A — Contracts and model | 1 | `packages/contracts/schemas/v2`, generated Java/Rust/PHP/TS bindings, `generated-manifest.json`, `docs/adr/058-*`, `docs/specs/trigger_delivery.tla` | Now |
 | B — SDK | 2 → 7 (SDK part) → 9 | `tool-sdk/java-sdk` (api, processor, runtime), `tool-sdk/python-sdk`, `tool-sdk/cli` | After module 1 |
 | C — Supervisor | 3 | New `crates/trigger-supervisor` | After module 1 |
 | D — Control | 4 → 6 → 10 → 11 → 12 → 13 | New trigger packages under `apps/control-plane/.../control/{application,adapter}`, fresh `V1` schema, `apps/admin-ui` raw page | After module 1 |

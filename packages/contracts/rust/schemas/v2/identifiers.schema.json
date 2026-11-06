@@ -29,7 +29,9 @@
     "Digest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$",
-      "description": "Algorithm-prefixed digest (tool-sdk/spec/descriptor)."
+      "description": "Algorithm-prefixed digest (tool-sdk/spec/descriptor).",
+      "maxLength": 71,
+      "minLength": 71
     },
     "SecretReference": {
       "type": "string",

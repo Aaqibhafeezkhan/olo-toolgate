@@ -104,3 +104,5 @@ Use `000-template.md`.
 - [ADR 056: Per-effect keys and qualified resend](056-per-effect-keys-and-qualified-resend.md)
 
 - [ADR 057: Generalized target fencing](057-generalized-target-fencing.md)
+
+- [ADR 058: Triggers](058-triggers.md)
