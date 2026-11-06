@@ -1,13 +1,31 @@
 # OLO ToolGate — Triggers (v1 plan)
 
-**Status:** Draft for design review, revision 11. Supersedes "Governed Event Fabric and Registered AI Workflows" for v1.
+**Status:** Draft for design review, revision 12. Supersedes "Governed Event Fabric and Registered AI Workflows" for v1.
 **Performance:** **v1 has no performance check.** No load, throughput, latency or capacity target is a v1 gate or
 claim (section 20.1). Bounded **resource-safety** tests, which are functional and have no rate targets, are part of the
 gate (section 20.2).
-**Baseline:** `main` at `92841049`.
-**Proposed ADR:** ADR 032 *Triggers* (amends ADR 013, ADR 014, ADR 027 and the Tool SDK authoring contract, so it
-reopens gate D0).
-**Date:** 2026-10-31
+**Fresh build:** **unreleased; one production code path.** No backward compatibility, no database migrations and no
+legacy or outdated code (section 0).
+**Baseline:** `main` at `bb3b078d`, which includes the #230 deliveries through stage S21.
+**Proposed ADR:** ADR 058 *Triggers* (amends ADR 013, ADR 014, ADR 027 and the Tool SDK authoring contract, so it
+reopens gate D0). ADR 032 and ADR 057 are already taken (*Renewable execution authority*, *Generalized target fencing*).
+**Date:** 2026-11-06
+
+**Changes in revision 12** (fresh build and #230 alignment)
+
+- **Section 0: fresh-build rule.** Triggers are unreleased. There is no backward compatibility, no database migration
+  and no legacy or outdated code: one production code path per behavior. Tables, including Quartz's, go into the
+  single fresh initial schema. Feature flags are removed once their module's slice checkpoint passes.
+- **ADR number** changed from 032 (taken) to 058, the next free number on `main`.
+- **Actions reuse the #230 operation and effect ledger** (14.3, 14.4, M10, module 14). The plan no longer builds its own
+  `trigger_action_operations` and `trigger_action_effects` tables. Operations, attempts, effect identities, consent,
+  resend and reconciliation come from ADR 034–036 and 053–057 and the S10 operation finalizer. Triggers add
+  only a thin delivery-to-operation mapping and the repeat approval record.
+- **Effect rules follow delivered #230 behavior** (14.4): financial and destructive effects always need exact consent
+  (ADR 055), so the tenant `unattendedEffects` opt-in no longer covers them. A retry after `OUTCOME_UNKNOWN` without
+  reconciliation needs a current reviewed target guarantee (ADR 056), not just a declared idempotency.
+- **Parallel tracks** (24.1, 24.5): modules that don't share code may run at the same time, with one schema owner and
+  explicit coordination points with #230 stages S22, S23, S27–S28, S30 and S31.
 
 **Changes in revision 11** (implementation plan)
 
@@ -195,6 +213,35 @@ reopens gate D0).
 - Rolling package upgrades per assignment, with schema-compatibility rules.
 - OpenTelemetry metrics and traces, a data classification for event fields, and fault-injection and soak tests.
 
+## 0. Fresh-build rule (applies to every module)
+
+Triggers have not been released, so nothing exists that needs to keep working. Every module follows these rules,
+and they override any wording elsewhere in this plan:
+
+- **No backward compatibility.** There is no support for earlier drafts of trigger contracts, wire frames, package
+  descriptors, desired documents or stored state. Before release, a contract changes in place and its generated
+  Java, Rust, PHP and TypeScript bindings are regenerated. There is no `v1` kept beside a `v2` of a trigger contract.
+- **No database migrations.** Trigger tables, indexes, row-level security and the Quartz tables are added directly to
+  the single fresh schema (`apps/control-plane/src/main/resources/db/migration/V1__initial_schema.sql`, its
+  Quickstart twin `db/quickstart/V1.sql`, and `db/schema-ownership.json`). No new `V2__…` files, and no upgrade,
+  backfill or conversion code. A store that doesn't match the current schema is refused at startup; it is not
+  converted or deleted. Crash recovery within the current schema is still required.
+- **No legacy or outdated code.** No compatibility constructors, aliases, deprecated fields, fallback paths,
+  "old format" readers or switches that keep a previous behavior. Each behavior has **one production code path**.
+  Code made obsolete by a later module is deleted in that module, not left behind.
+- **Feature flags are rollout gates, not legacy paths.** The `toolgate.triggers.<module>` flags of section 24.1 hide
+  unfinished work only. Each flag and its "off" branch are removed once the module's slice checkpoint passes, so the
+  release has no trigger feature flags.
+- **This is the same rule #230 follows** (see `AGENTS.md`, *Fresh breaking-build constraint*). Triggers build on the
+  current #230 contracts and schemas, never on earlier versions of them.
+
+**Not covered by this rule:** behavior that ToolGate offers to tenant-authored trigger packages at runtime. These are
+product features between two versions of a customer's own package, not compatibility code in ToolGate:
+
+- `eventType` major versions and the upload-time event-schema compatibility check (5.9);
+- `migrateCheckpoint` between two package versions (T12);
+- rolling package upgrades and `:rollback` per assignment (10.4).
+
 ## 1. What v1 delivers
 
 1. **Authoring.** A developer writes a trigger with a dedicated annotation:
@@ -269,6 +316,11 @@ Section 22 lists these.
 | Ping-pong | `POST /api/control/v1/endpoint/check-in`, used by endpoint clients and enrolled Tool Hosts | One `triggers` block for both |
 | Sequence, ack, dedupe, heartbeat | `RunEventBatch`, `RunEventAck`, `RunEventGap`, `LeaseHeartbeat` | Same semantics |
 | Tenancy, kill switch, correlation | ADR 029, ADR 017, ADR 031 | Applied throughout |
+| Renewable execution leases, revocation and watchdog | ADR 032 (#230 S05) | Trigger leases follow the same lease, heartbeat and epoch model; no second lease implementation |
+| Operations, attempts and business keys | ADR 034, ADR 035, S08 business-key policy, S10 operation finalizer (#230) | Actions record operations here; no trigger ledger (14.3) |
+| Effect identity, grants, consent, resend and reconciliation | ADR 036, ADR 053–056 (#230 S15–S20) | Every action effect uses this path (14.3, 14.4) |
+| Target fencing | ADR 057 (#230 S21): `SHARED_SQL` and `SQL_WITH_EXTERNAL_ACTION` fenced target classes | The only basis for "at most one effect" claims on action targets |
+| Worker and broker containment | ADR 033 and the S11–S14 qualified Python OCI tier (#230) | Server trigger sandboxes use the same tier and claims (6.10) |
 | Errors and contracts | problem+json responses in Control; generated contracts; proposed vs served OpenAPI | Same conventions |
 
 ## 4. Concepts and identifiers
@@ -952,8 +1004,9 @@ revision changes or an admin action `RUN` resets the budget. A successful run of
 
 ### 6.10 Sandbox posture
 
-Server triggers run in the Tool Host's `OCI_SANDBOX` tier with exactly the guarantees server tools have today. Network
-namespace and container isolation are tracked in #230, so triggers claim nothing stronger. A push trigger's native
+Server triggers run in the Tool Host's `OCI_SANDBOX` tier with exactly the guarantees server tools have today. #230
+has qualified worker and broker isolation for Linux x86_64 Python OCI pools (S11–S14, claims C1 and C5); other
+runtimes and tiers are not qualified, so triggers claim nothing stronger than the pool they run in. A push trigger's native
 library reaches the network only through `tcp().socketFactory` / `tcp().connect` for a declared destination. A pool
 that refuses `CREDENTIALS_IN_SANDBOX` refuses it for triggers too.
 
@@ -1368,7 +1421,7 @@ spec:
 **Implementation:**
 
 - **Engine.** `quarkus-quartz`. On PostgreSQL it uses a clustered JDBC job store (`jdbc-cmt`), so one Control replica
-  fires each trigger. The Quartz tables are created by a Flyway migration.
+  fires each trigger. The Quartz tables are part of the fresh initial schema (section 0), not a migration.
 - **Quartz is a derived cache, never the source of truth.** The canonical schedule is the `TriggerAssignment` row
   (spec, `metadata.generation`, effective desired state). Quartz holds only the job key `<tenantId>/<assignmentUid>`
   and job data `{tenantId, assignmentUid, generation}`. No schedule details, payload or tenant data are stored in
@@ -1907,26 +1960,38 @@ Actions therefore have their own durable identity and ledger:
 
   | Identity | Scope | Stable across | Sent to |
   |---|---|---|---|
-  | `operationKey` | The logical business operation, derived from the source event (above). Permanent | Everything | Ledger, audit and console only. **Never** used as an idempotency key |
-  | `effectId` | One **intended effect** of that operation. The first is `eff:<operationKey>:0`; each approved repeat creates the next, `eff:<operationKey>:<n>` | Every retry and attempt of that same intended effect | The invocation's ADR 016 business key, and the target's idempotency key (`Idempotency-Key` header or the tool's `businessKeyArgument`). Composite children derive `<effectId>:<stepId>` |
-  | `repeatId` | One explicit, approved decision to perform a **new** intended effect. A UUIDv7 recorded with its approval | — | Ledger and audit. It links the new `effectId` to its approval |
-  | `attemptId` | One transport or execution attempt of an `effectId`. UUIDv7 (the `invocationId`) | — | Invocation, permit and audit. Never an idempotency key |
+  | Identity | Scope | Stable across | Implemented by (#230, already on `main`) |
+  |---|---|---|---|
+  | `operationKey` | The logical business operation, derived from the source event (above). Permanent | Everything | The **business key** of a Control operation (ADR 034). Control binds it in the run-as Agent's authenticated `AGENT` namespace and derives the operation ID itself. **Never** sent to a target as an idempotency key |
+  | `effectId` | One **intended effect** of that operation. The first uses effect key `0`; each approved repeat uses the next, `<n>` | Every retry and attempt of that same intended effect | An explicit **per-effect key** (ADR 056). Control hashes tenant, operation, approved route and key into the effect identity; the **broker** injects the downstream idempotency key, and the tool cannot choose or change it. Composite children use the effect key `<n>:<stepId>` |
+  | `repeatId` | One explicit, approved decision to perform a **new** intended effect. A UUIDv7 recorded with its approval | — | The trigger repeat-approval record (below). It links the new effect key to its approval and to its exact consent slot (ADR 055) |
+  | `attemptId` | One execution attempt of an effect | — | The **attempt journal** (ADR 035): the permit nonce is the attempt ID and fencing token. Each attempt's effect authorization is a generation (ADR 036). Never an idempotency key |
 
-  So a **retry** reuses its `effectId` (a target that honors idempotency will not apply it twice), and an approved
-  **repeat** gets a new `effectId` (the target sees a new idempotency key and performs the new effect). Both stay
-  linked to the same `operationKey`.
+  So a **retry** reuses its effect key (a target with a reviewed guarantee will not apply it twice), and an approved
+  **repeat** gets a new effect key (the target sees a new idempotency key and performs the new effect). Both stay
+  linked to the same operation.
 
-- **Operation ledger** (`trigger_action_operations` and `trigger_action_effects`, tenant-scoped):
-  - **Operation row:** `operationKey` (unique), `firstObservedAt` (Control's trusted `receivedAt` of the first ingest
-    of that source id), `payloadDigest`, `state` and `retainUntil`.
-  - **Effect rows:** `{effectId, repeatId?, approvedBy?, reason?, actionRevision, targetDigest, state}`, each with an
-    append-only list of **attempts** `{attemptId, invocationId, outcome, reconciliationRef?}`.
-  - The operation row and effect 0 are inserted **in the same transaction** that submits the first attempt for
-    admission. If the operation already exists, the delivery gets `EXISTING` with the recorded state and outcome, and
-    no new invocation or effect is created.
-  - It stores no payload, only the digest, so long retention is cheap.
-- **The ledger is authoritative.** It answers *has this operation already happened?* even after the event payload,
-  the delivery and the invocation result have been purged.
+- **No separate trigger ledger.** Actions use the #230 operation, attempt and effect records as they are on `main`.
+  They don't add `trigger_action_operations` or `trigger_action_effects` tables, or any second way to record an
+  operation, an effect or an outcome:
+  - operations, business keys, windows and retention tombstones: ADR 034 and the S08 business-key policy;
+  - attempts and immutable attempt snapshots: ADR 035;
+  - effect identities, generations, owners, `SENDING`/`CONSUMED` and ambiguity: ADR 036 and ADR 053;
+  - exact consent slots for repeats and high-risk effects: ADR 055;
+  - per-effect keys, qualified resend and read-only reconciliation: ADR 056;
+  - final operation outcome over every attempt, effect and late evidence: the S10 operation finalizer.
+- **What triggers add** (tenant-scoped tables in the fresh schema, section 0):
+  - `trigger_action_deliveries`: `{deliveryId, assignmentUid, actionName, actionRevision, targetDigest, source, id,
+    firstObservedAt, payloadDigest, operationId}`, unique on `(tenant, assignmentUid, actionName, source, id)`.
+    `firstObservedAt` is Control's trusted `receivedAt` of the first ingest of that source id.
+  - `trigger_action_repeats`: `{repeatId, operationId, effectKey, approvedBy, checkedBy?, reason, acknowledgedOutcomes,
+    consentSlotRef}`, immutable.
+  - The delivery row and the first admission are written **in the same transaction**. If the business key is already
+    bound, the delivery gets `EXISTING` with the operation's recorded state and outcome, and no new invocation or
+    effect is created.
+  - They store no payload, only the digest, so long retention is cheap.
+- **The #230 records are authoritative.** They answer *has this operation already happened?* even after the event
+  payload, the delivery and the invocation result have been purged.
 - **Retention follows the target's effect, not the event store:**
 
   | Target effect (descriptor `effect`, plus the reviewed `effectDomain` tag) | Ledger `retainUntil` |
@@ -1942,8 +2007,9 @@ Actions therefore have their own durable identity and ledger:
   - `NON_REPLAYABLE`: the effect-class value;
   - schedules: until the assignment is removed.
 
-  Ledger rows are small (no payload). Capacity planning documents their growth, and an optional cold archive keeps
-  them queryable. They are never deleted without audit.
+  This value is the business-key retention of the operation, kept with the S08 retention tombstones, and the
+  delivery row lives as long. Rows are small (no payload). Capacity planning documents their growth. They are never
+  deleted without audit.
 - **Trusted time only.** Safety decisions never use the source-supplied CloudEvent `time`, which can be skewed or
   forged. It is display and ordering data only. Ages are computed from Control's trusted `firstObservedAt`, recorded at
   first ingest and kept in the ledger and dedupe index.
@@ -1960,9 +2026,9 @@ Actions therefore have their own durable identity and ledger:
 
   | Kind | Intent | When allowed | Authorization | Identity effect |
   |---|---|---|---|---|
-  | **Re-drive** | Perform the operation's first effect, which never started | No attempt exists for `eff:…:0` | `trigger.redrive` on the assignment, a mandatory reason, and admission under the chosen revision as usual | First attempt of `effectId` 0 |
-  | **Retry** | Complete the **same** intended effect | The latest attempt is definitively `FAILED`, or `OUTCOME_UNKNOWN` and reconciliation established it was **not** applied. For targets that declare and honor idempotency, a retry after `OUTCOME_UNKNOWN` is also allowed without reconciliation, because the reused `effectId` makes the target dedupe | Automatic only under the effect rules of section 14.4; otherwise `trigger.redrive` and a reason | New `attemptId`, **same** `effectId` |
-  | **Repeat** | Perform an **additional**, intentional effect | Every earlier effect is in a known final state (`SUCCEEDED`, `FAILED`, or reconciled). A repeat while an effect is `OUTCOME_UNKNOWN` and unreconciled is refused, so unknowns don't compound | `trigger.repeat` (a separate, high-privilege permission), a mandatory reason, and acknowledgement of the earlier effects' outcomes. For `NON_IDEMPOTENT`, `UNKNOWN` and the financial, infrastructure and administrative domains, maker/checker approval by a second person as well | New `repeatId` and a **new** `effectId` (`eff:…:<n+1>`), linked to the same `operationKey` |
+  | **Re-drive** | Perform the operation's first effect, which never started | No attempt exists for effect key `0` | `trigger.redrive` on the assignment, a mandatory reason, and admission under the chosen revision as usual | First attempt of effect key `0` |
+  | **Retry** | Complete the **same** intended effect | The latest attempt is definitively `FAILED`, or `OUTCOME_UNKNOWN` and read-only reconciliation (ADR 056) witnessed that it was **not** applied. A retry after `OUTCOME_UNKNOWN` without reconciliation is allowed only through ADR 056 qualified resend: a current, independently reviewed target guarantee, inside its window, with current policy, consent, epoch, profile and original deadline rechecked. A declared idempotency alone is not enough | Automatic only under the effect rules of section 14.4; otherwise `trigger.redrive` and a reason | New attempt (ADR 035), **same** effect key |
+  | **Repeat** | Perform an **additional**, intentional effect | Every earlier effect is in a known final state (`SUCCEEDED`, `FAILED`, or reconciled). A repeat while an effect is `OUTCOME_UNKNOWN` and unreconciled is refused, so unknowns don't compound | `trigger.repeat` (a separate, high-privilege permission), a mandatory reason, and acknowledgement of the earlier effects' outcomes. For `NON_IDEMPOTENT`, `UNKNOWN` and the financial, infrastructure and administrative domains, maker/checker approval by a second person as well. The new effect takes its own exact consent slot (ADR 055) | New `repeatId` and a **new** effect key (`<n+1>`), linked to the same operation |
 
   Re-drives, retries and repeats are audited and shown in the console with the full effect and attempt history.
   Repeats are never automated.
@@ -1975,14 +2041,17 @@ effect happened, so the rules are:
 
 - The invocation ends in **`OUTCOME_UNKNOWN`**, never `FAILED`, when the result is ambiguous for a tool whose permit
   says `requiresExecutionLedger` (existing Tool Host behavior).
-- **Reconcile before any retry.** An action is re-executed only after reconciliation, using the tool's declared
-  `Reconciliation` (ADR 016, `@Reconcile`), has established that the effect did **not** happen, or that re-executing
-  is safe. Without a reconciliation path, `OUTCOME_UNKNOWN` goes to human review (the console and an
+- **Reconcile before any retry.** An action is re-executed only after reconciliation has established that the effect
+  did **not** happen, or that re-executing is safe. Reconciliation is the existing read-only target lookup of ADR 056
+  (using the tool's declared `Reconciliation`, ADR 016, `@Reconcile`). It contributes witnessed evidence only and never
+  grants new write authority. Without a reconciliation path, `OUTCOME_UNKNOWN` goes to human review (the console and an
   `action.completed` event with `outcome: UNKNOWN`). It is never retried automatically.
-- **Stronger guarantees need the target.** "At most one effect" holds only when the target enforces it: the tool
-  passes the business key as an idempotency key the target honors, or the target checks a fencing token. ToolGate's
-  part of that, per-effect authorization, fencing and target-specific recovery, is tracked in
-  [#230](https://github.com/olo-labs/olo-toolgate/issues/230). Until #230's verified slice covers a target or runtime,
+- **Stronger guarantees need the target.** "At most one effect" holds only when the target enforces it: the broker
+  injects the effect key as an idempotency key the target honors, or the target checks a fencing claim. ToolGate's
+  part of that is [#230](https://github.com/olo-labs/olo-toolgate/issues/230). On `main` today, fenced claims cover
+  the OLO memory/RAG targets (S17), reviewed target guarantees cover qualified resend (S20), and reviewed generic
+  HTTP targets of the `SHARED_SQL` and `SQL_WITH_EXTERNAL_ACTION` fenced classes use shared target claims (S21,
+  ADR 057). Native MCP targets are not covered by S21. Until #230's verified slice covers a target or runtime,
   documentation and the console state that action effects on it are **at-least-once with reconciliation**, not
   exactly-once.
 - `concurrencyPolicy` (as in Kubernetes CronJob):
@@ -1996,12 +2065,15 @@ effect happened, so the rules are:
 | Tool's declared effect (descriptor `effect`, ADR 016) | Unattended execution | Retry on failure |
 |---|---|---|
 | `READ_ONLY` | Allowed | Yes |
-| Side effects with target-honored idempotency (business key forwarded) **and** declared reconciliation | Allowed | Only after a definite failure (`FAILED` with a non-retryable-safe classification excluded), as a retry with the **same** `effectId` (section 14.3) |
-| `NON_IDEMPOTENT` or `UNKNOWN` | ASK approval for **every** invocation, unless the tenant policy `automation.unattendedEffects: allow` is set for that Tool Group. That policy is audited and flagged in the console | Never automatic |
-| Any outcome `OUTCOME_UNKNOWN` | — | Never before reconciliation (section 14.3). Without a reconciliation path: human review only |
+| Side effects on a target with a current, independently reviewed guarantee (ADR 056) or a fenced target class (ADR 057), **and** declared reconciliation | Allowed, unless the reviewed route policy requires consent (ADR 055) | Only after a definite failure (`FAILED` with a non-retryable-safe classification excluded), as a retry with the **same** effect key (section 14.3). After `OUTCOME_UNKNOWN`, only through ADR 056 qualified resend |
+| `NON_IDEMPOTENT` or `UNKNOWN`, not financial or destructive | ASK approval for **every** invocation, unless the tenant policy `automation.unattendedEffects: allow` is set for that Tool Group. That policy is audited and flagged in the console | Never automatic |
+| Reviewed route class `FINANCIAL` or `DESTRUCTIVE` (ADR 053) | **Never unattended.** Every effect needs exact effect consent (ADR 055), whatever the tenant policy says. `automation.unattendedEffects` does not apply, and an unfenced-risk acknowledgement is not consent | Never automatic |
+| Any outcome `OUTCOME_UNKNOWN` | — | Never before reconciliation (section 14.3), except ADR 056 qualified resend. Without a reconciliation path: human review only |
 
 For a composite, the effective effect is the most dangerous of its children (section 15.4). Isolation and effect
-guarantees are exactly those of normal tool calls today (#230 tracks the rest), and actions add none and claim none.
+guarantees are exactly those of normal tool calls on `main` (#230 tracks the rest), and actions add none and claim
+none. Every action invocation goes through the same #230 path as an agent's call: reviewed route intent, current
+per-effect grant, owner-bound `SENDING` and consent slots (ADR 053–057). Actions have no separate dispatch path.
 
 ### 14.4.1 Authorization changes while an operation is running
 
@@ -2012,7 +2084,8 @@ For work already running, ToolGate has three different mechanisms with different
 |---|---|---|
 | **Cancellation** (`invocations/{id}/cancel`, existing) | Records cancel intent. The executor stops the tool process at its next check, or kills it | Cooperative and best-effort. An upstream request already sent is not recalled. A cancelled executing invocation ends `OUTCOME_UNKNOWN` (existing rule), never "undone" |
 | **Capability revocation** (broker and secret fencing, ADR 013 / ADR 031) | Raises the invocation's authorization epoch. The broker refuses further `ROUTE_CALL`, `TCP_CONNECT` and `SECRET_REDEEM` for that fencing token, and secret handles stop redeeming | Stops **further** brokered effects. It cannot stop a request already in flight, or effects a tool performs with credentials it already holds (`CREDENTIALS_IN_SANDBOX`) |
-| **Target-side fencing and reconciliation** (#230) | The target rejects operations carrying a stale fencing token or a revoked permit, and a reconciler establishes what actually happened | Only where the target supports it. This is #230's scope; ToolGate makes no claim for targets without it |
+| **Current per-effect authority** (#230, ADR 053/054) | Control rechecks current grants, epoch and consent at the owner-bound `SENDING` transition, within a send window of at most two seconds | Refuses sends that haven't started. A send already started is not recalled |
+| **Target-side fencing and reconciliation** (#230, ADR 057, ADR 056) | A fenced target consumes only its own signed exact-request grant; revocation committed before first consumption refuses it. Read-only reconciliation establishes what actually happened | Only for fenced target classes and reviewed targets. ToolGate makes no claim for targets without it |
 
 **Response to each change:**
 
@@ -2028,9 +2101,10 @@ For work already running, ToolGate has three different mechanisms with different
   refusal happens before the harness timeout.
 - **Audit:** every invocation records which mechanism stopped it. `OUTCOME_UNKNOWN` results from revocation are listed
   for reconciliation.
-- **#230 integration:** the plan's claims stop at "no further brokered effects after revocation". Effect-level fencing
-  at targets, containment of credentials already held, and per-target recovery are #230's acceptance items, and the
-  console says so for each target and runtime.
+- **#230 integration:** the plan's claims stop at "no further brokered effects after revocation", plus the target
+  fencing #230 has delivered for fenced classes (S21). Push/long-poll kill, inbound mTLS dispatch and measured
+  revocation bounds are #230 stage S22 and not yet delivered. Containment of credentials already held and the full
+  phase-3 acceptance remain #230 items, and the console says so for each target and runtime.
 
 ### 14.5 Guardrails
 
@@ -2544,7 +2618,7 @@ not performance benchmarks: they check that limits hold and nothing deadlocks or
 latency or throughput target.
 
 ### M0 — Contracts and ADR (gate D0)
-- ADR 032 covering everything in sections 5–10. Amend the SDK authoring spec and runtime modes, ADR 013 (lease-bound
+- ADR 058 covering everything in sections 5–10. Amend the SDK authoring spec and runtime modes, ADR 013 (lease-bound
   broker, tunnels and secrets), and ADR 027 (trigger frames, `FILES_WATCH`).
 - `v2/trigger.schema.json` and protocol frames; CloudEvents JSON schema reference; fixtures; proposed OpenAPI.
 - Decide how Tool Hosts verify the desired document.
@@ -2587,7 +2661,7 @@ latency or throughput target.
 
 ### M3 — Control: definitions, assignments, actions, leases, desired state
 - Upload verification and the schema-compatibility check.
-- Migrations for the tables above, with the spec/status model.
+- The tables above in the fresh initial schema (section 0), with the spec/status model.
 - Assignments CRUD with ETag, idempotency, merge patch and dry run; `:action` and `:rollback`; override resolution.
 - Rolling update controller, server placement and failover, lease store, signed desired document.
 - Lease-bound secret delivery, permissions, audit and quotas.
@@ -2618,7 +2692,7 @@ latency or throughput target.
 ### M7 — Raw Triggers page
 
 ### M8 — Schedules (Quartz)
-- Add `quarkus-quartz`, with a clustered JDBC store and Flyway Quartz tables on PostgreSQL and a RAM store plus
+- Add `quarkus-quartz`, with a clustered JDBC store whose tables are in the fresh PostgreSQL schema, and a RAM store plus
   fire-history recovery on SQLite.
 - The schedule source on `TriggerAssignment`; the configuration outbox and schedule reconciliation controller
   (event-driven plus full reconciliation every 5 minutes); the fire-time guard; the fire job writing the event, outbox
@@ -2642,8 +2716,10 @@ latency or throughput target.
   (`Supersede` / `ExecuteOriginal`); revision revocation; explicit re-drive under a new revision.
 - Dispatch-time permission re-check (`Held`, `Skipped`, `Superseded`, `Denied`).
 - Information-flow checks for `when` and arguments (runAs clearance, sink limits, outcome-event labels).
-- One logical record per event (business key); `OUTCOME_UNKNOWN` handling with reconcile-before-retry and human review;
-  concurrency policies; effect rules; rate limits; outcome events; placement `OriginatingDevice`.
+- One logical record per event as a #230 business-key operation (ADR 034), with the thin `trigger_action_deliveries`
+  and `trigger_action_repeats` tables only; effects through ADR 053–057 with explicit effect keys and consent slots;
+  `OUTCOME_UNKNOWN` handling through ADR 056 reconciliation and human review; concurrency policies; effect rules; rate
+  limits; outcome events; placement `OriginatingDevice`.
 
 ### M11 — Composite MCP
 - Draft, validate, test, publish and deprecate routes; canonical digest; semver pinning.
@@ -2815,12 +2891,13 @@ latency or throughput target.
 48. **New revision is not a repeat:**
     - change an action's target after an operation succeeded, then replay the event: `EXISTING`, no run;
     - `:redrive` on an operation with an attempt is refused;
-    - `:retry` after `OUTCOME_UNKNOWN` without reconciliation is refused for a target that does not honor idempotency.
+    - `:retry` after `OUTCOME_UNKNOWN` without reconciliation is refused unless the target has a current reviewed
+      guarantee (ADR 056 qualified resend).
       With reconciliation ("not applied"), it creates attempt 2 with the **same** `effectId`, and a target that honors
       idempotency sees the same key;
     - `:repeat` without a reason, without the second approver for a financial-domain operation, or while an earlier
       effect is an unreconciled `OUTCOME_UNKNOWN`, is refused;
-    - an approved `:repeat` creates `eff:<operationKey>:1` with a new `repeatId`. The test target, which honors
+    - an approved `:repeat` creates effect key `1` with a new `repeatId` and its own consent slot. The test target, which honors
       idempotency, **performs** the new effect, because it receives a new idempotency key. The original effect's
       history is unchanged and linked by `operationKey`.
 49. **Cleanup transitions:**
@@ -2883,7 +2960,7 @@ outbox.
 | Composite compensation (sagas), parallel and `forEach` steps | Compensation semantics per effect class |
 | LangGraph or other agent workflows as action targets | Isolated workflow runner ADR |
 | WebSocket stream through the Gateway; webhook delivery to external URLs | Gateway streaming support; SSRF-safe outbound delivery |
-| Unattended non-idempotent effects without a tenant opt-in | #230 effect authorization and fencing per target |
+| Unattended non-idempotent effects without a tenant opt-in | #230 fencing for the target's class (ADR 057 covers two SQL classes; others remain) |
 | Inbound webhooks as push sources | A per-tenant inbound endpoint with signature verification and replay protection |
 | Brokered streaming routes (SSE, HTTP long-poll through `ROUTE_CALL`) | Broker streaming support. v1 push uses TCP tunnels |
 | Client egress and secrets (a mail listener on a device) | Separate ADR (ADR 013 §7) |
@@ -2923,8 +3000,9 @@ point is to test each piece once, when it is built, and not re-test half-finishe
 
 ### 24.1 Working rules
 
-1. **One module in progress.** Module *n+1* starts only when module *n* meets its *Done when*. Nothing runs in
-   parallel.
+1. **One module in progress per track.** A module starts only when every module it depends on meets its *Done when*.
+   Modules with no dependency between them and no shared code may run at the same time on separate tracks (24.5).
+   Within a track, modules run in sequence.
 2. **Vertical and complete.** Each module delivers working behavior through every layer it touches (contract, code,
    tests, docs). No "tests later" and no stubs left for a later module to fill in, except the explicit fakes below.
 3. **Test once, at the cheapest layer.**
@@ -2937,7 +3015,8 @@ point is to test each piece once, when it is built, and not re-test half-finishe
    that needs a not-yet-built neighbor uses a **fake** at that boundary: the router stores events with no deliveries,
    and actions have no composite targets yet.
 5. **Behind feature flags.** Each module ships behind `toolgate.triggers.<module>` (off by default) until its slice
-   checkpoint passes, so `main` stays releasable after every module.
+   checkpoint passes, so `main` stays releasable after every module. When the slice checkpoint passes, the flag and
+   its "off" branch are deleted (section 0): the release has one production code path and no trigger flags.
 6. **Scenario ownership.** Every M12 scenario is assigned to exactly one module (24.3), and passes when that module
    finishes. The final module re-runs the whole suite once, as the release gate.
 7. **Effort percentages** are each module's estimated share of the **total** v1 implementation effort, including that
@@ -2946,12 +3025,15 @@ point is to test each piece once, when it is built, and not re-test half-finishe
 8. **Tenant isolation inside every module.** Each module's *Done when* includes the cross-tenant negative tests for
    the routes, records and paths it adds (section 17). Scenario 13 is therefore completed incrementally, not in one
    place.
+9. **Fresh build.** Every module follows section 0: no backward compatibility, no database migrations and no legacy
+   or outdated code. Schema changes go into the fresh `V1` schema; contract changes are made in place and the
+   bindings regenerated.
 
 ### 24.2 Module sequence
 
 | # | Module | Effort | Cumulative | Builds | Depends on | Done when |
 |---|---|---|---|---|---|---|
-| 1 | **Contracts, ADR and model** | 5% | 5% | ADR 032; `v2/trigger.schema.json` and protocol frames; generated Java, Rust, PHP and TS bindings; fixtures; proposed OpenAPI; descriptor keyword amendment; `trigger-delivery.tla` | — | Gate D0 approved; contract round-trip tests pass; the check-in and ack worst-case size contract test passes (8.5); TLC passes on the model (6.6.1) |
+| 1 | **Contracts, ADR and model** | 5% | 5% | ADR 058; `v2/trigger.schema.json` and protocol frames; generated Java, Rust, PHP and TS bindings; fixtures; proposed OpenAPI; descriptor keyword amendment; `trigger-delivery.tla` | — | Gate D0 approved; contract round-trip tests pass; the check-in and ack worst-case size contract test passes (8.5); TLC passes on the model (6.6.1) |
 | 2 | **Java SDK, POLL** | 6% | 11% | `@ClientTrigger` and `@ServerTrigger` (POLL), processor rules, `PollContext`, runtime loop and frames, `toolgate check` and `toolgate pack`, harness; sample `inbox-watch` in POLL form | 1 | Processor compile-error tests (5.8), runtime frame tests, harness tests for the sample; the package packs and verifies |
 | 3 | **Supervisor crate** | 8% | 19% | `crates/trigger-supervisor`: process lifecycle, frames, outbox with `outboxSeq`, the `LOCAL` barrier, rejection classes, loss records, backoff and crash loop, health, the sequence namespaces | 1 | Stateful property tests against the model (G-STATE item 2) with a fake runtime and a fake Control; crash-point tests T1–T5 and T10 |
 | 4 | **Control core for client triggers** | 8% | 27% | Package acceptance of trigger exports and the security delta; the definitions API; `TriggerAssignment` CRUD for **client** targets (ETag, idempotency, dry run); instances; the signed `TriggerDesiredDocument`; client leases; permissions; audit; tenant tables | 1, 2 | API tests including cross-tenant negatives; desired-document signing and verification tests |
@@ -2964,7 +3046,7 @@ point is to test each piece once, when it is built, and not re-test half-finishe
 | 11 | **Information flow, coarse mode** | 3% | 67% | Labels per event type and tool output, `dataClearance`, fail-closed defaults per integration kind, redacted views, restricted CEL environment (`dev.cel`) with limits | 10 | Coarse-mode tests and CEL limit tests. This is the safe baseline that lets the following modules be built without the field-level work |
 | 12 | **Subscriptions and WebSocket** | 5% | 72% | `TriggerSubscription` with CEL filters on the readable view; single-use tickets with log redaction; `toolgate.triggers.v1` with credits, resume, gaps and revocation; AsyncAPI; the console Live panel | 10, 11 | Protocol tests and ticket-hygiene tests; owned scenarios pass |
 | 13 | **Schedules (Quartz)** | 5% | 77% | Schedule source; configuration outbox and reconciliation controller; fire-time guard; catch-up identity (11.3); `status.schedule` | 10 | DST, race and catch-up tests; owned scenarios pass |
-| 14 | ★ **Actions** | 8% | 85% | Action revisions and pinning; Control-originated admission (`origin: TRIGGER`); the run-as Agent and `agent.delegate`; the operation ledger with `effectId`, `repeatId` and `attemptId`; `:redrive`, `:retry` and `:repeat`; dispatch re-authorization; effect rules; `OUTCOME_UNKNOWN` handling; authorization changes during runs (14.4.1); `OriginatingDevice` | 12, 13 | **Slice 3:** schedule → socket → MCP, and device trigger → authorized MCP. Owned scenarios pass |
+| 14 | ★ **Actions** | 8% | 85% | Action revisions and pinning; Control-originated admission (`origin: TRIGGER`); the run-as Agent and `agent.delegate`; actions on the #230 operation, attempt and effect records (ADR 034–036, 053–057) with explicit effect keys, plus the thin delivery and repeat tables; `:redrive`, `:retry` (ADR 056 resend rules) and `:repeat` (new effect key and consent slot); dispatch re-authorization; effect rules; `OUTCOME_UNKNOWN` handling; authorization changes during runs (14.4.1); `OriginatingDevice` | 12, 13; #230 S21 (delivered) | **Slice 3:** schedule → socket → MCP, and device trigger → authorized MCP. Owned scenarios pass |
 | 15 | ★ **Composite MCP** | 7% | 92% | Draft, validate, test and publish; canonical digest; CEL type-checking; globals; credential slots with provenance; the durable orchestrator; resource-scope rules (15.4.1); the Gateway admission change; composites as action targets | 14 | **Slice 4:** a composite run by an agent and by an action. Owned scenarios pass |
 | 16 | **Information flow, field-level mode** | 4% | 96% | The schema-walk labeller for nested data, binding floors, side-channel enforcement, and the full conformance and adversarial corpus | 11, 15 | **Gate G-IFC** passes and field-level mode is switched on. If it doesn't pass, v1 ships in coarse mode and this module moves after release |
 | 17 | **Resource safety and release gate** | 3% | 99% | Section 20.2 tests with accounting counters; the nightly deterministic simulation (G-STATE item 3); one full M12 run on the release commit | all above | **G-STATE**, **G-IFC** (or coarse mode) and every M12 scenario pass |
@@ -3001,4 +3083,39 @@ Each scenario must pass when its owning module finishes. Module 17 re-runs all o
 | 8 | Both executors on one protocol; server features need no new transport |
 | 10 | A durable event stream with deliveries; consumers (sockets, actions) plug in |
 | 11 | A safe expression environment; every CEL user from here on is protected |
-| 14 | Governed execution from events; composites are just one more target kind |
+| 14 | Governed execution from events on the #230 effect path; composites are just one more target kind |
+
+### 24.5 Parallel tracks and coordination with #230
+
+Triggers and #230 change some of the same files. Based on `main` at `bb3b078d` (#230 through S21), modules are
+grouped into tracks that can run at the same time:
+
+| Track | Modules, in order | Main code areas | Can start |
+|---|---|---|---|
+| A — Contracts and model | 1 | `packages/contracts/schemas/v2`, generated Java/Rust/PHP/TS bindings, `generated-manifest.json`, `docs/adr/058-*`, `docs/specs/trigger-delivery.tla` | Now |
+| B — SDK | 2 → 7 (SDK part) → 9 | `tool-sdk/java-sdk` (api, processor, runtime), `tool-sdk/python-sdk`, `tool-sdk/cli` | After module 1 |
+| C — Supervisor | 3 | New `crates/trigger-supervisor` | After module 1 |
+| D — Control | 4 → 6 → 10 → 11 → 12 → 13 | New trigger packages under `apps/control-plane/.../control/{application,adapter}`, fresh `V1` schema, `apps/admin-ui` raw page | After module 1 |
+| E — Executors | 5 → 7 (client part) → 8 | `apps/endpoint-client/src` (check-in, `files.rs`), `apps/tool-host/src` (`lease.rs`, `control.rs`, `broker*.rs`) | After modules 3 and 4, and the S22 check-in agreement below |
+| F — Governed execution | 14 → 15 → 16 → 17 | Control action/composite packages on the #230 effect services (`EffectGrants`, `TargetClaims`, `OperationFinalizer`), Gateway admission | After modules 12 and 13 |
+
+**Shared files, one owner at a time:**
+
+- **Fresh schema** (`db/migration/V1__initial_schema.sql`, `db/quickstart/V1.sql`, `db/schema-ownership.json`): one
+  named schema owner merges trigger and #230 table changes. Trigger tables go in one clearly marked block.
+- **Generated contracts** (`generated-manifest.json`, `operations.generated.ts`, `ContractCodec` and the PHP, Rust and
+  TypeScript bindings): regenerate after every merge from `main`; never hand-merge generated output.
+- **OpenAPI** (`packages/contracts/openapi/control-v1.yaml`): trigger routes go in their own tagged section.
+
+**Coordination points with #230:**
+
+| #230 stage | Overlaps with | Rule |
+|---|---|---|
+| S22 push/long-poll kill and inbound mTLS dispatch | Module 5 (`TriggerSync` in check-in), module 8 (Tool Host leases and Control channel) | Agree one check-in and Control-channel extension with the S22 owner before module 5 starts. Both features use it; neither adds a second channel |
+| S23 outcome grades | Module 14 console and `action.completed` outcomes | Action outcomes use the S23 grades once delivered; until then, they show the same grades as `main` |
+| S27/S28 run identity and narrowing delegation | Module 14 run-as Agent and `agent.delegate` | `agent.delegate` is built as, or replaced by, the S28 delegation chain; there is no second delegation model |
+| S30 broker OAuth and token exchange | Module 8 lease-bound broker and secrets | Trigger leases use the same broker authority as permits; S30 token exchange applies to both |
+| S31 trusted provenance | Modules 11 and 16 information flow | Event and tool-output labels feed S31 provenance; one policy engine |
+
+When a #230 stage lands first, the trigger module builds on it as delivered. When a trigger module lands first, the
+#230 stage extends that code rather than adding a parallel path (section 0).
