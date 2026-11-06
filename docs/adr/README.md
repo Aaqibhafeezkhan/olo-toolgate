@@ -102,3 +102,5 @@ Use `000-template.md`.
 - [055 — Exact effect consent and atomic slots](055-exact-effect-consent-slots.md)
 
 - [ADR 056: Per-effect keys and qualified resend](056-per-effect-keys-and-qualified-resend.md)
+
+- [ADR 057: Generalized target fencing](057-generalized-target-fencing.md)

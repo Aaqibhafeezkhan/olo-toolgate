@@ -31,7 +31,7 @@ class TargetDedupeReviewTest {
         proposed.withObject("/definition").putArray("targetDedupeGuarantees")
             .add(json.valueToTree(new RouteDedupeConfiguration(profile,"send",guarantee)));
         var intent=new EffectIntentBlueprint(TextNode.valueOf("/send"),Map.of(),Map.of(),"",EffectBodyMode.NONE,NullNode.instance);
-        route=new RouteEffectReview(new RouteEffectPolicy("send",EffectClassification.WRITE,false,false,intent,guarantee),
+        route=new RouteEffectReview(new RouteEffectPolicy("send",EffectClassification.WRITE,false,false,intent,guarantee,null),
             "admin",System.currentTimeMillis());
     }
     EnterpriseConfigurationChange propose(String key){

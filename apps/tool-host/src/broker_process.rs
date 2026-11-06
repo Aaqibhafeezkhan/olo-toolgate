@@ -170,6 +170,13 @@ impl FrozenTransport {
         self.prepared = self.prepared.with_downstream_key(key)?;
         Ok(self)
     }
+    pub(crate) fn with_target_permit(
+        mut self,
+        permit: Option<&olo_toolgate_contracts::v2::SignedEffectGrant>,
+    ) -> Result<Self, String> {
+        self.prepared = self.prepared.with_target_permit(permit)?;
+        Ok(self)
+    }
     pub fn body_len(&self) -> usize {
         self.prepared.body_len()
     }

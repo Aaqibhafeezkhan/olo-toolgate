@@ -23,7 +23,8 @@ public final class EffectGrants {
         operations.requireFresh(tenant,tx,invocation);
     }
     private record Refused(EnterpriseInvocation invocation,String device){}
-    public Store.Reply issue(Ids.TenantId tenant,Function<Store.Session,String> certificate,String document){
+    public Store.Reply issue(Ids.TenantId tenant,Function<Store.Session,String> certificate,String executorKeySha256,String document){
+        if(executorKeySha256==null||!executorKeySha256.matches("[a-f0-9]{64}"))throw ManagementAccess.denied();
         var request=codec.model(document,EffectGrantIssue.class);var refused=new Refused[1];
         try{return store.transaction(tenant,true,tx->{
             String device=certificate.apply(tx);long now=operations.clock(tx);
@@ -51,7 +52,7 @@ public final class EffectGrants {
             if(descriptors.size()!=1)throw ManagementAccess.denied();
             var descriptor=descriptors.getFirst();
             EffectClassification classification;boolean consentRequired;EffectConsentMappedRequest consentRequest;
-            TargetDedupeGuarantee targetGuarantee=null;
+            TargetDedupeGuarantee targetGuarantee=null;FencedTarget fencedTarget=null;
             if(nativeMcp){
                 if(!claims.target().routes().isEmpty())throw ManagementAccess.denied();
                 var doc=ServerPackages.proxyDocument(tx,version,codec);
@@ -71,7 +72,8 @@ public final class EffectGrants {
                 try{policy=EffectIntentValidation.match(profile,manifest,arguments);}
                 catch(Failure invalid){if(consentBound&&invalid.status()==403)throw EffectConsents.mismatch();throw invalid;}
                 classification=policy.classification();consentRequired=EffectIntentValidation.requiresConsent(classification,policy.consentRequired());
-                targetGuarantee=policy.targetDedupeGuarantee();
+                targetGuarantee=policy.targetDedupeGuarantee();fencedTarget=policy.fencedTarget();
+                if(fencedTarget!=null)TargetFencing.currentReview(tx,codec,profile,manifest.routeId(),fencedTarget,now);
                 consentRequest=EffectIntentValidation.preview(profile,manifest.routeId(),arguments);
                 credentialHeaders(descriptor,profile,manifest);
             }
@@ -124,10 +126,10 @@ public final class EffectGrants {
             var downstream=TargetEffectKeys.bind(tx,codec,operations.signer(),tenant.value(),invocation,profile,targetGuarantee,manifest,effectId,now);
             var grant=operations.signer().signEffect(new EffectGrantClaims(operations.issuer(),device,now,now,expiry,tenant.value(),
                 invocation.id(),request.fencingToken(),invocation.authorizationEpoch(),effectId,generation.generation(),nonce,
-                request.brokerInstanceId(),request.handlerId(),request.httpRequestDigest(),manifest.profileDigest(),manifest.routeId(),classification,downstream));
+                request.brokerInstanceId(),request.handlerId(),request.httpRequestDigest(),manifest.profileDigest(),manifest.routeId(),classification,downstream,fencedTarget,executorKeySha256));
             tx.audit(DirectoryService.digest(device),replay?"EFFECT_GRANT_REPLAY":"EFFECT_GRANT_ISSUE","effect:"+effectId,generation.revision(),
                 invocation.evaluation().context().requestId(),request.httpRequestDigest().substring(7));
-            return new Store.Reply(200,codec.json(new EffectGrant(grant,expiry-now,downstream)),invocation.revision());
+            return new Store.Reply(200,codec.json(new EffectGrant(grant,expiry-now,downstream,fencedTarget)),invocation.revision());
         });}catch(Failure failure){
             if(refused[0]!=null&&(failure.status()==403||failure.status()==409)){
                 // The authority/slot transaction has rolled back. Retain only authenticated refusal facts in a new commit.

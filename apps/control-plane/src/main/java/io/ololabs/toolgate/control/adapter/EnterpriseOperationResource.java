@@ -106,7 +106,11 @@ public class EnterpriseOperationResource {
         var certificate=peer();
         if(document==null||document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>2*1024*1024)throw Failure.validation();
         return reply(new EffectGrants(store,codec,operations).issue(tenant(),
-            tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),document));
+            tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),executorKey(certificate),document));
+    }
+    private String executorKey(java.security.cert.X509Certificate certificate){
+        try{return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(certificate.getPublicKey().getEncoded()));}
+        catch(java.security.GeneralSecurityException invalid){throw ManagementAccess.denied();}
     }
     @POST @Path("effects/sending") @Consumes("application/json") @PermitAll
     public Response sendingEffect(String document){

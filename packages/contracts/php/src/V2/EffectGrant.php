@@ -10,18 +10,20 @@ final readonly class EffectGrant implements \JsonSerializable {
     public function __construct(
         public SignedEffectGrant $grant,
         public int $validForMs,
-        public ?DownstreamEffectKey $downstreamKey = null
+        public ?DownstreamEffectKey $downstreamKey = null,
+        public ?FencedTarget $fencedTarget = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['grant', 'validForMs', 'downstreamKey']) || array_diff(['grant', 'validForMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['grant', 'validForMs', 'downstreamKey', 'fencedTarget']) || array_diff(['grant', 'validForMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             SignedEffectGrant::fromArray($data['grant']),
             $data['validForMs'],
-            array_key_exists('downstreamKey', $data) ? DownstreamEffectKey::fromArray($data['downstreamKey']) : null
+            array_key_exists('downstreamKey', $data) ? DownstreamEffectKey::fromArray($data['downstreamKey']) : null,
+            array_key_exists('fencedTarget', $data) ? FencedTarget::fromArray($data['fencedTarget']) : null
         );
     }
 

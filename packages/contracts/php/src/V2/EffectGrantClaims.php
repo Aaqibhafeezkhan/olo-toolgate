@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline. */
+/** Single-owner exact-request authorization. Target consumption is the ordering point for explicitly fenced HTTP targets; unfenced dispatch remains bounded to two seconds. */
 final readonly class EffectGrantClaims implements \JsonSerializable {
     public function __construct(
         public string $iss,
@@ -26,12 +26,14 @@ final readonly class EffectGrantClaims implements \JsonSerializable {
         public string $profileDigest,
         public string $routeId,
         public EffectClassification $classification,
-        public ?DownstreamEffectKey $downstreamKey = null
+        public string $executorKeySha256,
+        public ?DownstreamEffectKey $downstreamKey = null,
+        public ?FencedTarget $fencedTarget = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification', 'downstreamKey']) || array_diff(['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification', 'downstreamKey', 'fencedTarget', 'executorKeySha256']) || array_diff(['iss', 'aud', 'iat', 'nbf', 'exp', 'tenantId', 'invocationId', 'fencingToken', 'authorizationEpoch', 'effectId', 'generation', 'authNonce', 'brokerInstanceId', 'handlerId', 'httpRequestDigest', 'profileDigest', 'routeId', 'classification', 'executorKeySha256'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -53,7 +55,9 @@ final readonly class EffectGrantClaims implements \JsonSerializable {
             $data['profileDigest'],
             $data['routeId'],
             EffectClassification::from($data['classification']),
-            array_key_exists('downstreamKey', $data) ? DownstreamEffectKey::fromArray($data['downstreamKey']) : null
+            $data['executorKeySha256'],
+            array_key_exists('downstreamKey', $data) ? DownstreamEffectKey::fromArray($data['downstreamKey']) : null,
+            array_key_exists('fencedTarget', $data) ? FencedTarget::fromArray($data['fencedTarget']) : null
         );
     }
 

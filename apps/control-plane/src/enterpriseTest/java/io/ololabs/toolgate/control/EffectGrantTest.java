@@ -17,10 +17,21 @@ class EffectGrantTest {
     static final ObjectMapper JSON=new ObjectMapper();
     @TempDir Path temp;
     ServicePermitBridgeTest base;EffectGrants grants;EnterpriseInvocation invocation;EffectGrantIssue issue;
-    ObjectNode profile;String packageDigest;String classification="WRITE";String reconciliationMode;String statusRouteId;boolean brokerOnly;
+    ObjectNode profile;String packageDigest;FencedTarget fencedTarget;String classification="WRITE";String reconciliationMode;String statusRouteId;boolean brokerOnly;
     @BeforeAll static void key()throws Exception{ServicePermitBridgeTest.key();}
     @BeforeEach void setup()throws Exception{
         base=new ServicePermitBridgeTest();base.temp=temp;base.setup();
+        if(fencedTarget!=null){
+            var rules=new ArrayList<EnterpriseManagementRule>();
+            for(var type:EnterpriseGroupType.values())rules.add(new EnterpriseManagementRule(List.of("package.deploy"),
+                type,new GroupSelection(List.of(),true),List.of(),base.rig.graph.conditions(),null));
+            base.rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.ROLE,new ControlRole(
+                "target-deployer","Target deployment review",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
+            base.rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.TEAM,new ControlTeam(
+                "target-reviewers","Target reviewers",true,1L,List.of("admin"),List.of("target-deployer")));
+            base.rig.saveGraph();
+        }
+
         if(reconciliationMode!=null){
             var rig=base.rig;var id=io.ololabs.toolgate.control.domain.Ids.Kind.TOOL.id("acme.test/tool");
             var entry=rig.graph.entries.get(id);var doc=(ObjectNode)rig.graph.codec.value(entry.document());
@@ -44,6 +55,7 @@ class EffectGrantTest {
         if(brokerOnly)route.put("auth","broker-key");
         var policy=JSON.createObjectNode().put("routeId","write").put("classification",classification)
             .put("consentRequired",false).put("acknowledgedUnfencedRisk",!classification.equals("WRITE"));
+        if(fencedTarget!=null)policy.set("fencedTarget",JSON.valueToTree(fencedTarget));
         var intent=policy.putObject("intent").put("path","/send").put("contentType","application/json").put("bodyMode","CANONICAL_JSON");
         intent.putObject("query");intent.putObject("headers");intent.putObject("body").putObject("path").put("$arg","/path");
         profile.putArray("effectReviews").addObject().put("reviewedBy","admin").put("reviewedAtUnixMs",EnterpriseConformanceTest.NOW).set("policy",policy);
@@ -71,7 +83,7 @@ class EffectGrantTest {
             "broker","handler",Map.of("path",args.path("path")),Canonical.arguments(manifest),codec.model(manifest.toString(),PreparedHttpRequestManifest.class), "charge");
     }
     EffectGrant issue(){
-        return base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device",base.rig.graph.codec.json(issue)).body(),EffectGrant.class);
+        return base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),base.rig.graph.codec.json(issue)).body(),EffectGrant.class);
     }
     Store.Reply send(EffectGrant grant,String owner){
         return grants.sending(base.rig.gateway.tenant(),tx->"device",base.rig.graph.codec.json(new EffectGrantDispatch(grant.grant(),"broker",owner)));
@@ -128,17 +140,17 @@ class EffectGrantTest {
         var legacy=issue();var legacyClaims=base.rig.signer.verifyEffect(legacy.grant());
         var document=(ObjectNode)JSON.readTree(base.rig.graph.codec.json(issue));
         document.put("effectKey","charge");
-        var replay=base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()).body(),EffectGrant.class);
+        var replay=base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),document.toString()).body(),EffectGrant.class);
         assertEquals(legacyClaims,base.rig.signer.verifyEffect(replay.grant()));
         document.remove("effectKey");
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),document.toString()));
         document.put("effectKey","receipt");
-        var other=base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()).body(),EffectGrant.class);
+        var other=base.rig.graph.codec.model(grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),document.toString()).body(),EffectGrant.class);
         var otherClaims=base.rig.signer.verifyEffect(other.grant());
         assertNotEquals(legacyClaims.effectId(),otherClaims.effectId());
         assertEquals(200,send(legacy,"handler").status());
         assertEquals(200,send(other,"handler").status());
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",document.toString()));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),document.toString()));
     }
     @Test void persistBeforeGrantAndOneOwnerCanSendOnlyOnce(){
         var grant=issue();var claims=base.rig.signer.verifyEffect(grant.grant());
@@ -161,7 +173,7 @@ class EffectGrantTest {
     @Test void replayCannotExtendExpiryOrChangeOwnerAndReleasedGenerationRetainsIntent()throws Exception{
         var first=issue();var original=base.rig.signer.verifyEffect(first.grant());
         var other=(ObjectNode)JSON.readTree(base.rig.graph.codec.json(issue));other.put("handlerId","other-handler");
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",other.toString()));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),other.toString()));
         base.rig.clock=java.time.Clock.offset(base.rig.clock,java.time.Duration.ofMillis(500));
         base.rig.operations=new EnterpriseOperations(base.rig.store,base.rig.graph.codec,base.rig.signer,base.rig.clock,
             "control","toolgate-client",60000,100);
@@ -176,16 +188,16 @@ class EffectGrantTest {
         assertEquals(200,send(replacement,"handler").status());assertThrows(Failure.class,()->send(first,"handler"));
     }
     @Test void wrongCertificateAndChangedArgumentsOrBodyCannotMintAuthority()throws Exception{
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"other-device",base.rig.graph.codec.json(issue)));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"other-device","a".repeat(64),base.rig.graph.codec.json(issue)));
         var changed=(ObjectNode)JSON.readTree(base.rig.graph.codec.json(issue));
         changed.putObject("arguments").put("path","olo://other/conversation/stolen");
         var alteredArguments=changed.toString();
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",alteredArguments));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),alteredArguments));
         changed=(ObjectNode)JSON.readTree(base.rig.graph.codec.json(issue));
         ((ObjectNode)changed.path("httpRequestManifest")).put("bodyDigest","sha256:"+"a".repeat(64));
         changed.put("httpRequestDigest",Canonical.arguments(changed.path("httpRequestManifest")));
         var body=changed.toString();
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",body));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),body));
         assertNotNull(issue());
     }
     @Test void consentIsNotInferredFromAdmissionApproval()throws Exception{
@@ -199,7 +211,7 @@ class EffectGrantTest {
         ((ObjectNode)changed.path("httpRequestManifest")).put("profileDigest",digest);
         changed.put("httpRequestDigest",Canonical.arguments(changed.path("httpRequestManifest")));
         base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->{tx.packages().saveDocument(digest,rawProfile.toString());return null;});
-        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device",changed.toString()));
+        assertThrows(Failure.class,()->grants.issue(base.rig.gateway.tenant(),tx->"device","a".repeat(64),changed.toString()));
     }
     @Test void redeployBetweenIssueAndSendRevokesProfileAuthority(){
         var grant=issue();

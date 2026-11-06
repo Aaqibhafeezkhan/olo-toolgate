@@ -17,7 +17,8 @@ APPLYING cannot report not-started and never grants a new owner automatically.
 DONE/FAILED and ABANDONED claims remain durable tombstones; no deletion API is
 provided. Deployments must retain them across replicas and restarts.
 
-Use caller-owned writable JDBC transactions and target-owned schema migrations.
+Use caller-owned writable JDBC transactions and fresh current target schemas.
+No upgrade, backfill or compatibility path is supported (ADR 057).
 SQL failures roll back and grant no authority; the library retries nothing.
 SQLite and PostgreSQL are the first qualified adapters. The SQL claim store
 does not authenticate requests: bindings must come from verified Control grants.

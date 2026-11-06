@@ -67,6 +67,13 @@ CASES = {
                    "a_scan_pages_through_the_tools_and_reports_raw_definitions_with_the_pin",
                    "a_call_with_fresh_evidence_goes_straight_to_the_tool_and_is_marked_untrusted"],
     },
+    "fenced-target-private-wire": {
+        "catalog": ["broker/auth-header-refused", "broker/no-retry-ledger", "egress/bad-cert"],
+        "scope": "explicit generic HTTPS target permit and accepted peer; unfenced targets receive no workload identity; no native business finality",
+        "native": ["request_binding::tests::target_permit_is_supervisor_only_sensitive_and_never_changes_bound_bytes",
+                   "fenced_grants_bind_peer_and_private_permit_without_bypassing_send_windows",
+                   "fresh_generic_grants_guard_direct_and_private_child_transports_and_expiry_at_tls"],
+    },
     "checked-transport": {
         "catalog": ["egress/rebinding", "egress/redirect-out", "egress/bad-cert"],
         "scope": "fresh HTTP/1.1, no redirects/retries, complete answer checks, standard TLS plus optional leaf pins",
@@ -96,7 +103,7 @@ def main():
             or oci.get("tier") != "OCI_SANDBOX"):
         parser.error("a passing current-source/revision Linux x86_64 OCI report is required")
     command = [args.cargo, "test", "-p", "olo-toolgate-tool-host", "--locked", "--lib"]
-    for name in ("dispatch", "worker_protocol", "egress_protocol", "broker_process", "service_dispatch", "mcp_proxy"):
+    for name in ("dispatch", "worker_protocol", "egress_protocol", "broker_process", "service_dispatch", "generic_dispatch", "fenced_dispatch", "mcp_proxy"):
         command += ["--test", name]
     command += ["--", "--test-threads=1", "--nocapture"]
     result = subprocess.run(command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

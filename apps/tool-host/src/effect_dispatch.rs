@@ -13,6 +13,7 @@ use tokio::time::Instant;
 
 pub(crate) struct BoundedTransport {
     pub(crate) client: reqwest::Client,
+    pub(crate) target_permit: Option<olo_toolgate_contracts::v2::SignedEffectGrant>,
     pub(crate) downstream_key: Option<olo_toolgate_contracts::v2::DownstreamEffectKey>,
     #[cfg(unix)]
     _window: crate::send_window::SendWindow,
@@ -66,7 +67,7 @@ pub(crate) async fn authorize(
         }
         let allowed = control
             .effect_sending(&EffectGrantDispatch {
-                grant: grant.grant,
+                grant: grant.grant.clone(),
                 broker_instance_id: request.broker_instance_id.clone(),
                 handler_id: request.handler_id.clone(),
             })
@@ -82,11 +83,19 @@ pub(crate) async fn authorize(
         let window =
             crate::send_window::SendWindow::open(policy.clone(), send_until, response_until)
                 .map_err(|_| refused())?;
-        let client = crate::egress::client_with_socket(destination, policy, window.socket())
-            .map_err(|_| refused())?;
+        let identity = if grant.fenced_target.is_some() {
+            Some(control.service_identity().map_err(|_| refused())?)
+        } else {
+            None
+        };
+        let target_permit = grant.fenced_target.as_ref().map(|_| grant.grant.clone());
+        let client =
+            crate::egress::client_with_socket(destination, policy, window.socket(), identity)
+                .map_err(|_| refused())?;
         Ok(BoundedTransport {
             client,
             downstream_key: grant.downstream_key,
+            target_permit,
             _window: window,
         })
     }

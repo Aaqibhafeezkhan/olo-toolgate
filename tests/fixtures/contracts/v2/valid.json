@@ -3182,7 +3182,8 @@
     "httpRequestDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "routeId": "send",
-    "classification": "FINANCIAL"
+    "classification": "FINANCIAL",
+    "executorKeySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
   "SignedEffectGrant": {
     "jws": "eyJhbGciOiJSUzI1NiJ9.eyJleGFtcGxlIjp0cnVlfQ.c2lnbmF0dXJl"
@@ -3455,5 +3456,18 @@
     ],
     "observedAtUnixMs": 1790000000000,
     "buildMode": "CURRENT_ONLY"
+  },
+  "FencedTargetClass": "SHARED_SQL",
+  "FencedTarget": {
+    "targetId": "billing",
+    "targetClass": "SHARED_SQL"
+  },
+  "TargetClaimConsumption": {
+    "grant": {
+      "jws": "eyJhbGciOiJSUzI1NiJ9.eyJleGFtcGxlIjp0cnVlfQ.c2lnbmF0dXJl"
+    },
+    "claimToken": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "httpRequestDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "executorKeySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   }
 }

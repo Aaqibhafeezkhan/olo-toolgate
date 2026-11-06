@@ -137,6 +137,14 @@ final class JdbcEffectStore implements EffectStore {
         catch(SQLException failure){throw Failure.unavailable();}
     }
     public void observe(String nonce,String outcome,String result,long now){evidence(require(nonce),"BROKER",outcome,result,now);}
+    public Generation targetNotStarted(String nonce,String consumer,String claim,String result,long now){
+        text(consumer);text(claim);var g=require(nonce);
+        if(!consumer.startsWith("TARGET:")||g.consumer()!=null
+            ||!Set.of("AUTHORIZED","SENDING","AMBIGUOUS").contains(g.state())
+            ||!result.equals("sha256:b775353541fcdd3e2ef3d940fbae7961712380d2390c74852a52e12487d8e7f2"))throw ManagementAccess.denied();
+        evidence(g,"TARGET:"+consumer,"FAILED",result,now);
+        return change(g,"FAILED",consumer,claim);
+    }
     public Generation targetOutcome(String nonce,String consumer,String claim,String outcome,String result,long now){
         var g=require(nonce);if(g.consumer()==null||!g.consumer().equals(consumer)||!g.claimToken().equals(claim))throw ManagementAccess.denied();
         evidence(g,"TARGET:"+consumer,outcome,result,now);

@@ -45,6 +45,24 @@ class EffectGenerationStorageTest(unittest.TestCase):
         self.assertFalse(db.run('DELETE FROM control_effect_evidence'))
 
 
+    def test_target_not_started_requires_an_exact_negative_witness_and_never_consumes(self):
+        import hashlib
+        result='sha256:'+hashlib.sha256(b'toolgate-target-not-started-v1').hexdigest()
+        for source,outcome,digest in [('BROKER','FAILED',result),('TARGET:TARGET:other','FAILED',result),
+                                      ('TARGET:TARGET:billing','COMPLETED',result),
+                                      ('TARGET:TARGET:billing','FAILED','sha256:'+'f'*64)]:
+            db=self.fixture()
+            update="UPDATE control_effect_generations SET state='FAILED',consumer='TARGET:billing',claim_token='claim',revision=2"
+            self.assertFalse(db.run(update))
+            self.assertTrue(db.run(f"INSERT INTO control_effect_evidence VALUES('{TENANT}','effect',1,'{'d'*64}','{source}','{outcome}','{digest}',70000)"))
+            self.assertFalse(db.run(update))
+        db=self.fixture()
+        self.assertTrue(db.run(f"INSERT INTO control_effect_evidence VALUES('{TENANT}','effect',1,'{'d'*64}','TARGET:TARGET:billing','FAILED','{result}',70000)"))
+        self.assertTrue(db.run("UPDATE control_effect_generations SET state='FAILED',consumer='TARGET:billing',claim_token='claim',revision=2"))
+        self.assertFalse(db.run("UPDATE control_effect_generations SET state='CONSUMED',revision=3"))
+        self.assertFalse(db.run("UPDATE control_effects SET current_generation=2"))
+
+
     def test_intent_requires_the_exact_fresh_generation_and_is_immutable_and_capacity_accounted(self):
         db=self.fixture()
         before=db.db.execute("SELECT stored_rows,stored_bytes FROM control_tenant_capacity WHERE tenant_id=?",(TENANT,)).fetchone()

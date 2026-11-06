@@ -36,7 +36,7 @@ class EffectConsentLifecycleTest {
         return request;
     }
     EffectGrant grant(EnterpriseInvocation i)throws Exception{
-        return rig.graph.codec.model(fixture.grants.issue(rig.gateway.tenant(),tx->"device",rig.graph.codec.json(request(i))).body(),EffectGrant.class);
+        return rig.graph.codec.model(fixture.grants.issue(rig.gateway.tenant(),tx->"device","a".repeat(64),rig.graph.codec.json(request(i))).body(),EffectGrant.class);
     }
     @Test void changingEffectKeyCannotSpendTheSameConsentSlotTwice()throws Exception{
         var i=submit("distinct-effect-consent");approve(i.id());
@@ -44,7 +44,7 @@ class EffectConsentLifecycleTest {
         var first=grant(running);
         var document=(ObjectNode)EffectGrantTest.JSON.readTree(rig.graph.codec.json(request(running)));
         document.put("effectKey","extra-charge");
-        var failure=assertThrows(Failure.class,()->fixture.grants.issue(rig.gateway.tenant(),tx->"device",document.toString()));
+        var failure=assertThrows(Failure.class,()->fixture.grants.issue(rig.gateway.tenant(),tx->"device","a".repeat(64),document.toString()));
         assertEquals(ControlErrorDetailCode.EFFECT_CONSENT_EXHAUSTED,failure.detail());
         assertEquals(200,fixture.send(first,"handler").status());
         String extra=EffectIdentity.of(rig.graph.codec,rig.gateway.tenant().value(),i.id(),"write","extra-charge");
@@ -127,7 +127,7 @@ class EffectConsentLifecycleTest {
         var changed=(ObjectNode)EffectGrantTest.JSON.readTree(rig.graph.codec.json(request(running)));
         ((ObjectNode)changed.path("httpRequestManifest")).put("bodyDigest",EffectLedgerTest.RESULT);
         changed.put("httpRequestDigest",Canonical.arguments(changed.path("httpRequestManifest")));
-        var failure=assertThrows(Failure.class,()->fixture.grants.issue(rig.gateway.tenant(),tx->"device",changed.toString()));
+        var failure=assertThrows(Failure.class,()->fixture.grants.issue(rig.gateway.tenant(),tx->"device","a".repeat(64),changed.toString()));
         assertEquals(ControlErrorDetailCode.EFFECT_CONSENT_MISMATCH,failure.detail());
         var events=rig.store.transaction(rig.gateway.tenant(),false,tx->(com.fasterxml.jackson.databind.JsonNode)rig.graph.codec.value(tx.auditPage(0,500))).path("items");
         assertTrue(java.util.stream.StreamSupport.stream(events.spliterator(),false).anyMatch(event->

@@ -78,7 +78,7 @@ class TargetResendLifecycleTest {
             "broker-"+i.reservedNonce(),"handler",fixture.issue.arguments(),fixture.issue.httpRequestDigest(),fixture.issue.httpRequestManifest(),key);
     }
     EffectGrant grant(EnterpriseInvocation i,String key)throws Exception{
-        return rig.graph.codec.model(fixture.grants.issue(rig.gateway.tenant(),tx->"device",rig.graph.codec.json(request(i,key))).body(),EffectGrant.class);
+        return rig.graph.codec.model(fixture.grants.issue(rig.gateway.tenant(),tx->"device","a".repeat(64),rig.graph.codec.json(request(i,key))).body(),EffectGrant.class);
     }
     void send(EnterpriseInvocation i,EffectGrant grant){
         assertEquals(200,fixture.grants.sending(rig.gateway.tenant(),tx->"device",rig.graph.codec.json(
