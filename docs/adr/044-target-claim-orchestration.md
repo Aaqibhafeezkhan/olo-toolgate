@@ -22,10 +22,10 @@ Recovery may abandon an expired CLAIMED generation by CAS, then enqueue its
 not-started evidence in that same transaction. Reporting occurs only after
 commit. A paused owner cannot subsequently enter APPLYING.
 
-Add an expiry column compatibly to existing SDK claim stores; legacy rows with
-unknown expiry are not automatically abandoned. Retain claim/outbox tombstones.
-Actual target migrations enforce tenant RLS and deny runtime deletion of these
-records. Missing schema fails startup instead of falling back to one-shot writes.
+Initialize the complete current claim schema and identity marker only in a fresh
+target schema. Reject obsolete stores intact, without conversion or backfill.
+Retain claim/outbox tombstones. Target runtime permissions preserve tenant
+isolation and deny deletion of these records (ADR 057). Missing schema fails startup instead of falling back to one-shot writes.
 Reads retain current authorization and release checks.
 
 The first integration remains one authorization generation per OLO effect;

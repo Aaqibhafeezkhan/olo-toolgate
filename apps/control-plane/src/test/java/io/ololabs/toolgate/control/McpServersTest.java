@@ -551,10 +551,10 @@ final class McpServersTest {
         var changed=(com.fasterxml.jackson.databind.node.ObjectNode)node(codec.json(issue));
         ((com.fasterxml.jackson.databind.node.ObjectNode)changed.path("httpRequestManifest")).put("bodyDigest","sha256:"+"a".repeat(64));
         changed.put("httpRequestDigest",Canonical.arguments(changed.path("httpRequestManifest")));
-        var mismatch=assertThrows(Failure.class,()->grants.issue(actor.tenant(),tx->"host-a",changed.toString()));
+        var mismatch=assertThrows(Failure.class,()->grants.issue(actor.tenant(),tx->"host-a","a".repeat(64),changed.toString()));
         assertEquals(403,mismatch.status());
         if(!classification.equals("WRITE"))assertEquals(ControlErrorDetailCode.EFFECT_CONSENT_MISMATCH,mismatch.detail());
-        var granted=codec.model(grants.issue(actor.tenant(),tx->"host-a",codec.json(issue)).body(),io.ololabs.toolgate.contracts.v2.EffectGrant.class);
+        var granted=codec.model(grants.issue(actor.tenant(),tx->"host-a","a".repeat(64),codec.json(issue)).body(),io.ololabs.toolgate.contracts.v2.EffectGrant.class);
         var grantClaims=f.signer.verifyEffect(granted.grant());
         assertEquals(io.ololabs.toolgate.contracts.v2.EffectClassification.valueOf(classification),grantClaims.classification());
         var retained=f.store.transaction(actor.tenant(),false,tx->tx.effects().intent(grantClaims.effectId()));
@@ -564,7 +564,7 @@ final class McpServersTest {
         var send=codec.json(new io.ololabs.toolgate.contracts.v2.EffectGrantDispatch(granted.grant(),"native-broker","native-handler"));
         assertEquals(200,grants.sending(actor.tenant(),tx->"host-a",send).status());
         assertEquals(409,status(()->grants.sending(actor.tenant(),tx->"host-a",send)));
-        assertEquals(409,status(()->grants.issue(actor.tenant(),tx->"host-a",codec.json(issue))));
+        assertEquals(409,status(()->grants.issue(actor.tenant(),tx->"host-a","a".repeat(64),codec.json(issue))));
     }
 
 }

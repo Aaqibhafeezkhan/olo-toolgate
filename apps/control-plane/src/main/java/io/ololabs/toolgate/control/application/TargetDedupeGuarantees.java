@@ -11,7 +11,7 @@ import java.util.*;
 /** A declaration is not authority: only the exact currently applied independent configuration review qualifies. */
 public final class TargetDedupeGuarantees {
     private static final Set<String> FORBIDDEN=Set.of("authorization","proxy-authorization","cookie","set-cookie","host","content-type",
-        "content-length","transfer-encoding","connection","te","upgrade","accept","user-agent","traceparent","tracestate","toolgate-service-permit","trailer","keep-alive","proxy-connection","content-encoding","expect",
+        "content-length","transfer-encoding","connection","te","upgrade","accept","user-agent","traceparent","tracestate","toolgate-service-permit","toolgate-effect-permit","trailer","keep-alive","proxy-connection","content-encoding","expect",
         "range","content-range","if-match","if-none-match","if-range","if-modified-since","if-unmodified-since");
     private TargetDedupeGuarantees(){}
     public static void validate(TargetDedupeGuarantee guarantee){

@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add explicit generic HTTP target fencing with peer-bound permits, dedicated
+  target consumption, shared SQL claim ownership and conservative crash recovery.
+  Review the target identity/class in the console; deploy matching current
+  artifacts on fresh schemas without compatibility or conversion paths.
+
 - Distinguish unconfirmed operation outcomes in the example MCP client and stop
   without retrying. Verify the current unqualified native boundary in the
   LangChain image gate without presenting reported output as business success.

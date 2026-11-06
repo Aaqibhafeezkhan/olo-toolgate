@@ -30,6 +30,8 @@ public interface EffectStore {
     Generation release(String nonce,String device,String broker,String handler,long now);
     Generation sending(String nonce,String device,String broker,String handler,long now);
     Authorization consume(String nonce,String requestDigest,String consumer,String claimToken,long now);
+    /** Durable target CAS abandonment before consumption; never an authorization or APPLYING recovery. */
+    Generation targetNotStarted(String nonce,String consumer,String claimToken,String resultDigest,long now);
     Generation targetOutcome(String nonce,String consumer,String claimToken,String outcome,String resultDigest,long now);
     /** Broker observations are retained but cannot settle consumed, fenced work. */
     void observe(String nonce,String outcome,String resultDigest,long now);

@@ -684,8 +684,10 @@ pub struct EffectGrant {
     pub valid_for_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downstream_key: Option<DownstreamEffectKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fenced_target: Option<FencedTarget>,
 }
-/// Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.
+/// Single-owner exact-request authorization. Target consumption is the ordering point for explicitly fenced HTTP targets; unfenced dispatch remains bounded to two seconds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EffectGrantClaims {
@@ -709,6 +711,9 @@ pub struct EffectGrantClaims {
     pub classification: EffectClassification,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub downstream_key: Option<DownstreamEffectKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fenced_target: Option<FencedTarget>,
+    pub executor_key_sha256: String,
 }
 /// One owner may claim the SENDING transition once.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -825,6 +830,21 @@ pub struct ExecutionSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_concurrency: Option<u64>,
     pub cancel_if_abandoned: bool,
+}
+/// Independently reviewed target identity and qualified target implementation. This declaration grants no authority by itself.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FencedTarget {
+    pub target_id: String,
+    pub target_class: FencedTargetClass,
+}
+/// Canonical FencedTargetClass wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FencedTargetClass {
+    #[serde(rename = "SHARED_SQL")]
+    SharedSql,
+    #[serde(rename = "SQL_WITH_EXTERNAL_ACTION")]
+    SqlWithExternalAction,
 }
 /// Canonical FrameKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2711,6 +2731,8 @@ pub struct RouteEffectPolicy {
     pub intent: EffectIntentBlueprint,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_dedupe_guarantee: Option<TargetDedupeGuarantee>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fenced_target: Option<FencedTarget>,
 }
 /// Review stamp created by Control, never accepted from package or worker input.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3008,6 +3030,15 @@ pub enum Streaming {
     Response,
     #[serde(rename = "BIDIRECTIONAL")]
     Bidirectional,
+}
+/// Authenticated target consumption of an exact accepted request, after its durable local claim commits. Replays return status only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TargetClaimConsumption {
+    pub grant: SignedEffectGrant,
+    pub claim_token: String,
+    pub http_request_digest: String,
+    pub executor_key_sha256: String,
 }
 /// Canonical TargetDedupeDifferentBody wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

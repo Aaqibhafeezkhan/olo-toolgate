@@ -22,7 +22,13 @@ tasks.register<JacocoReport>("jacocoRootReport") {
     val javaProjects = provider { subprojects.filter { it.plugins.hasPlugin("java") } }
     sourceDirectories.from(javaProjects.map { projects -> projects.map { it.extensions.getByType<SourceSetContainer>()["main"].allSource.srcDirs } })
     classDirectories.from(javaProjects.map { projects -> projects.map { it.extensions.getByType<SourceSetContainer>()["main"].output.classesDirs } })
-    executionData.from(provider { subprojects.map { it.layout.buildDirectory.file("jacoco/test.exec").get().asFile }.filter { it.exists() } })
+    executionData.from(provider {
+        subprojects.flatMap { project ->
+            listOf("test", "enterpriseTest")
+                .filter { project.tasks.findByName(it) is Test }
+                .map { project.layout.buildDirectory.file("jacoco/$it.exec").get().asFile }
+        }.filter { it.exists() }
+    })
     reports { xml.required.set(true); html.required.set(true) }
 }
 

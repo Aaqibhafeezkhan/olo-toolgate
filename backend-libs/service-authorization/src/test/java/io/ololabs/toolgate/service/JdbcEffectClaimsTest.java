@@ -163,6 +163,101 @@ class JdbcEffectClaimsTest {
             assertThrows(SQLException.class,()->q.executeQuery("SELECT authorization_expires_at FROM toolgate_target_claims"));
         }
     }
+    void externalApplyCrash()throws Exception{
+        var b=binding();var a=claim(b);
+        assertTrue(this.<Boolean>tx(c->claims.beginApply(c,a.owner())));
+        var externalEffects=new java.util.concurrent.atomic.AtomicInteger();
+        externalEffects.incrementAndGet(); // Target receipt exists, but SQL finish/outbox is lost in the crash.
+        var reopened=new JdbcEffectClaims();
+        assertFalse(tx(c->reopened.claim(c,b,1001)).acquired());
+        var observed=inspect(b);
+        assertEquals(JdbcEffectClaims.State.APPLYING,observed.state());
+        assertFalse(this.<Boolean>tx(c->reopened.abandon(c,observed)));
+        assertNull(tx(c->reopened.pendingOutcome(c,b)));
+        try(var c=connection()){
+            assertTrue(reopened.confirmApplied(c,observed,RESULT));c.rollback();
+        }
+        assertEquals(JdbcEffectClaims.State.APPLYING,inspect(b).state());
+        assertTrue(this.<Boolean>tx(c->reopened.confirmApplied(c,observed,RESULT)));
+        assertFalse(this.<Boolean>tx(c->reopened.confirmApplied(c,observed,RESULT)));
+        assertFalse(this.<Boolean>tx(c->reopened.finish(c,a.owner(),false,DIGEST)));
+        assertEquals(1,externalEffects.get());
+        assertEquals(JdbcEffectClaims.State.DONE,inspect(b).state());
+        var pending=tx(c->reopened.pendingOutcome(c,b));
+        assertEquals("COMPLETED",pending.outcome().name());assertEquals(RESULT,pending.resultDigest());
+    }
+    @Test void externalActionCrashStaysUncertainUntilPositiveTargetReceiptThenOnlyEvidenceIsRecovered()throws Exception{externalApplyCrash();}
+    void killedJvmAfterExternalCommit()throws Exception{
+        var b=binding();
+        tx(c->{try(var q=c.createStatement()){q.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS external_business_receipts(
+                tenant_id VARCHAR(128),effect_id VARCHAR(128),request_digest VARCHAR(71),result_digest VARCHAR(71),
+                PRIMARY KEY(tenant_id,effect_id))
+            """);}return null;});
+        String cp=Objects.requireNonNull(System.getProperty("toolgate.claimTestClasspath"));
+        String executable=Path.of(System.getProperty("java.home"),"bin",
+            System.getProperty("os.name").startsWith("Windows")?"java.exe":"java").toString();
+        var builder=new ProcessBuilder(executable,"-cp",cp,ClaimCrashProcess.class.getName(),b.effectId()).redirectErrorStream(true);
+        builder.environment().put("CLAIM_TEST_URL",url);
+        if(user!=null){builder.environment().put("CLAIM_TEST_USER",user);builder.environment().put("CLAIM_TEST_PASSWORD",password);}
+        var process=builder.start();
+        try{
+            assertTrue(process.waitFor(20,TimeUnit.SECONDS),"Target crash fixture exceeded its deadline");
+            assertEquals(47,process.exitValue(),new String(process.getInputStream().readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
+        }finally{if(process.isAlive())process.destroyForcibly();}
+        var reopened=new JdbcEffectClaims();var observed=inspect(b);
+        assertEquals(JdbcEffectClaims.State.APPLYING,observed.state());
+        assertNull(tx(c->reopened.pendingOutcome(c,b)));
+        assertFalse(this.<Boolean>tx(c->reopened.abandon(c,observed)));
+        assertFalse(tx(c->reopened.claim(c,b,1001)).acquired());
+        String receipt=tx(c->{try(var q=c.prepareStatement("""
+            SELECT result_digest FROM external_business_receipts WHERE tenant_id=? AND effect_id=? AND request_digest=?
+            """)){
+            q.setString(1,b.tenant());q.setString(2,b.effectId());q.setString(3,b.requestDigest());
+            try(var rows=q.executeQuery()){assertTrue(rows.next());String value=rows.getString(1);assertFalse(rows.next());return value;}
+        }});
+        assertEquals(RESULT,receipt);
+        assertTrue(this.<Boolean>tx(c->reopened.confirmApplied(c,observed,receipt)));
+        assertFalse(this.<Boolean>tx(c->reopened.confirmApplied(c,observed,receipt)));
+        var outcome=tx(c->reopened.pendingOutcome(c,b));
+        assertEquals("COMPLETED",outcome.outcome().name());assertEquals(RESULT,outcome.resultDigest());
+    }
+    @Test void aRealJvmHaltRetainsApplyingAndRecoversOnlyIndependentBusinessReceipt()throws Exception{killedJvmAfterExternalCommit();}
+    void closedFailureReceiptRecovery()throws Exception{
+        var b=binding();var a=claim(b);
+        assertTrue(this.<Boolean>tx(c->claims.beginApply(c,a.owner())));
+        var observed=inspect(b);
+        String notStarted="sha256:"+HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+            .digest("toolgate-target-not-started-v1".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertThrows(IllegalArgumentException.class,()->tx(c->claims.confirmFailed(c,observed,notStarted)));
+        assertEquals(JdbcEffectClaims.State.APPLYING,inspect(b).state());
+        assertNull(tx(c->claims.pendingOutcome(c,b)));
+        tx(c->{try(var q=c.createStatement()){q.executeUpdate("""
+            CREATE TABLE IF NOT EXISTS terminal_provider_receipts(tenant_id VARCHAR(128),effect_id VARCHAR(128),
+                request_digest VARCHAR(71),result_digest VARCHAR(71),outcome VARCHAR(16) CHECK(outcome IN ('COMPLETED','FAILED')),
+                PRIMARY KEY(tenant_id,effect_id))
+            """);}
+            try(var q=c.prepareStatement("INSERT INTO terminal_provider_receipts VALUES(?,?,?,?,'FAILED')")){
+                q.setString(1,b.tenant());q.setString(2,b.effectId());q.setString(3,b.requestDigest());q.setString(4,RESULT);q.executeUpdate();
+            }return null;});
+        String receipt=tx(c->{try(var q=c.prepareStatement("SELECT result_digest FROM terminal_provider_receipts WHERE tenant_id=? AND effect_id=? AND request_digest=? AND outcome='FAILED'")){
+            q.setString(1,b.tenant());q.setString(2,b.effectId());q.setString(3,b.requestDigest());
+            try(var rows=q.executeQuery()){assertTrue(rows.next());return rows.getString(1);}
+        }});
+        // A later provider apply for this identity is fenced by its durable terminal receipt.
+        assertThrows(SQLException.class,()->tx(c->{try(var q=c.prepareStatement(
+            "INSERT INTO terminal_provider_receipts VALUES(?,?,?,?,'COMPLETED')")){
+            q.setString(1,b.tenant());q.setString(2,b.effectId());q.setString(3,b.requestDigest());q.setString(4,DIGEST);q.executeUpdate();
+        }return null;}));
+        assertTrue(this.<Boolean>tx(c->claims.confirmFailed(c,observed,receipt)));
+        assertFalse(this.<Boolean>tx(c->claims.confirmApplied(c,observed,receipt)));
+        assertFalse(this.<Boolean>tx(c->claims.finish(c,a.owner(),true,RESULT)));
+        assertFalse(claim(b).acquired());
+        var outcome=tx(c->claims.pendingOutcome(c,b));
+        assertEquals("FAILED",outcome.outcome().name());assertEquals(RESULT,outcome.resultDigest());
+        assertEquals(JdbcEffectClaims.State.FAILED,inspect(b).state());
+    }
+    @Test void applyingRequiresAClosedFailureReceiptAndCannotBecomeANotStartedClaim()throws Exception{closedFailureReceiptRecovery();}
     @Test void outcomesSurviveReopenAndDeliveryAcknowledgementDoesNotReopenClaims()throws Exception{durableOutcomeDelivery();}
     @Test void expiryRecoveryFencesOnlyClaimedWorkAndCommitsItsEvidenceAtomically()throws Exception{expiredClaimRecovery();}
     @Test void oldSchemasHaveNoAutomaticUpgradePath()throws Exception{oldClaimSchemasAreRejectedWithoutConversion();}
@@ -179,7 +274,7 @@ class JdbcEffectClaimsTest {
         try(var c=DriverManager.getConnection(base,"control_migrator",secret);var s=c.createStatement()){s.execute("CREATE DATABASE "+database);}
         try{
             url=base.replace("/control?","/"+database+"?");user="control_migrator";password=secret;initialize();
-            replicaRace();pausedOwner();applyTakeoverRace();atomicCommitAndRollback();uncertainApplying();bindingConflicts();durableOutcomeDelivery();expiredClaimRecovery();oldClaimSchemasAreRejectedWithoutConversion();
+            replicaRace();pausedOwner();applyTakeoverRace();atomicCommitAndRollback();uncertainApplying();bindingConflicts();durableOutcomeDelivery();expiredClaimRecovery();externalApplyCrash();killedJvmAfterExternalCommit();closedFailureReceiptRecovery();oldClaimSchemasAreRejectedWithoutConversion();
         }finally{
             try(var c=DriverManager.getConnection(base,"control_migrator",secret);var s=c.createStatement()){s.execute("DROP DATABASE "+database+" WITH (FORCE)");}
         }

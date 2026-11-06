@@ -9710,6 +9710,132 @@ paths:
                       required: [kty, alg, use, kid, n, e]
         '403':
           description: Dedicated service role for this audience and tenant required
+  /api/control/v1/access/target-permits/{target}/claims/consume:
+    post:
+      operationId: target_claims_consume
+      description: Dedicated audience service role; first consumption checks current authority. Replays return status only;
+        local target claim ownership controls execution.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: target
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{0,63}$
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/TargetClaimConsumption
+      summary: Dedicated target claims consume; requires toolgate-target-{target} machine role
+  /api/control/v1/access/target-permits/{target}/claims/status:
+    post:
+      operationId: target_claims_status
+      description: Dedicated audience service role; recorded claim status after expiry or termination. Never renews execution
+        authority.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: target
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{0,63}$
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimReference
+      summary: Dedicated target claims status; requires toolgate-target-{target} machine role
+  /api/control/v1/access/target-permits/{target}/claims/outcome:
+    post:
+      operationId: target_claims_outcome
+      description: Dedicated audience service role; append late target outcome evidence for the recorded claim. Never renews
+        execution authority.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - in: path
+        name: target
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{0,63}$
+      responses:
+        '200':
+          description: Claim status only; no execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimResult
+        '403':
+          description: Authentication, scope, claim binding or current authority refused
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitTargetOutcome
+      summary: Dedicated target claims outcome; requires toolgate-target-{target} machine role
+  /api/control/v1/access/target-permits/{target}/jwks:
+    get:
+      operationId: target_jwks
+      description: Dedicated service role; current purpose-separated Control effect verification key.
+      parameters:
+      - in: path
+        name: target
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{0,63}$
+      responses:
+        '200':
+          description: Authenticated key-discovery result
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - keys
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - kty
+                      - alg
+                      - use
+                      - kid
+                      - n
+                      - e
+        '403':
+          description: Dedicated service role for this audience and tenant required
+      summary: Dedicated target jwks; requires toolgate-target-{target} machine role
+
 components:
   securitySchemes:
     adminAccessToken:

@@ -198,8 +198,9 @@ pub(crate) fn client_with_socket(
     destination: &ServiceDestination,
     policy: AddressPolicy,
     socket: &std::path::Path,
+    identity: Option<reqwest::Identity>,
 ) -> Result<reqwest::Client, String> {
-    build_client(destination, policy, None, Some(socket))
+    build_client(destination, policy, identity, Some(socket))
 }
 
 fn build_client(
