@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.
+/** Single-owner exact-request authorization. Target consumption is the ordering point for explicitly fenced HTTP targets; unfenced dispatch remains bounded to two seconds.
  *
  * @param iss canonical iss value
  * @param aud canonical aud value
@@ -24,6 +24,8 @@ package io.ololabs.toolgate.contracts.v2;
  * @param routeId canonical routeId value
  * @param classification canonical classification value
  * @param downstreamKey canonical downstreamKey value
+ * @param fencedTarget canonical fencedTarget value
+ * @param executorKeySha256 canonical executorKeySha256 value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EffectGrantClaims(
@@ -45,7 +47,9 @@ public record EffectGrantClaims(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "profileDigest", required = true) String profileDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "routeId", required = true) String routeId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "classification", required = true) EffectClassification classification,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "downstreamKey", required = false) DownstreamEffectKey downstreamKey
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "downstreamKey", required = false) DownstreamEffectKey downstreamKey,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencedTarget", required = false) FencedTarget fencedTarget,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "executorKeySha256", required = true) String executorKeySha256
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -68,6 +72,8 @@ public record EffectGrantClaims(
      * @param routeId canonical routeId value
      * @param classification canonical classification value
      * @param downstreamKey canonical downstreamKey value
+     * @param fencedTarget canonical fencedTarget value
+     * @param executorKeySha256 canonical executorKeySha256 value
      */
     public EffectGrantClaims {
         java.util.Objects.requireNonNull(iss, "iss");
@@ -88,5 +94,6 @@ public record EffectGrantClaims(
         java.util.Objects.requireNonNull(profileDigest, "profileDigest");
         java.util.Objects.requireNonNull(routeId, "routeId");
         java.util.Objects.requireNonNull(classification, "classification");
+        java.util.Objects.requireNonNull(executorKeySha256, "executorKeySha256");
     }
 }

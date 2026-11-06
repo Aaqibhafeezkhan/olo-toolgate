@@ -75,6 +75,9 @@
         },
         "targetDedupeGuarantee": {
           "$ref": "effect-authorization.schema.json#/$defs/TargetDedupeGuarantee"
+        },
+        "fencedTarget": {
+          "$ref": "effect-authorization.schema.json#/$defs/FencedTarget"
         }
       },
       "required": [
@@ -154,7 +157,7 @@
     },
     "EffectGrantClaims": {
       "type": "object",
-      "description": "Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline.",
+      "description": "Single-owner exact-request authorization. Target consumption is the ordering point for explicitly fenced HTTP targets; unfenced dispatch remains bounded to two seconds.",
       "additionalProperties": false,
       "properties": {
         "iss": {
@@ -215,6 +218,13 @@
         },
         "downstreamKey": {
           "$ref": "effect-authorization.schema.json#/$defs/DownstreamEffectKey"
+        },
+        "fencedTarget": {
+          "$ref": "effect-authorization.schema.json#/$defs/FencedTarget"
+        },
+        "executorKeySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
         }
       },
       "required": [
@@ -235,7 +245,8 @@
         "httpRequestDigest",
         "profileDigest",
         "routeId",
-        "classification"
+        "classification",
+        "executorKeySha256"
       ]
     },
     "SignedEffectGrant": {
@@ -268,6 +279,9 @@
         },
         "downstreamKey": {
           "$ref": "effect-authorization.schema.json#/$defs/DownstreamEffectKey"
+        },
+        "fencedTarget": {
+          "$ref": "effect-authorization.schema.json#/$defs/FencedTarget"
         }
       },
       "required": [
@@ -858,6 +872,59 @@
         "items",
         "observedAtUnixMs",
         "buildMode"
+      ]
+    },
+    "FencedTarget": {
+      "type": "object",
+      "description": "Independently reviewed target identity and qualified target implementation. This declaration grants no authority by itself.",
+      "additionalProperties": false,
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "targetClass": {
+          "$ref": "effect-authorization.schema.json#/$defs/FencedTargetClass"
+        }
+      },
+      "required": [
+        "targetId",
+        "targetClass"
+      ]
+    },
+    "TargetClaimConsumption": {
+      "type": "object",
+      "description": "Authenticated target consumption of an exact accepted request, after its durable local claim commits. Replays return status only.",
+      "additionalProperties": false,
+      "properties": {
+        "grant": {
+          "$ref": "effect-authorization.schema.json#/$defs/SignedEffectGrant"
+        },
+        "claimToken": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "httpRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "executorKeySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "grant",
+        "claimToken",
+        "httpRequestDigest",
+        "executorKeySha256"
+      ]
+    },
+    "FencedTargetClass": {
+      "type": "string",
+      "enum": [
+        "SHARED_SQL",
+        "SQL_WITH_EXTERNAL_ACTION"
       ]
     }
   }

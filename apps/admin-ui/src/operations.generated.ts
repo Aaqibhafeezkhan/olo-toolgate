@@ -259,6 +259,10 @@ export const operations = {
   reportServicePermitTargetOutcome: { method: 'POST', path: '/api/control/v1/access/service-permits/{audience}/claims/outcome' },
   serviceAuthorizationEpoch: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/epoch' },
   servicePermitKeys: { method: 'GET', path: '/api/control/v1/access/service-permits/{audience}/jwks' },
+  target_claims_consume: { method: 'POST', path: '/api/control/v1/access/target-permits/{target}/claims/consume' },
+  target_claims_status: { method: 'POST', path: '/api/control/v1/access/target-permits/{target}/claims/status' },
+  target_claims_outcome: { method: 'POST', path: '/api/control/v1/access/target-permits/{target}/claims/outcome' },
+  target_jwks: { method: 'GET', path: '/api/control/v1/access/target-permits/{target}/jwks' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;

@@ -213,7 +213,11 @@ public final class ServerPackages {
                     if(declaredRoute==null||!reviewedRoutes.add(policy.routeId()))throw Failure.validation();
                     var route=codec.model(codec.json(declaredRoute),io.ololabs.toolgate.contracts.v2.RouteDeclaration.class);
                     EffectIntentValidation.review(policy,route);
-                    if(policy.targetDedupeGuarantee()!=null&&(reviewerUser==null||!tx.load().entries().containsKey(Ids.Kind.USER.id(reviewerUser))))throw Failure.validation();
+                    if((policy.targetDedupeGuarantee()!=null||policy.fencedTarget()!=null)&&(reviewerUser==null||!tx.load().entries().containsKey(Ids.Kind.USER.id(reviewerUser))))throw Failure.validation();
+                    if(policy.fencedTarget()!=null){
+                        for(var destination:profileDestinations)if(destination.path("id").asText().equals(route.destination())
+                            && !destination.path("tls").path("spkiPins").isEmpty())throw Failure.validation();
+                    }
                     reviews.add(node(codec.json(new io.ololabs.toolgate.contracts.v2.RouteEffectReview(policy,reviewerUser==null?actor:reviewerUser,clock.millis()))));
                 }
             }

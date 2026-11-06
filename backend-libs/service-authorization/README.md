@@ -12,11 +12,10 @@ and enforce the returned authorization deadline immediately before transaction c
 No method accepts identity, tenant, operation or body claims from an executor as authority. A consumed or ambiguous
 write is reconciled, never automatically retried under a new permit.
 
-New broker permits also bind the prepared HTTP request. For those permits pass
+Every current permit binds the prepared HTTP request. Pass
 `ServicePermitVerifier.Transport` containing trusted profile/route configuration
 and actual accepted URI, method and repeated headers to the five-argument
-`Request` constructor. Missing transport facts fail closed. Upgrade target
-integrations before deploying the updated broker; see the installation guide.
+`Request` constructor. Missing transport facts fail closed. Deploy matching current target and broker artifacts with fresh schemas; see the installation guide.
 
 The SQL target-claim foundation is available as JdbcEffectClaims. Every replica
 must share the store and use caller-owned transactions. The actual OLO adapters now integrate it
@@ -39,3 +38,24 @@ Older stores are rejected without conversion. Every claim requires a positive
 authorization expiry. Direct authorization handles reads; writes require the
 verified-write and durable claim workflow. Owner and outcome string representations redact tokens. Credential suppliers used by
 the new concurrent reporting APIs must support concurrent reads.
+
+
+For declared generic HTTPS targets, use FencedTargetVerifier and
+ControlTargetAuthorization rather than the OLO-specific audience/operation
+adapter. They bind the reviewed target identity/class, actual HTTP request and
+accepted executor mTLS key. VerifiedWrite cannot authorize a business commit;
+commit the shared claim first, consume at Control, win beginApply and check the
+original deadline. The broker alone supplies the reserved target permit header.
+See [generic target fencing](../../docs/operations/generalized-target-fencing.md)
+for setup, capability limits and recovery.
+
+JdbcEffectClaims.confirmApplied records only independently verified positive
+target business evidence for an observed APPLYING claim. It cannot prove
+not-started work, return an owner, renew authority or retry an external action.
+All replicas retain uncertain APPLYING records until conclusive evidence exists.
+
+
+For a separately verified closed target failure that permanently rules out later
+apply, confirmFailed records FAILED evidence. It rejects the not-started witness
+from APPLYING; lookup misses, timeouts and executor reports remain unresolved.
+Both recovery methods preserve the original claim binding and dispatch nothing.

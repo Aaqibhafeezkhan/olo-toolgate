@@ -367,8 +367,9 @@ export interface EffectGrant {
   readonly grant: SignedEffectGrant;
   readonly validForMs: number;
   readonly downstreamKey?: DownstreamEffectKey;
+  readonly fencedTarget?: FencedTarget;
 }
-/** Single-owner unfenced authorization. Its lifetime is at most two seconds and never extends the original execution deadline. */
+/** Single-owner exact-request authorization. Target consumption is the ordering point for explicitly fenced HTTP targets; unfenced dispatch remains bounded to two seconds. */
 export interface EffectGrantClaims {
   readonly iss: string;
   readonly aud: string;
@@ -389,6 +390,8 @@ export interface EffectGrantClaims {
   readonly routeId: string;
   readonly classification: EffectClassification;
   readonly downstreamKey?: DownstreamEffectKey;
+  readonly fencedTarget?: FencedTarget;
+  readonly executorKeySha256: string;
 }
 /** One owner may claim the SENDING transition once. */
 export interface EffectGrantDispatch {
@@ -463,6 +466,12 @@ export interface ExecutionSettings {
   readonly maxConcurrency?: number;
   readonly cancelIfAbandoned: boolean;
 }
+/** Independently reviewed target identity and qualified target implementation. This declaration grants no authority by itself. */
+export interface FencedTarget {
+  readonly targetId: string;
+  readonly targetClass: FencedTargetClass;
+}
+export type FencedTargetClass = "SHARED_SQL" | "SQL_WITH_EXTERNAL_ACTION";
 export type FrameKind = "RESULT" | "PROGRESS" | "INPUT_REQUEST" | "LOG" | "BROKER_REQUEST" | "BROKER_RESPONSE";
 /** Gateway settings. */
 export interface GatewaySettings {
@@ -1443,6 +1452,7 @@ export interface RouteEffectPolicy {
   readonly acknowledgedUnfencedRisk: boolean;
   readonly intent: EffectIntentBlueprint;
   readonly targetDedupeGuarantee?: TargetDedupeGuarantee;
+  readonly fencedTarget?: FencedTarget;
 }
 /** Review stamp created by Control, never accepted from package or worker input. */
 export interface RouteEffectReview {
@@ -1599,6 +1609,13 @@ export interface SignedTenantDiscovery {
 }
 export type Slug = string;
 export type Streaming = "NONE" | "RESPONSE" | "BIDIRECTIONAL";
+/** Authenticated target consumption of an exact accepted request, after its durable local claim commits. Replays return status only. */
+export interface TargetClaimConsumption {
+  readonly grant: SignedEffectGrant;
+  readonly claimToken: string;
+  readonly httpRequestDigest: string;
+  readonly executorKeySha256: string;
+}
 export type TargetDedupeDifferentBody = "REJECT" | "REPLAY_FIRST";
 /** Explicit operator-reviewed target contract; its presence alone never authorizes resend. */
 export interface TargetDedupeGuarantee {

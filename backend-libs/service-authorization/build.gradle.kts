@@ -13,5 +13,8 @@ dependencies {
 }
 
 tasks.withType<Test>().configureEach {
+    // The shared-store PostgreSQL prerequisite varies per invocation; never reuse a skipped fixture as evidence.
+    outputs.upToDateWhen { false }
+    systemProperty("toolgate.claimTestClasspath", sourceSets.test.get().runtimeClasspath.asPath)
     systemProperty("toolgate.httpBindingVectors", rootProject.file("tests/fixtures/security/http-request-binding-v1.json").absolutePath)
 }

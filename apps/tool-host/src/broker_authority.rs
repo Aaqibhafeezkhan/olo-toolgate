@@ -515,6 +515,11 @@ impl BrokerControl for Local {
                 crate::broker_process::rebuild_request(&client, wire, permit.as_ref(), timeout)
                     .map_err(|_| refused())?
                     .with_downstream_key(bounded.as_ref().and_then(|b| b.downstream_key.as_ref()))
+                    .and_then(|prepared| {
+                        prepared.with_target_permit(
+                            bounded.as_ref().and_then(|b| b.target_permit.as_ref()),
+                        )
+                    })
                     .map_err(|_| refused())?;
             if frozen.body_len() as u64 > route.max_request_bytes {
                 return Err(refused());
@@ -602,6 +607,10 @@ impl BrokerControl for Local {
             }
             let response = prepared
                 .with_downstream_key(bounded.as_ref().and_then(|b| b.downstream_key.as_ref()))
+                .and_then(|prepared| {
+                    prepared
+                        .with_target_permit(bounded.as_ref().and_then(|b| b.target_permit.as_ref()))
+                })
                 .map_err(|_| serde_json::json!({"refused":"invalid target effect key"}))?
                 .using_client(client)
                 .send()

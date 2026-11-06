@@ -120,6 +120,11 @@ impl PreparedRequest {
             header::HeaderName::from_bytes(name.as_bytes())
                 .map_err(|_| "invalid credential header name")?;
         }
+        if request.headers().contains_key("toolgate-effect-permit")
+            || credentials.contains("toolgate-effect-permit")
+        {
+            return Err("target permit is reserved for the supervisor".into());
+        }
         let mut headers = Map::new();
         for name in request.headers().keys() {
             let name = name.as_str();
@@ -194,6 +199,32 @@ impl PreparedRequest {
     pub(crate) fn effect_key(&self) -> Option<&str> {
         self.effect_key.as_deref()
     }
+    /// Inject only a Control grant after exact request binding; worker-supplied tokens are refused.
+    pub(crate) fn with_target_permit(
+        mut self,
+        permit: Option<&olo_toolgate_contracts::v2::SignedEffectGrant>,
+    ) -> Result<Self, String> {
+        let Some(permit) = permit else {
+            return Ok(self);
+        };
+        if self.request.url().scheme() != "https"
+            || self
+                .request
+                .headers()
+                .contains_key("toolgate-effect-permit")
+            || permit.jws.is_empty()
+            || permit.jws.len() > 32768
+        {
+            return Err("invalid or substituted target permit".into());
+        }
+        let mut value =
+            header::HeaderValue::from_str(&permit.jws).map_err(|_| "invalid target permit")?;
+        value.set_sensitive(true);
+        self.request
+            .headers_mut()
+            .insert("toolgate-effect-permit", value);
+        Ok(self)
+    }
     /// Only Control's derived target key may be injected after binding; its fixed name is bound by the pinned profile.
     pub(crate) fn with_downstream_key(
         mut self,
@@ -219,6 +250,7 @@ impl PreparedRequest {
             "traceparent",
             "tracestate",
             "toolgate-service-permit",
+            "toolgate-effect-permit",
             "trailer",
             "keep-alive",
             "proxy-connection",
@@ -688,5 +720,45 @@ mod tests {
             value: format!("tg-{}", "a".repeat(64)),
         };
         assert!(forged.with_downstream_key(Some(&key)).is_err());
+    }
+    #[test]
+    fn target_permit_is_supervisor_only_sensitive_and_never_changes_bound_bytes() {
+        let permit = olo_toolgate_contracts::v2::SignedEffectGrant {
+            jws: "fixture.signed.grant".into(),
+        };
+        let p = prepared("https://example.test/send", "{}", "alice", "credential");
+        let digest = p.digest().to_owned();
+        let manifest = p.manifest().clone();
+        let p = p.with_target_permit(Some(&permit)).unwrap();
+        assert_eq!(p.digest(), digest);
+        assert_eq!(p.manifest(), &manifest);
+        assert_eq!(p.request.headers()["toolgate-effect-permit"], permit.jws);
+        assert!(p.request.headers()["toolgate-effect-permit"].is_sensitive());
+        assert!(p.with_target_permit(Some(&permit)).is_err());
+        assert!(
+            prepared("http://example.test/send", "{}", "alice", "credential")
+                .with_target_permit(Some(&permit))
+                .is_err()
+        );
+        let client = client();
+        assert!(PreparedRequest::new(
+            &client,
+            client
+                .post("https://example.test/send")
+                .header("toolgate-effect-permit", "worker-selected")
+                .build()
+                .unwrap(),
+            metadata()
+        )
+        .is_err());
+        let mut meta = metadata();
+        meta.credential_headers
+            .push("toolgate-effect-permit".into());
+        assert!(PreparedRequest::new(
+            &client,
+            client.post("https://example.test/send").build().unwrap(),
+            meta
+        )
+        .is_err());
     }
 }

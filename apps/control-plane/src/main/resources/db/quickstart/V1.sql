@@ -1058,9 +1058,16 @@ CREATE TRIGGER effect_family_insert_guard BEFORE INSERT ON control_effects WHEN 
 -- statement
 CREATE TRIGGER effect_generation_delete BEFORE DELETE ON control_effect_generations BEGIN SELECT RAISE(ABORT,'effect history is retained'); END;
 -- statement
-CREATE TRIGGER effect_generation_update BEFORE UPDATE ON control_effect_generations WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.effect_id<>OLD.effect_id OR NEW.generation<>OLD.generation OR NEW.operation_id<>OLD.operation_id OR NEW.attempt_id<>OLD.attempt_id OR NEW.auth_nonce<>OLD.auth_nonce OR NEW.device_id<>OLD.device_id OR NEW.broker_id<>OLD.broker_id OR NEW.handler_id<>OLD.handler_id OR NEW.issued_at<>OLD.issued_at OR NEW.expires_at<>OLD.expires_at OR NEW.outcome_deadline<>OLD.outcome_deadline OR NEW.revision<>OLD.revision+1 OR (OLD.consumer IS NOT NULL AND (NEW.consumer IS NOT OLD.consumer OR NEW.claim_token IS NOT OLD.claim_token)) OR (OLD.consumer IS NULL AND NEW.consumer IS NOT NULL AND NOT(OLD.state IN('AUTHORIZED','SENDING') AND NEW.state='CONSUMED')) OR NOT((NEW.state=OLD.state) OR
+CREATE TRIGGER effect_generation_update BEFORE UPDATE ON control_effect_generations WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.effect_id<>OLD.effect_id OR NEW.generation<>OLD.generation OR NEW.operation_id<>OLD.operation_id OR NEW.attempt_id<>OLD.attempt_id OR NEW.auth_nonce<>OLD.auth_nonce OR NEW.device_id<>OLD.device_id OR NEW.broker_id<>OLD.broker_id OR NEW.handler_id<>OLD.handler_id OR NEW.issued_at<>OLD.issued_at OR NEW.expires_at<>OLD.expires_at OR NEW.outcome_deadline<>OLD.outcome_deadline OR NEW.revision<>OLD.revision+1 OR (OLD.consumer IS NOT NULL AND (NEW.consumer IS NOT OLD.consumer OR NEW.claim_token IS NOT OLD.claim_token)) OR (OLD.consumer IS NULL AND NEW.consumer IS NOT NULL AND NOT((OLD.state IN('AUTHORIZED','SENDING') AND NEW.state='CONSUMED') OR (OLD.state IN('AUTHORIZED','SENDING','AMBIGUOUS') AND (NEW.state='FAILED' AND NEW.consumer LIKE 'TARGET:%' AND EXISTS(
+ SELECT 1 FROM control_effect_evidence proof WHERE proof.tenant_id=OLD.tenant_id AND proof.effect_id=OLD.effect_id
+ AND proof.generation=OLD.generation AND proof.source='TARGET:'||NEW.consumer AND proof.outcome='FAILED'
+ AND proof.result_digest='sha256:b775353541fcdd3e2ef3d940fbae7961712380d2390c74852a52e12487d8e7f2'))))) OR NOT((NEW.state=OLD.state) OR
  (OLD.state='AUTHORIZED' AND NEW.state IN('RELEASED','SENDING','CONSUMED','AMBIGUOUS')) OR
  (OLD.state='SENDING' AND NEW.state IN('CONSUMED','AMBIGUOUS')) OR
+ (OLD.state IN('AUTHORIZED','SENDING') AND (NEW.state='FAILED' AND NEW.consumer LIKE 'TARGET:%' AND EXISTS(
+ SELECT 1 FROM control_effect_evidence proof WHERE proof.tenant_id=OLD.tenant_id AND proof.effect_id=OLD.effect_id
+ AND proof.generation=OLD.generation AND proof.source='TARGET:'||NEW.consumer AND proof.outcome='FAILED'
+ AND proof.result_digest='sha256:b775353541fcdd3e2ef3d940fbae7961712380d2390c74852a52e12487d8e7f2'))) OR
  (OLD.state='CONSUMED' AND NEW.state IN('COMPLETED','FAILED','AMBIGUOUS')) OR
  (OLD.state='AMBIGUOUS' AND NEW.state IN('COMPLETED','FAILED')) OR
  (OLD.state IN('COMPLETED','FAILED') AND NEW.state='CONFLICT')) BEGIN SELECT RAISE(ABORT,'invalid effect identity or transition'); END;

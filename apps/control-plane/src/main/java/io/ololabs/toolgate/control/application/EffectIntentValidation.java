@@ -16,7 +16,7 @@ public final class EffectIntentValidation {
     private static final int MAX_DEPTH=32, MAX_NODES=8192, MAX_BYTES=2*1024*1024;
     private static final Set<String> FORBIDDEN=Set.of("authorization","proxy-authorization","cookie","host",
         "forwarded","content-length","transfer-encoding","connection","te","upgrade","user-agent",
-        "traceparent","tracestate","content-type","toolgate-service-permit");
+        "traceparent","tracestate","content-type","toolgate-service-permit","toolgate-effect-permit");
     public static boolean reserved(String destination){return Set.of("olo-memory","olo-rag").contains(destination);}
     /** High-risk classes cannot opt out of explicit user/effect consent through a deployment flag. */
     public static boolean requiresConsent(EffectClassification classification,boolean declared){
@@ -28,7 +28,10 @@ public final class EffectIntentValidation {
         if(!policy.routeId().equals(route.id())||reserved(route.destination())
             ||route.streaming()!=Streaming.NONE)throw Failure.validation();
         if((policy.classification()==EffectClassification.DESTRUCTIVE||policy.classification()==EffectClassification.FINANCIAL)
-            && !policy.acknowledgedUnfencedRisk())throw Failure.validation();
+            && policy.fencedTarget()==null && !policy.acknowledgedUnfencedRisk())throw Failure.validation();
+        if(policy.fencedTarget()!=null&&(policy.classification()==EffectClassification.READ
+            ||policy.acknowledgedUnfencedRisk()||policy.targetDedupeGuarantee()!=null
+            ||!policy.fencedTarget().targetId().matches("[a-z][a-z0-9-]{0,63}")))throw Failure.validation();
         var intent=policy.intent();
         TargetDedupeGuarantees.validate(policy.targetDedupeGuarantee());
         if(policy.targetDedupeGuarantee()!=null&&(policy.classification()==EffectClassification.READ

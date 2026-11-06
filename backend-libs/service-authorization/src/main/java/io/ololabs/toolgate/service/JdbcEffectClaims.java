@@ -168,6 +168,32 @@ public final class JdbcEffectClaims {
             success?ServicePermitTargetOutcomeKind.COMPLETED:ServicePermitTargetOutcomeKind.FAILED,resultDigest);
         return changed;
     }
+    /** Reconcile only a conclusive positive target business receipt, never a timeout, lookup miss or HTTP success.
+     * This records evidence and grants no owner, new generation, action or negative not-started claim. */
+    public boolean confirmApplied(Connection c,Snapshot expected,String resultDigest)throws SQLException{
+        return confirmOutcome(c,expected,true,resultDigest);
+    }
+    /** A closed target-owned failure receipt must rule out any later apply for this exact binding.
+     * A timeout, lookup miss, executor error or not-started assertion is not such a receipt. */
+    public boolean confirmFailed(Connection c,Snapshot expected,String resultDigest)throws SQLException{
+        if(notStartedDigest().equals(resultDigest))throw new IllegalArgumentException("APPLYING cannot be reported as not started");
+        return confirmOutcome(c,expected,false,resultDigest);
+    }
+    private boolean confirmOutcome(Connection c,Snapshot expected,boolean success,String resultDigest)throws SQLException{
+        transaction(c);Objects.requireNonNull(expected);
+        if(expected.state()!=State.APPLYING)return false;
+        Binding b=expected.binding();String token;
+        try(var q=c.prepareStatement("""
+            SELECT claim_token FROM toolgate_target_claims WHERE tenant_id=? AND effect_id=?
+              AND authorization_generation=? AND auth_nonce=? AND request_digest=?
+              AND ownership_generation=? AND state='APPLYING'
+            """)){
+            q.setString(1,b.tenant());q.setString(2,b.effectId());q.setLong(3,b.authorizationGeneration());
+            q.setString(4,b.authNonce());q.setString(5,b.requestDigest());q.setLong(6,expected.ownershipGeneration());
+            try(var rows=q.executeQuery()){if(!rows.next())return false;token=rows.getString(1);}
+        }
+        return finish(c,new Owner(b,expected.ownershipGeneration(),token),success,resultDigest);
+    }
     private void enqueue(Connection c,Binding b,String token,ServicePermitTargetOutcomeKind outcome,String result)throws SQLException{
         try(var s=c.prepareStatement("""
             INSERT INTO toolgate_target_outcomes(tenant_id,effect_id,auth_nonce,claim_token,outcome,result_digest,delivered)
