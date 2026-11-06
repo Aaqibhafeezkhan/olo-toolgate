@@ -102,9 +102,12 @@ class FencedTargetVerifierTest {
         assertThrows(IllegalArgumentException.class,()->new FencedTargetVerifier("control","tenant",target,Map.of(),clock));
         assertThrows(IllegalArgumentException.class,()->new FencedTargetVerifier("control","tenant",
             new FencedTarget("../billing",FencedTargetClass.SHARED_SQL),Map.of("effect-key",key.getPublic()),clock));
-        var weak=KeyPairGenerator.getInstance("RSA");weak.initialize(1024);
+        // Negative public material only: never generate or use a weak private signing key.
+        var strong=(java.security.interfaces.RSAPublicKey)key.getPublic();
+        var weak=KeyFactory.getInstance("RSA").generatePublic(new java.security.spec.RSAPublicKeySpec(
+            strong.getModulus().shiftRight(1024).setBit(0),strong.getPublicExponent()));
         assertThrows(IllegalArgumentException.class,()->new FencedTargetVerifier("control","tenant",target,
-            Map.of("effect-key",weak.generateKeyPair().getPublic()),clock));
+            Map.of("effect-key",weak),clock));
     }
 
 }
