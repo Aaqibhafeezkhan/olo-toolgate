@@ -33,7 +33,7 @@ final class FleetTest {
         var grant=new FleetArtifactGrantClaims(io.ololabs.toolgate.control.fixtures.Tenants.id("fleet").value(),"server","device",3L,release.manifestDigest(),release.sizeBytes(),"grant",1700000000000L,1700000060000L);
         assertEquals(grant,crypto.grant(crypto.grant(grant)));
         var document=crypto.release(release.release()).model();FleetService.validatePackage(document);
-        assertThrows(Failure.class,()->FleetService.validatePackage(new FleetPackageDocument(document.formatVersion(),document.packageId(),document.version(),document.platforms(),document.architectures(),document.minimumClientVersion(),document.runtimes(),document.tools(),List.of())));
+        assertThrows(Failure.class,()->FleetService.validatePackage(new FleetPackageDocument(document.formatVersion(),document.packageId(),document.version(),document.platforms(),document.architectures(),document.minimumClientVersion(),document.runtimes(),document.tools(),List.of(),null)));
     }
     @Test void durableCanaryAdvanceRollbackUninstallReportsAndTenantIsolation()throws Exception{
         var base=Objects.requireNonNull(System.getenv("CONTROL_TEST_URL"));var password=Objects.requireNonNull(System.getenv("CONTROL_TEST_PASSWORD"));var database="fleet_"+UUID.randomUUID().toString().replace("-","");

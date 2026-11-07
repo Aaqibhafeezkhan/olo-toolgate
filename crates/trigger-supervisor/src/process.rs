@@ -32,9 +32,8 @@ impl std::error::Error for ReadError {}
 
 pub struct TriggerProcess {
     child: Child,
-    stdin: Option<ChildStdin>,
-    stdout: BufReader<ChildStdout>,
-    line: Vec<u8>,
+    writer: FrameWriter<ChildStdin>,
+    reader: FrameReader<ChildStdout>,
 }
 
 impl TriggerProcess {
@@ -67,9 +66,8 @@ impl TriggerProcess {
             .ok_or_else(|| io::Error::other("trigger stdout is not piped"))?;
         let mut process = Self {
             child,
-            stdin: Some(stdin),
-            stdout: BufReader::new(stdout),
-            line: Vec::new(),
+            writer: FrameWriter::new(stdin),
+            reader: FrameReader::new(stdout),
         };
         process.send(&Inbound::Start(start)).await?;
         Ok(process)
@@ -81,16 +79,97 @@ impl TriggerProcess {
 
     /// Writes one stdin frame.
     pub async fn send(&mut self, frame: &Inbound) -> io::Result<()> {
-        let stdin = self
-            .stdin
-            .as_mut()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "stdin closed"))?;
-        stdin.write_all(encode_inbound(frame).as_bytes()).await?;
-        stdin.flush().await
+        self.writer.send(frame).await
     }
 
     /// Reads the next stdout frame; `None` at end of stream. A line longer than [`MAX_FRAME_BYTES`] is an
     /// error without buffering it whole.
+    pub async fn next_frame(&mut self) -> Result<Option<Outbound>, ReadError> {
+        self.reader.next_frame().await
+    }
+
+    /// Closes stdin (after `STOP`, so the SDK sees end of input once it has read the frame).
+    pub fn close_stdin(&mut self) {
+        self.writer.close();
+    }
+
+    /// SIGTERM on Unix. Windows has no graceful signal for a console-less child, so this is a kill there.
+    pub fn terminate(&mut self) -> io::Result<()> {
+        #[cfg(unix)]
+        if let Some(pid) = self.child.id() {
+            // SAFETY: kill(2) with a pid this process spawned and has not yet reaped.
+            let result = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+            return if result == 0 {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            };
+        }
+        self.child.start_kill()
+    }
+
+    pub fn kill(&mut self) -> io::Result<()> {
+        self.child.start_kill()
+    }
+
+    pub async fn wait(&mut self) -> io::Result<ExitStatus> {
+        self.child.wait().await
+    }
+
+    /// Separates the process into its child, a writer and a reader, so one task can stream stdout frames while
+    /// another writes acknowledgements and broker answers.
+    pub fn into_parts(self) -> (Child, FrameWriter<ChildStdin>, FrameReader<ChildStdout>) {
+        (self.child, self.writer, self.reader)
+    }
+}
+
+/// The stdin half of a trigger process.
+pub struct FrameWriter<W> {
+    stdin: Option<W>,
+}
+
+impl<W: tokio::io::AsyncWrite + Unpin> FrameWriter<W> {
+    pub fn new(stdin: W) -> Self {
+        Self { stdin: Some(stdin) }
+    }
+
+    pub async fn send(&mut self, frame: &Inbound) -> io::Result<()> {
+        self.send_line(encode_inbound(frame).as_bytes()).await
+    }
+
+    /// Writes one complete line (an executor-built `BROKER_RESPONSE`, for example), adding the newline if missing.
+    pub async fn send_line(&mut self, line: &[u8]) -> io::Result<()> {
+        let stdin = self
+            .stdin
+            .as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::BrokenPipe, "stdin closed"))?;
+        stdin.write_all(line).await?;
+        if !line.ends_with(b"\n") {
+            stdin.write_all(b"\n").await?;
+        }
+        stdin.flush().await
+    }
+
+    pub fn close(&mut self) {
+        self.stdin = None;
+    }
+}
+
+/// The stdout half of a trigger process: bounded, newline-delimited frames.
+pub struct FrameReader<R> {
+    stdout: BufReader<R>,
+    line: Vec<u8>,
+}
+
+impl<R: tokio::io::AsyncRead + Unpin> FrameReader<R> {
+    pub fn new(stdout: R) -> Self {
+        Self {
+            stdout: BufReader::new(stdout),
+            line: Vec::new(),
+        }
+    }
+
+    /// The next frame; `None` at end of stream.
     pub async fn next_frame(&mut self) -> Result<Option<Outbound>, ReadError> {
         self.line.clear();
         loop {
@@ -117,33 +196,5 @@ impl TriggerProcess {
                 return parse_outbound(line).map(Some).map_err(ReadError::Frame);
             }
         }
-    }
-
-    /// Closes stdin (after `STOP`, so the SDK sees end of input once it has read the frame).
-    pub fn close_stdin(&mut self) {
-        self.stdin = None;
-    }
-
-    /// SIGTERM on Unix. Windows has no graceful signal for a console-less child, so this is a kill there.
-    pub fn terminate(&mut self) -> io::Result<()> {
-        #[cfg(unix)]
-        if let Some(pid) = self.child.id() {
-            // SAFETY: kill(2) with a pid this process spawned and has not yet reaped.
-            let result = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-            return if result == 0 {
-                Ok(())
-            } else {
-                Err(io::Error::last_os_error())
-            };
-        }
-        self.child.start_kill()
-    }
-
-    pub fn kill(&mut self) -> io::Result<()> {
-        self.child.start_kill()
-    }
-
-    pub async fn wait(&mut self) -> io::Result<ExitStatus> {
-        self.child.wait().await
     }
 }

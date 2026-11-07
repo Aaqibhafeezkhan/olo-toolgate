@@ -425,6 +425,7 @@ jobs:
         docker compose up -d --wait --wait-timeout 180 quickstart linux-device
         python manage.py setup --bootstrap-local --approve-linux-device --target linux
         docker compose run --rm -T --no-deps --entrypoint python -v "$PWD/test_agent.py:/app/test_agent.py:ro" agent /app/test_agent.py
+        docker compose run --rm -T --no-deps --entrypoint python -v "$PWD/test_trigger_agent.py:/app/test_trigger_agent.py:ro" agent /app/test_trigger_agent.py
         docker compose run --rm -T agent --target linux --verify-native-boundary
       if: ${{ inputs.run_tests }}
     - name: Preserve LangChain diagnostics

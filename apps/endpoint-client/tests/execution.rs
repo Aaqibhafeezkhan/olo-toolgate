@@ -63,6 +63,7 @@ fn settings(engine: PathBuf, state: PathBuf, access: Option<LocalFileAccess>) ->
             version: "21.0.12+1".into(),
         }],
         tools: vec![tool(access)],
+        triggers: vec![],
         files: None,
     };
     for tool in &mut settings.tools {

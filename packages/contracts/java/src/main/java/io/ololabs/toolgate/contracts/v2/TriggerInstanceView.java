@@ -19,6 +19,10 @@ package io.ololabs.toolgate.contracts.v2;
  * @param conditions canonical conditions value
  * @param leaseEpoch canonical leaseEpoch value
  * @param lastSeenAtUnixMs canonical lastSeenAtUnixMs value
+ * @param counters canonical counters value
+ * @param outbox canonical outbox value
+ * @param lastEventAt canonical lastEventAt value
+ * @param lastReconcileAt canonical lastReconcileAt value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record TriggerInstanceView(
@@ -35,7 +39,11 @@ public record TriggerInstanceView(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "phase", required = true) TriggerPhase phase,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "conditions", required = true) java.util.List<TriggerCondition> conditions,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "leaseEpoch", required = false) Long leaseEpoch,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "lastSeenAtUnixMs", required = false) Long lastSeenAtUnixMs
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "lastSeenAtUnixMs", required = false) Long lastSeenAtUnixMs,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "counters", required = false) TriggerCounters counters,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "outbox", required = false) TriggerOutboxStatus outbox,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "lastEventAt", required = false) String lastEventAt,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "lastReconcileAt", required = false) String lastReconcileAt
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -53,6 +61,10 @@ public record TriggerInstanceView(
      * @param conditions canonical conditions value
      * @param leaseEpoch canonical leaseEpoch value
      * @param lastSeenAtUnixMs canonical lastSeenAtUnixMs value
+     * @param counters canonical counters value
+     * @param outbox canonical outbox value
+     * @param lastEventAt canonical lastEventAt value
+     * @param lastReconcileAt canonical lastReconcileAt value
      */
     public TriggerInstanceView {
         java.util.Objects.requireNonNull(instanceId, "instanceId");

@@ -1,0 +1,24 @@
+{
+  "profileVersion": 1,
+  "profileId": "hotfolder-trigger",
+  "packages": [
+    {
+      "packageId": "examples.hotfolder",
+      "source": "PREBUILT_CORE",
+      "version": "0.1.0",
+      "required": true,
+      "deviceGroupIds": [
+        "ReadAndWriteDeviceGroup"
+      ],
+      "triggers": [
+        {
+          "assignment": "hotfolder-inbox",
+          "triggerId": "examples.hotfolder/file-dropped",
+          "config": {
+            "folder": "inbox"
+          }
+        }
+      ]
+    }
+  ]
+}

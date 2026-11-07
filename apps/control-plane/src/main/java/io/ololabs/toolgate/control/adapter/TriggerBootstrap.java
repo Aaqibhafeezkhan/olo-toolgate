@@ -19,12 +19,35 @@ public class TriggerBootstrap {
     @Inject TenantRequest request; @Inject Config config; @Inject ContractCodec codec; @Inject PostgresStore store;
     @Inject EndpointBootstrap endpoints; @Inject FleetBootstrap fleet;
 
-    static boolean enabled(Config config) { return config.getOptionalValue(FLAG, Boolean.class).orElse(false); }
+    private static volatile Boolean profileDeclares;
+
+    /**
+     * On with the module flag, or when the deployment profile this Control applies declares a trigger assignment:
+     * uploading such a profile enables triggers wherever it is applied (ADR 058, module 5).
+     */
+    static boolean enabled(Config config) {
+        if (config.getOptionalValue(FLAG, Boolean.class).orElse(false)) return true;
+        if (profileDeclares == null) {
+            var path = config.getOptionalValue("toolgate.control.profile.path", String.class);
+            boolean declares = false;
+            if (path.isPresent()) {
+                try {
+                    var profile = new com.fasterxml.jackson.databind.ObjectMapper().readTree(ProtectedCustody.read(java.nio.file.Path.of(path.get()), 262144));
+                    declares = PackageProvisioning.declaresTriggers(profile);
+                } catch (Exception unreadable) { declares = false; }
+            }
+            profileDeclares = declares;
+        }
+        return profileDeclares;
+    }
 
     public TriggerService forTenant(io.ololabs.toolgate.control.domain.Ids.TenantId tenant) {
         boolean on = enabled(config) && endpoints.profile(tenant) != null;
         return new TriggerService(store, codec, on ? fleet.triggerCrypto() : null, endpoints.forTenant(tenant), java.time.Clock.systemUTC(), on, tenant.value());
     }
+
+    /** Check-in ingest for a tenant (module 5); off with the module flag, when a check-in's triggers block is refused. */
+    public TriggerIngest ingest(io.ololabs.toolgate.control.domain.Ids.TenantId tenant) { return new TriggerIngest(forTenant(tenant), codec); }
 
     @Produces @jakarta.enterprise.context.RequestScoped TriggerService triggers() { return forTenant(request.tenant()); }
 }

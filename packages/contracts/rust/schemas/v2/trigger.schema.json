@@ -2156,6 +2156,18 @@
         },
         "lastSeenAtUnixMs": {
           "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "counters": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCounters"
+        },
+        "outbox": {
+          "$ref": "trigger.schema.json#/$defs/TriggerOutboxStatus"
+        },
+        "lastEventAt": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "lastReconcileAt": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
         }
       },
       "required": [
@@ -2182,6 +2194,69 @@
           "type": "array",
           "items": {
             "$ref": "trigger.schema.json#/$defs/TriggerInstanceView"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "TriggerDispositionView": {
+      "type": "object",
+      "description": "Control's terminal disposition of a stored record: a loss record, or a Control-side rejection on re-validation (plan 6.6).",
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDispositionKind"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        }
+      },
+      "required": [
+        "disposition",
+        "reason"
+      ]
+    },
+    "TriggerStoredEvent": {
+      "type": "object",
+      "description": "One record Control stored for an instance (plan 6.4): the event as the executor sent it, the producer Control attached from the certificate, the lease and the signed package, and when Control received it.",
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCloudEvent"
+        },
+        "producer": {
+          "$ref": "trigger.schema.json#/$defs/TriggerProducer"
+        },
+        "receivedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "disposition": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDispositionView"
+        }
+      },
+      "required": [
+        "event",
+        "producer",
+        "receivedAtUnixMs"
+      ]
+    },
+    "TriggerEventPage": {
+      "type": "object",
+      "description": "One page of an instance's stored records, in (leaseEpoch, outboxSeq) order.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerStoredEvent"
           },
           "maxItems": 200
         },

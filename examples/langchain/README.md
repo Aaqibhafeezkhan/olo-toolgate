@@ -96,6 +96,48 @@ the Linux composition. For example:
 docker compose exec linux-device cat /var/lib/olo-toolgate/hotfolder/langchain-smoke.txt
 ```
 
+## Hot-folder trigger (in progress, issue #274)
+
+A file dropped into the device's `inbox/` folder triggers a LangGraph flow
+([trigger_agent.py](trigger_agent.py)). The flow displays the file's content and
+then moves it to `processed/`. The feature is enabled by a deployment profile, not by a flag:
+[hotfolder-trigger.profile.json](hotfolder-trigger.profile.json) releases the
+HotFolder package to `ReadAndWriteDeviceGroup` and assigns its `file-dropped`
+client trigger there with `{"folder": "inbox"}`. Any Control that applies the
+profile enables triggers and creates (or updates) the assignment, including on
+devices that join the group later.
+
+```sh
+python manage.py prepare        # also writes .state/package/core-packages.lock.json
+docker compose -f compose.yaml -f compose.triggers.yaml up -d --wait --wait-timeout 180 quickstart linux-device
+python manage.py setup --bootstrap-local --approve-linux-device --target linux
+pip install -r requirements.txt
+python trigger_agent.py --target linux
+docker compose exec linux-device sh -c 'echo "2 x widget" > /var/lib/olo-toolgate/hotfolder/inbox/order-1042.txt'
+```
+
+The device polls `inbox/` every 10 seconds and reports each new `.txt` file once
+(`examples.hotfolder.file-dropped.v1`, a `STATE_SNAPSHOT` source). Control stores
+each event once, keyed by its source and id. The agent reads it, prints the
+content and moves the file with the package's `move` tool. A file that is already
+gone is skipped. An operation whose outcome the Gateway cannot confirm is
+reported and never retried.
+
+What works now and what is still to come:
+
+- **Module 5 (this delivery).** The profile-driven assignment, the device
+  trigger runner, check-in ingest with fencing and dedupe, and the stored-event
+  API that the agent pages (`ControlEvents`). Covered by unit tests
+  ([test_trigger_agent.py](test_trigger_agent.py), `HotFolderTest`,
+  `ClientReleasesTest`). This full Compose flow has not been run yet.
+- **Modules 10–12 and the end-to-end demo.** Push delivery over a
+  subscription socket replaces polling. It is another `EventSource`; the graph is
+  unchanged. The demo runs this flow end to end.
+- **Native HotFolder finality.** Until it is qualified (see the note at the
+  top), the Gateway reports `read_text` and `move` as `OUTCOME_UNKNOWN`. The
+  agent then shows `read-unconfirmed` or `move-unconfirmed` and leaves the
+  file in `inbox/`.
+
 ## Windows device targeting
 
 Use an x64 Windows client enrolled and approved on this example's Gateway, with

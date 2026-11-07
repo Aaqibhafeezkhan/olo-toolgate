@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. A package carries at least one tool or trigger.
  *
  * @param formatVersion canonical formatVersion value
  * @param packageId canonical packageId value
@@ -14,6 +14,7 @@ package io.ololabs.toolgate.contracts;
  * @param runtimes canonical runtimes value
  * @param tools canonical tools value
  * @param selfTests canonical selfTests value
+ * @param triggers canonical triggers value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record FleetPackageDocument(
@@ -25,7 +26,8 @@ public record FleetPackageDocument(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "minimumClientVersion", required = true) String minimumClientVersion,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "runtimes", required = true) java.util.List<ManagedRuntime> runtimes,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "tools", required = true) java.util.List<LocalToolRegistration> tools,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "selfTests", required = true) java.util.List<FleetSelfTest> selfTests
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "selfTests", required = true) java.util.List<FleetSelfTest> selfTests,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggers", required = false) java.util.List<FleetTriggerRegistration> triggers
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -38,6 +40,7 @@ public record FleetPackageDocument(
      * @param runtimes canonical runtimes value
      * @param tools canonical tools value
      * @param selfTests canonical selfTests value
+     * @param triggers canonical triggers value
      */
     public FleetPackageDocument {
         java.util.Objects.requireNonNull(formatVersion, "formatVersion");
@@ -54,5 +57,6 @@ public record FleetPackageDocument(
         tools = tools == null ? null : java.util.List.copyOf(tools);
         java.util.Objects.requireNonNull(selfTests, "selfTests");
         selfTests = selfTests == null ? null : java.util.List.copyOf(selfTests);
+        triggers = triggers == null ? null : java.util.List.copyOf(triggers);
     }
 }

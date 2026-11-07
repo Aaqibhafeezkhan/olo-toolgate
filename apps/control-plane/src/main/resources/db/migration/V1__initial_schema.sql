@@ -4159,7 +4159,7 @@ CREATE TABLE public.control_triggers (
     revision bigint NOT NULL,
     document text NOT NULL,
     CONSTRAINT control_triggers_document_check CHECK ((octet_length(document) <= 131072)),
-    CONSTRAINT control_triggers_kind_check CHECK ((kind = ANY (ARRAY['ASSIGNMENT'::text, 'INSTANCE'::text, 'DESIRED'::text, 'LEASE'::text]))),
+    CONSTRAINT control_triggers_kind_check CHECK ((kind = ANY (ARRAY['ASSIGNMENT'::text, 'INSTANCE'::text, 'DESIRED'::text, 'LEASE'::text, 'EVENT'::text, 'KEY'::text, 'EPOCH'::text, 'CHECKPOINT'::text]))),
     CONSTRAINT control_triggers_record_check CHECK (((length(record_id) >= 1) AND (length(record_id) <= 256))),
     CONSTRAINT control_triggers_revision_check CHECK (((revision > 0) AND (revision <= '9007199254740991'::bigint))),
     CONSTRAINT control_triggers_pkey PRIMARY KEY (tenant_id, kind, record_id),

@@ -20,6 +20,8 @@ public class EndpointBootstrap {
     @Inject PostgresStore store;
     @Inject EnterpriseOperations operations;
     @Inject IdentityKeyBootstrap identityKeys;
+    /** Lazy: the trigger services themselves need this bootstrap's endpoint services. */
+    @Inject jakarta.inject.Provider<TriggerBootstrap> triggers;
     private EndpointService service;
     private java.util.List<java.security.cert.X509Certificate> listenerRoots=java.util.List.of();
     void start(@Observes StartupEvent ignored){if(service==null)service=load();}
@@ -43,7 +45,8 @@ public class EndpointBootstrap {
             config.getOptionalValue("toolgate.control.client-check-in.jitter-pct",Integer.class).orElse(null),
             config.getOptionalValue("toolgate.control.client-check-in.offline-after-ms",Long.class).orElse(null));
         }catch(IllegalArgumentException failure){throw new IllegalStateException(failure.getMessage());}
-        return new EndpointService(store,codec,issuer,java.time.Clock.systemUTC(),enabled,tenant,server,organization,control,gateway).operations(operations).checkInPolicy(checkIn);
+        return new EndpointService(store,codec,issuer,java.time.Clock.systemUTC(),enabled,tenant,server,organization,control,gateway).operations(operations).checkInPolicy(checkIn)
+            .triggers(id->triggers.get().ingest(id));
     }
     private synchronized EndpointService template(){if(service==null)service=load();return service;}
     public Store.RuntimeProfile profile(Ids.TenantId tenant){return store.transaction(tenant,false,Store.Session::runtimeProfile);}

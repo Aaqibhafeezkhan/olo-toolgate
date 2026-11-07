@@ -244,6 +244,7 @@ fn shared_fixture_round_trips() {
         FleetSelfTest,
         FleetSignatureHeader,
         FleetSignedDocument,
+        FleetTriggerRegistration,
         FleetTrustKey,
         GroupMembership,
         GroupSelection,

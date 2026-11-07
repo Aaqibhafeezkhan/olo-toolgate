@@ -2095,6 +2095,13 @@
   "FleetSignedDocument": {
     "jws": "e30.e30.c2ln"
   },
+  "FleetTriggerRegistration": {
+    "triggerId": "examples.hotfolder/file-dropped",
+    "triggerDescriptorDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "runtimeId": "jvm",
+    "entryPoint": "/opt/tool/examples.hotfolder/app.jar",
+    "fileAccess": "READ"
+  },
   "FleetTrustKey": {
     "kid": "device-1",
     "n": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

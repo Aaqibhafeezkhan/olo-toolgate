@@ -69,7 +69,8 @@ public final class CorePackageInventory {
             try {
                 String digest = sha256(bytes);
                 if (!digest.equals(text(entry, "artifactSha256"))) throw new IOException("Core package artifact digest mismatch");
-                var verified = PackageArchive.validate(bytes);
+                // A sealed core package may export triggers (ADR 058); uploading it is still gated by the triggers module.
+                var verified = PackageArchive.validate(bytes, true);
                 var manifest = JSON.readTree(verified.manifestBytes());
                 if (!id.equals(manifest.path("id").asText()) || !version.equals(manifest.path("version").asText())
                         || !JsonProject.sdkVersion().equals(manifest.path("sdk").path("version").asText())

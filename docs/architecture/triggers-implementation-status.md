@@ -9,20 +9,20 @@ This is the live progress document for issue #274 (server and client triggers). 
 
 Updated: **2026-11-07**.
 
-**Overall: 5% complete; 95% pending.** 1 of 18 modules merged to `main`: module 1 (olo-labs/olo-toolgate#281,
-merge `16d0fd36`). Modules 2, 3 and 4 were each reviewed and merged into a stacked feature branch (#282 and #283
-into `feature/triggers-m01-contracts`, #284 into `feature/triggers-m02-java-sdk`), not into `main`. The integration
-PR from `feature/triggers-integration-m04` brings all three to `main` together; they earn their weight when it
-merges (5% → 27%).
+**Overall: 27% complete; 73% pending.** 4 of 18 modules merged to `main`: module 1 (olo-labs/olo-toolgate#281,
+merge `16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`;
+reviewed as #282, #283 and #284). Module 5 is implemented on `feature/triggers-m05-client-ingest`. It is not yet
+Done: its Slice 1 run on a real device is outstanding (see *Module 5*). It earns its 8% only when merged with that
+evidence (27% → 35%).
 
 | Slice / gate | Needs modules | Status |
 |---|---|---|
-| Slice 1 — client POLL trigger end to end (35%) | 1–5 | ⏳ Pending |
+| Slice 1 — client POLL trigger end to end (35%) | 1–5 | 🔵 Module 5 implemented and unit/integration tested; the run on a real device has not been executed |
 | Slice 2 — server trigger with failover (56%) | 1–8 | ⏳ Pending |
 | Slice 3 — schedule and device trigger → authorized MCP (85%) | 1–14 | ⏳ Pending |
 | Slice 4 — composite MCP from an agent and an action (92%) | 1–15 | ⏳ Pending |
 | Release-ready (99%) | 1–17 | ⏳ Pending |
-| Gate G-STATE (TLC model, stateful property tests, deterministic simulation) | 1, 3, 17 | 🔵 Item 1 (TLC) passes at the bounds in *Baseline changes*. Item 2 is delivered for the supervisor crate in the module 3 PR (the jqwik stateful tests for Control ingest belong to module 5). Item 3 pending |
+| Gate G-STATE (TLC model, stateful property tests, deterministic simulation) | 1, 3, 17 | 🔵 Item 1 (TLC) passes at the bounds in *Baseline changes*. Item 2 is delivered for the supervisor crate (module 3) and for Control ingest (module 5, a seeded-random stateful JUnit test instead of jqwik; see *Baseline changes*). Item 3 pending |
 | Gate G-IFC (conformance and adversarial corpus, security sign-off) | 11, 16 | ⏳ Not run |
 | M12 end-to-end scenarios | all | 0 of 58 passing |
 
@@ -31,10 +31,10 @@ merges (5% → 27%).
 | # | Module | Track | Weight | Status | Earned | PR |
 |---|---|---|---:|---|---:|---|
 | 1 | Contracts, ADR and model | A | 5% | ✅ Merged | 5% | #281 |
-| 2 | Java SDK, POLL | B | 6% | 🔵 In this PR (integration to `main`; reviewed in #282) | 0% | #282 |
-| 3 | Supervisor crate | C | 8% | 🔵 In this PR (integration to `main`; reviewed in #283) | 0% | #283 |
-| 4 | Control core for client triggers | D | 8% | 🔵 In this PR (integration to `main`; reviewed in #284) | 0% | #284 |
-| 5 | ★ Client integration and ingest | E | 8% | ⏳ Pending | 0% | — |
+| 2 | Java SDK, POLL | B | 6% | ✅ Merged (via #285) | 6% | #282, #285 |
+| 3 | Supervisor crate | C | 8% | ✅ Merged (via #285) | 8% | #283, #285 |
+| 4 | Control core for client triggers | D | 8% | ✅ Merged (via #285) | 8% | #284, #285 |
+| 5 | ★ Client integration and ingest | E | 8% | 🔵 In progress (implemented; Slice 1 device run outstanding) | 0% | — |
 | 6 | Lifecycle, rollout and raw page | D | 6% | ⏳ Pending | 0% | — |
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
 | 8 | ★ Server triggers on the Tool Host | E | 8% | ⏳ Pending | 0% | — |
@@ -48,7 +48,7 @@ merges (5% → 27%).
 | 16 | Information flow, field-level | F | 4% | ⏳ Pending | 0% | — |
 | 17 | Resource safety and release gate | F | 3% | ⏳ Pending | 0% | — |
 | 18 | IMAP PUSH sample | — | 1% | 🚫 Blocked (Tool Host TCP tunnels, ADR 013) | 0% | — |
-| | **Overall** | | **100%** | | **5%** | |
+| | **Overall** | | **100%** | | **27%** | |
 
 ## How progress is counted
 
@@ -69,6 +69,10 @@ their reasons.
 
 | Date | Change | Old | New | Reason |
 |---|---|---|---|---|
+| 2026-11-07 | Module 5: G-STATE item 2 for Control ingest (plan 6.6.1) | jqwik stateful property tests | A seeded-random stateful JUnit test (`TriggerIngestTest`, runs set with `-Dtoolgate.ingest.runs`) that interleaves check-ins, retries, epoch changes, stops and halts and checks the model's invariants after every step | jqwik 1.10.2 needs JUnit Platform 1.14; the build uses 6.1.3. The seeded generator gives the same reproducible interleavings without a second test engine. Weights unchanged |
+| 2026-11-07 | Module 5: how packages reach devices | Not specified beyond "the endpoint client links the supervisor" | Trigger exports reach devices only in the signed client release (`FleetPackageDocument.triggers`), through the existing fleet rollout; Control does not deliver a package automatically because a device has an instance. Automatic delivery is scheduled for a later stage | User decision. A device without the release reports the instance `Pending` with `Installed=False, PackageNotInstalled` |
+| 2026-11-07 | Module 5: enabling triggers | The `toolgate.triggers.control-core.enabled` flag | The flag, or a deployment profile that declares a trigger assignment (`ProfilePackage.triggers`). Applying such a profile releases the package to its device groups and creates or updates the assignment (provisioning step `ASSIGN`) | User decision: a profile uploaded to any installation enables the feature there. Contract amendment in `profile.schema.json` (fresh build, regenerated) |
+| 2026-11-07 | Module 5: SDK test harness fix | — | `TriggerRuntimeTest`'s in-process pipe reader retries once the runtime thread has ended (`Write end dead`) | Fixes the flaky CI run 42357957628, at the user's request. Test-only; no runtime change |
 | 2026-11-07 | Delivery grouping (plan 24.6) | One branch and one PR per module, modules strictly in the order of 24.2 | Module 5 in its own PR; then modules 10, 11 and 12 and an end-to-end demo (device POLL trigger → ingest → router → coarse labels → external WebSocket listener) in one PR; modules 6–9 and 13–18 in later deliveries | User decision, to reach the first externally observable trigger event sooner. Weights, scope and *Done when* are unchanged; the combined PR earns modules 10–12 (12%) only when each meets its own *Done when*; the demo carries no weight |
 | 2026-11-07 | Module 4 scope: package review and enable (plan 10.2 "existing review / enable routes") | Definitions are the triggers of enabled package versions; the existing review flow carries the security delta | Definitions are the trigger exports of every uploaded (`VERIFIED`) package version, each with a trigger security delta against the version uploaded before. Weights unchanged | Control has no review or enable state for SDK packages today (versions stay `VERIFIED`; tools deploy straight from them), so there is no existing flow to extend. Gating trigger use on a review step belongs with that flow when it exists |
 | 2026-11-07 | Module 4 scope: plan 10.1 conventions | Errors are RFC 9457 `application/problem+json`; bodies may be JSON or YAML | Errors use Control's existing error envelope with the same status codes (404 identical for unknown and cross-tenant, 412 stale ETag, 428 missing If-Match); bodies are JSON only | One error format per Control API: the console and every client parse the existing envelope. Changing it is a Control-wide decision, not a trigger one |
@@ -144,7 +148,7 @@ passes (plan 8.5); TLC passes on the model (plan 6.6.1).
 **Outstanding before the module is Done:** gate D0 review of the contracts and the delivery model in the PR. Admin resource schemas (`TriggerAssignment`, `TriggerInstance`) and the admin routes are part of module 4's
 definitions and assignments API, not of this module.
 
-### Module 2 — Java SDK, POLL (merged into `feature/triggers-m01-contracts`, #282; to `main` in the integration PR)
+### Module 2 — Java SDK, POLL (merged into `feature/triggers-m01-contracts`, #282; to `main` via #285, merge `abc72788`)
 
 Scope: `@ClientTrigger` and `@ServerTrigger` in POLL mode, the processor's rules (plan 5.8) and the generated
 descriptor (5.9), `PollContext`, the runtime loop on the trigger-mode frames (6.2), `toolgate check` and
@@ -213,13 +217,13 @@ package packs and verifies.
 exercised by hand with the same `java -jar` command above); the Maven plugin end-to-end run (`tool-sdk/java-sdk/e2e`,
 needs `mvn`); M12 scenarios (module 2 owns none).
 
-**Outstanding before the module is Done:** the merge of the integration PR to `main` (reviewed and merged as #282). Known limits, by design of this
+**Done:** merged to `main` via #285 (reviewed as #282). Known limits, by design of this
 module: PUSH mode, `SnapshotState`, `nativeMount` and the `ACCEPTED` checkpoint level are module 7; server-trigger
 routes, TCP destinations and secrets are module 8 (*Baseline changes*); `toolgate dev` does not serve triggers (they
 have no MCP surface); the trigger `description` is in the package index, not in the signed descriptor, which has no
 field for it — module 4's definitions API decides whether the contract needs one.
 
-### Module 3 — Supervisor crate (merged into `feature/triggers-m01-contracts`, #283; to `main` in the integration PR)
+### Module 3 — Supervisor crate (merged into `feature/triggers-m01-contracts`, #283; to `main` via #285, merge `abc72788`)
 
 Scope: `crates/trigger-supervisor`: process lifecycle, the trigger-mode stdio frames, the outbox with `outboxSeq`,
 the `LOCAL` barrier, rejection classes, loss records, backoff and crash loop, health, the sequence namespaces.
@@ -290,7 +294,7 @@ backpressure blocks like `BLOCK` until the SDK scheduler reads `Degraded (Backpr
 halt after a fix is left to modules 5 and 6. The supervisor trusts its executor for lease tokens and the
 renew deadline (modules 5 and 8 verify them).
 
-### Module 4 — Control core for client triggers (merged into `feature/triggers-m02-java-sdk`, #284; to `main` in the integration PR)
+### Module 4 — Control core for client triggers (merged into `feature/triggers-m02-java-sdk`, #284; to `main` via #285, merge `abc72788`)
 
 Scope: package acceptance of trigger exports and the security delta; the definitions API; `TriggerAssignment` CRUD
 for client targets (ETag, idempotency, dry run); instances; the signed `TriggerDesiredDocument`; client leases;
@@ -351,7 +355,75 @@ repository pre-commit script.
 **Not run:** the M12 scenarios (module 4 owns none); the console page (module 6); an HTTP-level test of the resource
 class (the service is tested directly, as Fleet's is).
 
-**Outstanding before the module is Done:** the merge of the integration PR to `main` (reviewed and merged as #284).
+**Done:** merged to `main` via #285 (reviewed as #284).
+
+### Module 5 — Client integration and ingest (in progress, `feature/triggers-m05-client-ingest`)
+
+Scope (plan 24.2): the endpoint client links the supervisor, fetches desired state and adds `TriggerSync` to
+check-in; Control ingest (T6–T9, dedupe, `acceptedOutboxSeq`, acks, `retryLater`, dispositions); instance and event
+queries; derived `Stale`.
+
+Done when: **Slice 1** (allocate a POLL trigger to a device, see `Running`, receive events, query status) and the
+owned M12 scenarios (9, 13 allocation and ingest parts, 33, 38, 39 client crash points) pass.
+
+**Implemented** (based on `main` at `abc72788`):
+
+- **Control ingest** (`TriggerIngest`): `EndpointCheckIn.triggers` is answered with a `TriggerSyncAck` on every
+  check-in while triggers are enabled (an empty one when the device sent none, so devices learn support). Leases
+  issue or renew in the ack and are never stored in plaintext in the replayed acknowledgement. Each record is fenced:
+  `NotAssigned`/`UnknownInstance`; the current epoch while the lease is active; an ended epoch drains for 7 days when
+  it ended by renewal or Stop. Then a token bucket at the descriptor's `maxEventsPerHour` (`retryLater`), and
+  re-validation against the signed descriptor (`IdentityMismatch`, `UnexpectedLossRecord`, `UnsupportedKind`,
+  `TypeMismatch`, `EventTooLarge`, `SchemaInvalid`). A failure becomes a stored disposition: under `SKIP` it is
+  counted, under `HALT` the instance halts (`haltedByControl`). Fired events are deduplicated on `(source, id)`.
+  `acceptedOutboxSeq` advances only over a contiguous prefix. Inline `ACCEPTED` checkpoints are checked against it
+  (invariant C). The check-in is bounded at 192 KiB.
+- **Queries:** `GET /triggers/events` (stored records per instance, in `(leaseEpoch, outboxSeq)` order, with
+  dispositions); instance views carry counters, outbox state, `lastEventAt` and `lastReconcileAt`; `Stale=True` is
+  derived after max(5 minutes, 3 check-in intervals); `GET /endpoint/triggers/descriptors/{digest}` for devices.
+- **Endpoint client** (`apps/endpoint-client/src/triggers.rs`): a runner task over the module 3 supervisor. It
+  verifies the signed desired document (tenant, executor, `CLIENT`, expiry), fetches each descriptor and checks its
+  RFC 8785 + NFC digest (`trigger-supervisor::canonical`, parity with the shared descriptor vectors). It installs
+  only what the signed client release registers (`FleetPackageDocument.triggers`). It runs each leased instance in a
+  hardened container in trigger mode with read-only access to its files area, and always removes the container. It
+  reports snapshots, events (48 KiB budget) and inline checkpoints in check-in, truncates on ack, and deletes local
+  state once an instance is removed.
+- **Delivery and enablement:** client releases carry trigger registrations (a trigger-only package is releasable).
+  A deployment profile may declare trigger assignments (`ProfilePackage.triggers`): applying it releases the
+  package to its device groups and creates or updates each assignment in a new `ASSIGN` step. A profile that
+  declares a trigger enables triggers for the installation (*Baseline changes*).
+- **Use case (matures with modules 10–12):** the HotFolder package's `file-dropped` POLL trigger, and in
+  `examples/langchain` a deployment profile, a Compose overlay with a core lock, and a LangGraph agent. The agent
+  takes each dropped file, displays it and moves it to `processed/`. It reads events from Control's events API now;
+  module 12's socket will be another event source.
+- **Contracts:** `FleetTriggerRegistration`, `TriggerStoredEvent`, `TriggerEventPage`, `TriggerDispositionView`,
+  `ProfileTrigger`, instance-view fields and the `ASSIGN` step; regenerated (1394 files) with valid fixtures.
+
+**Checks run** (Windows workstation, 2026-11-07; Rust and PHP in Docker; PostgreSQL 17 in Docker through
+`tools/control/check.py`):
+
+| Check | Result |
+|---|---|
+| `TriggerIngestTest` on SQLite (fencing, drain window, dedupe, contiguous prefix, checkpoint check, rate limit, SKIP and HALT dispositions, cross-tenant, seeded-random stateful run) | Pass: 8 tests |
+| `ClientReleasesTest` on SQLite, incl. a profile with a trigger: release, `ASSIGN`, idempotent reapply, ETag update on config change, refusals | Pass: 9 tests |
+| `tools/control/check.py`: `:control-plane:test` on PostgreSQL 17 (incl. `TriggerIngestTest`, `ClientReleasesTest`, `TriggerTest`, `FleetTest`) | Pass: 294 tests in 75 suites, 8 skipped |
+| `:control-plane:enterpriseTest` | 414 tests, 1 failure: the known `TargetClaimsTest` Windows path-length failure (same on `main`, see the integration section) |
+| `:contracts-java:test`, `:package-archive:test` | Pass: 4; 9 with 1 skipped |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked` | Pass: 377 passed, 16 ignored, 54 binaries. A first full run failed `power_off_reports_once_and_power_on_resumes_without_reenrollment` (an extra check-in after its 500 ms interval) while the PostgreSQL suite loaded the machine; it passed 5 of 5 alone and in the full re-run |
+| Java SDK runtime (`TriggerRuntimeTest` harness fix) | Pass: 115 tests, three runs |
+| `examples/java-tools`: `:hotfolder:check`, `:inbox-watch:check` against this branch's SDK | Pass: 4 and 7 tests |
+| `examples/langchain`: `test_trigger_agent.py` (LangGraph 1.2.20), `test_packages.py`, `test_manage.py` | Pass: 7, 5, 35 |
+| `generate.py --check`, `fixtures.py --check`, `version.py --check`, `tools/quality.py`, `tools/ci/preflight.py`, `permissions.py --check`, `capacity_schema.py --check`, `tools/ui/generate.py --check` | Pass |
+| `tests/ci` | Pass: 403, 10 skipped |
+| `tests/contracts` | 176 pass, 2 skipped; the same 3 environment failures as on `main` (2 symlink, 1 scorecard) |
+| TypeScript contracts check and tests; PHP 8.2 round trips and lint | Pass: 2 tests; 299 v1 and 371 v2 round trips, 670 files linted |
+| `tools/ci/secret-scan.mjs` (staged tree); dependency licence audit (`cargo metadata` in Docker) | Pass; 898 entries (new: `unicode-normalization` MIT/Apache-2.0, `ryu-js` Apache-2.0/BSL-1.0, `tinyvec` Zlib/Apache-2.0/MIT) |
+
+**Not run:** Slice 1 on a real device (Quickstart and device images built from this branch, a POLL trigger
+allocated, `Running` observed, events queried); the owned M12 scenarios 9, 13, 33, 38 and 39; the
+`examples/langchain` hot-folder Compose flow; the admin UI tests (no UI change).
+
+**Outstanding before the module is Done:** the Slice 1 run and the owned scenarios above, then the PR to `main`.
 
 ### Integration of modules 2–4 into `main`
 

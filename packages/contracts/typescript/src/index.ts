@@ -1425,7 +1425,7 @@ export interface FleetDesiredSnapshot {
   readonly generation: number;
   readonly assignments: ReadonlyArray<FleetAssignment>;
 }
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. A package carries at least one tool or trigger. */
 export interface FleetPackageDocument {
   readonly formatVersion: number;
   readonly packageId: string;
@@ -1436,6 +1436,7 @@ export interface FleetPackageDocument {
   readonly runtimes: ReadonlyArray<ManagedRuntime>;
   readonly tools: ReadonlyArray<LocalToolRegistration>;
   readonly selfTests: ReadonlyArray<FleetSelfTest>;
+  readonly triggers?: ReadonlyArray<FleetTriggerRegistration>;
 }
 /** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
 export interface FleetPackageRelease {
@@ -1510,6 +1511,14 @@ export interface FleetSignatureHeader {
 /** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
 export interface FleetSignedDocument {
   readonly jws: string;
+}
+/** A trigger export of a released package (ADR 058): how a device runs it. The device fetches the full descriptor by digest and checks it against this signed digest and the signed desired document. */
+export interface FleetTriggerRegistration {
+  readonly triggerId: string;
+  readonly triggerDescriptorDigest: string;
+  readonly runtimeId: string;
+  readonly entryPoint: string;
+  readonly fileAccess: LocalFileAccess;
 }
 /** Explicit RSA public trust key; no private material or implicit domain sharing. */
 export interface FleetTrustKey {

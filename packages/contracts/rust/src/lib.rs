@@ -2467,7 +2467,7 @@ pub struct FleetDesiredSnapshot {
     pub generation: u64,
     pub assignments: Vec<FleetAssignment>,
 }
-/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
+/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. A package carries at least one tool or trigger.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetPackageDocument {
@@ -2480,6 +2480,8 @@ pub struct FleetPackageDocument {
     pub runtimes: Vec<ManagedRuntime>,
     pub tools: Vec<LocalToolRegistration>,
     pub self_tests: Vec<FleetSelfTest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<FleetTriggerRegistration>>,
 }
 /// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2578,6 +2580,16 @@ pub struct FleetSignatureHeader {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetSignedDocument {
     pub jws: String,
+}
+/// A trigger export of a released package (ADR 058): how a device runs it. The device fetches the full descriptor by digest and checks it against this signed digest and the signed desired document.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FleetTriggerRegistration {
+    pub trigger_id: String,
+    pub trigger_descriptor_digest: String,
+    pub runtime_id: String,
+    pub entry_point: String,
+    pub file_access: LocalFileAccess,
 }
 /// Explicit RSA public trust key; no private material or implicit domain sharing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -60,6 +60,10 @@ pub struct ClientService {
     adoption: Option<EndpointAdoption>,
     deployment: crate::deployment::State,
     execution: Option<crate::execution::Manager>,
+    /// Client triggers (ADR 058), started with the first check-in that needs them.
+    triggers: Option<crate::triggers::Triggers>,
+    /// Control acknowledged a triggers block, so check-ins carry Trigger Sync.
+    triggers_supported: bool,
     store: ProtectedStore,
     _lease: ServiceLease,
     key: Arc<DeviceKey>,
@@ -245,6 +249,8 @@ impl ClientService {
             },
             deployment,
             execution,
+            triggers: None,
+            triggers_supported: false,
             store,
             _lease: lease,
             key,
@@ -1105,7 +1111,10 @@ impl ClientService {
                     })
                     .map(|p| p.digest.clone()),
                 local_tools: Some(self.local_catalog()),
-                triggers: None,
+                triggers: match self.trigger_runner(&identity) {
+                    Some(runner) if self.triggers_supported => Some(runner.sync().await?),
+                    _ => None,
+                },
             };
             self.journal.pending_report = Some(request);
             self.save()?;
@@ -1191,6 +1200,16 @@ impl ClientService {
             result = "accepted",
             sequence = self.journal.sequence
         );
+        // Trigger acknowledgements truncate what Control stored; they apply whatever the power state.
+        let mut trigger_generation = None;
+        if let Some(sync) = ack.triggers.clone() {
+            self.triggers_supported = true;
+            trigger_generation = Some(sync.generation);
+            let identity = self.journal.identity.clone().ok_or(Failure::Unauthorized)?;
+            if let Some(runner) = self.trigger_runner(&identity) {
+                runner.acknowledge(sync).await?;
+            }
+        }
         // Switched off: no task, package or builder work is taken from this or any later reply.
         if !self.power.is_on() {
             return Ok(());
@@ -1213,7 +1232,103 @@ impl ClientService {
                 return Err(failure);
             }
         }
+        if let Some(generation) = trigger_generation {
+            if let Err(failure) = self.refresh_triggers(&identity, generation).await {
+                tracing::warn!(event = "trigger_desired", result = "refused", error = ?failure);
+            }
+        }
         Ok(())
+    }
+    /// The trigger runner of this device, when it has an execution configuration; started on first use.
+    fn trigger_runner(&mut self, identity: &DeviceIdentity) -> Option<crate::triggers::Triggers> {
+        if self.triggers.is_none() && self.config.execution.is_some() {
+            self.triggers = Some(crate::triggers::Triggers::start(
+                self.config.state_directory.join("triggers"),
+                identity.tenant_id.clone(),
+            ));
+        }
+        self.triggers.clone()
+    }
+    /// Applies a newer signed desired trigger document (plan 8.1): each instance with its descriptor, verified
+    /// against the digest both signed documents name, and the signed release registration that installs it.
+    async fn refresh_triggers(&mut self, identity: &DeviceIdentity, generation: u64) -> Result<()> {
+        let Some(runner) = self.trigger_runner(identity) else {
+            return Ok(());
+        };
+        runner
+            .context(self.execution.as_ref().map(|m| m.trigger_context()))
+            .await?;
+        if generation <= runner.observed().await? {
+            return Ok(());
+        }
+        let settings = self.config.deployment.clone().ok_or(Failure::Unsupported)?;
+        let signed = self.control.trigger_desired(identity.clone()).await?;
+        let (document, _): (olo_toolgate_contracts::v2::TriggerDesiredDocument, _) = settings
+            .verify(
+                &FleetSignedDocument {
+                    jws: signed.document,
+                },
+                "toolgate-trigger-desired+jws",
+                "TriggerDesiredDocument",
+            )?;
+        let now = self.clock()?;
+        if document.tenant_id != identity.tenant_id
+            || document.executor_id != identity.device_id
+            || document.executor != olo_toolgate_contracts::v2::TriggerExecutor::Client
+            || document.expires_at_unix_ms <= now
+            || document.issued_at_unix_ms > now.saturating_add(300000)
+        {
+            return Err(Failure::Unauthorized);
+        }
+        let base = self.config.execution.clone().ok_or(Failure::Unsupported)?;
+        let candidate = if self.deployment.desired.is_some() {
+            self.deployment.candidate(&settings, &base)?.0
+        } else {
+            base
+        };
+        let mut resolved = Vec::new();
+        for instance in &document.instances {
+            let value = self
+                .control
+                .trigger_descriptor(identity.clone(), instance.trigger_descriptor_digest.clone())
+                .await?;
+            if crate::triggers::descriptor_digest(&value)? != instance.trigger_descriptor_digest {
+                return Err(Failure::Unauthorized);
+            }
+            let descriptor: olo_toolgate_contracts::v2::TriggerDescriptor =
+                serde_json::from_value(value).map_err(|_| Failure::Validation)?;
+            if descriptor.trigger_id != instance.trigger_id
+                || !descriptor
+                    .executors
+                    .contains(&olo_toolgate_contracts::v2::TriggerExecutor::Client)
+            {
+                return Err(Failure::Unauthorized);
+            }
+            let registration = candidate
+                .triggers
+                .iter()
+                .find(|r| {
+                    r.trigger_id == instance.trigger_id
+                        && r.trigger_descriptor_digest == instance.trigger_descriptor_digest
+                })
+                .cloned();
+            let runtime = registration.as_ref().and_then(|r| {
+                candidate
+                    .runtimes
+                    .iter()
+                    .find(|x| x.id == r.runtime_id)
+                    .cloned()
+            });
+            resolved.push(crate::triggers::Resolved {
+                instance: instance.clone(),
+                descriptor,
+                registration,
+                runtime,
+            });
+        }
+        runner
+            .desired(crate::triggers::Desired { document, resolved })
+            .await
     }
     /// True when this gateway's last acknowledged report matches the owner's switch.
     fn power_reported(&self) -> bool {

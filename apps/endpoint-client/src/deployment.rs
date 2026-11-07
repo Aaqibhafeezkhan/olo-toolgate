@@ -74,7 +74,9 @@ impl Settings {
         }
         let keys = match typ {
             "toolgate-package-release+jws" => &self.release_keys,
-            "toolgate-fleet-desired+jws" | "toolgate-fleet-artifact+jws" => &self.organization_keys,
+            "toolgate-fleet-desired+jws"
+            | "toolgate-fleet-artifact+jws"
+            | "toolgate-trigger-desired+jws" => &self.organization_keys,
             _ => return Err(Failure::Unauthorized),
         };
         let key = keys
@@ -112,6 +114,16 @@ impl Settings {
         let runtimes: BTreeSet<_> = document.runtimes.iter().map(|r| &r.id).collect();
         let tools: BTreeSet<_> = document.tools.iter().map(|t| &t.tool_id).collect();
         let tests: BTreeSet<_> = document.self_tests.iter().map(|t| &t.tool_id).collect();
+        let triggers = document.triggers.as_deref().unwrap_or_default();
+        let trigger_ids: BTreeSet<_> = triggers.iter().map(|t| &t.trigger_id).collect();
+        if trigger_ids.len() != triggers.len()
+            || (tools.is_empty() && triggers.is_empty())
+            || triggers
+                .iter()
+                .any(|t| !runtimes.contains(&t.runtime_id) || tools.contains(&t.trigger_id))
+        {
+            return Err(Failure::Validation);
+        }
         if runtimes.len() != document.runtimes.len()
             || tools.len() != document.tools.len()
             || tests.len() != document.self_tests.len()
@@ -304,6 +316,9 @@ impl State {
                 }
                 candidate.runtimes.extend(document.runtimes.clone());
                 candidate.tools.extend(document.tools.clone());
+                candidate
+                    .triggers
+                    .extend(document.triggers.clone().unwrap_or_default());
                 documents.push(document);
             }
         }

@@ -1395,7 +1395,7 @@ BEGIN SELECT RAISE(ABORT,'witnessed target outcome fences recovery'); END;
 
 -- statement
 -- BEGIN TRIGGERS (issue #274, ADR 058): the same tenant-scoped document table as PostgreSQL, never deleted.
-CREATE TABLE control_triggers(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,kind TEXT NOT NULL CHECK(kind IN('ASSIGNMENT','INSTANCE','DESIRED','LEASE')),record_id TEXT NOT NULL CHECK(length(record_id) BETWEEN 1 AND 256),revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=131072),PRIMARY KEY(tenant_id,kind,record_id));
+CREATE TABLE control_triggers(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,kind TEXT NOT NULL CHECK(kind IN('ASSIGNMENT','INSTANCE','DESIRED','LEASE','EVENT','KEY','EPOCH','CHECKPOINT')),record_id TEXT NOT NULL CHECK(length(record_id) BETWEEN 1 AND 256),revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=131072),PRIMARY KEY(tenant_id,kind,record_id));
 -- statement
 CREATE TRIGGER control_triggers_delete BEFORE DELETE ON control_triggers BEGIN SELECT RAISE(ABORT,'local retention violation'); END;
 -- statement

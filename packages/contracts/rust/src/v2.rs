@@ -2360,7 +2360,7 @@ pub enum ProfileChangeKind {
     #[serde(rename = "REMOVED")]
     Removed,
 }
-/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.
+/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProfilePackage {
@@ -2380,6 +2380,8 @@ pub struct ProfilePackage {
     pub tools: Option<Vec<ProfileToolActivation>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binding_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<ProfileTrigger>>,
 }
 /// Canonical ProfilePackageSource wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2405,6 +2407,16 @@ pub struct ProfileReadinessCase {
 pub struct ProfileToolActivation {
     pub tool_id: String,
     pub tool_group_id: String,
+}
+/// A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileTrigger {
+    pub assignment: String,
+    pub trigger_id: String,
+    pub config: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desired_state: Option<TriggerDesiredState>,
 }
 /// Progress frame.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2446,6 +2458,8 @@ pub struct ProvisioningPackageStatus {
     pub device_ids: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub globals_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_assignments: Option<Vec<String>>,
 }
 /// Canonical ProvisioningState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2493,6 +2507,8 @@ pub enum ProvisioningStep {
     Rollout,
     #[serde(rename = "ACTIVATE")]
     Activate,
+    #[serde(rename = "ASSIGN")]
+    Assign,
     #[serde(rename = "DONE")]
     Done,
 }
@@ -3828,6 +3844,13 @@ pub enum TriggerDispositionKind {
     #[serde(rename = "REJECTED_TERMINAL")]
     RejectedTerminal,
 }
+/// Control's terminal disposition of a stored record: a loss record, or a Control-side rejection on re-validation (plan 6.6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDispositionView {
+    pub disposition: TriggerDispositionKind,
+    pub reason: String,
+}
 /// Completes or fails one emit() future.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3877,6 +3900,14 @@ pub enum TriggerEventKind {
     State,
     #[serde(rename = "rejected")]
     Rejected,
+}
+/// One page of an instance's stored records, in (leaseEpoch, outboxSeq) order.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerEventPage {
+    pub items: Vec<TriggerStoredEvent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
 }
 /// Canonical TriggerExecutor wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4036,6 +4067,14 @@ pub struct TriggerInstanceView {
     pub lease_epoch: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_seen_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub counters: Option<TriggerCounters>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outbox: Option<TriggerOutboxStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_event_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_reconcile_at: Option<String>,
 }
 /// Canonical TriggerKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4334,6 +4373,16 @@ pub struct TriggerStopFrame {
     pub kind: String,
     pub reason: String,
     pub grace_ms: u64,
+}
+/// One record Control stored for an instance (plan 6.4): the event as the executor sent it, the producer Control attached from the certificate, the lease and the signed package, and when Control received it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerStoredEvent {
+    pub event: TriggerCloudEvent,
+    pub producer: TriggerProducer,
+    pub received_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disposition: Option<TriggerDispositionView>,
 }
 /// Trigger block of every executor check-in (plan 8.2, 8.5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

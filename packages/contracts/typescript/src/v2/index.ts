@@ -1280,7 +1280,7 @@ export interface ProfileChange {
   readonly packageDigest?: string;
 }
 export type ProfileChangeKind = "ADDED" | "CHANGED" | "REMOVED";
-/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. */
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups. */
 export interface ProfilePackage {
   readonly packageId: string;
   readonly source: ProfilePackageSource;
@@ -1292,6 +1292,7 @@ export interface ProfilePackage {
   readonly globals?: Record<string, unknown>;
   readonly tools?: ReadonlyArray<ProfileToolActivation>;
   readonly bindingIds?: ReadonlyArray<string>;
+  readonly triggers?: ReadonlyArray<ProfileTrigger>;
 }
 export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE";
 /** A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values. */
@@ -1305,6 +1306,13 @@ export interface ProfileReadinessCase {
 export interface ProfileToolActivation {
   readonly toolId: string;
   readonly toolGroupId: string;
+}
+/** A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment. */
+export interface ProfileTrigger {
+  readonly assignment: string;
+  readonly triggerId: string;
+  readonly config: Record<string, unknown>;
+  readonly desiredState?: TriggerDesiredState;
 }
 /** Progress frame. */
 export interface ProgressFrame {
@@ -1331,6 +1339,7 @@ export interface ProvisioningPackageStatus {
   readonly deviceGroupIds?: ReadonlyArray<string>;
   readonly deviceIds?: ReadonlyArray<string>;
   readonly globalsDigest?: string;
+  readonly triggerAssignments?: ReadonlyArray<string>;
 }
 export type ProvisioningState = "READY" | "PENDING" | "FAILED";
 /** Persisted outcome of the latest profile application. state is READY only when every required package is READY. */
@@ -1348,7 +1357,7 @@ export interface ProvisioningStatus {
 export interface ProvisioningStatusPage {
   readonly items: ReadonlyArray<ProvisioningStatus>;
 }
-export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "RELEASE" | "ROLLOUT" | "ACTIVATE" | "DONE";
+export type ProvisioningStep = "VALIDATE" | "IMPORT" | "DEPLOY" | "RELEASE" | "ROLLOUT" | "ACTIVATE" | "ASSIGN" | "DONE";
 /** Supersedes kills after two-person review. Issuer is always control. */
 export interface RecoveryEvent {
   readonly eventId: string;
@@ -2084,6 +2093,11 @@ export interface TriggerDisposition {
   readonly reason: string;
 }
 export type TriggerDispositionKind = "REJECTED_TERMINAL";
+/** Control's terminal disposition of a stored record: a loss record, or a Control-side rejection on re-validation (plan 6.6). */
+export interface TriggerDispositionView {
+  readonly disposition: TriggerDispositionKind;
+  readonly reason: string;
+}
 /** Completes or fails one emit() future. */
 export interface TriggerEmitAckFrame {
   readonly kind: "EMIT_ACK";
@@ -2105,6 +2119,11 @@ export interface TriggerEmitFrame {
 export type TriggerEmitStatus = "LOCAL_DURABLE" | "RETRYABLE_REJECTION" | "TERMINAL_REJECTION";
 export type TriggerEventId = string;
 export type TriggerEventKind = "fired" | "state" | "rejected";
+/** One page of an instance's stored records, in (leaseEpoch, outboxSeq) order. */
+export interface TriggerEventPage {
+  readonly items: ReadonlyArray<TriggerStoredEvent>;
+  readonly nextPageToken?: string;
+}
 export type TriggerEventType = string;
 export type TriggerExecutor = "SERVER" | "CLIENT";
 export type TriggerExecutorId = string;
@@ -2181,6 +2200,10 @@ export interface TriggerInstanceView {
   readonly conditions: ReadonlyArray<TriggerCondition>;
   readonly leaseEpoch?: number;
   readonly lastSeenAtUnixMs?: number;
+  readonly counters?: TriggerCounters;
+  readonly outbox?: TriggerOutboxStatus;
+  readonly lastEventAt?: string;
+  readonly lastReconcileAt?: string;
 }
 export type TriggerKind = "SERVER_TRIGGER" | "CLIENT_TRIGGER";
 /** One assignment label. */
@@ -2320,6 +2343,13 @@ export interface TriggerStopFrame {
   readonly kind: "STOP";
   readonly reason: string;
   readonly graceMs: number;
+}
+/** One record Control stored for an instance (plan 6.4): the event as the executor sent it, the producer Control attached from the certificate, the lease and the signed package, and when Control received it. */
+export interface TriggerStoredEvent {
+  readonly event: TriggerCloudEvent;
+  readonly producer: TriggerProducer;
+  readonly receivedAtUnixMs: number;
+  readonly disposition?: TriggerDispositionView;
 }
 /** Trigger block of every executor check-in (plan 8.2, 8.5). */
 export interface TriggerSync {

@@ -137,7 +137,9 @@ final class ClientReleasesTest {
         return sdkPackage(false);
     }
     static byte[] sdkPackage(boolean python) throws Exception { return sdkPackage(python,false); }
-    static byte[] sdkPackage(boolean python,boolean requiredKey) throws Exception {
+    static byte[] sdkPackage(boolean python,boolean requiredKey) throws Exception { return sdkPackage(python,requiredKey,false); }
+    /** With {@code trigger}, the package also exports the client POLL trigger {@code acme.greet/new-file} (ADR 058). */
+    static byte[] sdkPackage(boolean python,boolean requiredKey,boolean trigger) throws Exception {
         var jar = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(jar)) {
             zip.putNextEntry(new ZipEntry(python ? "_toolgate_index/package.json" : "META-INF/toolgate/package.json"));
@@ -158,7 +160,7 @@ final class ClientReleasesTest {
             ((ObjectNode) manifest.get("sdk")).put("language", "PYTHON");
             ((ObjectNode) manifest.get("runtimes").get(0)).put("runtimeId", "python").put("language", "python").put("version", "3.10");
         }
-        var tools = manifest.putArray("tools"); var set = JSON.createArrayNode();
+        var tools = manifest.putArray("tools"); com.fasterxml.jackson.databind.node.ArrayNode set = JSON.createArrayNode();
         for (var spec : List.of(new String[]{"client_greet", "CLIENT"}, new String[]{"fetch", "SERVER"}, new String[]{"server_greet", "SERVER"})) {
             var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
                 + "\"inputSchema\":" + schema + ",\"outputSchema\":" + output + ",\"errors\":[],\"effect\":{\"safety\":\"READ_ONLY\",\"destructive\":false,\"openWorld\":false},\"businessKey\":{\"required\":false},"
@@ -178,6 +180,18 @@ final class ClientReleasesTest {
             set.addObject().put("toolId", "acme.greet/" + spec[0]).put("toolDescriptorDigest", digest);
             files.put("tools/" + spec[0] + ".json", canonical);
         }
+        if (trigger) {
+            var d = (ObjectNode) JSON.readTree(io.ololabs.toolgate.packagearchive.TriggerPackages.clientDescriptor("acme.greet", "new-file"));
+            byte[] canonical = Canonical.bytes(d); String digest = Canonical.sha256(canonical);
+            var entry = manifest.putArray("triggers").addObject(); entry.set("descriptor", d);
+            entry.put("triggerDescriptorDigest", digest).put("runtimeId", "jvm").put("entryPoint", ClientReleases.JAVA_SDK_MAIN).putArray("artifactIds").add("app");
+            set.addObject().put("triggerId", "acme.greet/new-file").put("triggerDescriptorDigest", digest);
+            files.put("triggers/new-file.json", canonical);
+            // descriptorSetDigest sorts tool and trigger entries by id.
+            var sorted = new TreeMap<String, com.fasterxml.jackson.databind.JsonNode>();
+            for (var item : set) sorted.put(item.has("toolId") ? item.get("toolId").asText() : item.get("triggerId").asText(), item);
+            set = JSON.createArrayNode(); for (var item : sorted.values()) set.add(item);
+        }
         String artifact = python ? "artifacts/tool.pyz" : "artifacts/app.jar";
         manifest.putArray("artifacts").addObject().put("artifactId", "app").put("path", artifact).put("mediaType", python ? "application/zip" : "application/java-archive").put("runtimeId", python ? "python" : "jvm").put("artifactDigest", Canonical.sha256(jarBytes)).put("sizeBytes", jarBytes.length);
         manifest.put("descriptorSetDigest", Canonical.digest(set));
@@ -196,12 +210,13 @@ final class ClientReleasesTest {
     private Rig rig(boolean signed, String credentials, boolean python) throws Exception {
         return rig(signed,credentials,python,false);
     }
-    private Rig rig(boolean signed, String credentials, boolean python, boolean requiredKey) throws Exception {
+    private Rig rig(boolean signed, String credentials, boolean python, boolean requiredKey) throws Exception { return rig(signed, credentials, python, requiredKey, false); }
+    private Rig rig(boolean signed, String credentials, boolean python, boolean requiredKey, boolean trigger) throws Exception {
         start(); String baseDigest = seedBase(python);
         var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("releases.sqlite"))), codec);
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("fleet"); var admin = TestSupport.seed(store, codec, tenant, "root");
-        byte[] bytes = sdkPackage(python,requiredKey);
-        String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).upload(admin, bytes, "upload").body()).get("packageDigest").asText();
+        byte[] bytes = sdkPackage(python,requiredKey,trigger);
+        String digest = JSON.readTree(new ServerPackages(store, codec, null, java.time.Clock.systemUTC()).acceptTriggers(trigger).upload(admin, bytes, "upload").body()).get("packageDigest").asText();
         var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var organization = generator.generateKeyPair(); var release = generator.generateKeyPair();
         var crypto = new RsaFleetCrypto(codec, (RSAPrivateCrtKey) organization.getPrivate(), "org", List.of(trust("release", release.getPublic())), List.of(trust("org", organization.getPublic())), List.of());
@@ -343,6 +358,42 @@ final class ClientReleasesTest {
         var third = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
         assertEquals(second.get("generation"), third.get("generation"));
         assertEquals(1, JSON.readTree(rig.fleet.rollouts(rig.admin, null).body()).get("items").size());
+    }
+
+    /** Triggers module 5: a profile that declares a trigger assignment releases its trigger and assigns the device group. */
+    @Test void aProfileDeclaringATriggerReleasesItAndAssignsItsDeviceGroups() throws Exception {
+        var rig = rig(true, "robot:secret", false, false, true);
+        var endpoint = new EndpointService(rig.store, rig.codec, null, java.time.Clock.systemUTC(), true, rig.tenant.value(), "server", "Organization", "https://control.example.test", "https://gateway.example.test");
+        var triggers = new TriggerService(rig.store, rig.codec, rig.crypto, endpoint, java.time.Clock.systemUTC(), true, rig.tenant.value());
+        var provisioning = provisioning(rig).triggers(tenantId -> triggers);
+        String profile = DEVICE_PROFILE.replace("\"bindingIds\":[\"lab-binding\"]",
+            "\"bindingIds\":[\"lab-binding\"],\"triggers\":[{\"assignment\":\"lab-inbox\",\"triggerId\":\"acme.greet/new-file\",\"config\":{\"folder\":\"inbox\"}}]");
+        assertTrue(PackageProvisioning.declaresTriggers(JSON.readTree(profile)), "a profile with triggers enables them");
+        assertFalse(PackageProvisioning.declaresTriggers(JSON.readTree(DEVICE_PROFILE)));
+        join(rig, "lab-1");
+        var applied = JSON.readTree(provisioning.apply(rig.admin, profile).body());
+        assertEquals("READY", applied.get("state").asText(), applied.toString());
+        assertEquals("[\"lab-inbox\"]", applied.get("packages").get(0).get("triggerAssignments").toString());
+        // The signed release declares the trigger: devices learn how to run it only from there.
+        var document = rig.fleet.document(rig.admin, "acme.greet", "1.0.0");
+        var registration = document.triggers().getFirst();
+        assertEquals("acme.greet/new-file", registration.triggerId());
+        assertEquals("READ", registration.fileAccess().name());
+        assertEquals(ClientReleases.RUNTIME_ID, registration.runtimeId());
+        var assignment = JSON.readTree(triggers.get(rig.admin, "lab-inbox").body());
+        assertEquals("[\"lab\"]", assignment.path("spec").path("target").path("deviceGroups").toString());
+        assertEquals("inbox", assignment.path("spec").path("config").path("folder").asText());
+        assertEquals(1, assignment.path("metadata").path("configRevision").asInt());
+        // Reapplying the same profile changes nothing; a changed config updates the assignment with its ETag.
+        provisioning.apply(rig.admin, profile);
+        assertEquals(1, JSON.readTree(triggers.get(rig.admin, "lab-inbox").body()).path("metadata").path("configRevision").asInt());
+        provisioning.apply(rig.admin, profile.replace("\"folder\":\"inbox\"", "\"folder\":\"drop\""));
+        var changed = JSON.readTree(triggers.get(rig.admin, "lab-inbox").body());
+        assertEquals("drop", changed.path("spec").path("config").path("folder").asText());
+        assertEquals(2, changed.path("metadata").path("configRevision").asInt());
+        // Refusals before anything changes.
+        assertEquals(400, assertThrows(Failure.class, () -> provisioning.apply(rig.admin, profile.replace("acme.greet/new-file", "other.pkg/new-file"))).status());
+        assertEquals(400, assertThrows(Failure.class, () -> provisioning.apply(rig.admin, profile.replace("\"deviceGroupIds\":[\"lab\"],", "").replace(",\"tools\":[{\"toolId\":\"acme.greet/client_greet\",\"toolGroupId\":\"lab-tools\"}]", ""))).status());
     }
 
     @Test void devicesNeedTheReleaseKeyAndNothingIsSubstituted() throws Exception {

@@ -1361,6 +1361,7 @@ dependencies = [
  "libc",
  "olo-toolgate-contracts",
  "olo-toolgate-tenant-identity",
+ "olo-toolgate-trigger-supervisor",
  "rcgen",
  "reqwest",
  "ring",
@@ -1472,10 +1473,12 @@ dependencies = [
  "proptest",
  "proptest-state-machine",
  "ring",
+ "ryu-js",
  "serde",
  "serde_json",
  "sha2 0.11.0",
  "tokio",
+ "unicode-normalization",
 ]
 
 [[package]]

@@ -21,12 +21,16 @@ final readonly class TriggerInstanceView implements \JsonSerializable {
         public TriggerPhase $phase,
         public array $conditions,
         public ?int $leaseEpoch = null,
-        public ?int $lastSeenAtUnixMs = null
+        public ?int $lastSeenAtUnixMs = null,
+        public ?TriggerCounters $counters = null,
+        public ?TriggerOutboxStatus $outbox = null,
+        public ?string $lastEventAt = null,
+        public ?string $lastReconcileAt = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['instanceId', 'assignment', 'triggerId', 'executor', 'executorId', 'packageDigest', 'triggerDescriptorDigest', 'configRevision', 'desiredState', 'desiredStateSource', 'phase', 'conditions', 'leaseEpoch', 'lastSeenAtUnixMs']) || array_diff(['instanceId', 'assignment', 'triggerId', 'executor', 'executorId', 'packageDigest', 'triggerDescriptorDigest', 'configRevision', 'desiredState', 'desiredStateSource', 'phase', 'conditions'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['instanceId', 'assignment', 'triggerId', 'executor', 'executorId', 'packageDigest', 'triggerDescriptorDigest', 'configRevision', 'desiredState', 'desiredStateSource', 'phase', 'conditions', 'leaseEpoch', 'lastSeenAtUnixMs', 'counters', 'outbox', 'lastEventAt', 'lastReconcileAt']) || array_diff(['instanceId', 'assignment', 'triggerId', 'executor', 'executorId', 'packageDigest', 'triggerDescriptorDigest', 'configRevision', 'desiredState', 'desiredStateSource', 'phase', 'conditions'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -43,7 +47,11 @@ final readonly class TriggerInstanceView implements \JsonSerializable {
             TriggerPhase::from($data['phase']),
             array_map(static fn ($item) => TriggerCondition::fromArray($item), $data['conditions']),
             array_key_exists('leaseEpoch', $data) ? $data['leaseEpoch'] : null,
-            array_key_exists('lastSeenAtUnixMs', $data) ? $data['lastSeenAtUnixMs'] : null
+            array_key_exists('lastSeenAtUnixMs', $data) ? $data['lastSeenAtUnixMs'] : null,
+            array_key_exists('counters', $data) ? TriggerCounters::fromArray($data['counters']) : null,
+            array_key_exists('outbox', $data) ? TriggerOutboxStatus::fromArray($data['outbox']) : null,
+            array_key_exists('lastEventAt', $data) ? $data['lastEventAt'] : null,
+            array_key_exists('lastReconcileAt', $data) ? $data['lastReconcileAt'] : null
         );
     }
 

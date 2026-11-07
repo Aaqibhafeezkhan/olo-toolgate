@@ -74,6 +74,15 @@ public class TriggerResource {
         return response(service.instances(actor(), assignment, executorId, token, size));
     }
 
+    @GET @Path("triggers/events") @io.quarkus.security.Authenticated
+    public Response events(@QueryParam("assignment") String assignment, @QueryParam("instanceId") String instanceId,
+                           @QueryParam("pageToken") String token, @QueryParam("pageSize") Integer size) {
+        return response(service.events(actor(), assignment, instanceId, token, size));
+    }
+
     @GET @Path("endpoint/triggers/desired")
     public Response desired() { return response(service.desired(peer())); }
+
+    @GET @Path("endpoint/triggers/descriptors/{digest}")
+    public Response descriptor(@PathParam("digest") String digest) { return response(service.descriptor(peer(), digest)); }
 }

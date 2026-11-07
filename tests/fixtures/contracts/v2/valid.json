@@ -4523,5 +4523,125 @@
     "kind": "EXIT",
     "code": 0
   },
-  "TriggerDesiredJws": "eyJhbGciOiJFZERTQSJ9.eyJmb3JtYXRWZXJzaW9uIjoxfQ.c2ln"
+  "TriggerDesiredJws": "eyJhbGciOiJFZERTQSJ9.eyJmb3JtYXRWZXJzaW9uIjoxfQ.c2ln",
+  "ProfileTrigger": {
+    "assignment": "hotfolder-inbox",
+    "triggerId": "examples.hotfolder/file-dropped",
+    "config": {
+      "folder": "inbox"
+    },
+    "desiredState": "Running"
+  },
+  "TriggerDispositionView": {
+    "disposition": "REJECTED_TERMINAL",
+    "reason": "SchemaInvalid"
+  },
+  "TriggerStoredEvent": {
+    "event": {
+      "specversion": "1.0",
+      "id": "AAMkAGI2-41",
+      "source": "toolgate:trigger-instance:c7b2-01",
+      "type": "examples.mail.message.received.v1",
+      "subject": "ap@example.com",
+      "time": "2026-10-31T10:29:58Z",
+      "datacontenttype": "application/json",
+      "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+      "data": {
+        "messageId": "AAMkAGI2-41",
+        "subject": "Invoice 1031"
+      },
+      "tgleaseepoch": 7,
+      "tgsequence": 41,
+      "tgkind": "fired",
+      "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+    },
+    "producer": {
+      "kind": "DEVICE",
+      "executorId": "device-42",
+      "deviceGroups": [
+        "finance-desktops"
+      ],
+      "assignment": "finance-inbox-pdf",
+      "instanceId": "c7b2-01",
+      "leaseEpoch": 4,
+      "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "receivedAtUnixMs": 1793442600000
+  },
+  "TriggerEventPage": {
+    "items": [
+      {
+        "event": {
+          "specversion": "1.0",
+          "id": "AAMkAGI2-41",
+          "source": "toolgate:trigger-instance:c7b2-01",
+          "type": "examples.mail.message.received.v1",
+          "subject": "ap@example.com",
+          "time": "2026-10-31T10:29:58Z",
+          "datacontenttype": "application/json",
+          "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+          "data": {
+            "messageId": "AAMkAGI2-41",
+            "subject": "Invoice 1031"
+          },
+          "tgleaseepoch": 7,
+          "tgsequence": 41,
+          "tgkind": "fired",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+        },
+        "producer": {
+          "kind": "DEVICE",
+          "executorId": "device-42",
+          "deviceGroups": [
+            "finance-desktops"
+          ],
+          "assignment": "finance-inbox-pdf",
+          "instanceId": "c7b2-01",
+          "leaseEpoch": 4,
+          "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "receivedAtUnixMs": 1793442600000
+      },
+      {
+        "event": {
+          "specversion": "1.0",
+          "id": "AAMkAGI2-41",
+          "source": "toolgate:trigger-instance:c7b2-01",
+          "type": "examples.mail.message.received.v1",
+          "subject": "ap@example.com",
+          "time": "2026-10-31T10:29:58Z",
+          "datacontenttype": "application/json",
+          "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+          "data": {
+            "messageId": "AAMkAGI2-41",
+            "subject": "Invoice 1031"
+          },
+          "tgleaseepoch": 7,
+          "tgsequence": 41,
+          "tgkind": "fired",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+        },
+        "producer": {
+          "kind": "DEVICE",
+          "executorId": "device-42",
+          "deviceGroups": [
+            "finance-desktops"
+          ],
+          "assignment": "finance-inbox-pdf",
+          "instanceId": "c7b2-01",
+          "leaseEpoch": 4,
+          "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "receivedAtUnixMs": 1793442600000,
+        "disposition": {
+          "disposition": "REJECTED_TERMINAL",
+          "reason": "SchemaInvalid"
+        }
+      }
+    ],
+    "nextPageToken": "after-finance"
+  }
 }

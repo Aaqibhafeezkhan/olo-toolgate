@@ -90,7 +90,8 @@ public class ContractCodec implements Codec {
         java.util.Map.entry("trigger.schema.json", "TriggerDesiredDocument"),
         java.util.Map.entry("trigger.schema.json", "SignedTriggerDesiredDocument"),
         java.util.Map.entry("trigger.schema.json", "TriggerLease"),
-        java.util.Map.entry("trigger.schema.json", "TriggerRevocation"));
+        java.util.Map.entry("trigger.schema.json", "TriggerRevocation"),
+        java.util.Map.entry("trigger.schema.json", "TriggerEventPage"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",

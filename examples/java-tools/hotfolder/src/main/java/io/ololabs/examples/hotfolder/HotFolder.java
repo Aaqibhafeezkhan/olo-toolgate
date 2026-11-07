@@ -3,12 +3,16 @@
 package io.ololabs.examples.hotfolder;
 
 import io.ololabs.toolgate.sdk.annotations.ClientTool;
+import io.ololabs.toolgate.sdk.annotations.ClientTrigger;
 import io.ololabs.toolgate.sdk.annotations.Reconciliation;
 import io.ololabs.toolgate.sdk.annotations.DeviceFileAccess;
 import io.ololabs.toolgate.sdk.annotations.EffectSafety;
 import io.ololabs.toolgate.sdk.annotations.Example;
 import io.ololabs.toolgate.sdk.annotations.Param;
+import io.ololabs.toolgate.sdk.annotations.SourceReplay;
 import io.ololabs.toolgate.sdk.annotations.ToolPackage;
+import io.ololabs.toolgate.sdk.annotations.TriggerExample;
+import io.ololabs.toolgate.sdk.annotations.TriggerMode;
 import io.ololabs.toolgate.sdk.annotations.ModelValidation;
 import io.ololabs.toolgate.sdk.annotations.Training;
 import io.ololabs.toolgate.sdk.annotations.TrainingPrompt;
@@ -16,12 +20,19 @@ import io.ololabs.toolgate.sdk.annotations.TrainingValues;
 import io.ololabs.toolgate.sdk.context.DeviceFiles;
 import io.ololabs.toolgate.sdk.context.ToolContext;
 import io.ololabs.toolgate.sdk.errors.ToolInputError;
+import io.ololabs.toolgate.sdk.trigger.Checkpoint;
+import io.ololabs.toolgate.sdk.trigger.PollContext;
+import io.ololabs.toolgate.sdk.trigger.PollResult;
+import io.ololabs.toolgate.sdk.trigger.TriggerEvent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * HotFolder: text files in the device's confined files area (ADR 027). Every tool runs on the selected client device
@@ -31,6 +42,10 @@ import java.util.List;
  *
  * <p>A file that does not exist is reported as data ({@code exists: false}), not as a failure, so callers can test
  * for it; refusals by the device are failures.
+ *
+ * <p>The {@code file-dropped} client trigger watches one folder (the assignment's {@code folder}, such as
+ * {@code inbox}) and reports each text file that appears there. An agent subscribed to those events can read the file
+ * with {@code read_text} and file it away with {@code move}, for example to {@code processed/}.
  */
 @ToolPackage(id = "examples.hotfolder", name = "HotFolder", publisher = "ToolGate Examples",
         description = "Reads and writes text files in a protected folder on your device.")
@@ -542,5 +557,71 @@ public class HotFolder {
         if (exists(files, destination)) throw new ToolInputError("The destination already exists");
         files.writeText(destination, files.readText(path));
         return new Copied(true);
+    }
+
+    /** The assignment config an administrator sets per device group, usually in the deployment profile. */
+    public record WatchConfig(
+            @Param(description = "Folder of the HotFolder to watch, such as inbox", pattern = "^[a-z0-9][a-z0-9._ -]{0,127}(/[a-z0-9][a-z0-9._ -]{0,127}){0,7}$")
+            String folder,
+            @Param(description = "File name suffix to report", defaultValue = ".txt", pattern = "^\\.[a-z0-9]{1,16}$")
+            String extension) {}
+
+    /** A file version present in the watched folder that had not been reported. */
+    public record FileDropped(
+            @Param(description = "File name inside the watched folder") String name,
+            @Param(description = "Path in the HotFolder, for read_text and move") String path,
+            @Param(description = "Size in bytes") long size) {}
+
+    /**
+     * A {@code STATE_SNAPSHOT} poll: an event means "this file version was present at check time and had not been
+     * reported", never "this file was created". A file dropped and moved away between two checks is never reported.
+     * The checkpoint holds the reported version (path and size) of every file still present, so a file moved out of
+     * the folder is pruned and the checkpoint stays as small as the folder.
+     */
+    @ClientTrigger(name = "file-dropped", mode = TriggerMode.POLL, sourceReplay = SourceReplay.STATE_SNAPSHOT,
+            description = "Reports each new text file that appears in a folder of the HotFolder",
+            config = WatchConfig.class, event = FileDropped.class, eventType = "examples.hotfolder.file-dropped.v1",
+            intervalMs = 10_000, maxEventsPerHour = 600)
+    @DeviceFileAccess
+    @TriggerExample(name = "new-file",
+            config = """
+                    {"folder": "inbox"}""",
+            files = """
+                    {"inbox/order-1042.txt": "2 x widget", "inbox/scan.pdf": "%PDF", "processed/old.txt": "done"}""",
+            expectedEvents = """
+                    [{"id": "file:inbox/order-1042.txt:10", "subject": "inbox/order-1042.txt",
+                      "data": {"name": "order-1042.txt", "path": "inbox/order-1042.txt", "size": 10}}]""",
+            expectedCheckpoint = """
+                    {"reported": {"inbox/order-1042.txt": 10}}""")
+    @TriggerExample(name = "moved-away",
+            config = """
+                    {"folder": "inbox"}""",
+            checkpoint = """
+                    {"reported": {"inbox/order-1042.txt": 10}}""",
+            files = """
+                    {"processed/order-1042.txt": "2 x widget"}""",
+            expectedEvents = "[]",
+            expectedCheckpoint = """
+                    {"reported": {}}""")
+    public PollResult<FileDropped> fileDropped(WatchConfig config, PollContext ctx) {
+        Map<String, Object> reported = ctx.checkpoint().map(c -> c.getMap("reported")).orElse(Map.of());
+        String prefix = config.folder() + "/";
+        // A complete listing, or the check fails and the checkpoint stays where it is: a failed listing never prunes.
+        List<String> present = new ArrayList<>();
+        for (String path : ctx.files().list()) {
+            if (path.startsWith(prefix) && path.indexOf('/', prefix.length()) < 0 && path.endsWith(config.extension())) present.add(path);
+        }
+        present.sort(null);
+        Map<String, Object> next = new TreeMap<>();
+        List<TriggerEvent<FileDropped>> events = new ArrayList<>();
+        for (String path : present) {
+            long size = ctx.files().info(path).bytes();
+            next.put(path, size);
+            if (Objects.equals(reported.get(path), size)) continue;
+            // A stable source identity: the same version gets the same id after a restart, so Control stores it once.
+            events.add(TriggerEvent.of(new FileDropped(path.substring(prefix.length()), path, size)).id("file:" + path + ":" + size).subject(path));
+        }
+        if (!events.isEmpty()) ctx.log().info(events.size() + " new file(s) in " + config.folder());
+        return PollResult.of(events).checkpoint(Checkpoint.of("reported", next));
     }
 }
