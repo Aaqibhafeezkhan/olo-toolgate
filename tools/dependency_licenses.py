@@ -21,9 +21,11 @@ def cargo_license(expression):
     # Cargo's historical slash syntax predates SPDX OR. Normalize only the
     # reviewed pairs found in locked dependencies, retaining metadata. Locked
     # same-file 1.0.6 and walkdir 2.5.0 README/LICENSE-MIT explicitly offer MIT
-    # or Unlicense; unknown slash expressions still require review.
+    # or Unlicense; unknown slash expressions still require review. Locked fnv 1.0.7
+    # (a proptest dev-dependency) ships LICENSE-APACHE and LICENSE-MIT.
     return {'MIT/Apache-2.0':'MIT OR Apache-2.0',
             'Apache-2.0/MIT':'Apache-2.0 OR MIT',
+            'Apache-2.0 / MIT':'Apache-2.0 OR MIT',
             'Unlicense/MIT':'Unlicense OR MIT'}.get(expression, expression)
 
 

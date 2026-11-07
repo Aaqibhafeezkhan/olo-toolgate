@@ -22,9 +22,12 @@ public final class PackageArchive {
 
     private PackageArchive() {}
 
-    public static Verified validate(byte[] data, Function<String, JsonNode> json) {
+    public static Verified validate(byte[] data, Function<String, JsonNode> json) { return validate(data, json, false); }
+
+    /** With {@code triggers} (the triggers control-core module is on), trigger exports are accepted under the CLI's rules (ADR 058). */
+    public static Verified validate(byte[] data, Function<String, JsonNode> json, boolean triggers) {
         io.ololabs.toolgate.packagearchive.PackageArchive.Verified verified;
-        try { verified = io.ololabs.toolgate.packagearchive.PackageArchive.validate(data); }
+        try { verified = io.ololabs.toolgate.packagearchive.PackageArchive.validate(data, triggers); }
         catch (PackageRejected rejected) {
             if (rejected.status() == 413) throw new Failure(ErrorCode.VALIDATION, 413, "Package too large");
             throw Failure.validation();

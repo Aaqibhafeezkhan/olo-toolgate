@@ -2565,7 +2565,7 @@ pub struct FleetSelfTest {
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
     pub expected_output: std::collections::BTreeMap<String, serde_json::Value>,
 }
-/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
+/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetSignatureHeader {

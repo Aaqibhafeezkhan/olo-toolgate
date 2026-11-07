@@ -9,6 +9,8 @@ base { archivesName.set("toolgate-sdk-testing") }
 
 dependencies {
     api(project(":sdk-java-runtime-mcp"))
+    // TriggerHarness speaks the trigger frames through the generated bindings.
+    api(project(":contracts-java"))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)
     testAnnotationProcessor(project(":sdk-java-processor"))

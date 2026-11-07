@@ -25,7 +25,7 @@
 | Command | Does |
 |---|---|
 | `toolgate pack <staging-dir> [-o file.tgpkg]` | Builds a package from a directory holding `toolgate-package.json`, and prints its digests (below) |
-| `toolgate validate <file.tgpkg>` | The archive rules, then the manifest against `PackageManifest` v2, every `toolDescriptorDigest`, `descriptorSetDigest`, the `tools/` files, artifact and runtime references, and the ceilings |
+| `toolgate validate <file.tgpkg>` | The archive rules, then the manifest against `PackageManifest` v2, every `toolDescriptorDigest` and `triggerDescriptorDigest`, `descriptorSetDigest`, the `tools/` and `triggers/` files, artifact and runtime references, the ceilings, and the trigger rules of [ADR 058](../../docs/adr/058-triggers.md): one export namespace for tools and triggers, client triggers on `CLIENT` executors only and with read-only device files, server triggers that use routes, TCP destinations or secrets on `SERVER` only, a POLL interval or a PUSH resync interval, `DROP_*` overflow only for loss-tolerant types with `SKIP_AND_RECORD`, and checkpoints above 16 KiB only with a snapshot capacity |
 | `toolgate verify <file.tgpkg>` | The archive rules only, as every hop runs them (platform-requirements.md §7.6); prints `packageDigest` |
 | `toolgate schema <file.tgpkg \| staging-dir> [--annotations file] [-o file]` | Writes the [tool schema](#tool-schema) (default `<file>.tool-schema.json`, or `tool-schema.json` in the staging directory) |
 | `toolgate digest <descriptor.json>...` | `toolDescriptorDigest` of each descriptor, and their `descriptorSetDigest` |
@@ -40,8 +40,8 @@ Exit codes: 0 success, 1 rejected or invalid input (or a failed build), 2 usage.
 
 The staging directory holds `toolgate-package.json` and the artifacts it lists. `pack`:
 
-1. computes `artifactDigest` and `sizeBytes` for each artifact, `toolDescriptorDigest` for each tool and `descriptorSetDigest`. A value already present must match, so a stale build fails instead of being overwritten;
-2. writes `tools/<tool local name>.json` with each canonical descriptor, and the manifest as canonical JSON plus a newline;
+1. computes `artifactDigest` and `sizeBytes` for each artifact, `toolDescriptorDigest` for each tool, `triggerDescriptorDigest` for each trigger export and `descriptorSetDigest` over both ([descriptor spec §3](../spec/descriptor/README.md)). A value already present must match, so a stale build fails instead of being overwritten;
+2. writes `tools/<tool local name>.json` and `triggers/<trigger name>.json` with each canonical descriptor, and the manifest as canonical JSON plus a newline;
 3. copies `marketplace/listing.json`, `marketplace/README.md`, `marketplace/CHANGELOG.md`, `marketplace/icon.png`, `tests/self-tests.json` and `sbom/cyclonedx.json` when present. Nothing else in the directory is packaged;
 4. writes `CHECKSUMS.sha256` and a deterministic zip: entries sorted bytewise, stored, dated 1980-01-01, mode 0644;
 5. validates its own output.

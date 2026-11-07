@@ -22,6 +22,7 @@ public interface Store {
         default EffectConsentStore effectConsents(){throw Failure.unavailable();}
         default EnterpriseStore enterprise() { throw Failure.unavailable(); }
         default FleetStore fleet() { throw Failure.unavailable(); }
+        default TriggerStore triggers() { throw Failure.unavailable(); }
         default BuilderStore builder() { throw Failure.unavailable(); }
         default McpStore mcp() { throw Failure.unavailable(); }
         default PackageStore packages() { throw Failure.unavailable(); }

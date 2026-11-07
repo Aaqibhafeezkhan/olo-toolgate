@@ -508,30 +508,6 @@ paths:
         '409': *id001
         '500': *id001
         '503': *id001
-  /api/control/v1/endpoint/triggers/desired:
-    get:
-      operationId: getTriggerDesiredDocument
-      security:
-      - workloadCertificate: []
-      description: Signed desired trigger state for the calling executor (ADR 058, plan 8.1). Executors without the triggers.v1
-        capability receive 404.
-      responses:
-        '200':
-          description: Compact JWS over TriggerDesiredDocument
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/trigger.schema.json#/$defs/SignedTriggerDesiredDocument
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        '500':
-          $ref: '#/components/responses/Error'
-        '503':
-          $ref: '#/components/responses/Error'
   /api/control/v1/endpoint/triggers/instances/{instanceId}/checkpoint-uploads:
     post:
       operationId: startTriggerCheckpointUpload

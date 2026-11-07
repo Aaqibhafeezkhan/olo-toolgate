@@ -22,6 +22,7 @@ TRACKED={
  'control_invocation_events':(['document'],None),
  'control_invocation_results':(['payload'],None),
  'control_policy_bundles':(['document','policy'],None),
+ 'control_triggers':(['document'],None),
 }
 
 def expression(row,fields,queued,postgres):
@@ -71,7 +72,8 @@ CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON {table} FOR 
             for operation,row,bytes_delta,rows_delta,queue_delta in [
                 ('INSERT','NEW',new_bytes,'1',new_queue),
                 ('DELETE','OLD','-('+old_bytes+')','-1','-('+old_queue+')'),
-                ('UPDATE','NEW','('+new_bytes+')-('+old_bytes+')','0','('+new_queue+')-('+old_queue+')')]:
+                ('UPDATE','NEW','('+new_bytes+')-('+old_bytes+')','0',
+                 '0' if new_queue==old_queue=='0' else '('+new_queue+')-('+old_queue+')')]:
                 statements.append(f'''CREATE TRIGGER {table}_capacity_{operation.lower()} AFTER {operation} ON {table} BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+({bytes_delta}),stored_rows=stored_rows+({rows_delta}),queued_rows=queued_rows+({queue_delta}) WHERE tenant_id={row}.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
@@ -90,7 +92,7 @@ def main():
         else:updated=source+'\n-- statement\n'+block(False)
         if args.check:
             if source!=updated:raise SystemExit('Capacity schema drift: '+filename)
-        else:path.write_text(updated)
+        else:path.write_text(updated,newline='\n')
     print('Tenant capacity schema blocks verified' if args.check else 'Tenant capacity V1 blocks generated')
 
 if __name__=='__main__':main()

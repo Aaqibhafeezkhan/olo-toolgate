@@ -5,12 +5,13 @@
 //! - [`verify`] applies the archive rules every hop runs: the zip rules, the exact file set
 //!   against a canonical `CHECKSUMS.sha256`, and manifest artifact digests.
 //! - [`validate`] adds the packager's checks: the manifest against `PackageManifest` v2, every
-//!   descriptor digest and the set digest, `tools/` files, artifact references and ceilings.
+//!   descriptor digest and the set digest, `tools/` and `triggers/` files, artifact references,
+//!   ceilings and the trigger rules of ADR 058 (plan 5.7 and 5.8).
 //! - [`pack`] builds a package from a staging directory and validates its own output.
 
 use crate::archive::{self, check_collisions, check_name};
 use crate::canonical::{canonical_bytes, sha256_hex, sha256_tagged};
-use crate::descriptor::{set_digest_of, tool_descriptor_digest};
+use crate::descriptor::{export_set_digest, tool_descriptor_digest};
 use crate::{strict_json, Error};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -49,6 +50,8 @@ pub struct Report {
     pub descriptor_set_digest: String,
     /// `(toolId, toolDescriptorDigest)` in manifest order.
     pub tools: Vec<(String, String)>,
+    /// `(triggerId, triggerDescriptorDigest)` in manifest order.
+    pub triggers: Vec<(String, String)>,
 }
 
 fn reject(reason: impl Into<String>) -> Error {
@@ -183,12 +186,96 @@ pub fn validate_manifest_schema(manifest: &Value) -> Result<(), Error> {
     }
 }
 
-/// The tool local name: the part of a `toolId` after the package id.
+/// The export local name: the part of a `toolId` or `triggerId` after the package id.
 fn local_name(tool_id: &str) -> Result<&str, Error> {
     tool_id
         .split_once('/')
         .map(|(_, name)| name)
-        .ok_or_else(|| reject(format!("toolId has no local name: {tool_id:?}")))
+        .ok_or_else(|| reject(format!("export id has no local name: {tool_id:?}")))
+}
+
+fn strings(value: &Value) -> Vec<&str> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+/// The trigger rules beyond the schema (ADR 058; plan 5.7, 5.8, 6.6 and 6.7), so a descriptor the
+/// processor would refuse is refused here too.
+fn trigger_rules(trigger_id: &str, d: &Value) -> Result<(), Error> {
+    let fail = |why: &str| Err(reject(format!("{trigger_id}: {why}")));
+    let executors = strings(&d["executors"]);
+    if executors.iter().collect::<BTreeSet<_>>().len() != executors.len() {
+        return fail("executors are listed twice");
+    }
+    let capabilities = ["routes", "tcpDestinations", "secrets"]
+        .iter()
+        .any(|k| !strings(&d[*k]).is_empty());
+    match d["kind"].as_str() {
+        Some("CLIENT_TRIGGER") => {
+            if executors != ["CLIENT"] {
+                return fail("a client trigger runs on CLIENT executors only");
+            }
+            if capabilities {
+                return fail("a client trigger has no routes, TCP destinations or secrets");
+            }
+            if strings(&d["permissions"])
+                .iter()
+                .any(|p| *p != "DEVICE_FILES_READ")
+            {
+                return fail("a client trigger may only read the device files area");
+            }
+        }
+        _ => {
+            if capabilities && executors.contains(&"CLIENT") {
+                return fail("a server trigger that uses routes, TCP destinations or secrets cannot run on CLIENT executors");
+            }
+            if strings(&d["permissions"])
+                .iter()
+                .any(|p| p.starts_with("DEVICE_FILES"))
+            {
+                return fail("a server trigger has no device files area");
+            }
+        }
+    }
+    let schedule = &d["schedule"];
+    match d["mode"].as_str() {
+        Some("POLL") => {
+            if schedule.get("intervalMs").is_none() || schedule.get("resyncIntervalMs").is_some() {
+                return fail("a POLL trigger has schedule.intervalMs and no resyncIntervalMs");
+            }
+        }
+        _ => {
+            let resync = schedule.get("resyncIntervalMs").and_then(Value::as_u64);
+            if schedule.get("intervalMs").is_some() || resync.is_none_or(|r| r != 0 && r < 60_000) {
+                return fail("a PUSH trigger has schedule.resyncIntervalMs, 0 or at least 60000, and no intervalMs");
+            }
+        }
+    }
+    if d["overflow"].as_str() != Some("BLOCK") {
+        if d["lossTolerant"].as_bool() != Some(true) {
+            return fail("DROP_* overflow is allowed only for a lossTolerant event type");
+        }
+        if d["onTerminalRejection"].as_str() != Some("SKIP_AND_RECORD") {
+            return fail("DROP_* overflow needs onTerminalRejection SKIP_AND_RECORD");
+        }
+    }
+    let checkpoint = d["limits"]["maxCheckpointBytes"].as_u64().unwrap_or(0);
+    if checkpoint > 16_384
+        && (d["sourceReplay"].as_str() != Some("STATE_SNAPSHOT") || d.get("snapshot").is_none())
+    {
+        return fail(
+            "maxCheckpointBytes above 16384 needs a STATE_SNAPSHOT source with a snapshot capacity",
+        );
+    }
+    let tests = strings(&d["selfTests"]);
+    if tests.iter().collect::<BTreeSet<_>>().len() != tests.len() {
+        return fail("selfTests are listed twice");
+    }
+    Ok(())
 }
 
 fn str_at<'a>(value: &'a Value, key: &str) -> Result<&'a str, Error> {
@@ -338,14 +425,90 @@ pub fn validate(data: &[u8]) -> Result<Report, Error> {
     {
         return Err(reject(format!("{extra} matches no tool in the manifest")));
     }
-    let set = set_digest_of(digests.clone()).map_err(|e| reject(e.to_string()))?;
+
+    // Trigger exports (ADR 058): the same digest rules as tools, in one export namespace.
+    let tool_names: BTreeSet<String> = digests
+        .iter()
+        .filter_map(|(id, _)| local_name(id).ok().map(str::to_owned))
+        .collect();
+    let mut trigger_digests = Vec::new();
+    let mut trigger_files = BTreeSet::new();
+    for trigger in manifest["triggers"].as_array().into_iter().flatten() {
+        let descriptor = &trigger["descriptor"];
+        let trigger_id = str_at(descriptor, "triggerId")?;
+        if trigger_id.split_once('/').map(|(p, _)| p) != Some(package_id) {
+            return Err(reject(format!(
+                "triggerId {trigger_id:?} is not in package {package_id:?}"
+            )));
+        }
+        let local = local_name(trigger_id)?;
+        if tool_names.contains(local) {
+            return Err(reject(format!(
+                "{trigger_id}: a tool has the same name; tools and triggers share one namespace"
+            )));
+        }
+        let canonical = canonical_bytes(descriptor)?;
+        if canonical.len() as u64 > max_bytes {
+            return Err(reject(format!(
+                "{trigger_id}: descriptor is over maxDescriptorBytes"
+            )));
+        }
+        let digest = tool_descriptor_digest(descriptor)?;
+        if str_at(trigger, "triggerDescriptorDigest")? != digest {
+            return Err(reject(format!(
+                "{trigger_id}: triggerDescriptorDigest does not match the descriptor"
+            )));
+        }
+        let file = format!("triggers/{local}.json");
+        if verified.files.get(&file) != Some(&canonical) {
+            return Err(reject(format!(
+                "{file} is missing or not the canonical descriptor"
+            )));
+        }
+        trigger_files.insert(file);
+        for id in trigger["artifactIds"].as_array().into_iter().flatten() {
+            if !id.as_str().is_some_and(|id| artifact_ids.contains(id)) {
+                return Err(reject(format!("{trigger_id}: unknown artifact {id}")));
+            }
+        }
+        let runtime = str_at(trigger, "runtimeId")?;
+        if !runtimes.contains(runtime) {
+            return Err(reject(format!(
+                "{trigger_id}: undeclared runtime {runtime:?}"
+            )));
+        }
+        if java.contains(runtime) {
+            match trigger["artifactIds"].as_array().map(Vec::as_slice) {
+                Some([only]) if only.as_str().is_some_and(|id| jars.contains(id)) => {}
+                _ => {
+                    return Err(reject(format!(
+                        "{trigger_id}: a Java trigger must run from one self-contained jar"
+                    )))
+                }
+            }
+        }
+        trigger_rules(trigger_id, descriptor)?;
+        trigger_digests.push((trigger_id.to_owned(), digest));
+    }
+    if let Some(extra) = verified
+        .files
+        .keys()
+        .find(|p| p.starts_with("triggers/") && !trigger_files.contains(*p))
+    {
+        return Err(reject(format!(
+            "{extra} matches no trigger in the manifest"
+        )));
+    }
+    let set = export_set_digest(digests.clone(), trigger_digests.clone())
+        .map_err(|e| reject(e.to_string()))?;
     if str_at(manifest, "descriptorSetDigest")? != set {
-        return Err(reject("descriptorSetDigest does not match the tools"));
+        return Err(reject("descriptorSetDigest does not match the exports"));
     }
     Ok(Report {
         package_digest: verified.package_digest,
         descriptor_set_digest: set,
         tools: digests,
+        triggers: trigger_digests,
     })
 }
 
@@ -374,9 +537,10 @@ fn read_regular(dir: &Path, relative: &str) -> Result<Vec<u8>, Error> {
 
 /// Builds a package from a staging directory holding `toolgate-package.json` and the artifacts it
 /// lists. The packager computes `toolDescriptorDigest`, `descriptorSetDigest`, `artifactDigest`
-/// and `sizeBytes`; a value already present must match. It writes `tools/<local name>.json` with
-/// each canonical descriptor, copies the optional marketplace, self-test and SBOM files, and
-/// returns the archive bytes after validating them.
+/// and `sizeBytes`, and `triggerDescriptorDigest` per trigger; a value already present must match.
+/// It writes `tools/<local name>.json` and `triggers/<local name>.json` with each canonical
+/// descriptor, copies the optional marketplace, self-test and SBOM files, and returns the archive
+/// bytes after validating them.
 pub fn pack(dir: &Path) -> Result<(Vec<u8>, Report), Error> {
     let mut manifest = strict_json(&read_regular(dir, MANIFEST)?)?;
     let mut files = BTreeMap::new();
@@ -431,7 +595,37 @@ pub fn pack(dir: &Path) -> Result<(Vec<u8>, Report), Error> {
             digests.push((tool_id, digest));
         }
     }
-    let set = set_digest_of(digests)?;
+    let mut trigger_digests = Vec::new();
+    if let Some(Value::Array(triggers)) = object.get_mut("triggers") {
+        for trigger in triggers {
+            let descriptor = trigger
+                .get("descriptor")
+                .cloned()
+                .ok_or_else(|| Error::Invalid("trigger has no descriptor".into()))?;
+            let trigger_id = descriptor
+                .get("triggerId")
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error::Invalid("trigger descriptor has no triggerId".into()))?
+                .to_owned();
+            let digest = tool_descriptor_digest(&descriptor)?;
+            let entry = trigger
+                .as_object_mut()
+                .ok_or_else(|| Error::Invalid("trigger is not an object".into()))?;
+            fill(
+                entry,
+                "triggerDescriptorDigest",
+                Value::String(digest.clone()),
+                &trigger_id,
+            )?;
+            let local = local_name(&trigger_id).map_err(|e| Error::Invalid(e.to_string()))?;
+            files.insert(
+                format!("triggers/{local}.json"),
+                canonical_bytes(&descriptor)?,
+            );
+            trigger_digests.push((trigger_id, digest));
+        }
+    }
+    let set = export_set_digest(digests, trigger_digests)?;
     fill(object, "descriptorSetDigest", Value::String(set), MANIFEST)?;
     let mut manifest_bytes = canonical_bytes(&manifest)?;
     manifest_bytes.push(b'\n');

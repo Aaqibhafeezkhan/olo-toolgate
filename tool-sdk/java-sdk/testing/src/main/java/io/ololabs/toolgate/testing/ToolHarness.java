@@ -80,6 +80,14 @@ public final class ToolHarness implements AutoCloseable {
         return new Builder();
     }
 
+    /**
+     * A harness for the POLL trigger with this local name or trigger id: the real trigger runtime over the stdio
+     * frames, against a fake supervisor (see {@link TriggerHarness}).
+     */
+    public static TriggerHarness.Builder trigger(String name) {
+        return TriggerHarness.builder(name);
+    }
+
     /** Calls a tool by local name, tool id or MCP name, with arguments as a JSON string, a map or a JSON tree. */
     public ToolResult call(String tool, Object arguments) {
         String name = mcpName(tool);

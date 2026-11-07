@@ -22,12 +22,13 @@ final readonly class PackageManifest implements \JsonSerializable {
         public array $connections,
         public array $composition,
         public PackageLimits $limits,
-        public ?SdkInfo $sdk = null
+        public ?SdkInfo $sdk = null,
+        public ?array $triggers = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['schemaVersion', 'kind', 'id', 'version', 'publisher', 'sdk', 'compatibility', 'runtimes', 'tools', 'descriptorSetDigest', 'artifacts', 'credentialReferences', 'connections', 'composition', 'limits']) || array_diff(['schemaVersion', 'kind', 'id', 'version', 'publisher', 'compatibility', 'runtimes', 'tools', 'descriptorSetDigest', 'artifacts', 'credentialReferences', 'connections', 'composition', 'limits'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['schemaVersion', 'kind', 'id', 'version', 'publisher', 'sdk', 'compatibility', 'runtimes', 'tools', 'triggers', 'descriptorSetDigest', 'artifacts', 'credentialReferences', 'connections', 'composition', 'limits']) || array_diff(['schemaVersion', 'kind', 'id', 'version', 'publisher', 'compatibility', 'runtimes', 'tools', 'descriptorSetDigest', 'artifacts', 'credentialReferences', 'connections', 'composition', 'limits'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         if ($data['schemaVersion'] !== 2) {
@@ -48,7 +49,8 @@ final readonly class PackageManifest implements \JsonSerializable {
             array_map(static fn ($item) => ConnectionRequirement::fromArray($item), $data['connections']),
             array_map(static fn ($item) => CompositionRecord::fromArray($item), $data['composition']),
             PackageLimits::fromArray($data['limits']),
-            array_key_exists('sdk', $data) ? SdkInfo::fromArray($data['sdk']) : null
+            array_key_exists('sdk', $data) ? SdkInfo::fromArray($data['sdk']) : null,
+            array_key_exists('triggers', $data) ? array_map(static fn ($item) => TriggerDefinition::fromArray($item), $data['triggers']) : null
         );
     }
 

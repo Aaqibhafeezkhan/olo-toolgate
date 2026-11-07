@@ -43,6 +43,37 @@ ADR 027 (trigger frames and `FILES_WATCH`) and the Tool SDK authoring contract.
    legacy path (plan section 0). A contract change before release edits the schema in place and regenerates the
    bindings.
 
+## Amendment (triggers module 2)
+
+Packaging trigger exports needed a manifest member the module 1 contracts did not have, so module 2 adds it in place
+(fresh build, no compatibility):
+
+- `PackageManifest.triggers` lists `TriggerDefinition {descriptor, triggerDescriptorDigest, runtimeId, entryPoint,
+  artifactIds}`. `triggers/<name>.json` holds each descriptor's canonical bytes; `triggerDescriptorDigest` is their
+  SHA-256, like `toolDescriptorDigest`.
+- `descriptorSetDigest` covers both export kinds: the digest of one array of `{toolId, toolDescriptorDigest}` and
+  `{triggerId, triggerDescriptorDigest}` entries sorted by id. Without triggers it is the tool set digest unchanged.
+- Control refuses a package with `triggers` until it accepts trigger definitions (module 4), as it refuses a check-in
+  with `triggers` until ingest exists.
+- A retried emit (after `RETRYABLE_REJECTION`) is the same `EMIT` frame with the same `emitSeq`; an `emitSeq` never
+  names a different event. A POLL check's `CHECKPOINT` is sent only once every emit of that check is resolved.
+
+## Amendment (triggers module 4)
+
+Control's client trigger core needed admin resources and one signature type the module 1 contracts did not have, so
+module 4 adds them in place:
+
+- `trigger.schema.json` gains the admin resources of plan 9 and 10: `TriggerAssignment` (with `TriggerAssignmentSpec`,
+  `TriggerTarget`, `TriggerAssignmentMetadata`, `TriggerAssignmentStatus`), `TriggerAssignmentCreate`,
+  `TriggerAssignmentResult` (with the instance changes a mutation or dry run makes), `TriggerInstanceView`,
+  `TriggerDefinitionRecord` (with its security delta) and their pages. Labels are a bounded list of key/value pairs,
+  not a map, so every value stays bounded.
+- `FleetSignatureHeader.typ` admits `toolgate-trigger-desired+jws`. The desired trigger document is signed by the same
+  organization deployment key as the fleet desired document (ADR 010) but under its own type, so neither verifies as
+  the other. This settles the module 1 open item for client executors; Tool Hosts (module 8) still need the key.
+- A client lease's bearer token is stored only as its SHA-256 digest; renewal keeps the epoch and rotates the token.
+  A new epoch starts on first issue, after a release or revocation, after expiry and on a new config revision.
+
 ## Consequences
 
 - Executors, Control and the SDKs share one frozen wire contract; later modules implement it without new transport.

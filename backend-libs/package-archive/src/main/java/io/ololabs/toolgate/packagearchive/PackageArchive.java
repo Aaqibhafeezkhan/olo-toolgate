@@ -28,10 +28,12 @@ public final class PackageArchive {
      *  descriptor digest, sorted by UTF-16 code units. */
     public static final class Verified {
         private final SortedMap<String, byte[]> files; private final Json manifest;
-        private final String packageDigest, descriptorSetDigest; private final SortedMap<String, String> toolDigests;
-        Verified(SortedMap<String, byte[]> files, Json manifest, String packageDigest, String descriptorSetDigest, SortedMap<String, String> toolDigests) {
+        private final String packageDigest, descriptorSetDigest; private final SortedMap<String, String> toolDigests, triggerDigests;
+        Verified(SortedMap<String, byte[]> files, Json manifest, String packageDigest, String descriptorSetDigest, SortedMap<String, String> toolDigests,
+                 SortedMap<String, String> triggerDigests) {
             this.files = Collections.unmodifiableSortedMap(files); this.manifest = manifest; this.packageDigest = packageDigest;
             this.descriptorSetDigest = descriptorSetDigest; this.toolDigests = Collections.unmodifiableSortedMap(toolDigests);
+            this.triggerDigests = Collections.unmodifiableSortedMap(triggerDigests);
         }
         public SortedMap<String, byte[]> files() { return files; }
         public Json manifest() { return manifest; }
@@ -41,13 +43,19 @@ public final class PackageArchive {
         public String packageDigest() { return packageDigest; }
         public String descriptorSetDigest() { return descriptorSetDigest; }
         public SortedMap<String, String> toolDigests() { return toolDigests; }
+        /** Each triggerId and its trigger descriptor digest (ADR 058), sorted by UTF-16 code units. */
+        public SortedMap<String, String> triggerDigests() { return triggerDigests; }
     }
 
     private PackageArchive() {}
     private static PackageRejected reject(String reason) { return new PackageRejected(reason); }
 
-    /** Validates a whole package. Throws {@link PackageRejected} for any package that breaks a rule. */
-    public static Verified validate(byte[] data) {
+    /** Validates a whole package and refuses trigger exports. Throws {@link PackageRejected} for any package that breaks a rule. */
+    public static Verified validate(byte[] data) { return validate(data, false); }
+
+    /** Validates a whole package. With {@code triggers}, trigger exports (ADR 058) are checked like the CLI checks them and
+     *  covered by the set digest; without, a package carrying them is refused, never accepted with its triggers ignored. */
+    public static Verified validate(byte[] data, boolean triggers) {
         if (data.length > MAX_PACKAGE_BYTES) throw new PackageRejected(413, "Package too large");
         var files = read(data);
         var checksums = files.get(CHECKSUMS);
@@ -72,6 +80,9 @@ public final class PackageArchive {
         catch (Json.ParseException e) { throw reject(MANIFEST + " is not strict JSON: " + e.getMessage()); }
         if (!manifest.isObject() || manifest.path("schemaVersion").asInt() != 2 || !manifest.path("id").isTextual() || !manifest.path("version").isTextual())
             throw reject(MANIFEST + " is not a schemaVersion 2 manifest with a text id and version");
+        // Trigger exports (ADR 058) are accepted once Control implements trigger definitions (triggers module 4); until then
+        // a package carrying them is refused, never accepted with its triggers ignored.
+        if (manifest.has("triggers") && !triggers) throw reject("trigger exports are not accepted by this Control version");
         String packageId = manifest.get("id").asText();
         if (!packageId.matches("^[a-z][a-z0-9-]{1,30}(\\.[a-z][a-z0-9-]{1,30}){1,3}$")) throw reject("not a package id: " + packageId);
 
@@ -121,11 +132,82 @@ public final class PackageArchive {
             if (digests.put(toolId, digest) != null) throw reject("two tools share a toolId: " + toolId);
         }
         for (var path : files.keySet()) if (path.startsWith("tools/") && !toolFiles.contains(path)) throw reject(path + " matches no tool in the manifest");
-        var set = new ArrayList<Json>();
-        digests.forEach((id, d) -> { var entry = new LinkedHashMap<String, Json>(); entry.put("toolId", Json.string(id)); entry.put("toolDescriptorDigest", Json.string(d)); set.add(Json.object(entry)); }); // TreeMap: UTF-16 order
-        String setDigest = Canonical.digest(Json.array(set));
-        if (!setDigest.equals(manifest.path("descriptorSetDigest").asText())) throw reject("descriptorSetDigest does not match the tools");
-        return new Verified(files, manifest, Canonical.sha256(checksums), setDigest, digests);
+        // Trigger exports (ADR 058): the same digest rules as tools, one export namespace, and the processor's rules.
+        var triggerDigests = new TreeMap<String, String>(); var triggerFiles = new HashSet<String>();
+        var localTools = new HashSet<String>(); for (var id : digests.keySet()) localTools.add(id.substring(id.indexOf('/') + 1));
+        var exports = manifest.path("triggers");
+        if (!exports.isMissing() && (!exports.isArray() || exports.size() > MAX_TOOLS)) throw reject("triggers is not an array of at most " + MAX_TOOLS);
+        for (var trigger : exports) {
+            var descriptor = trigger.path("descriptor");
+            String triggerId = descriptor.path("triggerId").asText();
+            int slash = triggerId.indexOf('/');
+            if (slash < 0 || !triggerId.substring(0, slash).equals(packageId) || !triggerId.matches("[^/]+/[a-z][a-z0-9_-]{0,47}")) throw reject("triggerId is not in package " + packageId + ": " + triggerId);
+            String local = triggerId.substring(slash + 1);
+            if (localTools.contains(local)) throw reject(triggerId + ": a tool has the same name; tools and triggers share one namespace");
+            byte[] canonical;
+            try { canonical = Canonical.bytes(descriptor); }
+            catch (IllegalArgumentException e) { throw reject(triggerId + ": the descriptor has no canonical form: " + e.getMessage()); }
+            if (canonical.length > maxBytes) throw reject(triggerId + ": descriptor is over maxDescriptorBytes");
+            String digest = Canonical.sha256(canonical);
+            if (!digest.equals(trigger.path("triggerDescriptorDigest").asText())) throw reject(triggerId + ": triggerDescriptorDigest does not match the descriptor");
+            String file = "triggers/" + local + ".json";
+            if (!Arrays.equals(files.get(file), canonical)) throw reject(file + " is missing or not the canonical descriptor");
+            triggerFiles.add(file);
+            for (var id : trigger.path("artifactIds")) if (!artifactIds.contains(id.asText())) throw reject(triggerId + ": unknown artifact " + id.asText());
+            if (!runtimes.contains(trigger.path("runtimeId").asText())) throw reject(triggerId + ": undeclared runtime");
+            if (java.contains(trigger.path("runtimeId").asText()) && (trigger.path("artifactIds").size() != 1 || !jars.contains(trigger.path("artifactIds").path(0).asText())))
+                throw reject(triggerId + ": a Java trigger must run from one self-contained jar");
+            triggerRules(triggerId, descriptor);
+            if (triggerDigests.put(triggerId, digest) != null) throw reject("two triggers share a triggerId: " + triggerId);
+        }
+        for (var path : files.keySet()) if (path.startsWith("triggers/") && !triggerFiles.contains(path)) throw reject(path + " matches no trigger in the manifest");
+        // descriptorSetDigest: {toolId, toolDescriptorDigest} and {triggerId, triggerDescriptorDigest}, sorted by id.
+        var exportIds = new TreeMap<String, Json>();
+        digests.forEach((id, d) -> { var entry = new LinkedHashMap<String, Json>(); entry.put("toolId", Json.string(id)); entry.put("toolDescriptorDigest", Json.string(d)); exportIds.put(id, Json.object(entry)); }); // TreeMap: UTF-16 order
+        triggerDigests.forEach((id, d) -> { var entry = new LinkedHashMap<String, Json>(); entry.put("triggerId", Json.string(id)); entry.put("triggerDescriptorDigest", Json.string(d)); exportIds.put(id, Json.object(entry)); });
+        String setDigest = Canonical.digest(Json.array(new ArrayList<>(exportIds.values())));
+        if (!setDigest.equals(manifest.path("descriptorSetDigest").asText())) throw reject("descriptorSetDigest does not match the exports");
+        return new Verified(files, manifest, Canonical.sha256(checksums), setDigest, digests, triggerDigests);
+    }
+
+    private static List<String> strings(Json value) { var out = new ArrayList<String>(); for (var v : value) out.add(v.asText()); return out; }
+
+    /** The trigger rules beyond the schema (ADR 058; plan 5.7, 5.8, 6.6 and 6.7), as the CLI's {@code validate} applies them. */
+    static void triggerRules(String triggerId, Json d) {
+        var executors = strings(d.path("executors"));
+        if (executors.isEmpty() || executors.size() > 2 || new HashSet<>(executors).size() != executors.size() || !Set.of("CLIENT", "SERVER").containsAll(executors))
+            throw reject(triggerId + ": executors must be CLIENT and/or SERVER, once each");
+        boolean capabilities = !strings(d.path("routes")).isEmpty() || !strings(d.path("tcpDestinations")).isEmpty() || !strings(d.path("secrets")).isEmpty();
+        var permissions = strings(d.path("permissions"));
+        switch (d.path("kind").asText()) {
+            case "CLIENT_TRIGGER" -> {
+                if (!executors.equals(List.of("CLIENT"))) throw reject(triggerId + ": a client trigger runs on CLIENT executors only");
+                if (capabilities) throw reject(triggerId + ": a client trigger has no routes, TCP destinations or secrets");
+                if (permissions.stream().anyMatch(p -> !p.equals("DEVICE_FILES_READ"))) throw reject(triggerId + ": a client trigger may only read the device files area");
+            }
+            case "SERVER_TRIGGER" -> {
+                if (capabilities && executors.contains("CLIENT")) throw reject(triggerId + ": a server trigger that uses routes, TCP destinations or secrets cannot run on CLIENT executors");
+                if (permissions.stream().anyMatch(p -> p.startsWith("DEVICE_FILES"))) throw reject(triggerId + ": a server trigger has no device files area");
+            }
+            default -> throw reject(triggerId + ": kind must be CLIENT_TRIGGER or SERVER_TRIGGER");
+        }
+        var schedule = d.path("schedule");
+        switch (d.path("mode").asText()) {
+            case "POLL" -> { if (!schedule.path("intervalMs").isIntegralNumber() || schedule.has("resyncIntervalMs")) throw reject(triggerId + ": a POLL trigger has schedule.intervalMs and no resyncIntervalMs"); }
+            case "PUSH" -> {
+                long resync = schedule.path("resyncIntervalMs").asLong(-1);
+                if (schedule.has("intervalMs") || resync < 0 || (resync != 0 && resync < 60_000)) throw reject(triggerId + ": a PUSH trigger has schedule.resyncIntervalMs, 0 or at least 60000, and no intervalMs");
+            }
+            default -> throw reject(triggerId + ": mode must be POLL or PUSH");
+        }
+        if (!"BLOCK".equals(d.path("overflow").asText())) {
+            if (!d.path("lossTolerant").booleanValue()) throw reject(triggerId + ": DROP_* overflow is allowed only for a lossTolerant event type");
+            if (!"SKIP_AND_RECORD".equals(d.path("onTerminalRejection").asText())) throw reject(triggerId + ": DROP_* overflow needs onTerminalRejection SKIP_AND_RECORD");
+        }
+        if (d.path("limits").path("maxCheckpointBytes").asLong(0) > 16_384 && (!"STATE_SNAPSHOT".equals(d.path("sourceReplay").asText()) || !d.has("snapshot")))
+            throw reject(triggerId + ": maxCheckpointBytes above 16384 needs a STATE_SNAPSHOT source with a snapshot capacity");
+        var tests = strings(d.path("selfTests"));
+        if (new HashSet<>(tests).size() != tests.size()) throw reject(triggerId + ": selfTests are listed twice");
     }
 
     /** Canonical CHECKSUMS.sha256: UTF-8, LF only, `<64 lowercase hex>  <NFC path>` per line, sorted bytewise. */
