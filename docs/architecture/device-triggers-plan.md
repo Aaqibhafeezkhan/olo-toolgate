@@ -3120,3 +3120,19 @@ grouped into tracks that can run at the same time:
 
 When a #230 stage lands first, the trigger module builds on it as delivered. When a trigger module lands first, the
 #230 stage extends that code rather than adding a parallel path (section 0).
+
+### 24.6 Delivery grouping (decided 2026-11-07)
+
+The modules of 24.2 keep their scope, weights, dependencies and *Done when*. What changes is how they are delivered
+next:
+
+1. **Module 5** (client integration and ingest, Slice 1) in its own PR, as before.
+2. **Modules 10, 11 and 12 and an end-to-end demo in one PR.** The event router and retention, coarse-mode
+   information flow, and subscriptions over WebSocket are built in sequence on one branch. The demo runs the first
+   user-visible path: a device POLL trigger, through Control ingest and the router, with coarse labels applied, reaches
+   an external listener subscribed over `toolgate.triggers.v1`. Each module still has to meet its own *Done when*
+   before the PR merges, and the status document records the evidence per module. Merging the PR earns all three
+   weights (12%). The demo has no separate weight; it is the evidence for scenarios 16 and 31 (module 12).
+3. **Everything else in later deliveries:** modules 6 to 9 and 13 to 18, in the order of 24.2 and the tracks of 24.5.
+
+This supersedes the "one branch and one PR per module" rule for modules 10–12 only.

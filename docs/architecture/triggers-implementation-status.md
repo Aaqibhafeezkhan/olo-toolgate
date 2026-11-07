@@ -39,9 +39,9 @@ merges (5% → 27%).
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
 | 8 | ★ Server triggers on the Tool Host | E | 8% | ⏳ Pending | 0% | — |
 | 9 | Python SDK parity | B | 4% | ⏳ Pending | 0% | — |
-| 10 | Event router and retention | D | 4% | ⏳ Pending | 0% | — |
-| 11 | Information flow, coarse mode | D | 3% | ⏳ Pending | 0% | — |
-| 12 | Subscriptions and WebSocket | D | 5% | ⏳ Pending | 0% | — |
+| 10 | Event router and retention | D | 4% | ⏳ Pending (next delivery: one PR with modules 10–12 and the end-to-end demo, plan 24.6) | 0% | — |
+| 11 | Information flow, coarse mode | D | 3% | ⏳ Pending (next delivery: one PR with modules 10–12 and the end-to-end demo, plan 24.6) | 0% | — |
+| 12 | Subscriptions and WebSocket | D | 5% | ⏳ Pending (next delivery: one PR with modules 10–12 and the end-to-end demo, plan 24.6) | 0% | — |
 | 13 | Schedules (Quartz) | D | 5% | ⏳ Pending | 0% | — |
 | 14 | ★ Actions | F | 8% | ⏳ Pending | 0% | — |
 | 15 | ★ Composite MCP | F | 7% | ⏳ Pending | 0% | — |
@@ -69,6 +69,7 @@ their reasons.
 
 | Date | Change | Old | New | Reason |
 |---|---|---|---|---|
+| 2026-11-07 | Delivery grouping (plan 24.6) | One branch and one PR per module, modules strictly in the order of 24.2 | Module 5 in its own PR; then modules 10, 11 and 12 and an end-to-end demo (device POLL trigger → ingest → router → coarse labels → external WebSocket listener) in one PR; modules 6–9 and 13–18 in later deliveries | User decision, to reach the first externally observable trigger event sooner. Weights, scope and *Done when* are unchanged; the combined PR earns modules 10–12 (12%) only when each meets its own *Done when*; the demo carries no weight |
 | 2026-11-07 | Module 4 scope: package review and enable (plan 10.2 "existing review / enable routes") | Definitions are the triggers of enabled package versions; the existing review flow carries the security delta | Definitions are the trigger exports of every uploaded (`VERIFIED`) package version, each with a trigger security delta against the version uploaded before. Weights unchanged | Control has no review or enable state for SDK packages today (versions stay `VERIFIED`; tools deploy straight from them), so there is no existing flow to extend. Gating trigger use on a review step belongs with that flow when it exists |
 | 2026-11-07 | Module 4 scope: plan 10.1 conventions | Errors are RFC 9457 `application/problem+json`; bodies may be JSON or YAML | Errors use Control's existing error envelope with the same status codes (404 identical for unknown and cross-tenant, 412 stale ETag, 428 missing If-Match); bodies are JSON only | One error format per Control API: the console and every client parse the existing envelope. Changing it is a Control-wide decision, not a trigger one |
 | 2026-11-07 | Module 4 boundary: what later modules wire | — | Server targets are refused (module 8); lifecycle overrides and actions (module 6); leases reach devices through `TriggerSyncAck` in check-in (module 5), which calls `TriggerService.leases`; the `triggers.v1` capability gate on the desired route arrives with check-in negotiation (module 5) | Each is owned by its module in plan 24.2; module 4 builds and tests the Control side they call |
@@ -351,3 +352,28 @@ repository pre-commit script.
 class (the service is tested directly, as Fleet's is).
 
 **Outstanding before the module is Done:** the merge of the integration PR to `main` (reviewed and merged as #284).
+
+### Integration of modules 2–4 into `main`
+
+Modules 2, 3 and 4 were reviewed and merged into stacked feature branches (#282, #283 and #284). Branch
+`feature/triggers-integration-m04` starts from `feature/triggers-m01-contracts` (modules 1–3) at `1060c262`. It merges
+`feature/triggers-m02-java-sdk` (module 4) at `b63ad4d5` and `main` at `16d0fd36`. Two conflicts were resolved:
+`generated-manifest.json` was regenerated rather than hand-merged, and this document keeps every module's section.
+The trigger schema merged cleanly with module 3's `TriggerRejection.leaseEpoch` and module 4's admin resources.
+
+**Checks run on the combined tree** (Windows workstation, 2026-11-07; Rust and PHP in Docker; PostgreSQL 17 in Docker
+through `tools/control/check.py`):
+
+| Check | Result |
+|---|---|
+| `generate.py --check`, `fixtures.py --check`, `version.py --check`, `tools/quality.py`, `tools/ci/preflight.py`, `tools/access/permissions.py --check`, `tools/tenancy/capacity_schema.py --check`, `tools/ui/generate.py --check` | Pass (1384 generated binding files) |
+| `tools/control/check.py`: `:contracts-java:test`, `:package-archive:test`, `:control-plane:test`, `:control-plane:enterpriseTest` on an isolated PostgreSQL 17 | `control-plane:test` passes: 285 tests, 8 skipped, `TriggerTest` 4 of 4. `enterpriseTest`: 414 tests, 1 failure. `TargetClaimsTest.currentPostgresRuntimeRoles…` fails with `SQLITE_CANTOPEN`: each scenario nests a new temp directory inside the previous one, past the Windows path limit. It fails identically on unmodified `main` (`16d0fd36`) on this machine, and twice more when rerun alone |
+| `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked --no-fail-fast` | Pass: 371 passed, 16 ignored, 53 test binaries |
+| `tests/ci` (413 tests, `PYTHONUTF8=1`) | Pass, 10 skipped |
+| `tests/contracts` (181 tests) | 176 pass, 2 skipped. The same 3 environment failures as on `main` (2 symlink, 1 scorecard) |
+| TypeScript contracts check, build and tests; admin UI `ui:check` and tests | Pass: 2 contract tests; 255 UI tests in 36 files |
+| PHP 8.2 round trips and lint | Pass: 298 v1 and 367 v2 round trips; 665 files linted |
+
+**Not run:** the machine-readable evidence file that `tools/enterprise/check.py` writes after the Gradle tests; the
+script stops at the `TargetClaimsTest` environment failure above, so the results come from the JUnit reports. The M12
+scenarios: modules 2–4 own none.
