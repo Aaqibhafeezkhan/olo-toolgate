@@ -4137,6 +4137,45 @@ END $$;
 CREATE TRIGGER control_lookup_recovery_fence BEFORE INSERT ON public.control_operation_recoveries
 FOR EACH ROW EXECUTE FUNCTION public.control_lookup_recovery_fence();
 
+-- BEGIN TRIGGERS (issue #274, ADR 058): assignments, instances, desired documents and run leases in one tenant-scoped
+-- document table. Rows are never deleted: a removed assignment or instance keeps its row with a tombstone state, and
+-- every update advances the revision by exactly one (compare-and-swap under the tenant's transaction).
+CREATE FUNCTION public.control_triggers_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' OR NEW.tenant_id <> OLD.tenant_id OR NEW.kind <> OLD.kind OR NEW.record_id <> OLD.record_id
+      OR NEW.revision <> OLD.revision + 1 THEN
+    RAISE EXCEPTION 'trigger record identity or revision violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TABLE public.control_triggers (
+    tenant_id text NOT NULL,
+    kind text NOT NULL,
+    record_id text NOT NULL,
+    revision bigint NOT NULL,
+    document text NOT NULL,
+    CONSTRAINT control_triggers_document_check CHECK ((octet_length(document) <= 131072)),
+    CONSTRAINT control_triggers_kind_check CHECK ((kind = ANY (ARRAY['ASSIGNMENT'::text, 'INSTANCE'::text, 'DESIRED'::text, 'LEASE'::text]))),
+    CONSTRAINT control_triggers_record_check CHECK (((length(record_id) >= 1) AND (length(record_id) <= 256))),
+    CONSTRAINT control_triggers_revision_check CHECK (((revision > 0) AND (revision <= '9007199254740991'::bigint))),
+    CONSTRAINT control_triggers_pkey PRIMARY KEY (tenant_id, kind, record_id),
+    CONSTRAINT control_triggers_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id)
+);
+
+ALTER TABLE ONLY public.control_triggers FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.control_triggers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON public.control_triggers USING (true) WITH CHECK (true);
+CREATE POLICY tenant_fence ON public.control_triggers AS RESTRICTIVE USING (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK (((tenant_id = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+CREATE TRIGGER control_triggers_guard BEFORE DELETE OR UPDATE ON public.control_triggers FOR EACH ROW EXECUTE FUNCTION public.control_triggers_guard();
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON public.control_triggers FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_triggers TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_triggers TO toolgate_control_platform;
+-- END TRIGGERS
+
 -- BEGIN TENANT CAPACITY
 GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
 
@@ -4314,4 +4353,16 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION control_policy_bundles_capacity() FROM PUBLIC;
 CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_policy_bundles FOR EACH ROW EXECUTE FUNCTION control_policy_bundles_capacity();
+
+CREATE FUNCTION control_triggers_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_triggers_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_triggers FOR EACH ROW EXECUTE FUNCTION control_triggers_capacity();
 -- END TENANT CAPACITY

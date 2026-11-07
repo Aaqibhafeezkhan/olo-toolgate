@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key.
  *
  * @param alg canonical alg value
  * @param typ canonical typ value

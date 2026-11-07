@@ -22,6 +22,7 @@ TRACKED={
  'control_invocation_events':(['document'],None),
  'control_invocation_results':(['payload'],None),
  'control_policy_bundles':(['document','policy'],None),
+ 'control_triggers':(['document'],None),
 }
 
 def expression(row,fields,queued,postgres):
@@ -90,7 +91,7 @@ def main():
         else:updated=source+'\n-- statement\n'+block(False)
         if args.check:
             if source!=updated:raise SystemExit('Capacity schema drift: '+filename)
-        else:path.write_text(updated)
+        else:path.write_text(updated,newline='\n')
     print('Tenant capacity schema blocks verified' if args.check else 'Tenant capacity V1 blocks generated')
 
 if __name__=='__main__':main()

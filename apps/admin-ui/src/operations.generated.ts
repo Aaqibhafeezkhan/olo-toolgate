@@ -263,6 +263,14 @@ export const operations = {
   target_claims_status: { method: 'POST', path: '/api/control/v1/access/target-permits/{target}/claims/status' },
   target_claims_outcome: { method: 'POST', path: '/api/control/v1/access/target-permits/{target}/claims/outcome' },
   target_jwks: { method: 'GET', path: '/api/control/v1/access/target-permits/{target}/jwks' },
+  listTriggerDefinitions: { method: 'GET', path: '/api/control/v1/triggers/definitions' },
+  listTriggerAssignments: { method: 'GET', path: '/api/control/v1/triggers/assignments' },
+  createTriggerAssignment: { method: 'POST', path: '/api/control/v1/triggers/assignments' },
+  getTriggerAssignment: { method: 'GET', path: '/api/control/v1/triggers/assignments/{name}' },
+  patchTriggerAssignment: { method: 'PATCH', path: '/api/control/v1/triggers/assignments/{name}' },
+  deleteTriggerAssignment: { method: 'DELETE', path: '/api/control/v1/triggers/assignments/{name}' },
+  listTriggerInstances: { method: 'GET', path: '/api/control/v1/triggers/instances' },
+  getTriggerDesiredDocument: { method: 'GET', path: '/api/control/v1/endpoint/triggers/desired' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;
