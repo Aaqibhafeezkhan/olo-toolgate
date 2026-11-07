@@ -1501,7 +1501,7 @@ export interface FleetSelfTest {
   readonly arguments: Record<string, unknown>;
   readonly expectedOutput: Record<string, unknown>;
 }
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key. */
 export interface FleetSignatureHeader {
   readonly alg: string;
   readonly typ: string;

@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts;
 
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key. */
 final readonly class FleetSignatureHeader implements \JsonSerializable {
     public function __construct(
         public string $alg,
