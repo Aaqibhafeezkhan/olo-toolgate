@@ -736,7 +736,7 @@ mod tests {
         assert!(p.request.headers()["toolgate-effect-permit"].is_sensitive());
         assert!(p.with_target_permit(Some(&permit)).is_err());
         assert!(
-            prepared("http://example.test/send", "{}", "alice", "credential")
+            prepared("http://127.0.0.1/send", "{}", "alice", "credential")
                 .with_target_permit(Some(&permit))
                 .is_err()
         );
