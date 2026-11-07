@@ -67,6 +67,7 @@ public class FleetBootstrap {
         loaded=true;
     }
     void start(@Observes StartupEvent event){load();}
+    public KillCrypto killCrypto(){load();if(!enabled||!(crypto instanceof KillCrypto signer))throw Failure.unavailable();return signer;}
     public FleetService forTenant(io.ololabs.toolgate.control.domain.Ids.TenantId tenant){load();var profile=endpoints.profile(tenant);return new FleetService(store,codec,crypto,endpoints.forTenant(tenant),java.time.Clock.systemUTC(),enabled&&profile!=null,tenant.value(),profile==null?"disabled":profile.serverId());}
     @Produces @jakarta.enterprise.context.RequestScoped FleetService fleet(){return forTenant(request.tenant());}
     @Produces @ApplicationScoped ArtifactStore artifacts(){load();return artifacts;}

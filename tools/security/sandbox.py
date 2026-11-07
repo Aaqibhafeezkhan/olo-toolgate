@@ -77,7 +77,8 @@ def main():
                    'TOOLGATE_SANDBOX_BROKER_IMAGE': args.broker_image,
                    'TOOLGATE_SANDBOX_IMAGE': args.image, 'TOOLGATE_SANDBOX_IO_DEVICE': io_device,
                    'TOOLGATE_SANDBOX_CGROUP_PARENT': parent, 'CARGO_TERM_COLOR': 'never'}
-    for name in ('RUSTUP_HOME', 'CARGO_HOME'):
+    for name in ('RUSTUP_HOME', 'CARGO_HOME', 'CARGO_BUILD_JOBS', 'CARGO_INCREMENTAL',
+                 'CARGO_PROFILE_DEV_DEBUG', 'CARGO_PROFILE_TEST_DEBUG'):
         if name in os.environ:
             environment[name] = os.environ[name]
     command += ['--setenv=' + name + '=' + value for name, value in environment.items()]

@@ -82,7 +82,7 @@ public final class EffectConsents {
             return null;
         }
         var approval=tx.effectConsents().approval(pending.consentId());
-        if(approval==null||approval.authorizationEpoch()!=tx.enterprise().authorizationEpoch()||now<pending.notBefore()
+        if(approval==null||!KillEnforcement.currentEpoch(tx,approval.authorizationEpoch())||now<pending.notBefore()
             ||now>=pending.expiresAt()||tx.effectConsents().revoked(pending.consentId()))throw required();
         reviewer(tx,codec,approval.reviewer(),i,now);
         var preview=codec.model(pending.document(),EffectConsentPreview.class);

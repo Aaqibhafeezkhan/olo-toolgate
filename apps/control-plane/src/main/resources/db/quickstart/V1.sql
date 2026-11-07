@@ -677,7 +677,7 @@ CREATE TRIGGER consent_slots_immutable_update BEFORE UPDATE ON control_effect_co
 CREATE TRIGGER consent_use_guard BEFORE INSERT ON control_effect_consent_uses WHEN NOT EXISTS(SELECT 1 FROM control_effect_consent_slots s
  JOIN control_effect_consents c ON c.tenant_id=s.tenant_id AND c.consent_id=s.consent_id
  JOIN control_effect_consent_approvals a ON a.tenant_id=c.tenant_id AND a.consent_id=c.consent_id
- JOIN control_tenant_authority t ON t.tenant_id=c.tenant_id AND t.authorization_epoch=a.authorization_epoch
+ JOIN control_tenant_authority t ON t.tenant_id=c.tenant_id AND (a.authorization_epoch=t.authorization_epoch OR (a.authorization_epoch<t.authorization_epoch AND (SELECT COUNT(*) FROM control_kill_events k WHERE k.tenant_id=t.tenant_id AND k.authorization_epoch>a.authorization_epoch AND k.authorization_epoch<=t.authorization_epoch)=t.authorization_epoch-a.authorization_epoch))
  JOIN control_effects e ON e.tenant_id=c.tenant_id AND e.operation_id=c.operation_id AND e.route_id=s.route_id
  JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id AND g.generation=e.current_generation
  WHERE s.tenant_id=NEW.tenant_id AND s.consent_id=NEW.consent_id AND s.slot_index=NEW.slot_index
@@ -1102,7 +1102,11 @@ CREATE TRIGGER effect_manifest_guard BEFORE INSERT ON control_effect_generations
  WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND i.state='EXECUTING'
  AND json_extract(i.document,'$.reservedNonce')=NEW.attempt_id AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=NEW.issued_at
  AND i.expires_at>NEW.issued_at AND NEW.expires_at<=i.expires_at
- AND i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id)
+ AND (i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id) OR (i.authorization_epoch<(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id) AND (SELECT COUNT(*) FROM control_kill_events k WHERE k.tenant_id=i.tenant_id AND k.authorization_epoch>i.authorization_epoch AND k.authorization_epoch<=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id))=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id)-i.authorization_epoch))
+ AND NOT EXISTS(SELECT 1 FROM control_kill_events k WHERE k.tenant_id=i.tenant_id AND k.event_kind='KILL' AND k.mode='TERMINATE'
+ AND NOT EXISTS(SELECT 1 FROM control_kill_supersessions x WHERE x.tenant_id=k.tenant_id AND x.kill_event_id=k.event_id)
+ AND (k.scope_kind='TENANT' OR NOT EXISTS(SELECT 1 FROM control_invocation_kill_scopes s WHERE s.tenant_id=i.tenant_id AND s.attempt_id=NEW.attempt_id)
+ OR EXISTS(SELECT 1 FROM control_invocation_kill_scopes s WHERE s.tenant_id=i.tenant_id AND s.attempt_id=NEW.attempt_id AND ((k.scope_kind='PACKAGE' AND (s.package_id IS NULL OR s.package_id=k.scope_value)) OR (k.scope_kind='PACKAGE_DIGEST' AND (s.package_digest IS NULL OR s.package_digest=k.scope_value)) OR (k.scope_kind='PUBLISHER' AND (s.publisher_id IS NULL OR s.publisher_id=k.scope_value)) OR (k.scope_kind='TOOL' AND (s.tool_id IS NULL OR s.tool_id=k.scope_value)) OR (k.scope_kind='POOL' AND (s.pool_id IS NULL OR s.pool_id=k.scope_value)) OR (k.scope_kind='RUNTIME_IMAGE' AND (s.image_digest IS NULL OR s.image_digest=k.scope_value))))))
  AND NOT EXISTS(SELECT 1 FROM control_operation_cancellations c WHERE c.tenant_id=i.tenant_id AND c.invocation_id=i.invocation_id)
  AND NOT EXISTS(SELECT 1 FROM control_execution_leases l WHERE l.tenant_id=i.tenant_id AND l.invocation_id=i.invocation_id
  AND l.fencing_token=NEW.attempt_id AND l.expires_at<=NEW.issued_at))
@@ -1120,7 +1124,11 @@ CREATE TRIGGER effect_manifest_transition_guard BEFORE UPDATE ON control_effect_
  WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id AND i.state='EXECUTING'
  AND json_extract(i.document,'$.reservedNonce')=NEW.attempt_id AND n.purpose='EXECUTION' AND n.consumed_at IS NOT NULL AND n.consumed_at<=NEW.issued_at
  AND i.expires_at>NEW.issued_at AND NEW.expires_at<=i.expires_at
- AND i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id)
+ AND (i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id) OR (i.authorization_epoch<(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id) AND (SELECT COUNT(*) FROM control_kill_events k WHERE k.tenant_id=i.tenant_id AND k.authorization_epoch>i.authorization_epoch AND k.authorization_epoch<=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id))=(SELECT authorization_epoch FROM control_tenant_authority t WHERE t.tenant_id=i.tenant_id)-i.authorization_epoch))
+ AND NOT EXISTS(SELECT 1 FROM control_kill_events k WHERE k.tenant_id=i.tenant_id AND k.event_kind='KILL' AND k.mode='TERMINATE'
+ AND NOT EXISTS(SELECT 1 FROM control_kill_supersessions x WHERE x.tenant_id=k.tenant_id AND x.kill_event_id=k.event_id)
+ AND (k.scope_kind='TENANT' OR NOT EXISTS(SELECT 1 FROM control_invocation_kill_scopes s WHERE s.tenant_id=i.tenant_id AND s.attempt_id=NEW.attempt_id)
+ OR EXISTS(SELECT 1 FROM control_invocation_kill_scopes s WHERE s.tenant_id=i.tenant_id AND s.attempt_id=NEW.attempt_id AND ((k.scope_kind='PACKAGE' AND (s.package_id IS NULL OR s.package_id=k.scope_value)) OR (k.scope_kind='PACKAGE_DIGEST' AND (s.package_digest IS NULL OR s.package_digest=k.scope_value)) OR (k.scope_kind='PUBLISHER' AND (s.publisher_id IS NULL OR s.publisher_id=k.scope_value)) OR (k.scope_kind='TOOL' AND (s.tool_id IS NULL OR s.tool_id=k.scope_value)) OR (k.scope_kind='POOL' AND (s.pool_id IS NULL OR s.pool_id=k.scope_value)) OR (k.scope_kind='RUNTIME_IMAGE' AND (s.image_digest IS NULL OR s.image_digest=k.scope_value))))))
  AND NOT EXISTS(SELECT 1 FROM control_operation_cancellations c WHERE c.tenant_id=i.tenant_id AND c.invocation_id=i.invocation_id)
  AND NOT EXISTS(SELECT 1 FROM control_execution_leases l WHERE l.tenant_id=i.tenant_id AND l.invocation_id=i.invocation_id
  AND l.fencing_token=NEW.attempt_id AND l.expires_at<=NEW.issued_at))
@@ -1252,7 +1260,7 @@ CREATE TRIGGER operation_recovery_insert BEFORE INSERT ON control_operation_reco
  WHERE i.tenant_id=NEW.tenant_id AND i.invocation_id=NEW.operation_id
  AND i.revision=NEW.from_revision AND o.revision=NEW.operation_revision AND o.legacy=0
  AND i.state IN('FAILED','EXPIRED','OUTCOME_UNKNOWN') AND o.state IN('FAILED','OUTCOME_UNKNOWN')
- AND i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority WHERE tenant_id=i.tenant_id)
+ AND (i.authorization_epoch=(SELECT authorization_epoch FROM control_tenant_authority WHERE tenant_id=i.tenant_id) OR (i.authorization_epoch<(SELECT authorization_epoch FROM control_tenant_authority WHERE tenant_id=i.tenant_id) AND (SELECT COUNT(*) FROM control_kill_events k WHERE k.tenant_id=i.tenant_id AND k.authorization_epoch>i.authorization_epoch AND k.authorization_epoch<=(SELECT authorization_epoch FROM control_tenant_authority WHERE tenant_id=i.tenant_id))=(SELECT authorization_epoch FROM control_tenant_authority WHERE tenant_id=i.tenant_id)-i.authorization_epoch))
  AND i.expires_at=NEW.original_deadline AND i.expires_at>NEW.created_at
  AND json_extract(i.document,'$.reservedNonce') IS NEW.previous_nonce
  AND json_extract(NEW.document,'$.invocation')=i.document
@@ -1394,8 +1402,297 @@ WHEN NEW.proof='TARGET_DEDUPLICATION' AND EXISTS(
 BEGIN SELECT RAISE(ABORT,'witnessed target outcome fences recovery'); END;
 
 -- statement
+-- Copyright 2026 OLO Labs
+-- SPDX-License-Identifier: Apache-2.0
+-- Current fresh-schema kill storage, mirrored in initial V1.
+CREATE TABLE control_kill_events(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),event_id TEXT NOT NULL,issuer TEXT NOT NULL CHECK(issuer IN('control','control-breakglass')),issuer_counter INTEGER NOT NULL CHECK(issuer_counter BETWEEN 1 AND 9999999999999999),event_kind TEXT NOT NULL CHECK(event_kind IN('KILL','RECOVERY')),scope_kind TEXT CHECK(scope_kind IN('PACKAGE','PACKAGE_DIGEST','PUBLISHER','TOOL','POOL','RUNTIME_IMAGE','TENANT')),scope_value TEXT CHECK(length(scope_value) BETWEEN 1 AND 256),mode TEXT CHECK(mode IN('STOP_NEW','TERMINATE')),authorization_epoch INTEGER NOT NULL CHECK(authorization_epoch BETWEEN 1 AND 9007199254740991),issued_at INTEGER NOT NULL CHECK(issued_at BETWEEN 0 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=65536),PRIMARY KEY(tenant_id,event_id),UNIQUE(tenant_id,issuer,issuer_counter),UNIQUE(tenant_id,authorization_epoch),CHECK(event_id=issuer||':'||issuer_counter),CHECK(event_kind='KILL' OR issuer='control'),CHECK((event_kind='KILL')=(scope_kind IS NOT NULL)),CHECK((event_kind='KILL')=(mode IS NOT NULL)),CHECK(scope_kind IS NULL OR (scope_kind='TENANT')=(scope_value IS NULL)));
+-- statement
+CREATE INDEX control_kill_event_epoch ON control_kill_events(tenant_id,authorization_epoch);
+-- statement
+CREATE TABLE control_kill_supersessions(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),kill_event_id TEXT NOT NULL,recovery_event_id TEXT NOT NULL,PRIMARY KEY(tenant_id,kill_event_id,recovery_event_id),FOREIGN KEY(tenant_id,kill_event_id) REFERENCES control_kill_events(tenant_id,event_id),FOREIGN KEY(tenant_id,recovery_event_id) REFERENCES control_kill_events(tenant_id,event_id));
+-- statement
+CREATE TABLE control_kill_archive(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),event_id TEXT NOT NULL,archived_at INTEGER NOT NULL CHECK(archived_at BETWEEN 0 AND 9007199254740991),PRIMARY KEY(tenant_id,event_id),FOREIGN KEY(tenant_id,event_id) REFERENCES control_kill_events(tenant_id,event_id));
+-- statement
+CREATE TABLE control_kill_acks(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),component_kind TEXT NOT NULL CHECK(component_kind IN('TOOL_HOST','ENDPOINT','GATEWAY')),component_id TEXT NOT NULL CHECK(length(component_id) BETWEEN 1 AND 256),acked_epoch INTEGER NOT NULL CHECK(acked_epoch BETWEEN 0 AND 9007199254740991),acked_at INTEGER NOT NULL CHECK(acked_at BETWEEN 0 AND 9007199254740991),delivery_path TEXT NOT NULL CHECK(delivery_path IN('PUSH','CHECK_IN','POLL')),PRIMARY KEY(tenant_id,component_kind,component_id));
+-- statement
+CREATE TRIGGER control_kill_events_update BEFORE UPDATE ON control_kill_events BEGIN SELECT RAISE(ABORT,'kill events are grow-only'); END;
+-- statement
+CREATE TRIGGER control_kill_events_delete BEFORE DELETE ON control_kill_events BEGIN SELECT RAISE(ABORT,'kill events are grow-only'); END;
+-- statement
+CREATE TRIGGER control_kill_supersessions_update BEFORE UPDATE ON control_kill_supersessions BEGIN SELECT RAISE(ABORT,'kill events are grow-only'); END;
+-- statement
+CREATE TRIGGER control_kill_supersessions_delete BEFORE DELETE ON control_kill_supersessions BEGIN SELECT RAISE(ABORT,'kill events are grow-only'); END;
+-- statement
+CREATE TRIGGER control_kill_archive_update BEFORE UPDATE ON control_kill_archive BEGIN SELECT RAISE(ABORT,'kill events are grow-only'); END;
+-- statement
+CREATE TRIGGER control_kill_archive_delete BEFORE DELETE ON control_kill_archive BEGIN SELECT RAISE(ABORT,'kill events are grow-only'); END;
+-- statement
+CREATE TRIGGER control_kill_supersession_guard BEFORE INSERT ON control_kill_supersessions WHEN NOT EXISTS(
+ SELECT 1 FROM control_kill_events k JOIN control_kill_events r ON r.tenant_id=k.tenant_id
+ WHERE k.tenant_id=NEW.tenant_id AND k.event_id=NEW.kill_event_id AND k.event_kind='KILL'
+ AND r.event_id=NEW.recovery_event_id AND r.event_kind='RECOVERY' AND r.authorization_epoch>k.authorization_epoch
+ AND EXISTS(SELECT 1 FROM json_each(r.document,'$.supersedes') s WHERE s.type='text' AND s.value=k.event_id))
+ BEGIN SELECT RAISE(ABORT,'a signed later recovery must name its superseded kill'); END;
+-- statement
+CREATE TRIGGER control_kill_archive_guard BEFORE INSERT ON control_kill_archive WHEN NOT EXISTS(SELECT 1 FROM control_kill_supersessions WHERE tenant_id=NEW.tenant_id AND (kill_event_id=NEW.event_id OR recovery_event_id=NEW.event_id)) BEGIN SELECT RAISE(ABORT,'only superseded kills and applied recoveries are archived'); END;
+-- statement
+CREATE TRIGGER control_kill_ack_update BEFORE UPDATE ON control_kill_acks WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.component_kind<>OLD.component_kind OR NEW.component_id<>OLD.component_id OR NEW.acked_epoch<OLD.acked_epoch OR NEW.acked_at<OLD.acked_at BEGIN SELECT RAISE(ABORT,'kill acknowledgements are monotonic'); END;
+-- statement
+CREATE TRIGGER control_kill_ack_delete BEFORE DELETE ON control_kill_acks BEGIN SELECT RAISE(ABORT,'kill acknowledgements are monotonic'); END;
+-- statement
+
+CREATE TABLE control_invocation_kill_scopes(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),
+ operation_id TEXT NOT NULL,attempt_id TEXT NOT NULL,device_id TEXT NOT NULL,
+ package_id TEXT,package_digest TEXT NOT NULL,tool_id TEXT NOT NULL,
+ publisher_id TEXT,pool_id TEXT,image_digest TEXT,
+ PRIMARY KEY(tenant_id,attempt_id),
+ FOREIGN KEY(tenant_id,operation_id,attempt_id) REFERENCES control_operation_attempts(tenant_id,operation_id,attempt_id),
+ CHECK(length(operation_id) BETWEEN 1 AND 128),CHECK(length(attempt_id) BETWEEN 1 AND 128),
+ CHECK(length(device_id) BETWEEN 1 AND 128),CHECK(length(tool_id) BETWEEN 1 AND 128),
+ CHECK(length(package_digest)=71),CHECK(package_id IS NULL OR length(package_id) BETWEEN 1 AND 128),
+ CHECK(publisher_id IS NULL OR length(publisher_id) BETWEEN 1 AND 128),
+ CHECK(pool_id IS NULL OR length(pool_id)<=128),CHECK(image_digest IS NULL OR length(image_digest) IN(0,71))
+);
+-- statement
+CREATE TRIGGER control_invocation_kill_scopes_update BEFORE UPDATE ON control_invocation_kill_scopes BEGIN SELECT RAISE(ABORT,'execution kill scope is immutable'); END;
+-- statement
+CREATE TRIGGER control_invocation_kill_scopes_delete BEFORE DELETE ON control_invocation_kill_scopes BEGIN SELECT RAISE(ABORT,'execution kill scope is immutable'); END;
+-- statement
+
+CREATE TABLE control_kill_proposals(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),proposal_id TEXT NOT NULL,requester_id TEXT NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN('KILL','RECOVERY')),authorization_epoch BIGINT NOT NULL CHECK(authorization_epoch BETWEEN 0 AND 9007199254740991),
+ request_digest TEXT NOT NULL CHECK(length(request_digest)=64),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=65536 AND json_valid(document) AND json_type(document)='object'),
+ created_at BIGINT NOT NULL CHECK(created_at BETWEEN 0 AND 9007199254740991),
+ expires_at BIGINT NOT NULL CHECK(expires_at>created_at AND expires_at<=created_at+600000),
+ PRIMARY KEY(tenant_id,proposal_id),CHECK(length(proposal_id) BETWEEN 1 AND 128),CHECK(length(requester_id) BETWEEN 1 AND 128)
+);
+-- statement
+CREATE TABLE control_kill_reviews(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),proposal_id TEXT NOT NULL,reviewer_id TEXT NOT NULL,
+ approved BOOLEAN NOT NULL CHECK(approved IN(0,1)),reviewed_at BIGINT NOT NULL CHECK(reviewed_at BETWEEN 0 AND 9007199254740991),
+ PRIMARY KEY(tenant_id,proposal_id,reviewer_id),
+ FOREIGN KEY(tenant_id,proposal_id) REFERENCES control_kill_proposals(tenant_id,proposal_id)
+);
+-- statement
+CREATE TABLE control_kill_closures(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),proposal_id TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN('APPLIED','REJECTED')),
+ event_id TEXT,closed_at BIGINT NOT NULL CHECK(closed_at BETWEEN 0 AND 9007199254740991),
+ PRIMARY KEY(tenant_id,proposal_id),
+ FOREIGN KEY(tenant_id,proposal_id) REFERENCES control_kill_proposals(tenant_id,proposal_id),
+ FOREIGN KEY(tenant_id,event_id) REFERENCES control_kill_events(tenant_id,event_id),
+ CHECK((state='APPLIED')=(event_id IS NOT NULL))
+);
+-- statement
+CREATE TRIGGER control_kill_proposals_update BEFORE UPDATE ON control_kill_proposals BEGIN SELECT RAISE(ABORT,'kill review is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_proposals_delete BEFORE DELETE ON control_kill_proposals BEGIN SELECT RAISE(ABORT,'kill review is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_reviews_update BEFORE UPDATE ON control_kill_reviews BEGIN SELECT RAISE(ABORT,'kill review is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_reviews_delete BEFORE DELETE ON control_kill_reviews BEGIN SELECT RAISE(ABORT,'kill review is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_closures_update BEFORE UPDATE ON control_kill_closures BEGIN SELECT RAISE(ABORT,'kill review is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_closures_delete BEFORE DELETE ON control_kill_closures BEGIN SELECT RAISE(ABORT,'kill review is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_review_guard BEFORE INSERT ON control_kill_reviews WHEN NOT EXISTS(SELECT 1 FROM control_kill_proposals p WHERE p.tenant_id=NEW.tenant_id AND p.proposal_id=NEW.proposal_id
+ AND p.requester_id<>NEW.reviewer_id AND p.created_at<=NEW.reviewed_at AND p.expires_at>NEW.reviewed_at)
+ OR EXISTS(SELECT 1 FROM control_kill_closures c WHERE c.tenant_id=NEW.tenant_id AND c.proposal_id=NEW.proposal_id)
+ OR (SELECT COUNT(*) FROM control_kill_reviews r WHERE r.tenant_id=NEW.tenant_id AND r.proposal_id=NEW.proposal_id)>=2 BEGIN SELECT RAISE(ABORT,'independent current kill review required'); END;
+-- statement
+CREATE TRIGGER control_kill_closure_guard BEFORE INSERT ON control_kill_closures WHEN NOT EXISTS(SELECT 1 FROM control_kill_proposals p WHERE p.tenant_id=NEW.tenant_id AND p.proposal_id=NEW.proposal_id
+ AND p.created_at<=NEW.closed_at AND p.expires_at>NEW.closed_at)
+ OR (NEW.state='APPLIED' AND ((SELECT COUNT(*) FROM control_kill_reviews r WHERE r.tenant_id=NEW.tenant_id AND r.proposal_id=NEW.proposal_id AND r.approved=true)<>2
+ OR NOT EXISTS(SELECT 1 FROM control_kill_events e JOIN control_kill_proposals p ON p.tenant_id=e.tenant_id AND p.kind=e.event_kind
+ WHERE e.tenant_id=NEW.tenant_id AND e.event_id=NEW.event_id AND p.proposal_id=NEW.proposal_id AND e.issuer='control')))
+ OR (NEW.state='REJECTED' AND NOT EXISTS(SELECT 1 FROM control_kill_reviews r WHERE r.tenant_id=NEW.tenant_id AND r.proposal_id=NEW.proposal_id AND r.approved=false)) BEGIN SELECT RAISE(ABORT,'independent current kill review required'); END;
+-- statement
+CREATE TABLE control_kill_breakglass_requests(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),request_id TEXT NOT NULL,
+ request_digest TEXT NOT NULL CHECK(length(request_digest)=64),event_id TEXT NOT NULL,
+ certificate_sha256 TEXT NOT NULL CHECK(length(certificate_sha256)=64),
+ not_after BIGINT NOT NULL CHECK(not_after BETWEEN 1 AND 9007199254740991),
+ applied_at BIGINT NOT NULL CHECK(applied_at>=0 AND applied_at<not_after),
+ PRIMARY KEY(tenant_id,request_id),UNIQUE(tenant_id,event_id),
+ FOREIGN KEY(tenant_id,event_id) REFERENCES control_kill_events(tenant_id,event_id),
+ CHECK(length(request_id) BETWEEN 1 AND 128)
+);
+-- statement
+CREATE TRIGGER control_kill_breakglass_requests_update BEFORE UPDATE ON control_kill_breakglass_requests BEGIN SELECT RAISE(ABORT,'operator request is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_breakglass_requests_delete BEFORE DELETE ON control_kill_breakglass_requests BEGIN SELECT RAISE(ABORT,'operator request is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_breakglass_request_guard BEFORE INSERT ON control_kill_breakglass_requests WHEN NOT EXISTS(
+ SELECT 1 FROM control_kill_events e WHERE e.tenant_id=NEW.tenant_id AND e.event_id=NEW.event_id AND e.event_kind='KILL'
+ AND e.issuer='control-breakglass' AND e.issued_at=NEW.applied_at)
+ BEGIN SELECT RAISE(ABORT,'operator request requires its committed emergency kill'); END;
+
+-- statement
+CREATE TABLE control_kill_gateways(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),gateway_id TEXT NOT NULL,
+ registered_at BIGINT NOT NULL CHECK(registered_at BETWEEN 0 AND 9007199254740991),
+ PRIMARY KEY(tenant_id,gateway_id),CHECK(length(gateway_id)=64)
+);
+-- statement
+CREATE TRIGGER control_kill_gateways_update BEFORE UPDATE ON control_kill_gateways BEGIN SELECT RAISE(ABORT,'gateway revocation identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_kill_gateways_delete BEFORE DELETE ON control_kill_gateways BEGIN SELECT RAISE(ABORT,'gateway revocation identity is immutable'); END;
+
+-- statement
 -- BEGIN TENANT CAPACITY
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants BEGIN INSERT INTO control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id); END;
+-- statement
+CREATE TRIGGER control_kill_gateways_capacity_insert AFTER INSERT ON control_kill_gateways BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.gateway_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_gateways_capacity_delete AFTER DELETE ON control_kill_gateways BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.gateway_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_gateways_capacity_update AFTER UPDATE ON control_kill_gateways BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.gateway_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.gateway_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_breakglass_requests_capacity_insert AFTER INSERT ON control_kill_breakglass_requests BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.request_id AS BLOB)),0)+COALESCE(length(CAST(NEW.request_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.event_id AS BLOB)),0)+COALESCE(length(CAST(NEW.certificate_sha256 AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_breakglass_requests_capacity_delete AFTER DELETE ON control_kill_breakglass_requests BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.request_id AS BLOB)),0)+COALESCE(length(CAST(OLD.request_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.event_id AS BLOB)),0)+COALESCE(length(CAST(OLD.certificate_sha256 AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_breakglass_requests_capacity_update AFTER UPDATE ON control_kill_breakglass_requests BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.request_id AS BLOB)),0)+COALESCE(length(CAST(NEW.request_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.event_id AS BLOB)),0)+COALESCE(length(CAST(NEW.certificate_sha256 AS BLOB)),0))-(COALESCE(length(CAST(OLD.request_id AS BLOB)),0)+COALESCE(length(CAST(OLD.request_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.event_id AS BLOB)),0)+COALESCE(length(CAST(OLD.certificate_sha256 AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_proposals_capacity_insert AFTER INSERT ON control_kill_proposals BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_proposals_capacity_delete AFTER DELETE ON control_kill_proposals BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_proposals_capacity_update AFTER UPDATE ON control_kill_proposals BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_reviews_capacity_insert AFTER INSERT ON control_kill_reviews BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.reviewer_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_reviews_capacity_delete AFTER DELETE ON control_kill_reviews BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.reviewer_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_reviews_capacity_update AFTER UPDATE ON control_kill_reviews BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.reviewer_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.reviewer_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_closures_capacity_insert AFTER INSERT ON control_kill_closures BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.event_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_closures_capacity_delete AFTER DELETE ON control_kill_closures BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.event_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_closures_capacity_update AFTER UPDATE ON control_kill_closures BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.event_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.event_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_invocation_kill_scopes_capacity_insert AFTER INSERT ON control_invocation_kill_scopes BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.tool_id AS BLOB)),0)+COALESCE(length(CAST(NEW.package_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.publisher_id AS BLOB)),0)+COALESCE(length(CAST(NEW.pool_id AS BLOB)),0)+COALESCE(length(CAST(NEW.image_digest AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_invocation_kill_scopes_capacity_delete AFTER DELETE ON control_invocation_kill_scopes BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.tool_id AS BLOB)),0)+COALESCE(length(CAST(OLD.package_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.publisher_id AS BLOB)),0)+COALESCE(length(CAST(OLD.pool_id AS BLOB)),0)+COALESCE(length(CAST(OLD.image_digest AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_invocation_kill_scopes_capacity_update AFTER UPDATE ON control_invocation_kill_scopes BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.tool_id AS BLOB)),0)+COALESCE(length(CAST(NEW.package_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.publisher_id AS BLOB)),0)+COALESCE(length(CAST(NEW.pool_id AS BLOB)),0)+COALESCE(length(CAST(NEW.image_digest AS BLOB)),0))-(COALESCE(length(CAST(OLD.tool_id AS BLOB)),0)+COALESCE(length(CAST(OLD.package_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.publisher_id AS BLOB)),0)+COALESCE(length(CAST(OLD.pool_id AS BLOB)),0)+COALESCE(length(CAST(OLD.image_digest AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_events_capacity_insert AFTER INSERT ON control_kill_events BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_events_capacity_delete AFTER DELETE ON control_kill_events BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_events_capacity_update AFTER UPDATE ON control_kill_events BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_supersessions_capacity_insert AFTER INSERT ON control_kill_supersessions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.kill_event_id AS BLOB)),0)+COALESCE(length(CAST(NEW.recovery_event_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_supersessions_capacity_delete AFTER DELETE ON control_kill_supersessions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.kill_event_id AS BLOB)),0)+COALESCE(length(CAST(OLD.recovery_event_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_supersessions_capacity_update AFTER UPDATE ON control_kill_supersessions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.kill_event_id AS BLOB)),0)+COALESCE(length(CAST(NEW.recovery_event_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.kill_event_id AS BLOB)),0)+COALESCE(length(CAST(OLD.recovery_event_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_archive_capacity_insert AFTER INSERT ON control_kill_archive BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.event_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_archive_capacity_delete AFTER DELETE ON control_kill_archive BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.event_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_archive_capacity_update AFTER UPDATE ON control_kill_archive BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.event_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.event_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_acks_capacity_insert AFTER INSERT ON control_kill_acks BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.component_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_acks_capacity_delete AFTER DELETE ON control_kill_acks BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.component_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_kill_acks_capacity_update AFTER UPDATE ON control_kill_acks BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.component_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.component_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
 -- statement
 CREATE TRIGGER control_builder_capacity_insert AFTER INSERT ON control_builder BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(CASE WHEN NEW.kind='TEST' AND json_extract(NEW.document,'$.state') IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END) WHERE tenant_id=NEW.tenant_id;

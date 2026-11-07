@@ -6,6 +6,7 @@ mod contracts;
 mod discovery;
 mod identity;
 mod json;
+pub mod revocation;
 pub use config::origin;
 pub use discovery::{verify, Trust, Verified};
 pub use identity::{

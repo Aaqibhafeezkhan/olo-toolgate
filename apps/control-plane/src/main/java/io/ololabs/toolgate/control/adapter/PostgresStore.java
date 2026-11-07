@@ -170,6 +170,7 @@ public class PostgresStore implements Store {
             try(var s=statement("INSERT INTO control_tenant_runtime_profiles(tenant_id,server_id,organization,control_url,gateway_url) VALUES(?,?,?,?,?)",profile.serverId(),profile.organization(),profile.controlUrl(),profile.gatewayUrl())){s.executeUpdate();}
             catch(SQLException failure){throw Failure.unavailable();}
         }
+        public io.ololabs.toolgate.control.application.KillStore kills(){return new JdbcKillStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.EffectStore effects(){return new JdbcEffectStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.EffectConsentStore effectConsents(){return new JdbcEffectConsentStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec,insights);}

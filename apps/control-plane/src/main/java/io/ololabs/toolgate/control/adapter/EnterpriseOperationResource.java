@@ -98,7 +98,10 @@ public class EnterpriseOperationResource {
     public Response cancel(@PathParam("id")String id,@HeaderParam("If-Match")String etag){if(etag==null||!etag.matches("\"[1-9][0-9]{0,15}\""))throw Failure.validation();long revision=Long.parseLong(etag.substring(1,etag.length()-1));if(revision>9007199254740991L)throw Failure.validation();return reply(operations.cancel(actors.human(),id,revision));}
     @POST @Path("permits/consume") @Consumes("application/json") @PermitAll
     public Response consume(String document){var certificate=peer();java.util.function.Function<Store.Session,String> device=tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId();
-        return reply(v2(document,"toolDescriptorDigest")?operations.consumeInvocation(tenant(),device,document):operations.consume(tenant(),device,body(document)));}
+        return reply(operations.consumeInvocation(tenant(),device,body(document)));}
+    @POST @Path("native-permits/consume") @Consumes("application/json") @PermitAll
+    public Response consumeNative(String document){var certificate=peer();return reply(operations.consume(tenant(),
+        tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),body(document)));}
     @POST @Path("invocations/{id}/heartbeat") @Consumes("application/json") @PermitAll
     public Response heartbeat(@PathParam("id")String id,String document){var certificate=peer();return reply(operations.heartbeat(tenant(),tx->endpoints.authenticate(tx,certificate,System.currentTimeMillis()).deviceId(),id,body(document)));}
     @POST @Path("effects/authorize") @Consumes("application/json") @PermitAll

@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Design gate D2: current fresh schemas and unshipped SQL fragments enforce invariants.
 
-Only isolated empty fixture databases are assembled. The kill-switch fragment
-is design evidence for future folding into fresh initialization, never an
-upgrade step for an existing application database.
+Only isolated empty fixture databases are assembled. Kill storage is included
+in fresh initialization, never applied as an upgrade to an existing database.
 """
+import json
 import os
 import re
 import sqlite3
@@ -104,15 +104,17 @@ SCENARIOS = [
 
 KILL = ("INSERT INTO control_kill_events(tenant_id,event_id,issuer,issuer_counter,event_kind,scope_kind,scope_value,"
         "mode,authorization_epoch,issued_at,document) VALUES('10000000-0000-4000-8000-000000000001','{issuer}:{n}','{issuer}',{n},'{kind}',{scope},"
-        "{value},{mode},{n},1000,'{{}}')")
+        "{value},{mode},{epoch},1000,'{{}}')")
 
 
-def kill(n, issuer='control', kind='KILL', scope="'PACKAGE'", value="'acme'", mode="'TERMINATE'"):
-    return KILL.format(n=n, issuer=issuer, kind=kind, scope=scope, value=value, mode=mode)
+def kill(n, issuer='control', kind='KILL', scope="'PACKAGE'", value="'acme'", mode="'TERMINATE'", epoch=None):
+    return KILL.format(n=n, issuer=issuer, kind=kind, scope=scope, value=value, mode=mode, epoch=epoch if epoch is not None else n*2+(issuer=='control-breakglass'))
 
 
-def recovery(n, issuer='control'):
-    return kill(n, issuer, 'RECOVERY', 'NULL', 'NULL', 'NULL')
+def recovery(n, issuer='control', supersedes=('control:1',)):
+    # SQL tests use structural documents; crypto binding is exercised by Java/Rust.
+    document = json.dumps({'supersedes': list(supersedes)}, separators=(',', ':'))
+    return kill(n, issuer, 'RECOVERY', 'NULL', 'NULL', 'NULL').replace("'{}'", "'" + document + "'")
 
 
 SUPERSEDE = "INSERT INTO control_kill_supersessions VALUES('10000000-0000-4000-8000-000000000001','{}','{}')"
@@ -123,6 +125,7 @@ ACK = ("INSERT INTO control_kill_acks VALUES('10000000-0000-4000-8000-0000000000
 KILL_SCENARIOS = [
     (kill(1), True),
     (kill(1, 'control-breakglass', mode="'STOP_NEW'"), True),
+    (kill(5, epoch=2), False),                                         # one committed event per epoch
     (kill(1), False),                                                      # event ids are never reused
     (kill(2, scope="'TENANT'"), False),                                    # TENANT has no value
     (kill(2, scope="'TENANT'", value='NULL'), True),
@@ -131,6 +134,7 @@ KILL_SCENARIOS = [
     (recovery(4), True),
     (SUPERSEDE.format('control:4', 'control:1'), False),                   # a recovery isn't a kill
     (SUPERSEDE.format('control:1', 'control-breakglass:1'), False),        # a kill can't supersede
+    (SUPERSEDE.format('control:2', 'control:4'), False),                   # absent from recovery document
     (SUPERSEDE.format('control:1', 'control:4'), True),
     ("INSERT INTO control_kill_archive VALUES('10000000-0000-4000-8000-000000000001','control:2',5000)", False),   # still effective
     ("INSERT INTO control_kill_archive VALUES('10000000-0000-4000-8000-000000000001','control:1',5000)", True),
@@ -152,7 +156,7 @@ def versions(directory, pattern):
 
 
 def specification(dialect):
-    return [SPEC/dialect/'kill-switch.sql']
+    return []  # Kill storage is now part of fresh V1; never apply it to an existing store.
 
 
 class SqliteRun:

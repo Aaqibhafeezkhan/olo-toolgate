@@ -1,5 +1,4 @@
-# Copyright 2026 OLO Labs
-# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 openapi: 3.1.0
 info:
   title: OLO ToolGate Control Plane API
@@ -182,8 +181,8 @@ paths:
   /api/control/v1/endpoint/ping:
     post:
       operationId: pingEndpoint
-      description: Device presence continues before enrollment, during suspension and
-        after deletion or revocation. A signed CSR proves the announced key. Control
+      description: Device presence continues before enrollment, during suspension
+        and after deletion or revocation. A signed CSR proves the announced key. Control
         returns its current state and the next action; presence grants no access.
       security: []
       requestBody:
@@ -255,8 +254,8 @@ paths:
     post:
       operationId: requestEndpointEnrollmentApproval
       description: Explicit signed-key request to reopen a revoked device for a fresh
-        administrator review. Old enrollment codes are invalidated. This request
-        never approves access and bypasses initial-enrollment automatic approval.
+        administrator review. Old enrollment codes are invalidated. This request never
+        approves access and bypasses initial-enrollment automatic approval.
       security: []
       requestBody:
         required: true
@@ -357,8 +356,8 @@ paths:
         '403':
           description: Wrong tenant/user, inactive or revoked device
         '409':
-          description: State, replay or polling conflict; ONE_DEVICE_PER_ACCOUNT when an
-            ownDevices approver already owns a device in the rule's group
+          description: State, replay or polling conflict; ONE_DEVICE_PER_ACCOUNT when
+            an ownDevices approver already owns a device in the rule's group
           content:
             application/json:
               schema:
@@ -385,9 +384,10 @@ paths:
     post:
       operationId: lookupEndpointEnrollment
       description: Returns the pending enrollment a client's code names, for comparison
-        before approval, when the signed-in user may approve it through a group rule or
-        an ownDevices rule. An unknown, expired, decided or unapprovable code is 404 without
-        detail. Five failed lookups or approvals per user in ten minutes return 429.
+        before approval, when the signed-in user may approve it through a group rule
+        or an ownDevices rule. An unknown, expired, decided or unapprovable code is
+        404 without detail. Five failed lookups or approvals per user in ten minutes
+        return 429.
       responses:
         '200':
           description: Success; no-store
@@ -418,7 +418,8 @@ paths:
   /api/control/v1/endpoint/console-device/challenge:
     post:
       operationId: challengeConsoleDevice
-      description: Issues a single-use two-minute challenge bound to the verified console session and owned device key. Does not approve device access.
+      description: Issues a single-use two-minute challenge bound to the verified
+        console session and owned device key. Does not approve device access.
       requestBody:
         required: true
         content:
@@ -443,7 +444,8 @@ paths:
   /api/control/v1/endpoint/console-device/verify:
     post:
       operationId: verifyConsoleDevice
-      description: Verifies a device-key signature and records current-device context for this console token session. Never issues a certificate or approves access.
+      description: Verifies a device-key signature and records current-device context
+        for this console token session. Never issues a certificate or approves access.
       requestBody:
         required: true
         content:
@@ -537,12 +539,14 @@ paths:
       description: Administrator lists all directory devices and unexpired pending
         requests in their tenant, including internal Quickstart executors. Quickstart
         supports an explicit deployment=true view using EndpointManagedDeviceDeploymentPage,
-        which adds optional public deployment records without changing the default response.
+        which adds optional public deployment records without changing the default
+        response.
       parameters:
       - name: deployment
         in: query
         required: false
-        description: Opt in to public Docker display metadata on Quickstart. Standalone Control returns its normal device page.
+        description: Opt in to public Docker display metadata on Quickstart. Standalone
+          Control returns its normal device page.
         schema:
           type: boolean
           default: false
@@ -609,8 +613,8 @@ paths:
     post:
       operationId: requestEndpointDeviceApproval
       description: Administrator reopens a revoked device for a fresh enrollment request.
-        Approval and access remain blocked until the live client submits its CSR
-        and an administrator approves it. Does not change directory enablement.
+        Approval and access remain blocked until the live client submits its CSR and
+        an administrator approves it. Does not change directory enablement.
       parameters:
       - name: id
         in: path
@@ -974,14 +978,11 @@ paths:
   /api/control/v1/bundles/publish:
     post:
       operationId: publishPolicyBundle
-      description: "Admin only. Compile current directoryRevision and atomically publish\
-        \ expectedSequence+1 with audit and durable replay. rollbackOf must be absent.\
-        \ Lifetime is 1 second\xC3\u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xC2\
-        \xA2\xC3\xA2\xE2\u201A\xAC\xC5\xA1\xC3\u201A\xC2\xAC\xC3\u0192\xC2\xA2\xC3\
-        \xA2\xE2\u20AC\u0161\xC2\xAC\xC3\u2026\xE2\u20AC\u015324 hours; grace is 0\xC3\
-        \u0192\xC6\u2019\xC3\u201A\xC2\xA2\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u201A\xAC\
-        \xC5\xA1\xC3\u201A\xC2\xAC\xC3\u0192\xC2\xA2\xC3\xA2\xE2\u20AC\u0161\xC2\xAC\
-        \xC3\u2026\xE2\u20AC\u01535 minutes. Publication does not execute tools."
+      description: Admin only. Compile current directoryRevision and atomically publish
+        expectedSequence+1 with audit and durable replay. rollbackOf must be absent.
+        Lifetime is 1 secondÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ24 hours; grace
+        is 0ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ5 minutes. Publication does not
+        execute tools.
       parameters:
       - name: Idempotency-Key
         in: header
@@ -2591,9 +2592,9 @@ paths:
     get:
       operationId: exportConfig
       description: Requires export on every group. Users, team userIds, identity bindings
-        and device evidence are left out; requiredIdentities lists, by ID, every user an
-        exported record references with the teams it belonged to. settings are included
-        for a Super Admin only.
+        and device evidence are left out; requiredIdentities lists, by ID, every user
+        an exported record references with the teams it belonged to. settings are
+        included for a Super Admin only.
       responses:
         '200':
           description: Success
@@ -2625,15 +2626,15 @@ paths:
   /api/control/v1/config/import:
     post:
       operationId: importConfig
-      description: Requires import on every group; a snapshot with settings requires Super
-        Admin. Every requiredIdentities ID must exist or be resolved in identityResolution
-        (EXISTING, MAP, PLACEHOLDER), otherwise 409 UNRESOLVED_IDENTITIES lists them, dry
-        runs included. Resolved users are added to their teamIds; other memberships stay
-        unless removeUnlistedMemberships. Replace deletes only exported kinds absent from
-        the file and refuses with 409 REPLACE_CONFLICTS when a preserved record would point
-        at a deleted one. A settings.configuration.requiredReviews change is refused with
-        409 REQUIRED_REVIEWS_CHANGE while reviews are required. With requiredReviews 0 the
-        import applies at once.
+      description: Requires import on every group; a snapshot with settings requires
+        Super Admin. Every requiredIdentities ID must exist or be resolved in identityResolution
+        (EXISTING, MAP, PLACEHOLDER), otherwise 409 UNRESOLVED_IDENTITIES lists them,
+        dry runs included. Resolved users are added to their teamIds; other memberships
+        stay unless removeUnlistedMemberships. Replace deletes only exported kinds
+        absent from the file and refuses with 409 REPLACE_CONFLICTS when a preserved
+        record would point at a deleted one. A settings.configuration.requiredReviews
+        change is refused with 409 REQUIRED_REVIEWS_CHANGE while reviews are required.
+        With requiredReviews 0 the import applies at once.
       responses:
         '200':
           description: Success
@@ -2681,19 +2682,21 @@ paths:
   /api/control/v1/settings:
     get:
       operationId: getServerSettings
-      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
-        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
-        current number of reviews, with no Super Admin bypass. Returns the tenant's control-plane settings
-        (formatVersion 2), grouped by Configuration page. clientCheckIn is read-only and
-        always shows the running deployment's values. The document is also the export
-        format.
+      description: Feature permissions control visibility and changes. A write that
+        changes configuration.requiredReviews while it is above 0 returns 202 with
+        a SETTINGS configuration change that needs the current number of reviews,
+        with no Super Admin bypass. Returns the tenant's control-plane settings (formatVersion
+        2), grouped by Configuration page. clientCheckIn is read-only and always shows
+        the running deployment's values. The document is also the export format.
       parameters:
       - in: query
         name: section
         required: false
         schema:
           type: string
-          enum: [server, device]
+          enum:
+          - server
+          - device
         description: Read one feature. Unreadable groups are omitted from the response.
       responses:
         '200':
@@ -2722,12 +2725,12 @@ paths:
         '503': *id010
     put:
       operationId: updateServerSettings
-      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
-        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
-        current number of reviews, with no Super Admin bypass. Replaces the editable settings with a full
-        formatVersion 2 record; used to restore an exported settings document. The
-        revision and clientCheckIn in the body are ignored; If-Match carries the current
-        revision.
+      description: Feature permissions control visibility and changes. A write that
+        changes configuration.requiredReviews while it is above 0 returns 202 with
+        a SETTINGS configuration change that needs the current number of reviews,
+        with no Super Admin bypass. Replaces the editable settings with a full formatVersion
+        2 record; used to restore an exported settings document. The revision and
+        clientCheckIn in the body are ignored; If-Match carries the current revision.
       parameters:
       - *id011
       - *id012
@@ -2764,9 +2767,10 @@ paths:
         '503': *id010
     patch:
       operationId: patchServerSettings
-      description: Feature permissions control visibility and changes. A write that changes configuration.requiredReviews
-        while it is above 0 returns 202 with a SETTINGS configuration change that needs the
-        current number of reviews, with no Super Admin bypass. Merge patch (RFC 7396) of the editable settings
+      description: Feature permissions control visibility and changes. A write that
+        changes configuration.requiredReviews while it is above 0 returns 202 with
+        a SETTINGS configuration change that needs the current number of reviews,
+        with no Super Admin bypass. Merge patch (RFC 7396) of the editable settings
         groups; each Configuration page sends only its own fields. clientCheckIn is
         env-owned and cannot be patched. A stale If-Match returns 409.
       parameters:
@@ -2806,8 +2810,8 @@ paths:
   /api/control/v1/review-policy:
     get:
       operationId: getReviewPolicy
-      description: Any signed-in console user. The configuration review threshold in force
-        for new changes; 0 means changes apply immediately.
+      description: Any signed-in console user. The configuration review threshold
+        in force for new changes; 0 means changes apply immediately.
       responses:
         '200':
           description: Success; no-store
@@ -2828,11 +2832,11 @@ paths:
         $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
     post:
       operationId: rotateWorkloadCredential
-      description: Super Admin only. Installs a new static token hash, increments credentialEpoch,
-        rebinds a delegated binding to its user's current session epoch, clears needsReauthorization
-        and sets enabled. Returns the binding and the Gateway request context to install;
-        context.bindingId is the request's bindingId or the single execution binding the
-        agent groups' grants select.
+      description: Super Admin only. Installs a new static token hash, increments
+        credentialEpoch, rebinds a delegated binding to its user's current session
+        epoch, clears needsReauthorization and sets enabled. Returns the binding and
+        the Gateway request context to install; context.bindingId is the request's
+        bindingId or the single execution binding the agent groups' grants select.
       parameters:
       - name: Idempotency-Key
         in: header
@@ -2861,7 +2865,8 @@ paths:
         '404':
           description: Workload binding not found
         '409':
-          description: Hash already used, or no identity binding for the delegated user
+          description: Hash already used, or no identity binding for the delegated
+            user
   /api/control/v1/users/{id}/enable:
     parameters:
     - name: id
@@ -2871,8 +2876,8 @@ paths:
         $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
     post:
       operationId: enableControlUser
-      description: Super Admin only. Enables the user; its sessions and delegated workload
-        tokens end, so delegated bindings need a credential rotation afterwards.
+      description: Super Admin only. Enables the user; its sessions and delegated
+        workload tokens end, so delegated bindings need a credential rotation afterwards.
       parameters:
       - name: Idempotency-Key
         in: header
@@ -3318,8 +3323,9 @@ paths:
     post:
       operationId: importBuilderSource
       summary: importBuilderSource
-      description: Reads the JSON SDK project from a source ZIP, as Download source exports it or rezipped after editing, and
-        returns it canonical and validated. Nothing is stored; save it as a draft to keep it. Requires tool_builder.build.
+      description: Reads the JSON SDK project from a source ZIP, as Download source
+        exports it or rezipped after editing, and returns it canonical and validated.
+        Nothing is stored; save it as a draft to keep it. Requires tool_builder.build.
       security:
       - adminAccessToken: []
       responses:
@@ -3489,6 +3495,15 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v1/endpoint.schema.json#/$defs/LocalToolCatalog
+          headers:
+            Toolgate-Authorization-Epoch:
+              required: true
+              description: Current catalog authorization epoch to acknowledge only
+                after validating the catalog.
+              schema:
+                type: integer
+                minimum: 0
+                maximum: 9007199254740991
         '400': *id013
         '401': *id014
         '403': *id015
@@ -7266,7 +7281,9 @@ paths:
   /api/control/v1/access/insights/spans:
     post:
       operationId: submitInsightsSpans
-      description: DETAILED Operator Insights spans from the Gateway for its tenant's invocations (ADR 031). Best-effort; spans of unknown invocations or with names outside the Gateway's set are refused.
+      description: DETAILED Operator Insights spans from the Gateway for its tenant's
+        invocations (ADR 031). Best-effort; spans of unknown invocations or with names
+        outside the Gateway's set are refused.
       security:
       - adminAccessToken: []
       responses:
@@ -7289,7 +7306,9 @@ paths:
   /api/control/v1/access/insights/admissions:
     post:
       operationId: submitInsightsAdmissions
-      description: Gateway admission counters for Operator Insights (ADR 031). Best-effort; a repeated (gatewayId, epoch, sequence) is acknowledged as a duplicate and counted once.
+      description: Gateway admission counters for Operator Insights (ADR 031). Best-effort;
+        a repeated (gatewayId, epoch, sequence) is acknowledged as a duplicate and
+        counted once.
       security:
       - adminAccessToken: []
       responses:
@@ -7428,7 +7447,8 @@ paths:
   /api/control/v1/access/invocations/{id}/effect-consent/approve:
     post:
       operationId: approveEffectConsent
-      description: Approve the exact preview digest and revision using authenticated human authority. Policy ASK obligations remain separate.
+      description: Approve the exact preview digest and revision using authenticated
+        human authority. Policy ASK obligations remain separate.
       security:
       - adminAccessToken: []
       parameters:
@@ -7459,7 +7479,8 @@ paths:
   /api/control/v1/access/invocations/{id}/effect-consent/revoke:
     post:
       operationId: revokeEffectConsent
-      description: Revoke exact consent without freeing consumed slots or extending validity.
+      description: Revoke exact consent without freeing consumed slots or extending
+        validity.
       security:
       - adminAccessToken: []
       parameters:
@@ -7490,7 +7511,9 @@ paths:
   /api/control/v1/access/invocations/{id}/status:
     post:
       operationId: readCallerOperation
-      description: Gateway service only. Recheck the authenticated current caller context against the original owner and current grants. Metadata only; no reservation, resend or deadline extension.
+      description: Gateway service only. Recheck the authenticated current caller
+        context against the original owner and current grants. Metadata only; no reservation,
+        resend or deadline extension.
       security:
       - adminAccessToken: []
       requestBody:
@@ -7501,7 +7524,8 @@ paths:
               $ref: ../schemas/v2/common.schema.json#/$defs/RequestContext
       responses:
         '200':
-          description: Retained executor state and separate current derived business outcome
+          description: Retained executor state and separate current derived business
+            outcome
           content:
             application/json:
               schema:
@@ -7519,7 +7543,8 @@ paths:
   /api/control/v1/access/invocations/{id}/history:
     get:
       operationId: getEnterpriseOperationHistory
-      description: Authorized bounded attempt and effect metadata, pinned to one derived evidence revision. Never supplies execution authority.
+      description: Authorized bounded attempt and effect metadata, pinned to one derived
+        evidence revision. Never supplies execution authority.
       security:
       - adminAccessToken: []
       responses:
@@ -7555,7 +7580,8 @@ paths:
           default: 50
     post:
       operationId: readCallerOperationHistory
-      description: Gateway service only. Bounded metadata with current caller ownership and grant checks; never execution authority.
+      description: Gateway service only. Bounded metadata with current caller ownership
+        and grant checks; never execution authority.
       security:
       - adminAccessToken: []
       requestBody:
@@ -7625,7 +7651,7 @@ paths:
           pattern: ^"[1-9][0-9]{0,15}"$
   /api/control/v1/access/permits/consume:
     post:
-      operationId: consumeEnterprisePermit
+      operationId: consumeToolHostExecutionPermit
       security:
       - deviceCertificate: []
       responses:
@@ -7634,7 +7660,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseInvocation
+                $ref: ../schemas/v2/permit.schema.json#/$defs/PermitConsumed
         '403':
           description: Access denied
         '409':
@@ -7644,13 +7670,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterprisePermitConsumption
+              $ref: ../schemas/v2/permit.schema.json#/$defs/PermitConsumption
+      description: Tool Host v2 consumption only. Obsolete or native request shapes
+        are refused.
   /api/control/v1/access/dispatches:
     post:
       operationId: relayToolHostDispatch
-      description: Relay Gateway only. Queues a signed Dispatch for a Tool Host that fetches its calls from Control, for
-        example one on a laptop the Gateway cannot reach. The permit's audience must be the invocation's target Tool Host.
-        Relaying the same dispatch again answers its current status.
+      description: Relay Gateway only. Queues a signed Dispatch for a Tool Host that
+        fetches its calls from Control, for example one on a laptop the Gateway cannot
+        reach. The permit's audience must be the invocation's target Tool Host. Relaying
+        the same dispatch again answers its current status.
       security:
       - adminAccessToken: []
       requestBody:
@@ -7671,11 +7700,13 @@ paths:
         '403':
           description: Access denied
         '409':
-          description: Another dispatch for this invocation, or the target is not a Tool Host
+          description: Another dispatch for this invocation, or the target is not
+            a Tool Host
   /api/control/v1/access/dispatches/{id}:
     get:
       operationId: getToolHostDispatchStatus
-      description: Relay Gateway only. Where a relayed dispatch stands, with the host's admission and result once posted.
+      description: Relay Gateway only. Where a relayed dispatch stands, with the host's
+        admission and result once posted.
       security:
       - adminAccessToken: []
       parameters:
@@ -7698,7 +7729,8 @@ paths:
   /api/control/v1/access/invocations/{id}/device-outcome:
     get:
       operationId: getDeviceEnterpriseOutcome
-      description: Own-device outcome metadata for journal recovery; never creates an execution permit.
+      description: Own-device outcome metadata for journal recovery; never creates
+        an execution permit.
       security:
       - deviceCertificate: []
       parameters:
@@ -7720,7 +7752,8 @@ paths:
   /api/control/v1/access/invocations/{id}/heartbeat:
     post:
       operationId: renewExecutionLease
-      description: Renew a running Tool Host lease against current authority. Expired leases cannot be resurrected. Progress and input requests are currently refused.
+      description: Renew a running Tool Host lease against current authority. Expired
+        leases cannot be resurrected. Progress and input requests are currently refused.
       security:
       - deviceCertificate: []
       parameters:
@@ -7752,7 +7785,8 @@ paths:
   /api/control/v1/access/effects/authorize:
     post:
       operationId: issueEffectGrant
-      description: Fresh current authority, reviewed intent reconstructed from signed admission arguments, durable intent and unique owner. No implicit resend.
+      description: Fresh current authority, reviewed intent reconstructed from signed
+        admission arguments, durable intent and unique owner. No implicit resend.
       security:
       - deviceCertificate: []
       responses:
@@ -7775,7 +7809,8 @@ paths:
   /api/control/v1/access/effects/sending:
     post:
       operationId: beginEffectGrantDispatch
-      description: One owner-bound AUTHORIZED-to-SENDING CAS. Lost replies never authorize a retry.
+      description: One owner-bound AUTHORIZED-to-SENDING CAS. Lost replies never authorize
+        a retry.
       security:
       - deviceCertificate: []
       responses:
@@ -7963,7 +7998,8 @@ paths:
   /api/control/v1/access/invocations/{id}/insights/spans:
     post:
       operationId: submitInvocationInsightsSpans
-      description: DETAILED Operator Insights spans from the executor the invocation was placed on, authenticated by its device certificate (ADR 031).
+      description: DETAILED Operator Insights spans from the executor the invocation
+        was placed on, authenticated by its device certificate (ADR 031).
       responses:
         '200':
           description: Spans buffered or refused
@@ -8013,18 +8049,21 @@ paths:
           maximum: 200
       responses:
         '200':
-          description: Retained events after the cursor, with explicit gaps, truncation and expiry
+          description: Retained events after the cursor, with explicit gaps, truncation
+            and expiry
           content:
             application/json:
               schema:
                 $ref: ../schemas/v2/protocol.schema.json#/$defs/RunEventPage
         '403':
-          description: The invocation's owner no longer holds current access, or the reader lacks operation.read
+          description: The invocation's owner no longer holds current access, or the
+            reader lacks operation.read
         '404':
           description: Invocation not found
     post:
       operationId: submitInvocationRunEvents
-      summary: Executor frames of the admitted attempt, bound by device certificate and fencing token
+      summary: Executor frames of the admitted attempt, bound by device certificate
+        and fencing token
       parameters:
       - name: id
         in: path
@@ -8173,7 +8212,8 @@ paths:
   /api/control/v1/recovery-eligibility:
     get:
       operationId: listRecoveryEligibility
-      description: Return current configured recovery readiness. Operation-specific proof and current authority remain required before any resend.
+      description: Return current configured recovery readiness. Operation-specific
+        proof and current authority remain required before any resend.
       security:
       - adminAccessToken: []
       parameters:
@@ -8190,7 +8230,8 @@ paths:
           maximum: 100
       responses:
         '200':
-          description: Current readiness without credentials, target keys or business receipts.
+          description: Current readiness without credentials, target keys or business
+            receipts.
           content:
             application/json:
               schema:
@@ -8204,7 +8245,8 @@ paths:
   /insights/v1/recovery-eligibility:
     get:
       operationId: listOperatorRecoveryEligibility
-      description: Return current configured recovery readiness. Operation-specific proof and current authority remain required before any resend.
+      description: Return current configured recovery readiness. Operation-specific
+        proof and current authority remain required before any resend.
       security:
       - operatorCertificate: []
       parameters:
@@ -8226,7 +8268,8 @@ paths:
           maximum: 100
       responses:
         '200':
-          description: Current readiness without credentials, target keys or business receipts.
+          description: Current readiness without credentials, target keys or business
+            receipts.
           content:
             application/json:
               schema:
@@ -8240,7 +8283,8 @@ paths:
   /api/control/v1/access/invocations/{id}/effects/{effect}/lookup:
     post:
       operationId: lookupTargetEffectStatus
-      description: Run the pinned read-only target adapter under current scoped operation read and approval authority. No business resend is authorized.
+      description: Run the pinned read-only target adapter under current scoped operation
+        read and approval authority. No business resend is authorized.
       parameters:
       - name: id
         in: path
@@ -8256,7 +8300,8 @@ paths:
           maxLength: 128
       responses:
         '200':
-          description: Observed effect status; whole-operation completion remains independently derived.
+          description: Observed effect status; whole-operation completion remains
+            independently derived.
           content:
             application/json:
               schema:
@@ -8264,9 +8309,11 @@ paths:
         '403':
           description: Current scoped authority or independent target review denied.
         '409':
-          description: No supported current adapter, changed generation/profile/credential, or incompatible evidence.
+          description: No supported current adapter, changed generation/profile/credential,
+            or incompatible evidence.
         '503':
-          description: Target lookup unavailable or refused; no execution authority granted.
+          description: Target lookup unavailable or refused; no execution authority
+            granted.
   /api/control/v1/access/invocations/{id}/reconciliation:
     post:
       operationId: proposeOutcomeReconciliation
@@ -8362,12 +8409,14 @@ paths:
   /api/control/v1/access/secrets/deliver:
     post:
       operationId: deliverRuntimeSecret
-      description: Delivers a declared secret only to the current executing device and consumed permit nonce.
+      description: Delivers a declared secret only to the current executing device
+        and consumed permit nonce.
       parameters:
       - name: Toolgate-Fencing-Token
         in: header
         required: true
-        description: The consumed permit nonce for the current invocation attempt. Missing or stale tokens are denied.
+        description: The consumed permit nonce for the current invocation attempt.
+          Missing or stale tokens are denied.
         schema:
           type: string
           minLength: 1
@@ -8404,9 +8453,10 @@ paths:
   /api/control/v1/packages/uploads:
     post:
       operationId: uploadServerPackage
-      description: Super Admin only. Uploads a .tgpkg built by `toolgate pack`. Control applies the packager's archive
-        rules, CHECKSUMS, artifact and descriptor digests, stores the exact bytes and answers the verified version.
-        Uploading the same bytes again answers 200 with the stored version.
+      description: Super Admin only. Uploads a .tgpkg built by `toolgate pack`. Control
+        applies the packager's archive rules, CHECKSUMS, artifact and descriptor digests,
+        stores the exact bytes and answers the verified version. Uploading the same
+        bytes again answers 200 with the stored version.
       requestBody:
         required: true
         content:
@@ -8442,7 +8492,8 @@ paths:
   /api/control/v1/packages:
     get:
       operationId: listServerPackageVersions
-      description: Administrators with read access to every tool. The newest uploaded package versions.
+      description: Administrators with read access to every tool. The newest uploaded
+        package versions.
       responses:
         '200':
           description: Success; no-store
@@ -8459,7 +8510,8 @@ paths:
   /api/control/v1/packages/deployments:
     get:
       operationId: listServerPackageDeployments
-      description: Administrators with read access to every tool. The version each package id runs on Tool Hosts.
+      description: Administrators with read access to every tool. The version each
+        package id runs on Tool Hosts.
       responses:
         '200':
           description: Success; no-store
@@ -8475,12 +8527,14 @@ paths:
           description: Dependency unavailable
     post:
       operationId: deployServerPackage
-      description: Super Admin only. Makes a stored version the one Tool Hosts run for its package id, with the values of
-        its declared globals and destination host settings. Control writes the service profile, the globals document, a
-        disabled directory entry per new tool in the default Tool Group (an existing tool keeps its state and group) and the
-        tool's resource extractor. hostIds names the Tool Hosts that run it (none means every Tool Host); deploying the
-        same version with other hostIds moves its tools. Each tool still needs a reviewed enable, a binding that allows the package digest and a
-        grant.
+      description: Super Admin only. Makes a stored version the one Tool Hosts run
+        for its package id, with the values of its declared globals and destination
+        host settings. Control writes the service profile, the globals document, a
+        disabled directory entry per new tool in the default Tool Group (an existing
+        tool keeps its state and group) and the tool's resource extractor. hostIds
+        names the Tool Hosts that run it (none means every Tool Host); deploying the
+        same version with other hostIds moves its tools. Each tool still needs a reviewed
+        enable, a binding that allows the package digest and a grant.
       requestBody:
         required: true
         content:
@@ -8507,8 +8561,9 @@ paths:
   /api/control/v1/packages/provisioning:
     get:
       operationId: listProvisioningStatuses
-      description: Administrators with package.read. The latest recorded ProvisioningStatus of every applied deployment
-        profile, by profile id, with the package changes from the profile applied before it.
+      description: Administrators with package.read. The latest recorded ProvisioningStatus
+        of every applied deployment profile, by profile id, with the package changes
+        from the profile applied before it.
       responses:
         '200':
           description: Success; no-store
@@ -8525,7 +8580,8 @@ paths:
   /api/control/v1/packages/provisioning/{profileId}:
     get:
       operationId: getProvisioningStatus
-      description: Administrators with package.read. The latest recorded ProvisioningStatus of one deployment profile.
+      description: Administrators with package.read. The latest recorded ProvisioningStatus
+        of one deployment profile.
       parameters:
       - name: profileId
         in: path
@@ -8550,8 +8606,9 @@ paths:
   /api/control/v1/marketplace:
     get:
       operationId: getMarketplaceStatus
-      description: Administrators with read access to every tool. Whether this ToolGate reads an OLO Orgs Marketplace, its
-        id and origin, and the fingerprints of the pinned release signing keys. All are environment-owned settings.
+      description: Administrators with read access to every tool. Whether this ToolGate
+        reads an OLO Orgs Marketplace, its id and origin, and the fingerprints of
+        the pinned release signing keys. All are environment-owned settings.
       responses:
         '200':
           description: Success; no-store
@@ -8568,8 +8625,9 @@ paths:
   /api/control/v1/marketplace/catalog:
     get:
       operationId: listMarketplaceCatalog
-      description: Administrators with read access to every tool. One page of the Marketplace catalog, as the Marketplace
-        answers it, with each item's latest version marked compatible or not with this ToolGate in `control`.
+      description: Administrators with read access to every tool. One page of the
+        Marketplace catalog, as the Marketplace answers it, with each item's latest
+        version marked compatible or not with this ToolGate in `control`.
       parameters:
       - name: page
         in: query
@@ -8610,8 +8668,8 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace catalog page, as the Marketplace API defines it, each item annotated with
-                  control.compatible and control.reasons.
+                description: The Marketplace catalog page, as the Marketplace API
+                  defines it, each item annotated with control.compatible and control.reasons.
         '400':
           description: Invalid bounded input
         '401':
@@ -8621,12 +8679,14 @@ paths:
         '404':
           description: The Marketplace is not enabled
         '503':
-          description: Marketplace unavailable or answered something Control does not accept
+          description: Marketplace unavailable or answered something Control does
+            not accept
   /api/control/v1/marketplace/packages/{packageId}:
     get:
       operationId: listMarketplacePackageVersions
-      description: Administrators with read access to every tool. The versions of one Marketplace package, each marked
-        compatible or not, and installVersion, the newest listed version this ToolGate can run.
+      description: Administrators with read access to every tool. The versions of
+        one Marketplace package, each marked compatible or not, and installVersion,
+        the newest listed version this ToolGate can run.
       parameters:
       - name: packageId
         in: path
@@ -8640,7 +8700,8 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace version list, as the Marketplace API defines it, with control annotations and installVersion.
+                description: The Marketplace version list, as the Marketplace API
+                  defines it, with control annotations and installVersion.
         '400':
           description: Invalid bounded input
         '401':
@@ -8650,12 +8711,13 @@ paths:
         '404':
           description: Not found, or the Marketplace is not enabled
         '503':
-          description: Marketplace unavailable or answered something Control does not accept
+          description: Marketplace unavailable or answered something Control does
+            not accept
   /api/control/v1/marketplace/packages/{packageId}/{version}:
     get:
       operationId: getMarketplacePackageVersion
-      description: Administrators with read access to every tool. One Marketplace version's detail record, marked
-        compatible or not with this ToolGate.
+      description: Administrators with read access to every tool. One Marketplace
+        version's detail record, marked compatible or not with this ToolGate.
       parameters:
       - name: packageId
         in: path
@@ -8674,7 +8736,8 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace detail record, as the Marketplace API defines it, with control annotations.
+                description: The Marketplace detail record, as the Marketplace API
+                  defines it, with control annotations.
         '400':
           description: Invalid bounded input
         '401':
@@ -8684,11 +8747,13 @@ paths:
         '404':
           description: Not found, or the Marketplace is not enabled
         '503':
-          description: Marketplace unavailable or answered something Control does not accept
+          description: Marketplace unavailable or answered something Control does
+            not accept
   /api/control/v1/marketplace/publishers/{slug}:
     get:
       operationId: getMarketplacePublisher
-      description: Administrators with read access to every tool. A Marketplace publisher's public profile.
+      description: Administrators with read access to every tool. A Marketplace publisher's
+        public profile.
       parameters:
       - name: slug
         in: path
@@ -8703,7 +8768,8 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The Marketplace publisher record, as the Marketplace API defines it.
+                description: The Marketplace publisher record, as the Marketplace
+                  API defines it.
         '400':
           description: Invalid bounded input
         '401':
@@ -8713,16 +8779,19 @@ paths:
         '404':
           description: Not found, or the Marketplace is not enabled
         '503':
-          description: Marketplace unavailable or answered something Control does not accept
+          description: Marketplace unavailable or answered something Control does
+            not accept
   /api/control/v1/marketplace/imports:
     post:
       operationId: importMarketplacePackage
-      description: Super Admin only. Fetches one Marketplace version from the configured origin and stores it as an
-        uploaded server package after the checks of the Marketplace design §8.3 (not delisted, a known release schema, a
-        signature by a pinned key, this Marketplace id, the same ids and publisher, the archive SHA-256 and the package
-        rules) and this ToolGate's compatibility rules. Redirects are never followed. The audit log records the
-        Marketplace, version, publisher and key. Nothing is deployed, enabled or granted; the package then follows the
-        same review, deploy, enable and grant steps as an upload.
+      description: Super Admin only. Fetches one Marketplace version from the configured
+        origin and stores it as an uploaded server package after the checks of the
+        Marketplace design §8.3 (not delisted, a known release schema, a signature
+        by a pinned key, this Marketplace id, the same ids and publisher, the archive
+        SHA-256 and the package rules) and this ToolGate's compatibility rules. Redirects
+        are never followed. The audit log records the Marketplace, version, publisher
+        and key. Nothing is deployed, enabled or granted; the package then follows
+        the same review, deploy, enable and grant steps as an upload.
       requestBody:
         required: true
         content:
@@ -8755,13 +8824,15 @@ paths:
         '422':
           description: Refused by an import check or not compatible with this ToolGate
         '503':
-          description: Marketplace unavailable or answered something Control does not accept
+          description: Marketplace unavailable or answered something Control does
+            not accept
   /api/control/v1/marketplace/media/{mediaId}:
     get:
       operationId: getMarketplaceMedia
       security: []
-      description: A Marketplace screenshot or logo from the configured origin, so the console keeps img-src 'self'. Public
-        Marketplace content; only PNG and JPEG up to 1 MiB are passed through.
+      description: A Marketplace screenshot or logo from the configured origin, so
+        the console keeps img-src 'self'. Public Marketplace content; only PNG and
+        JPEG up to 1 MiB are passed through.
       parameters:
       - name: mediaId
         in: path
@@ -8792,7 +8863,8 @@ paths:
       operationId: registerToolHost
       security:
       - deviceCertificate: []
-      description: An enrolled device registers as a Tool Host; hostId must equal its device id.
+      description: An enrolled device registers as a Tool Host; hostId must equal
+        its device id.
       requestBody:
         required: true
         content:
@@ -8819,7 +8891,8 @@ paths:
       operationId: getToolHostAssignments
       security:
       - deviceCertificate: []
-      description: The tools a registered Tool Host runs and the deployments whose content it fetches by digest.
+      description: The tools a registered Tool Host runs and the deployments whose
+        content it fetches by digest.
       responses:
         '200':
           description: Success; no-store
@@ -8869,7 +8942,8 @@ paths:
       operationId: getToolHostDocument
       security:
       - deviceCertificate: []
-      description: A service profile or globals document a deployment pins, whose canonical digest is the path digest.
+      description: A service profile or globals document a deployment pins, whose
+        canonical digest is the path digest.
       parameters:
       - name: digest
         in: path
@@ -8899,7 +8973,8 @@ paths:
       operationId: nextToolHostDispatch
       security:
       - deviceCertificate: []
-      description: The oldest queued call relayed for this Tool Host, which Control marks claimed. 204 when none is queued.
+      description: The oldest queued call relayed for this Tool Host, which Control
+        marks claimed. 204 when none is queued.
       responses:
         '200':
           description: The claimed dispatch
@@ -8990,7 +9065,8 @@ paths:
       operationId: listMcpServers
       security:
       - adminAccessToken: []
-      description: mcp_server.read. The upstream MCP servers registered in the routed tenant.
+      description: mcp_server.read. The upstream MCP servers registered in the routed
+        tenant.
       responses:
         '200':
           description: Success; no-store
@@ -9014,8 +9090,9 @@ paths:
       operationId: registerMcpServer
       security:
       - adminAccessToken: []
-      description: mcp_server.register plus scoped authority over the binding's Tool Group and Device Group. Registers an upstream
-        MCP server in the routed tenant; the secret must belong to exactly the binding's groups. Contacts nothing.
+      description: mcp_server.register plus scoped authority over the binding's Tool
+        Group and Device Group. Registers an upstream MCP server in the routed tenant;
+        the secret must belong to exactly the binding's groups. Contacts nothing.
       parameters:
       - name: Idempotency-Key
         in: header
@@ -9053,7 +9130,8 @@ paths:
       operationId: getMcpServer
       security:
       - adminAccessToken: []
-      description: mcp_server.read. One registration with its state, verification and quarantine.
+      description: mcp_server.read. One registration with its state, verification
+        and quarantine.
       parameters:
       - name: slug
         in: path
@@ -9083,7 +9161,8 @@ paths:
       operationId: deleteMcpServer
       security:
       - adminAccessToken: []
-      description: mcp_server.register with scoped authority. Undeploys the generated package and disables its tools; history is kept.
+      description: mcp_server.register with scoped authority. Undeploys the generated
+        package and disables its tools; history is kept.
       parameters:
       - name: slug
         in: path
@@ -9116,8 +9195,9 @@ paths:
       operationId: scanMcpServer
       security:
       - adminAccessToken: []
-      description: mcp_server.register with scoped authority. Queues a DISCOVER scan on a Tool Host of the binding Device Group;
-        the host contacts the upstream, never Control.
+      description: mcp_server.register with scoped authority. Queues a DISCOVER scan
+        on a Tool Host of the binding Device Group; the host contacts the upstream,
+        never Control.
       parameters:
       - name: slug
         in: path
@@ -9154,7 +9234,8 @@ paths:
       operationId: getMcpSnapshot
       security:
       - adminAccessToken: []
-      description: mcp_server.read. One immutable snapshot with recomputed definition digests.
+      description: mcp_server.read. One immutable snapshot with recomputed definition
+        digests.
       parameters:
       - name: slug
         in: path
@@ -9221,9 +9302,10 @@ paths:
       operationId: approveMcpServer
       security:
       - adminAccessToken: []
-      description: mcp_server.register with scoped authority. Approves at most 64 tools of one snapshot as the next approval sequence,
-        generates and deploys the tenant's MCP_PROXY package, and retires omitted tools. A retry with the same key and request
-        returns the original approval.
+      description: mcp_server.register with scoped authority. Approves at most 64
+        tools of one snapshot as the next approval sequence, generates and deploys
+        the tenant's MCP_PROXY package, and retires omitted tools. A retry with the
+        same key and request returns the original approval.
       parameters:
       - name: slug
         in: path
@@ -9266,8 +9348,9 @@ paths:
       operationId: nextMcpScan
       security:
       - deviceCertificate: []
-      description: The oldest queued scan for this Tool Host, which must be an administered member of the registration's binding
-        Device Group. Control marks it claimed and returns its scan permit. 204 when none is queued.
+      description: The oldest queued scan for this Tool Host, which must be an administered
+        member of the registration's binding Device Group. Control marks it claimed
+        and returns its scan permit. 204 when none is queued.
       responses:
         '200':
           description: The claimed scan
@@ -9282,7 +9365,8 @@ paths:
         '401':
           description: Authentication or direct TLS required
         '403':
-          description: Not the lease holder, not a member host, or not a registered Tool Host
+          description: Not the lease holder, not a member host, or not a registered
+            Tool Host
         '409':
           description: Expired, already reported or stale
         '503':
@@ -9292,7 +9376,8 @@ paths:
       operationId: consumeMcpScan
       security:
       - deviceCertificate: []
-      description: The lease holder consumes the scan permit before the signed deadline; only then may it redeem the secret.
+      description: The lease holder consumes the scan permit before the signed deadline;
+        only then may it redeem the secret.
       parameters:
       - name: id
         in: path
@@ -9318,7 +9403,8 @@ paths:
         '401':
           description: Authentication or direct TLS required
         '403':
-          description: Not the lease holder, not a member host, or not a registered Tool Host
+          description: Not the lease holder, not a member host, or not a registered
+            Tool Host
         '409':
           description: Expired, already reported or stale
         '503':
@@ -9328,8 +9414,9 @@ paths:
       operationId: deliverMcpScanSecret
       security:
       - deviceCertificate: []
-      description: The registration's upstream secret, for the admitted lease holder of a current scan with its fencing token,
-        before the signed deadline, and only a secret of exactly the binding's Tool Group and Device Group.
+      description: The registration's upstream secret, for the admitted lease holder
+        of a current scan with its fencing token, before the signed deadline, and
+        only a secret of exactly the binding's Tool Group and Device Group.
       parameters:
       - name: id
         in: path
@@ -9353,7 +9440,8 @@ paths:
         '401':
           description: Authentication or direct TLS required
         '403':
-          description: Not the admitted lease holder, past the deadline, or the secret is not the binding's
+          description: Not the admitted lease holder, past the deadline, or the secret
+            is not the binding's
         '404':
           description: No such scan in this tenant
         '503':
@@ -9363,7 +9451,8 @@ paths:
       operationId: postMcpScanResult
       security:
       - deviceCertificate: []
-      description: The lease holder reports what it observed, once and before the deadline. Control recomputes every digest.
+      description: The lease holder reports what it observed, once and before the
+        deadline. Control recomputes every digest.
       parameters:
       - name: id
         in: path
@@ -9389,7 +9478,8 @@ paths:
         '401':
           description: Authentication or direct TLS required
         '403':
-          description: Not the lease holder, not a member host, or not a registered Tool Host
+          description: Not the lease holder, not a member host, or not a registered
+            Tool Host
         '409':
           description: Expired, already reported or stale
         '503':
@@ -9399,7 +9489,8 @@ paths:
       operationId: postMcpScanFailure
       security:
       - deviceCertificate: []
-      description: The lease holder reports a failed scan, once and before the deadline. A failed refresh makes verification UNVERIFIED.
+      description: The lease holder reports a failed scan, once and before the deadline.
+        A failed refresh makes verification UNVERIFIED.
       parameters:
       - name: id
         in: path
@@ -9425,7 +9516,8 @@ paths:
         '401':
           description: Authentication or direct TLS required
         '403':
-          description: Not the lease holder, not a member host, or not a registered Tool Host
+          description: Not the lease holder, not a member host, or not a registered
+            Tool Host
         '409':
           description: Expired, already reported or stale
         '503':
@@ -9435,8 +9527,9 @@ paths:
       operationId: requestMcpRefresh
       security:
       - deviceCertificate: []
-      description: The holder of one MCP_PROXY invocation saw notifications/tools/list_changed and asks for an immediate refresh
-        of that call's server. Control queues one unless a scan of it is already open.
+      description: The holder of one MCP_PROXY invocation saw notifications/tools/list_changed
+        and asks for an immediate refresh of that call's server. Control queues one
+        unless a scan of it is already open.
       requestBody:
         required: true
         content:
@@ -9459,8 +9552,9 @@ paths:
       operationId: reportMcpQuarantine
       security:
       - deviceCertificate: []
-      description: The lease holder of one invocation or scan reports a quarantine. Control derives the targets from that evidence
-        and applies it only to the current approval; a stale report is audited and changes nothing.
+      description: The lease holder of one invocation or scan reports a quarantine.
+        Control derives the targets from that evidence and applies it only to the
+        current approval; a stale report is audited and changes nothing.
       requestBody:
         required: true
         content:
@@ -9479,7 +9573,8 @@ paths:
         '401':
           description: Authentication or direct TLS required
         '403':
-          description: Not the lease holder, not a member host, or not a registered Tool Host
+          description: Not the lease holder, not a member host, or not a registered
+            Tool Host
         '409':
           description: Expired, already reported or stale
         '503':
@@ -9529,7 +9624,8 @@ paths:
   /api/control/v1/access/service-permits/sending:
     post:
       operationId: beginServicePermitDispatch
-      description: Direct device mTLS, signed service grant, current authority and recorded owner required; exactly one send CAS succeeds.
+      description: Direct device mTLS, signed service grant, current authority and
+        recorded owner required; exactly one send CAS succeeds.
       security:
       - deviceCertificate: []
       responses:
@@ -9540,7 +9636,8 @@ paths:
               schema:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitDispatchAllowed
         '409':
-          description: The dispatch was already started, expired or fenced; no replay authority
+          description: The dispatch was already started, expired or fenced; no replay
+            authority
         '403':
           description: Authentication, scope, expiry or current authority refused
       requestBody:
@@ -9552,7 +9649,8 @@ paths:
   /api/control/v1/access/service-permits/{audience}/consume:
     post:
       operationId: consumeServicePermit
-      description: Dedicated toolgate-service-{audience} role; exact request facts and current authority checked.
+      description: Dedicated toolgate-service-{audience} role; exact request facts
+        and current authority checked.
       security:
       - adminAccessToken: []
       parameters:
@@ -9561,7 +9659,9 @@ paths:
         required: true
         schema:
           type: string
-          enum: [olo-memory, olo-rag]
+          enum:
+          - olo-memory
+          - olo-rag
       responses:
         '200':
           description: Authorized result
@@ -9580,7 +9680,9 @@ paths:
   /api/control/v1/access/service-permits/{audience}/claims/consume:
     post:
       operationId: consumeServicePermitClaim
-      description: Dedicated audience service role; first consumption checks current authority. Replays return status only; local target claim ownership controls execution.
+      description: Dedicated audience service role; first consumption checks current
+        authority. Replays return status only; local target claim ownership controls
+        execution.
       security:
       - adminAccessToken: []
       parameters:
@@ -9589,7 +9691,9 @@ paths:
         required: true
         schema:
           type: string
-          enum: [olo-memory, olo-rag]
+          enum:
+          - olo-memory
+          - olo-rag
       responses:
         '200':
           description: Claim status only; no execution authority
@@ -9608,7 +9712,8 @@ paths:
   /api/control/v1/access/service-permits/{audience}/claims/status:
     post:
       operationId: servicePermitClaimStatus
-      description: Dedicated audience service role; recorded claim status after expiry or termination. Never renews execution authority.
+      description: Dedicated audience service role; recorded claim status after expiry
+        or termination. Never renews execution authority.
       security:
       - adminAccessToken: []
       parameters:
@@ -9617,7 +9722,9 @@ paths:
         required: true
         schema:
           type: string
-          enum: [olo-memory, olo-rag]
+          enum:
+          - olo-memory
+          - olo-rag
       responses:
         '200':
           description: Claim status only; no execution authority
@@ -9636,7 +9743,8 @@ paths:
   /api/control/v1/access/service-permits/{audience}/claims/outcome:
     post:
       operationId: reportServicePermitTargetOutcome
-      description: Dedicated audience service role; append late target outcome evidence for the recorded claim. Never renews execution authority.
+      description: Dedicated audience service role; append late target outcome evidence
+        for the recorded claim. Never renews execution authority.
       security:
       - adminAccessToken: []
       parameters:
@@ -9645,7 +9753,9 @@ paths:
         required: true
         schema:
           type: string
-          enum: [olo-memory, olo-rag]
+          enum:
+          - olo-memory
+          - olo-rag
       responses:
         '200':
           description: Claim status only; no execution authority
@@ -9673,7 +9783,9 @@ paths:
         required: true
         schema:
           type: string
-          enum: [olo-memory, olo-rag]
+          enum:
+          - olo-memory
+          - olo-rag
       responses:
         '200':
           description: Authorized result
@@ -9686,14 +9798,17 @@ paths:
   /api/control/v1/access/service-permits/{audience}/jwks:
     get:
       operationId: servicePermitKeys
-      description: Dedicated service role; current purpose-separated Control effect verification key.
+      description: Dedicated service role; current purpose-separated Control effect
+        verification key.
       parameters:
       - in: path
         name: audience
         required: true
         schema:
           type: string
-          enum: [olo-memory, olo-rag]
+          enum:
+          - olo-memory
+          - olo-rag
       responses:
         '200':
           description: Authenticated key-discovery result
@@ -9701,20 +9816,28 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [keys]
+                required:
+                - keys
                 properties:
                   keys:
                     type: array
                     items:
                       type: object
-                      required: [kty, alg, use, kid, n, e]
+                      required:
+                      - kty
+                      - alg
+                      - use
+                      - kid
+                      - n
+                      - e
         '403':
           description: Dedicated service role for this audience and tenant required
   /api/control/v1/access/target-permits/{target}/claims/consume:
     post:
       operationId: target_claims_consume
-      description: Dedicated audience service role; first consumption checks current authority. Replays return status only;
-        local target claim ownership controls execution.
+      description: Dedicated audience service role; first consumption checks current
+        authority. Replays return status only; local target claim ownership controls
+        execution.
       security:
       - adminAccessToken: []
       parameters:
@@ -9739,12 +9862,13 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v2/effect-authorization.schema.json#/$defs/TargetClaimConsumption
-      summary: Dedicated target claims consume; requires toolgate-target-{target} machine role
+      summary: Dedicated target claims consume; requires toolgate-target-{target}
+        machine role
   /api/control/v1/access/target-permits/{target}/claims/status:
     post:
       operationId: target_claims_status
-      description: Dedicated audience service role; recorded claim status after expiry or termination. Never renews execution
-        authority.
+      description: Dedicated audience service role; recorded claim status after expiry
+        or termination. Never renews execution authority.
       security:
       - adminAccessToken: []
       parameters:
@@ -9769,12 +9893,13 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitClaimReference
-      summary: Dedicated target claims status; requires toolgate-target-{target} machine role
+      summary: Dedicated target claims status; requires toolgate-target-{target} machine
+        role
   /api/control/v1/access/target-permits/{target}/claims/outcome:
     post:
       operationId: target_claims_outcome
-      description: Dedicated audience service role; append late target outcome evidence for the recorded claim. Never renews
-        execution authority.
+      description: Dedicated audience service role; append late target outcome evidence
+        for the recorded claim. Never renews execution authority.
       security:
       - adminAccessToken: []
       parameters:
@@ -9799,11 +9924,13 @@ paths:
           application/json:
             schema:
               $ref: ../schemas/v1/enterprise.schema.json#/$defs/ServicePermitTargetOutcome
-      summary: Dedicated target claims outcome; requires toolgate-target-{target} machine role
+      summary: Dedicated target claims outcome; requires toolgate-target-{target}
+        machine role
   /api/control/v1/access/target-permits/{target}/jwks:
     get:
       operationId: target_jwks
-      description: Dedicated service role; current purpose-separated Control effect verification key.
+      description: Dedicated service role; current purpose-separated Control effect
+        verification key.
       parameters:
       - in: path
         name: target
@@ -9835,7 +9962,399 @@ paths:
         '403':
           description: Dedicated service role for this audience and tenant required
       summary: Dedicated target jwks; requires toolgate-target-{target} machine role
-
+  /api/control/v1/kill-events:
+    get:
+      operationId: getKillState
+      description: Signed current state; requires global kill.read authority.
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillPush
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+    post:
+      operationId: proposeKill
+      description: Retain exact kill intent for two independent human reviews. No
+        kill commits on proposal.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/KillRequest
+      responses:
+        '202':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillProposal
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/kill-events/recoveries:
+    post:
+      operationId: proposeKillRecovery
+      description: Propose lifting currently effective kills; requester cannot review.
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/RecoveryRequest
+      responses:
+        '202':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillProposal
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/kill-events/proposals:
+    get:
+      operationId: listKillProposals
+      parameters:
+      - name: after
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      responses:
+        '200':
+          description: Bounded keyset page; last id is the next cursor.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: ../schemas/v2/kill.schema.json#/$defs/KillProposal
+  /api/control/v1/kill-events/proposals/{id}:
+    get:
+      operationId: getKillProposal
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillProposal
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/kill-events/proposals/{id}/decisions:
+    post:
+      operationId: reviewKillProposal
+      description: Second independent current approval applies event, epoch, stored
+        cancellation and closure in one transaction. No administrator self-review
+        exception.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/KillProposalDecision
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillProposal
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/tool-hosts/kills:
+    get:
+      operationId: getToolHostKillState
+      security:
+      - deviceCertificate: []
+      description: Direct mTLS full fetch. Bearer credentials and identity headers
+        cannot substitute for the accepted device certificate.
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillPush
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/tool-hosts/kills/poll:
+    get:
+      operationId: pollToolHostKills
+      security:
+      - deviceCertificate: []
+      description: Bounded long-poll; at most one per verified host per Control process.
+        Holds no database transaction while waiting.
+      parameters:
+      - name: afterEpoch
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      - name: waitMs
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 20000
+          default: 20000
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillPush
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/tool-hosts/kills/acknowledgements:
+    post:
+      operationId: acknowledgeToolHostKills
+      security:
+      - deviceCertificate: []
+      description: Monotonic acknowledgement for the socket-authenticated registered
+        host; no caller-supplied component identity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/tool-hosts/kills/keys:
+    get:
+      operationId: getToolHostKillKeys
+      security:
+      - deviceCertificate: []
+      description: Fleet public-key bootstrap only through the fixed authenticated
+        HTTPS Control origin. Never accepted from a worker or a relayed event.
+      responses:
+        '200':
+          description: Tenant-bound current fleet public keys
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillTrustDocument
+        '403':
+          description: Accepted registered-host certificate required
+  /api/control/v1/access/native-permits/consume:
+    post:
+      operationId: consumeNativeExecutionPermit
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Current authoritative state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/NativePermitConsumed
+        '403':
+          description: Access denied
+        '409':
+          description: Revision or invocation binding conflict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterprisePermitConsumption
+      description: Native endpoint executor only. Accepts current native permits and
+        returns frozen scope/current epoch with a live lease.
+  /api/control/v1/endpoints/kills/keys:
+    get:
+      operationId: nativeKillTrustKeys
+      security:
+      - deviceCertificate: []
+      description: Native endpoint executor, authenticated by its accepted device
+        certificate. Distinct from Tool Host registration. Acknowledgements use CHECK_IN
+        after durable signed-state persistence.
+      responses:
+        '200':
+          description: Tenant-bound current fleet public keys
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillTrustDocument
+        '403':
+          description: Accepted registered-host certificate required
+  /api/control/v1/endpoints/kills:
+    get:
+      operationId: nativeKillState
+      security:
+      - deviceCertificate: []
+      description: Native endpoint executor, authenticated by its accepted device
+        certificate. Distinct from Tool Host registration. Acknowledgements use CHECK_IN
+        after durable signed-state persistence.
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillPush
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/endpoints/kills/acknowledgements:
+    post:
+      operationId: acknowledgeNativeKillState
+      security:
+      - deviceCertificate: []
+      description: Native endpoint executor, authenticated by its accepted device
+        certificate. Distinct from Tool Host registration. Acknowledgements use CHECK_IN
+        after durable signed-state persistence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
+      responses:
+        '200':
+          description: Current authenticated revocation state
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
+        '403':
+          description: Current scoped authority or device identity refused
+        '503':
+          description: Revocation signing or storage unavailable
+  /api/control/v1/kill-events/status:
+    get:
+      operationId: killDeliveryOverview
+      responses:
+        '200':
+          description: Current signed state, registered delivery acknowledgements
+            and retained archive counts
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillOverview
+  /api/control/v1/gateways/kills/keys:
+    get:
+      operationId: getGatewayKillKeys
+      security:
+      - adminAccessToken: []
+      description: Dedicated toolgate-relay-gateway service role, fixed authenticated
+        Control origin and verified principal tenant. Registers the signed-state reader.
+      responses:
+        '200':
+          description: Current signed tenant revocation authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillTrustDocument
+        '403':
+          description: Dedicated Gateway service principal required
+  /api/control/v1/gateways/kills:
+    get:
+      operationId: getGatewayKillState
+      security:
+      - adminAccessToken: []
+      description: Dedicated toolgate-relay-gateway service role, fixed authenticated
+        Control origin and verified principal tenant. Registers the signed-state reader.
+      responses:
+        '200':
+          description: Current signed tenant revocation authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillPush
+        '403':
+          description: Dedicated Gateway service principal required
+  /api/control/v1/gateways/kills/acknowledgements:
+    post:
+      operationId: acknowledgeGatewayKillCatalog
+      security:
+      - adminAccessToken: []
+      description: Dedicated toolgate-relay-gateway service role. Principal ID is
+        derived from the verified issuer/subject. Only registered catalog readers
+        may acknowledge POLL delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
+      responses:
+        '200':
+          description: Monotonic acknowledgement retained
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
 components:
   securitySchemes:
     adminAccessToken:
@@ -9846,7 +10365,8 @@ components:
         Not a Gateway runtime credential.
     operatorCertificate:
       type: mutualTLS
-      description: Direct operator identity verified by the dedicated operator CA on the Insights listener.
+      description: Direct operator identity verified by the dedicated operator CA
+        on the Insights listener.
     deviceCertificate:
       type: mutualTLS
       description: Direct verified device TLS identity; forwarded identity headers

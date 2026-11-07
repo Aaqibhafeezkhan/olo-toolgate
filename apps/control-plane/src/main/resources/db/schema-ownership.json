@@ -2836,6 +2836,370 @@
         "INSERT",
         "SELECT"
       ]
+    },
+    {
+      "name": "control_invocation_kill_scopes",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "attempt_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_operation_attempts",
+          "columns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "operation_id",
+            "attempt_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_acks",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "component_kind",
+        "component_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_kill_archive",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "event_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_kill_events",
+          "columns": [
+            "tenant_id",
+            "event_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "event_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_breakglass_requests",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "request_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_kill_events",
+          "columns": [
+            "tenant_id",
+            "event_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "event_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_closures",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "proposal_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_kill_events",
+          "columns": [
+            "tenant_id",
+            "event_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "event_id"
+          ]
+        },
+        {
+          "table": "control_kill_proposals",
+          "columns": [
+            "tenant_id",
+            "proposal_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "proposal_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_events",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "event_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_gateways",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "gateway_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_proposals",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "proposal_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_reviews",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "text",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "proposal_id",
+        "reviewer_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_kill_proposals",
+          "columns": [
+            "tenant_id",
+            "proposal_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "proposal_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_kill_supersessions",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "TEXT",
+      "primaryKey": [
+        "tenant_id",
+        "kill_event_id",
+        "recovery_event_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_kill_events",
+          "columns": [
+            "tenant_id",
+            "recovery_event_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "event_id"
+          ]
+        },
+        {
+          "table": "control_kill_events",
+          "columns": [
+            "tenant_id",
+            "kill_event_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "event_id"
+          ]
+        },
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
     }
   ]
 }

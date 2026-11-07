@@ -17,7 +17,7 @@ class EffectGrantTest {
     static final ObjectMapper JSON=new ObjectMapper();
     @TempDir Path temp;
     ServicePermitBridgeTest base;EffectGrants grants;EnterpriseInvocation invocation;EffectGrantIssue issue;
-    ObjectNode profile;String packageDigest;FencedTarget fencedTarget;String classification="WRITE";String reconciliationMode;String statusRouteId;boolean brokerOnly;
+    ObjectNode profile;String packageDigest;FencedTarget fencedTarget;String classification="WRITE";String reconciliationMode;String statusRouteId;boolean brokerOnly;java.util.function.Consumer<EffectGrantTest> configure;
     @BeforeAll static void key()throws Exception{ServicePermitBridgeTest.key();}
     @BeforeEach void setup()throws Exception{
         base=new ServicePermitBridgeTest();base.temp=temp;base.setup();
@@ -38,6 +38,7 @@ class EffectGrantTest {
             ((ObjectNode)doc.path("definition")).put("reconciliation",reconciliationMode);
             rig.graph.entries.put(id,rig.graph.codec.revision(rig.graph.codec.entry(id.kind(),doc.toString()),entry.revision()+1));rig.saveGraph();
         }
+        if(configure!=null)configure.accept(this);
         prepare();
     }
     void prepare()throws Exception{

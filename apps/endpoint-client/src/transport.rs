@@ -36,7 +36,29 @@ pub trait ControlPort: Send + Sync {
         &self,
         _identity: DeviceIdentity,
         _request: EnterprisePermitConsumption,
-    ) -> Call<'_, EnterpriseInvocation> {
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativePermitConsumed> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn kill_keys(
+        &self,
+        _identity: DeviceIdentity,
+    ) -> Call<'_, olo_toolgate_contracts::v2::KillTrustDocument> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn kill_state(
+        &self,
+        _identity: DeviceIdentity,
+    ) -> Call<'_, olo_toolgate_contracts::v2::KillPush> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn kill_ack(&self, _identity: DeviceIdentity, _epoch: u64) -> Call<'_, ()> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn heartbeat(
+        &self,
+        _identity: DeviceIdentity,
+        _request: olo_toolgate_contracts::v2::LeaseHeartbeat,
+    ) -> Call<'_, olo_toolgate_contracts::v2::LeaseRenewal> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
     fn report_effect(
@@ -279,7 +301,14 @@ impl HttpsControl {
         if status != 200 {
             return Err(self.refusal(response).await);
         }
-        if response.content_length().is_some_and(|n| n > 131072)
+        let max_reply = if model == "KillPush" {
+            2 * 1024 * 1024
+        } else {
+            131072
+        };
+        if response
+            .content_length()
+            .is_some_and(|n| n > max_reply as u64)
             || response
                 .headers()
                 .get("content-type")
@@ -290,7 +319,7 @@ impl HttpsControl {
         }
         let mut bytes = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|_| Failure::Unavailable)? {
-            if bytes.len() + chunk.len() > 131072 {
+            if bytes.len() + chunk.len() > max_reply {
                 return Err(Failure::Validation);
             }
             bytes.extend_from_slice(&chunk);
@@ -402,11 +431,10 @@ impl ControlPort for HttpsControl {
             .await
         })
     }
-    fn consume_effect(
+    fn kill_keys(
         &self,
         identity: DeviceIdentity,
-        request: EnterprisePermitConsumption,
-    ) -> Call<'_, EnterpriseInvocation> {
+    ) -> Call<'_, olo_toolgate_contracts::v2::KillTrustDocument> {
         Box::pin(async move {
             let client = Self::builder(&self.config)?
                 .identity(self.key.tls_identity(&identity)?)
@@ -414,12 +442,89 @@ impl ControlPort for HttpsControl {
                 .map_err(|_| Failure::Unavailable)?;
             self.request(
                 &client,
-                "/api/control/v1/access/permits/consume",
+                "/api/control/v1/endpoints/kills/keys",
+                None,
+                "KillTrustDocument",
+            )
+            .await
+        })
+    }
+    fn kill_state(
+        &self,
+        identity: DeviceIdentity,
+    ) -> Call<'_, olo_toolgate_contracts::v2::KillPush> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(&client, "/api/control/v1/endpoints/kills", None, "KillPush")
+                .await
+        })
+    }
+    fn kill_ack(&self, identity: DeviceIdentity, epoch: u64) -> Call<'_, ()> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let _: olo_toolgate_contracts::v2::KillAcknowledgement = self
+                .request(
+                    &client,
+                    "/api/control/v1/endpoints/kills/acknowledgements",
+                    Some(self.contracts.encode(
+                        "KillAcknowledgement",
+                        &olo_toolgate_contracts::v2::KillAcknowledgement {
+                            authorization_epoch: epoch,
+                            delivery_path: olo_toolgate_contracts::v2::KillDeliveryPath::CheckIn,
+                        },
+                    )?),
+                    "KillAcknowledgement",
+                )
+                .await?;
+            Ok(())
+        })
+    }
+    fn heartbeat(
+        &self,
+        identity: DeviceIdentity,
+        request: olo_toolgate_contracts::v2::LeaseHeartbeat,
+    ) -> Call<'_, olo_toolgate_contracts::v2::LeaseRenewal> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(
+                &client,
+                &format!(
+                    "/api/control/v1/access/invocations/{}/heartbeat",
+                    request.invocation_id
+                ),
+                Some(self.contracts.encode("LeaseHeartbeat", &request)?),
+                "LeaseRenewal",
+            )
+            .await
+        })
+    }
+    fn consume_effect(
+        &self,
+        identity: DeviceIdentity,
+        request: EnterprisePermitConsumption,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativePermitConsumed> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(
+                &client,
+                "/api/control/v1/access/native-permits/consume",
                 Some(
                     self.contracts
                         .encode("EnterprisePermitConsumption", &request)?,
                 ),
-                "EnterpriseInvocation",
+                "NativePermitConsumed",
             )
             .await
         })

@@ -989,7 +989,7 @@ async fn tool_host_calls_dispatch_with_a_permit_and_return_the_host_result() {
     tokio::spawn(async move { axum::serve(listener, host).await.unwrap() });
     let mut config = config();
     config.tool_hosts = serde_json::from_value(
-        json!([{"hostId":"placed-device","url":format!("http://127.0.0.1:{port}")}]),
+        json!([{"hostId":"placed-device","url":format!("http://127.0.0.1:{port}"),"developmentLoopbackHttp":true}]),
     )
     .unwrap();
     let (code, body) = call(

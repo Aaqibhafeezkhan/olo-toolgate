@@ -109,6 +109,9 @@
     ],
     "mcp-servers": [
       "mcp_server.read"
+    ],
+    "kill-events": [
+      "kill.read"
     ]
   },
   "resources": [
@@ -479,6 +482,16 @@
       "id": "administration",
       "label": "Installation Administration",
       "actions": [
+        "recover"
+      ]
+    },
+    {
+      "id": "kill",
+      "label": "Emergency Revocation",
+      "actions": [
+        "read",
+        "create",
+        "approve",
         "recover"
       ]
     }

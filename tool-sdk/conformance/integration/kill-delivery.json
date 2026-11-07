@@ -61,11 +61,11 @@
         "tool-host",
         "control"
       ],
-      "when": "A host is partitioned from Control when a kill commits, with and without selfTerminateOnControlLoss",
+      "when": "A host is partitioned from Control when a kill commits, with and without a stricter current Control-loss grace",
       "then": [
         "No new admission, redemption or report",
-        "Without the setting: running work continues to its deadline",
-        "With it: running work terminates after the window"
+        "Without a stricter grace: running work stops by the earlier of its last accepted live lease and execution/runtime deadline",
+        "With a stricter grace: running work also stops within the configured window after its last successful renewal; no disconnected renewal is inferred"
       ],
       "status": "authored"
     },
@@ -85,7 +85,7 @@
       "when": "Control is fully down",
       "then": [
         "Nothing new runs",
-        "Running work is bounded by deadline and selfTerminateOnControlLoss",
+        "Running work is bounded by its last accepted live lease, execution/runtime deadline and any stricter configured Control-loss grace",
         "After recovery the break-glass kill is pushed and acknowledged"
       ],
       "status": "authored"

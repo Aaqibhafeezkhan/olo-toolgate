@@ -39,22 +39,24 @@ public final class McpService {
         var b=codec.model(tx.load().entries().get(Ids.Kind.BINDING.id(i.evaluation().context().bindingId())).document(),ControlExecutionBinding.class);var access=new ManagementAccess(codec);
         access.require(tx.load(),actor.userId(),action,Ids.Kind.TOOL_GROUP,b.toolGroupId(),now(tx));access.require(tx.load(),actor.userId(),action,Ids.Kind.DEVICE_GROUP,b.deviceGroupId(),now(tx));
     }
-    public Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body){return catalog(actor,gateway,body,null);}
+    public Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body){return catalog(actor,gateway,body,null,true);}
     /** chosen is the device a person picked in the console; Gateway callers are placed by Control. */
-    Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body,String chosen){gateway(actor,gateway);var c=codec.model(body,RequestContext.class);
+    Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body,String chosen){return catalog(actor,gateway,body,chosen,false);}
+    private Store.Reply catalog(DirectoryService.Actor actor,boolean gateway,String body,String chosen,boolean registeredGateway){gateway(actor,gateway);var c=codec.model(body,RequestContext.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);if(!tenant.value().equals(c.tenantId()))throw forbidden();
             if(chosen!=null&&!placement().member(tx,c.bindingId(),chosen))throw forbidden();
+            if(registeredGateway)tx.kills().registerGateway(actor.id(),now);
             // A Gateway caller sees the tools of every device a call could be placed on: a group may mix client devices and
             // Tool Hosts, and placement sends each call to a member that reports the tool.
             var devices=chosen!=null?List.of(chosen):placement().candidates(tx,c,now);var usage=new HashMap<String,Long>();var tools=new ArrayList<LocalToolInfo>();var listed=new HashSet<String>();
             for(var placed:devices){
                 if(tx.endpoint(placed)==null)continue;
                 var d=device(tx,c,placed);if(endpoints.checkInPolicy().offline(d.lastSeenUnixMs(),now)||DevicePlacement.poweredOff(d))continue;var hints=new DiscoveryIndex(codec).rules(tenant,tx.load(),c,placed,now,budget->usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),c.requestId())));
-                for(var t:local(tx,d).tools())if(t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
+                for(var t:local(tx,d).tools())if(!KillEnforcement.killed(tx,codec,t.toolId(),t.packageDigest(),placed)&&t.enabled()&&hints.stream().anyMatch(rule->rule.toolId().equals(t.toolId())&&rule.action().equals(t.action()))){
                     var entry=tx.load().entries().get(Ids.Kind.TOOL.id(t.toolId()));if(entry==null||!entry.enabled())continue;var tool=codec.model(entry.document(),ControlTool.class);
                     if(t.toolDigest().equals(new EnterpriseEvaluator(codec).toolDigest(tx.load(),tool))&&t.packageDigest().equals(tool.packageDigest())&&listed.add(t.toolId()+"\n"+t.action()))tools.add(new LocalToolInfo(t.toolId(),t.action(),t.description(),t.enabled(),t.inputSchema(),t.toolDigest(),t.packageDigest(),BusinessKeyPolicies.configured(tx,codec,t.toolId())));
                 }
-            }return reply(new LocalToolCatalog(tools));});}
+            }return new Store.Reply(200,codec.json(new LocalToolCatalog(tools)),tx.enterprise().authorizationEpoch());});}
     public Store.Reply submit(DirectoryService.Actor actor,boolean gateway,String body,String requestId){gateway(actor,gateway);var submission=codec.model(body,RemoteToolSubmission.class);
         return store.transaction(tenant,true,tx->{long now=now(tx);var i=invocation(tx,submission.invocationId());if(!i.id().equals(submission.context().requestId()))throw forbidden();
             var evaluation=new RuntimeAccess(codec).evaluation(tenant,tx.load(),submission.context(),i.evaluation().context().deviceId(),submission.request(),i.evaluation().toolDigest(),i.evaluation().packageDigest(),now);

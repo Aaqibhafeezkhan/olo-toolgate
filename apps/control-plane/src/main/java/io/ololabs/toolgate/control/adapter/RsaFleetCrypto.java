@@ -11,7 +11,7 @@ import java.security.spec.RSAPublicKeySpec;
 import java.util.*;
 
 /** RFC7515 RS256, strict protected headers, canonical base64url and disjoint trust domains. */
-public final class RsaFleetCrypto implements FleetCrypto {
+public final class RsaFleetCrypto implements FleetCrypto,KillCrypto {
     private static final String RELEASE="toolgate-package-release+jws", DESIRED="toolgate-fleet-desired+jws", GRANT="toolgate-fleet-artifact+jws";
     private final Codec codec;
     private final RSAPrivateCrtKey signing;
@@ -63,4 +63,47 @@ public final class RsaFleetCrypto implements FleetCrypto {
     public FleetArtifactGrantClaims grant(FleetSignedDocument signed){return verify(signed,GRANT,FleetArtifactGrantClaims.class,organizations).model();}
     public FleetSignedDocument desired(FleetDesiredDocument document){codec.model(codec.json(document),FleetDesiredDocument.class);return sign(document,DESIRED);}
     public FleetSignedDocument grant(FleetArtifactGrantClaims document){codec.model(codec.json(document),FleetArtifactGrantClaims.class);return sign(document,GRANT);}
+    public java.util.List<io.ololabs.toolgate.contracts.v2.KillTrustKey> publicKeys(){
+        return organizations.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(entry->{
+            byte[] bytes=entry.getValue().getModulus().toByteArray();if(bytes[0]==0)bytes=Arrays.copyOfRange(bytes,1,bytes.length);
+            return new io.ololabs.toolgate.contracts.v2.KillTrustKey(entry.getKey(),encode(bytes),"AQAB");
+        }).toList();
+    }
+    private static final String KILL_EVENT="toolgate-kill-event+jws",KILL_PUSH="toolgate-kill-push+jws";
+    public String signEvent(com.fasterxml.jackson.databind.node.ObjectNode unsigned){return signKill(unsigned,KILL_EVENT,24000);}
+    public String signPush(com.fasterxml.jackson.databind.node.ObjectNode unsigned){return signKill(unsigned,KILL_PUSH,1500000);}
+    public com.fasterxml.jackson.databind.node.ObjectNode verifyEvent(String signature){return verifyKill(signature,KILL_EVENT,32768);}
+    public com.fasterxml.jackson.databind.node.ObjectNode verifyPush(String signature){return verifyKill(signature,KILL_PUSH,2097152);}
+    private String signKill(com.fasterxml.jackson.databind.node.ObjectNode unsigned,String type,int limit){
+        if(unsigned.has("signature"))throw Failure.validation();
+        byte[] bytes=Canonical.jcs(unsigned);if(bytes.length>limit)throw Failure.validation();
+        String header=encode(Canonical.jcs((com.fasterxml.jackson.databind.JsonNode)codec.value(
+            codec.json(Map.of("alg","RS256","typ",type,"kid",keyId)))));
+        String message=header+"."+encode(bytes);
+        try{var signature=Signature.getInstance("SHA256withRSA");signature.initSign(signing);
+            signature.update(message.getBytes(StandardCharsets.US_ASCII));return message+"."+encode(signature.sign());
+        }catch(GeneralSecurityException failure){throw Failure.unavailable();}
+    }
+    private com.fasterxml.jackson.databind.node.ObjectNode verifyKill(String signed,String type,int limit){
+        if(signed==null||signed.length()>limit)throw unauthorized();
+        String[] parts=signed.split("\\.",-1);
+        if(parts.length!=3||parts[0].length()>1024)throw unauthorized();
+        var header=(com.fasterxml.jackson.databind.JsonNode)codec.value(new String(decode(parts[0]),StandardCharsets.UTF_8));
+        if(!header.isObject()||header.size()!=3||!"RS256".equals(header.path("alg").asText())
+            ||!type.equals(header.path("typ").asText()))throw unauthorized();
+        var key=organizations.get(header.path("kid").asText());if(key==null)throw unauthorized();
+        byte[] signature=decode(parts[2]),payload=decode(parts[1]);
+        if(signature.length!=key.getModulus().bitLength()/8)throw unauthorized();
+        try{
+            var verifier=Signature.getInstance("SHA256withRSA");verifier.initVerify(key);
+            verifier.update((parts[0]+"."+parts[1]).getBytes(StandardCharsets.US_ASCII));
+            if(!verifier.verify(signature))throw unauthorized();
+            String text=StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(payload)).toString();
+            var node=(com.fasterxml.jackson.databind.JsonNode)codec.value(text);
+            if(!node.isObject()||node.has("signature")||!MessageDigest.isEqual(payload,Canonical.jcs(node)))throw unauthorized();
+            return (com.fasterxml.jackson.databind.node.ObjectNode)node;
+        }catch(GeneralSecurityException|java.nio.charset.CharacterCodingException failure){throw unauthorized();}
+    }
+
 }

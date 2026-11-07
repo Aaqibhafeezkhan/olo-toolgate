@@ -1,13 +1,12 @@
-# Copyright 2026 OLO Labs
-# SPDX-License-Identifier: Apache-2.0
-# PROPOSED (design gate D1). Not served; see README.md in this folder.
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 openapi: 3.1.0
 info:
   title: OLO ToolGate Control Plane API (proposed v2 additions)
   version: 1.0.0-dev.1
-  description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021), with the invocation, reserve and task endpoints
-    added at D2 (ADR 016). Not served. Milestone M1 moves each operation into the served file when it is implemented, so the
-    served contract never advertises an unimplemented endpoint.
+  description: Proposed at design gate D1 (ADRs 014, 015, 018, 020, 021), with the
+    invocation, reserve and task endpoints added at D2 (ADR 016). Not served. Milestone
+    M1 moves each operation into the served file when it is implemented, so the served
+    contract never advertises an unimplemented endpoint.
 security:
 - adminAccessToken: []
 paths:
@@ -38,7 +37,8 @@ paths:
   /api/control/v1/packages/{packageId}/versions/{version}/review:
     get:
       operationId: getPackageReview
-      description: Requires toolgate-admin. API-compatibility diff, security delta and the binding draft (platform-requirements.md §8.3).
+      description: Requires toolgate-admin. API-compatibility diff, security delta
+        and the binding draft (platform-requirements.md §8.3).
       parameters:
       - name: packageId
         in: path
@@ -72,8 +72,9 @@ paths:
   /api/control/v1/packages/{packageId}/versions/{version}/enable:
     post:
       operationId: enablePackageVersion
-      description: Requires toolgate-admin. Enables exactly the reviewed package digest with the given binding. A non-empty
-        security delta must be acknowledged. Runs through the existing maker/checker configuration review when enabled.
+      description: Requires toolgate-admin. Enables exactly the reviewed package digest
+        with the given binding. A non-empty security delta must be acknowledged. Runs
+        through the existing maker/checker configuration review when enabled.
       parameters:
       - name: packageId
         in: path
@@ -91,7 +92,8 @@ paths:
         name: If-Match
         in: header
         required: true
-        description: Quoted current revision; a stale value returns 409 with the current record
+        description: Quoted current revision; a stale value returns 409 with the current
+          record
         schema:
           type: string
       - &id004
@@ -151,8 +153,9 @@ paths:
         '503': *id001
     put:
       operationId: updateDeploymentBinding
-      description: Requires toolgate-admin. Creates a new binding revision. Values above a higher layer are rejected naming
-        the limiting layer (platform-requirements.md §8.5).
+      description: Requires toolgate-admin. Creates a new binding revision. Values
+        above a higher layer are rejected naming the limiting layer (platform-requirements.md
+        §8.5).
       parameters:
       - name: bindingId
         in: path
@@ -188,7 +191,8 @@ paths:
   /api/control/v1/deployments/{bindingId}/effective:
     get:
       operationId: getEffectiveDeployment
-      description: Requires toolgate-admin. Every effective field with its value and the layer it came from.
+      description: Requires toolgate-admin. Every effective field with its value and
+        the layer it came from.
       parameters:
       - name: bindingId
         in: path
@@ -211,10 +215,12 @@ paths:
   /api/control/v1/access/invocations:
     post:
       operationId: submitInvocationV2
-      description: Extends the existing endpoint with a v2 body (a body with toolId is v2; the served v1 body stays accepted).
-        Control evaluates policy, reserves the business key and creates the invocation, task columns and reservation in one
-        transaction (invocation-state-v2.md T1, §4). Idempotent by invocationId. Business-key refusals are 409 with the code
-        IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE or EXPIRED_KEY and no other detail.
+      description: Extends the existing endpoint with a v2 body (a body with toolId
+        is v2; the served v1 body stays accepted). Control evaluates policy, reserves
+        the business key and creates the invocation, task columns and reservation
+        in one transaction (invocation-state-v2.md T1, §4). Idempotent by invocationId.
+        Business-key refusals are 409 with the code IDEMPOTENCY_CONFLICT, IDEMPOTENCY_KEY_IN_USE
+        or EXPIRED_KEY and no other detail.
       requestBody:
         required: true
         content:
@@ -238,8 +244,9 @@ paths:
   /api/control/v1/access/invocations/reserve:
     post:
       operationId: reserveInvocationPermitV2
-      description: Extends the existing endpoint with a v2 body. Mints one Control-signed permit for one attempt, addressed
-        to one Tool Host or device, and reserves its single-use nonce (invocation-state-v2.md T4, ADR 013).
+      description: Extends the existing endpoint with a v2 body. Mints one Control-signed
+        permit for one attempt, addressed to one Tool Host or device, and reserves
+        its single-use nonce (invocation-state-v2.md T4, ADR 013).
       requestBody:
         required: true
         content:
@@ -265,8 +272,9 @@ paths:
       operationId: consumeInvocationPermitV2
       security:
       - workloadCertificate: []
-      description: Extends the existing endpoint to Tool Host identities and v2 permits. Moves the invocation RESERVED to
-        EXECUTING once and returns the fencing token (platform-requirements.md §11.3, §12.8). The served v1 body stays accepted.
+      description: Extends the existing endpoint to Tool Host identities and v2 permits.
+        Moves the invocation RESERVED to EXECUTING once and returns the fencing token
+        (platform-requirements.md §11.3, §12.8). The served v1 body stays accepted.
       requestBody:
         required: true
         content:
@@ -292,8 +300,9 @@ paths:
       operationId: renewInvocationLease
       security:
       - workloadCertificate: []
-      description: Extends the existing endpoint with progress and input requests and returned task input
-        (invocation-state-v2.md T6-T8). The served lease-only endpoint currently refuses those fields.
+      description: Extends the existing endpoint with progress and input requests
+        and returned task input (invocation-state-v2.md T6-T8). The served lease-only
+        endpoint currently refuses those fields.
       parameters:
       - name: id
         in: path
@@ -326,8 +335,9 @@ paths:
       operationId: reportInvocationResultV2
       security:
       - workloadCertificate: []
-      description: Extends the existing endpoint with a v2 body carrying the result payload. Idempotent per (invocationId,
-        fencingToken); a stale token records evidence only.
+      description: Extends the existing endpoint with a v2 body carrying the result
+        payload. Idempotent per (invocationId, fencingToken); a stale token records
+        evidence only.
       requestBody:
         required: true
         content:
@@ -348,8 +358,9 @@ paths:
   /api/control/v1/access/tasks/{taskId}:
     get:
       operationId: getInvocationTask
-      description: Task state for MCP tasks/get (invocation-state-v2.md §7). Control compares the owner digest the Gateway
-        derived from the authenticated caller; a task owned by anyone else is 404, never 403.
+      description: Task state for MCP tasks/get (invocation-state-v2.md §7). Control
+        compares the owner digest the Gateway derived from the authenticated caller;
+        a task owned by anyone else is 404, never 403.
       parameters: &id005
       - name: taskId
         in: path
@@ -381,7 +392,8 @@ paths:
   /api/control/v1/access/tasks/{taskId}/input:
     post:
       operationId: submitInvocationTaskInput
-      description: MCP tasks/update input for a task in INPUT_REQUIRED, with the same owner rule as getInvocationTask.
+      description: MCP tasks/update input for a task in INPUT_REQUIRED, with the same
+        owner rule as getInvocationTask.
       parameters: *id005
       requestBody:
         required: true
@@ -404,110 +416,6 @@ paths:
         '413': *id001
         '500': *id001
         '503': *id001
-  /api/control/v1/kill-events:
-    get:
-      operationId: listKillEvents
-      security:
-      - adminAccessToken: []
-      - workloadCertificate: []
-      description: Effective kills and unarchived recoveries. Requires toolgate-admin, or a Tool Host or device workload certificate
-        for the full fetch that replaces its kill set (kill-switch.md §8).
-      responses:
-        '200':
-          description: Events
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/kill.schema.json#/$defs/KillEventPage
-        '401': *id001
-        '403': *id001
-        '500': *id001
-        '503': *id001
-    post:
-      operationId: createKillEvent
-      description: Requires toolgate-admin; two-person review when the enterprise review workflow is on. Bumps the tenant
-        authorization epoch.
-      parameters:
-      - *id004
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../../schemas/v2/kill.schema.json#/$defs/KillRequest
-      responses:
-        '201':
-          description: Event
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/kill.schema.json#/$defs/KillEvent
-        '400': *id001
-        '401': *id001
-        '403': *id001
-        '404': *id001
-        '409': *id001
-        '413': *id001
-        '415': *id001
-        '500': *id001
-        '503': *id001
-  /api/control/v1/kill-events/recoveries:
-    post:
-      operationId: createKillRecovery
-      description: Requires toolgate-admin and always two-person review. Only Control issues recovery events; break-glass
-        never can.
-      parameters:
-      - *id004
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../../schemas/v2/kill.schema.json#/$defs/RecoveryRequest
-      responses:
-        '201':
-          description: Recovery event
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/kill.schema.json#/$defs/RecoveryEvent
-        '400': *id001
-        '401': *id001
-        '403': *id001
-        '404': *id001
-        '409': *id001
-        '413': *id001
-        '415': *id001
-        '500': *id001
-        '503': *id001
-  /api/control/v1/break-glass/kills:
-    post:
-      operationId: createBreakGlassKill
-      security:
-      - operatorCertificate: []
-      description: 'Emergency path: 2-of-3 operator signatures, no maker/checker review, adds kills only, always audited (platform-requirements.md
-        §15.4).'
-      parameters:
-      - *id004
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../../schemas/v2/kill.schema.json#/$defs/BreakGlassRequest
-      responses:
-        '201':
-          description: Event
-          content:
-            application/json:
-              schema:
-                $ref: ../../schemas/v2/kill.schema.json#/$defs/KillEvent
-        '400': *id001
-        '401': *id001
-        '403': *id001
-        '409': *id001
-        '500': *id001
-        '503': *id001
 components:
   securitySchemes:
     adminAccessToken:
@@ -519,7 +427,8 @@ components:
       description: Tool Host or device workload certificate
     operatorCertificate:
       type: mutualTLS
-      description: Break-glass operator client certificate; the body also carries 2-of-3 operator signatures
+      description: Break-glass operator client certificate; the body also carries
+        2-of-3 operator signatures
   responses:
     Error:
       description: Stable sanitized error code and server-generated request ID

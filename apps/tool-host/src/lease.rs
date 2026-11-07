@@ -20,6 +20,7 @@ pub async fn supervise(
     fence: &str,
     deadline: u64,
     initial: LeaseRenewal,
+    control_loss_grace_ms: Option<u64>,
 ) {
     let mut reply = initial;
     loop {
@@ -31,9 +32,18 @@ pub async fn supervise(
             .saturating_sub(crate::now_ms());
         // Anchor to a monotonic timer before doing network IO. A hung renewal cannot
         // keep the worker alive, even if the system wall clock moves backwards.
-        let expiry = tokio::time::Instant::now() + Duration::from_millis(remaining);
+        let now = tokio::time::Instant::now();
+        let expiry = now + Duration::from_millis(remaining);
+        let expiry = control_loss_grace_ms
+            .map(|ms| expiry.min(now + Duration::from_millis(ms)))
+            .unwrap_or(expiry);
+        let interval = (remaining / 3).clamp(1, 10_000).min(
+            control_loss_grace_ms
+                .map(|ms| (ms / 3).max(1))
+                .unwrap_or(u64::MAX),
+        );
         let renew = async {
-            tokio::time::sleep(Duration::from_millis((remaining / 3).clamp(1, 10_000))).await;
+            tokio::time::sleep(Duration::from_millis(interval)).await;
             control.heartbeat(id, fence).await
         };
         match tokio::time::timeout_at(expiry, renew).await {

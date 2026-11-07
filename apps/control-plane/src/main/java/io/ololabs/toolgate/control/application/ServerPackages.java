@@ -89,21 +89,35 @@ public final class ServerPackages {
         String digest = verified.packageDigest(), id = manifest.get("id").asText(), version = manifest.get("version").asText();
         {
             var existing = tx.packages().version(digest);
-            if (existing != null) return new Store.Reply(200, existing.document(), 0);
+            if (existing != null) return reply(200,visibleVersion(tx,existing));
             long now = clock.millis();
             var document = JSON.objectNode().put("packageId", id).put("version", version).put("packageDigest", digest).put("descriptorSetDigest", verified.descriptorSetDigest())
                 .put("state", "VERIFIED").put("revision", 1).put("uploadedAtUnixMs", now);
             document.set("manifest", manifest);
             tx.packages().saveVersion(new PackageStore.Version(digest, id, version, now, codec.json(document)), data);
             tx.audit(actor, "PACKAGE_UPLOAD", "package:" + id, 1, requestId, hex(digest));
-            return reply(201, document);
+            return reply(201,visibleVersion(tx,tx.packages().version(digest)));
         }
+    }
+
+    /** Suspension is a current-authority projection; immutable uploaded state is never rewritten. */
+    private JsonNode visibleVersion(Store.Session tx,PackageStore.Version version) {
+        var document=(ObjectNode)node(version.document()).deepCopy();
+        var subject=new KillPolicy.Subject(version.packageId(),version.digest(),
+            document.path("manifest").path("publisher").isTextual()?document.path("manifest").path("publisher").asText():null,
+            null,null,null);
+        for(var event:tx.kills().effective()){
+            var kill=codec.model(event.document(),io.ololabs.toolgate.contracts.v2.KillEvent.class);
+            if(switch(kill.scope().kind()){case PACKAGE,PACKAGE_DIGEST,PUBLISHER,TENANT->true;default->false;})
+                if(KillPolicy.matches(kill.scope(),subject)){document.put("state","SUSPENDED");break;}
+        }
+        return document;
     }
 
     public Store.Reply versions(DirectoryService.Actor actor) {
         return store.transaction(actor.tenant(), false, tx -> {
             reader(tx, actor); var page = JSON.objectNode(); var items = page.putArray("items");
-            for (var v : tx.packages().versions(100)) items.add(node(v.document()));
+            for (var v : tx.packages().versions(100)) items.add(visibleVersion(tx,v));
             return reply(200, page);
         });
     }
@@ -549,6 +563,7 @@ public final class ServerPackages {
                     }
                 }
             }
+            KillEnforcement.capture(tx,codec,operations.invocationIn(tx,i.id()));
             return operations.signer().signInvocation(signedClaims);
         }
     }
@@ -608,8 +623,25 @@ public final class ServerPackages {
         status.put("state", state); change.accept(status);
         return new PackageStore.Relayed(relayed.invocationId(), relayed.hostId(), state, relayed.expiresAt(), codec.json(document));
     }
-    private PackageStore.Relayed current(PackageStore.Relayed relayed) {
-        return relayed != null && OPEN.contains(relayed.state()) && relayed.expiresAt() <= clock.millis() ? updated(relayed, "EXPIRED", s -> {}) : relayed;
+    private PackageStore.Relayed current(Store.Session tx, PackageStore.Relayed relayed) {
+        if(relayed==null||!OPEN.contains(relayed.state()))return relayed;
+        long deadline=relayed.expiresAt();
+        // Permit expiry bounds admission, not an execution already consumed at T5.
+        // Late admission telemetry for the exact consumed fence is metadata only.
+        boolean consumed=false;
+        if(relayed.state().equals("CLAIMED")&&deadline<=clock.millis()){
+            if(operations==null)throw Failure.unavailable();
+            var invocation=operations.invocationIn(tx,relayed.invocationId());
+            consumed=invocation.state()==EnterpriseInvocationState.EXECUTING
+                &&Objects.equals(invocation.reservedNonce(),dispatchNonce(relayed));
+        }
+        if(relayed.state().equals("ADMITTED")||consumed){
+            var signed=claims(node(relayed.document()).path("dispatch")).path("deadlineUnixMs");
+            if(!signed.isIntegralNumber()||!signed.canConvertToLong()||signed.asLong()<=0)throw Failure.validation();
+            if(operations==null)throw Failure.unavailable();
+            deadline=Math.min(signed.asLong(),operations.invocationIn(tx,relayed.invocationId()).expiresAtUnixMs());
+        }
+        return deadline<=clock.millis()?updated(relayed,"EXPIRED",s->{}):relayed;
     }
 
     /** The Gateway hands Control a dispatch for a call placed on a Tool Host; the host fetches it. */
@@ -627,7 +659,7 @@ public final class ServerPackages {
             var i = operations.invocationIn(tx, invocationId); var context = i.evaluation().context();
             if (!actor.userId().equals(context.userId()) || context.mode() != io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN) throw ManagementAccess.denied();
             var existing = tx.packages().relayed(invocationId);
-            if (existing != null) return reply(200, status(current(existing)));
+            if (existing != null) return reply(200, status(current(tx,existing)));
             if (i.state() != EnterpriseInvocationState.QUEUED) throw Failure.conflict();
             var permit = permitIn(tx, actor, new PermitReservationRequest(invocationId, context.deviceId(), 1L, arguments));
             return relayIn(tx, new io.ololabs.toolgate.contracts.v2.Dispatch(permit, arguments, null, null, null));
@@ -645,7 +677,7 @@ public final class ServerPackages {
                     || context.mode() != io.ololabs.toolgate.contracts.v2.RequestMode.HUMAN
                     || !Objects.equals(context.sessionEpoch(), sessionEpoch)) throw ManagementAccess.denied();
             operations.requireMetadataFresh(actor.tenant(), tx, invocation);
-            var relayed = current(tx.packages().relayed(invocationId));
+            var relayed = current(tx,tx.packages().relayed(invocationId));
             if (relayed == null || !relayed.hostId().equals(context.deviceId())) throw notFound();
             var status = status(relayed); RemoteToolResult result = null; ErrorCode error = null;
             RemoteToolState state = switch (relayed.state()) {
@@ -680,7 +712,7 @@ public final class ServerPackages {
             String document = codec.json(dispatch); var existing = tx.packages().relayed(invocationId);
             if (existing != null) {
                 if (!node(existing.document()).get("dispatch").equals(node(document))) throw Failure.conflict();
-                return reply(200, status(current(existing)));
+                return reply(200, status(current(tx,existing)));
             }
             var record = JSON.objectNode(); record.set("dispatch", node(document));
             record.putObject("status").put("invocationId", invocationId).put("hostId", device).put("state", "QUEUED");
@@ -696,7 +728,7 @@ public final class ServerPackages {
     public Store.Reply relayed(DirectoryService.Actor actor, String invocationId) {
         if (actor.admin() || actor.userId() != null) throw ManagementAccess.denied();
         return store.transaction(actor.tenant(), false, tx -> {
-            var relayed = current(tx.packages().relayed(invocationId)); if (relayed == null) throw notFound();
+            var relayed = current(tx,tx.packages().relayed(invocationId)); if (relayed == null) throw notFound();
             return reply(200, status(relayed));
         });
     }
@@ -716,7 +748,7 @@ public final class ServerPackages {
         var admission = codec.model(body, io.ololabs.toolgate.contracts.v2.AdmissionResponse.class);
         if (!admission.invocationId().equals(invocationId)) throw Failure.validation();
         return store.transaction(tenant, true, tx -> {
-            var d = host(tx, device); var relayed = current(tx.packages().relayed(invocationId));
+            var d = host(tx, device); var relayed = current(tx,tx.packages().relayed(invocationId));
             if (relayed == null || !relayed.hostId().equals(d.deviceId())) throw notFound();
             if (!relayed.state().equals("CLAIMED")) throw Failure.conflict();
             String expected=dispatchNonce(relayed);
@@ -741,7 +773,7 @@ public final class ServerPackages {
                 if(!Objects.equals(i.reservedNonce(),result.fencingToken())){
                     operations.retainHistoricalExecutionEvidence(tenant,tx,d.deviceId(),invocationId,result.fencingToken(),body);
                     // Acknowledge the superseded receipt even while the replacement has no dispatch pointer.
-                    var receipt=relayed==null?JSON.objectNode().put("invocationId",invocationId).put("hostId",d.deviceId()).put("state","EXPIRED"):status(current(relayed));
+                    var receipt=relayed==null?JSON.objectNode().put("invocationId",invocationId).put("hostId",d.deviceId()).put("state","EXPIRED"):status(current(tx,relayed));
                     return reply(200,receipt);
                 }
             }

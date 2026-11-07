@@ -111,3 +111,18 @@ async fn orphaned_prior_keys_are_not_adopted_into_a_new_tenant_binding() {
     assert!(!dir.join("device.json").exists());
     assert_eq!(std::fs::read(dir.join("device-key.pem")).unwrap(), prior);
 }
+
+#[test]
+fn a_control_loss_grace_must_be_a_bounded_positive_window() {
+    let area = Area::new();
+    for grace in [None, Some(1_000), Some(120_000)] {
+        let mut settings = config(&area);
+        settings.limits.control_loss_grace_ms = grace;
+        assert!(settings.validate().is_ok());
+    }
+    for grace in [0, 999, 120_001, u64::MAX] {
+        let mut settings = config(&area);
+        settings.limits.control_loss_grace_ms = Some(grace);
+        assert!(settings.validate().is_err());
+    }
+}

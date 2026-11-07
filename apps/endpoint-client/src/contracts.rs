@@ -33,6 +33,7 @@ impl Contracts {
                 "/runtime.schema.json",
                 "/enterprise.schema.json",
                 "/v2/discovery.schema.json",
+                "/v2/kill.schema.json",
             ]
             .iter()
             .any(|suffix| uri.ends_with(suffix))
@@ -43,6 +44,10 @@ impl Contracts {
                     .keys()
                 {
                     definitions.push((name.clone(), uri.to_string()));
+                }
+            } else if uri.ends_with("/v2/permit.schema.json") {
+                for name in ["LeaseHeartbeat", "LeaseRenewal"] {
+                    definitions.push((name.to_string(), uri.to_string()));
                 }
             } else if uri.ends_with("/v2/protocol.schema.json") {
                 // Devices forward run-response frames like Tool Hosts; only these two v2 messages cross this boundary.
@@ -73,7 +78,13 @@ impl Contracts {
         Ok(Self { validators })
     }
     pub fn decode<T: DeserializeOwned>(&self, name: &str, bytes: &[u8]) -> Result<T> {
-        if bytes.len() > 131072 {
+        if bytes.len()
+            > if name == "KillPush" {
+                2 * 1024 * 1024
+            } else {
+                131072
+            }
+        {
             return Err(Failure::Validation);
         }
         let value: serde_json::Value =

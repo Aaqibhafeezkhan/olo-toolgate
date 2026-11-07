@@ -166,7 +166,11 @@ public final class ManagementPermissionCatalog {
   "secret.write",
   "remote_tool.read",
   "remote_tool.request",
-  "administration.recover");
+  "administration.recover",
+  "kill.read",
+  "kill.create",
+  "kill.approve",
+  "kill.recover");
  public static String resource(Kind kind){return switch(kind){
   case USER -> "user";
   case TEAM -> "team";

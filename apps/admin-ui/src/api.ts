@@ -79,6 +79,12 @@ async function readBody(response: Response): Promise<unknown> {
  */
 export class ConfigurationPending extends Error {constructor(readonly changeId:string){super('Draft created. Review its impact, submit it for independent approval, then apply the reviewed change.');}}
 export class ControlClient {
+  killOverview(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').KillOverview>{return this.send(operations.killDeliveryOverview,{signal});}
+  killProposals(after?:string,signal?:AbortSignal):Promise<readonly import('@olo-labs/toolgate-contracts/v2').KillProposal[]>{const query=new URLSearchParams({limit:'50'});if(after)query.set('after',after);return this.send(operations.listKillProposals,{query,signal});}
+  killProposal(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').KillProposal>{return this.send(operations.getKillProposal,{id,signal});}
+  proposeKill(body:import('@olo-labs/toolgate-contracts/v2').KillRequest,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').KillProposal>{return this.send(operations.proposeKill,{body,key});}
+  proposeKillRecovery(body:import('@olo-labs/toolgate-contracts/v2').RecoveryRequest,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').KillProposal>{return this.send(operations.proposeKillRecovery,{body,key});}
+  reviewKill(id:string,body:import('@olo-labs/toolgate-contracts/v2').KillProposalDecision,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').KillProposal>{return this.send(operations.reviewKillProposal,{id,body,key});}
   invocations(after?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EnterpriseInvocationPage>{const query=new URLSearchParams({limit:'50'});if(after)query.set('after',after);return this.send(operations.listEnterpriseInvocations,{query,signal});}
   proposeOutcome(id:string,body:import('@olo-labs/toolgate-contracts').EnterpriseReconciliationRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseReconciliation>{return this.send(operations.proposeOutcomeReconciliation,{id,body,key});}
   outcomeReconciliation(id:string):Promise<import('@olo-labs/toolgate-contracts').EnterpriseReconciliation>{return this.send(operations.getOutcomeReconciliation,{id});}

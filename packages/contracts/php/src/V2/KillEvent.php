@@ -14,12 +14,14 @@ final readonly class KillEvent implements \JsonSerializable {
         public KillMode $mode,
         public string $reason,
         public int $issuedAtUnixMs,
-        public string $signature
+        public string $signature,
+        public string $tenantId,
+        public int $authorizationEpoch
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['eventId', 'issuer', 'scope', 'mode', 'reason', 'issuedAtUnixMs', 'signature']) || array_diff(['eventId', 'issuer', 'scope', 'mode', 'reason', 'issuedAtUnixMs', 'signature'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['eventId', 'issuer', 'scope', 'mode', 'reason', 'issuedAtUnixMs', 'signature', 'tenantId', 'authorizationEpoch']) || array_diff(['eventId', 'issuer', 'scope', 'mode', 'reason', 'issuedAtUnixMs', 'signature', 'tenantId', 'authorizationEpoch'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -29,7 +31,9 @@ final readonly class KillEvent implements \JsonSerializable {
             KillMode::from($data['mode']),
             $data['reason'],
             $data['issuedAtUnixMs'],
-            $data['signature']
+            $data['signature'],
+            $data['tenantId'],
+            $data['authorizationEpoch']
         );
     }
 

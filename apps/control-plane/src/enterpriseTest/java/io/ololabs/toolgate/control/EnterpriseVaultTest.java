@@ -61,16 +61,20 @@ class EnterpriseVaultTest {
     assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,fence,ops).body(),EnterpriseSecretDelivery.class).value());
     assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"other-device",body,fence,ops)).status());
     assertEquals(404,assertThrows(Failure.class,()->vault.deliver(io.ololabs.toolgate.control.fixtures.Tenants.id("other"),tx->"device",body,fence,ops)).status(),"Another tenant cannot find this invocation");
-    // A subsequent attempt invalidates the first fence, even for the same tenant/device/invocation.
+    // A consumed nonce alone cannot replace an executing fence/lease: current
+    // recovery requires the archived whole-attempt proof exercised by recovery tests.
     String nextFence=UUID.randomUUID().toString();
-    store.transaction(admin.tenant(),true,tx->{var current=tx.enterprise().invocation(i.id());
+    assertThrows(Failure.class,()->store.transaction(admin.tenant(),true,tx->{var current=tx.enterprise().invocation(i.id());
         tx.enterprise().reserveNonce(new EnterpriseStore.Nonce(nextFence,i.id(),DirectoryService.digest(graph.codec.json(current.evaluation())),current.authorizationEpoch(),EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+10000,null));
         tx.enterprise().consumeNonce(nextFence,EnterpriseConformanceTest.NOW);
-        tx.enterprise().saveInvocation(new EnterpriseInvocation(current.id(),current.requestDigest(),current.evaluation(),current.state(),current.revision()+1,current.authorizationEpoch(),nextFence,current.expiresAtUnixMs(),current.completedResources(),current.downstreamIdempotencyKey(),current.resultDigest(),current.diagnosticId(),current.reconciliation(), null),EnterpriseConformanceTest.NOW,current.revision());return null;});
-    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status());
-    assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,nextFence,ops).body(),EnterpriseSecretDelivery.class).value());
+        tx.enterprise().saveInvocation(new EnterpriseInvocation(current.id(),current.requestDigest(),current.evaluation(),current.state(),current.revision()+1,current.authorizationEpoch(),nextFence,current.expiresAtUnixMs(),current.completedResources(),current.downstreamIdempotencyKey(),current.resultDigest(),current.diagnosticId(),current.reconciliation(), null),EnterpriseConformanceTest.NOW,current.revision());
+        tx.enterprise().saveExecutionLease(new EnterpriseStore.ExecutionLease(i.id(),nextFence,"device",EnterpriseConformanceTest.NOW+10000));return null;}));
+    assertEquals(fence,store.transaction(admin.tenant(),false,tx->tx.enterprise().invocation(i.id()).reservedNonce()));
+    assertNull(store.transaction(admin.tenant(),false,tx->tx.enterprise().nonce(nextFence)));
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,nextFence,ops)).status());
+    assertEquals("runtime-only-value",graph.codec.model(vault.deliver(admin.tenant(),tx->"device",body,fence,ops).body(),EnterpriseSecretDelivery.class).value());
     store.transaction(admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.GRANT.id("human-secret"));tx.save(before,new Directory(before.revision()+1,entries));return null;});
-    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,nextFence,ops)).status());assertFalse(vault.list(admin).body().contains("runtime-only-value"));
+    assertEquals(403,assertThrows(Failure.class,()->vault.deliver(admin.tenant(),tx->"device",body,fence,ops)).status());assertFalse(vault.list(admin).body().contains("runtime-only-value"));
  }
 
 }

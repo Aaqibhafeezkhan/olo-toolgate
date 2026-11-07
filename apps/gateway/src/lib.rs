@@ -14,6 +14,7 @@ pub mod relay;
 pub mod server;
 pub mod tenancy;
 pub mod toolhost;
+mod toolhost_tls;
 pub mod user_credential;
 pub mod validation;
 

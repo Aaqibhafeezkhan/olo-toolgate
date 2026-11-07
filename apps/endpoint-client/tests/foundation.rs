@@ -240,7 +240,7 @@ fn journal_binds_origin_before_key_creation_and_rejects_repointing_without_mutat
     let store = directory.store();
     let before = store.read("journal.json").unwrap().unwrap();
     let journal: serde_json::Value = serde_json::from_slice(&before).unwrap();
-    assert_eq!(journal["formatVersion"], 3);
+    assert_eq!(journal["formatVersion"], 4);
     assert_eq!(journal["serverUrl"], config(&directory).server_url);
     let key_hash = olo_toolgate_client::digest(&store.read("device-key").unwrap().unwrap());
     drop(initial);
@@ -685,5 +685,33 @@ async fn health_waits_for_poll_but_enrollment_retains_immediate_backpressure() {
             assert_eq!(response.error, Some(ErrorCode::Conflict));
             assert!(response.challenge.is_none());
         }
+    }
+}
+
+#[test]
+fn prior_native_journal_and_corrupted_revocation_versions_are_refused_without_conversion() {
+    for prior in [true, false] {
+        let directory = Directory::new();
+        let initial = service(&directory);
+        drop(initial);
+        let store = directory.store();
+        let key = store.read("device-key").unwrap().unwrap();
+        let mut journal: serde_json::Value =
+            serde_json::from_slice(&store.read("journal.json").unwrap().unwrap()).unwrap();
+        if prior {
+            journal["formatVersion"] = 3.into();
+        } else {
+            journal["revocations"]["version"] = 0.into();
+        }
+        let bytes = serde_json::to_vec(&journal).unwrap();
+        store.write("journal.json", &bytes).unwrap();
+        assert!(
+            ClientService::open(config(&directory), directory.store(), |_| panic!(
+                "unsupported state must precede transport"
+            ))
+            .is_err()
+        );
+        assert_eq!(store.read("journal.json").unwrap().unwrap(), bytes);
+        assert_eq!(store.read("device-key").unwrap().unwrap(), key);
     }
 }

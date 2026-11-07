@@ -5,7 +5,7 @@
 
 Qualified Python pools can use the [rootless OCI tier](../../docs/operations/rootless-tool-host.md),
 with a permit-bound runtime image, enforced limits and container teardown.
-`HOST_NATIVE` remains the legacy compatibility tier and provides no container isolation.
+`HOST_NATIVE` is the explicit unisolated execution tier and provides no container isolation.
 
 ## Responsibility
 
@@ -59,6 +59,56 @@ Every accepted permit must name `control.tenantId`, even when another tenant use
 Enrolled hosts persist a versioned UUID binding before creating a device key or contacting Control. Changing the configured tenant fails without rewriting that state or key. Expiry, device deletion and renewed enrollment retain the UUID. Unsupported development journals or orphaned older keys are rejected unchanged; use an explicitly fresh identity directory rather than converting or deleting them automatically. Enrolled hosts persist the verified v2 manifest and signing-key floor alongside the UUID and canonical Control origin. An anonymous HTTPS client fetches discovery without presenting a device certificate. Certificates are checked against that tenant's published device-CA ring, exact identity claims, key fingerprint, client-only EKU and lifetime before use. Unknown CA IDs trigger a fixed-origin HTTPS refresh; ordinary untrusted envelopes cannot introduce an unknown signer. Deletion and re-enrollment retain the trust floor and origin.
 
 Preprovisioned hosts use the same v2 verification and tenant certificate rules. Mount only that tenant's certificate/key and public TLS roots; `identityTrustDirectory/authority.json` persists the owner, origin and trust floor. Startup verifies the host ID and refreshes discovery before readiness; subsequent requests refresh at least every four minutes. A changed origin, foreign certificate or retired CA fails before authenticated traffic. Protect this directory and isolate tenant processes, mounts and networks; these checks do not provide an operating-system sandbox.
+
+## Revocation delivery (S22 in implementation)
+
+HTTPS hosts require a current signed kill snapshot before readiness or admission.
+The host obtains organization public keys and signed snapshots directly from its
+fixed Control origin using the accepted device certificate, then maintains an
+outbound two-second long poll. The private workDir/revocation journal persists
+tenant/origin binding, verified events and the epoch floor before acknowledging
+delivery. Restarts require a fresh authenticated fetch; unsupported journals are
+refused intact. Repair persistence faults before restarting. Protect the work
+directory from untrusted writers.
+
+Online acceptance must match the exact permit nonce, live deadline-clipped lease
+and verified package/runtime facts. Control returns the frozen attempt scope,
+including placement; subsequent host registration changes do not change it.
+Matching TERMINATE updates stop healthy execution; STOP_NEW preserves running
+attempts. Pending admissions register before T5; termination of an older execution
+survives recovery and full-fetch history pruning. The accepted epoch is bound once,
+so later metadata cannot revive work. Heartbeat and monotonic lease expiry remain
+independent of polling.
+
+On configured dedicated mTLS routes the Gateway also forwards Control-signed
+envelopes to POST /v1/kills. Hosts verify with their direct-Control keys, persist
+a merge and notify cancellation before their own PUSH acknowledgement. Relays
+cannot supply trust keys or prune state. Development HTTP dispatch rejects this
+route. Gateway delivery failures and recovery are logged without granting authority.
+The short admission permit bounds claiming a dispatch; an exactly consumed or
+admitted attempt's status instead observes its signed execution deadline, clipped
+to the original operation expiry. This metadata never renews its live lease.
+Local component tests do not qualify the full S22 connectivity SLO or compromised
+root-host containment; see the authoritative
+[execution status](../../docs/security/zero-trust-execution-status.md).
+
+## Authenticated inbound dispatch (S22 in implementation)
+
+Configure dispatchTls with certificatePath, privateKeyPath, gatewayCaPath and
+gatewayCertificates (one to four exact current Gateway leaf PEM paths). Gateway
+leaves require the host tenant's canonical UUID as their sole OU and client-only
+EKU. TLS verifies the dedicated client CA before the host compares the accepted
+leaf with these pins. Forwarded certificate headers are never used. Admission
+still requires the signed permit and online nonce consumption.
+
+Without dispatchTls, a production host is outbound-only and accepts calls through
+Control's authenticated relay. Plain HTTP dispatch requires the separate explicit
+developmentDispatchHttp flag and a loopback address. This setting does not enable
+the broker's developmentLoopbackHttp egress policy. TLS and the development
+dispatch flag cannot be combined. Inbound keys/pins and the socket are validated
+before pull/authority tasks can accept work. The listener bounds simultaneous
+connections and TLS/header waits. Exact leaf rotation requires installing the
+new pin before switching the corresponding certificate.
 
 ## Dispatch
 
@@ -156,7 +206,12 @@ Control takes these only from a registered Tool Host whose device id is the perm
 
 ## Not yet
 
-- Kill pushes, and the mTLS dispatch listener for Gateways on other machines (pull mode covers hosts the Gateway cannot reach).
-- A result outbox: a report Control does not take is logged, not retried.
-- Sandbox isolation beyond a clean environment and its own directory: the network namespace, firewall and container tiers of platform-requirements.md §11.5 and §11.6.
+- Full containment/interface qualification across every proposed platform tier; HOST_NATIVE alone is not an operating-system sandbox. Qualified OCI execution and its independent evidence remain separately configured.
 - Tunnel destinations, TCP, OAuth 2.0, token exchange and connection auth, streaming routes.
+
+Sensitive pools may set limits.controlLossGraceMs (1,000–120,000 ms) to a
+stricter healthy-host Control-loss bound. Successful heartbeats refresh this
+monotonic window; renewal scheduling is shortened accordingly. An unavailable
+or hung renewal cannot extend either this window or the accepted execution
+lease. The default uses the accepted lease alone. This does not bound a
+root-compromised host, and native endpoint policy remains independently scoped.

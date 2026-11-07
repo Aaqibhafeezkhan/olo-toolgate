@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/kill.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Kill switch events",
-  "description": "Grow-only signed kill and recovery events (platform-requirements.md §15).",
+  "description": "Grow-only signed kill and recovery events (platform-requirements.md \u00a715).",
   "$ref": "#/$defs/KillEvent",
   "$defs": {
     "KillMode": {
@@ -85,6 +85,15 @@
         },
         "signature": {
           "$ref": "identifiers.schema.json#/$defs/CompactJws"
+        },
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -94,7 +103,9 @@
         "mode",
         "reason",
         "issuedAtUnixMs",
-        "signature"
+        "signature",
+        "tenantId",
+        "authorizationEpoch"
       ]
     },
     "RecoveryEvent": {
@@ -132,6 +143,15 @@
         },
         "signature": {
           "$ref": "identifiers.schema.json#/$defs/CompactJws"
+        },
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -140,7 +160,9 @@
         "supersedes",
         "reviewers",
         "issuedAtUnixMs",
-        "signature"
+        "signature",
+        "tenantId",
+        "authorizationEpoch"
       ]
     },
     "KillPush": {
@@ -171,7 +193,9 @@
           "maxItems": 1024
         },
         "signature": {
-          "$ref": "identifiers.schema.json#/$defs/CompactJws"
+          "type": "string",
+          "maxLength": 2097152,
+          "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$"
         }
       },
       "required": [
@@ -292,6 +316,410 @@
         "kills",
         "recoveries",
         "authorizationEpoch"
+      ]
+    },
+    "KillAcknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Acknowledgement from a socket-authenticated component; identity is never caller supplied.",
+      "properties": {
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "deliveryPath": {
+          "$ref": "kill.schema.json#/$defs/KillDeliveryPath"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "deliveryPath"
+      ]
+    },
+    "KillDeliveryPath": {
+      "type": "string",
+      "enum": [
+        "PUSH",
+        "CHECK_IN",
+        "POLL"
+      ],
+      "description": "Verified kill delivery channel."
+    },
+    "KillProposalKind": {
+      "type": "string",
+      "enum": [
+        "KILL",
+        "RECOVERY"
+      ],
+      "description": "Reviewed emergency change purpose."
+    },
+    "KillProposalState": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "APPLIED",
+        "REJECTED",
+        "EXPIRED"
+      ],
+      "description": "Append-only proposal projection."
+    },
+    "KillReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reviewerUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "reviewedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "reviewerUserId",
+        "approved",
+        "reviewedAtUnixMs"
+      ],
+      "description": "One authenticated independent review of retained kill or recovery intent."
+    },
+    "KillProposalDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "approve": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "approve"
+      ],
+      "description": "Review the exact retained proposal; reviewer identity is authenticated."
+    },
+    "KillProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Immutable request and append-only reviews; no execution authority.",
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "requesterUserId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "kind": {
+          "$ref": "kill.schema.json#/$defs/KillProposalKind"
+        },
+        "state": {
+          "$ref": "kill.schema.json#/$defs/KillProposalState"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "createdAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "scope": {
+          "$ref": "kill.schema.json#/$defs/KillScope"
+        },
+        "mode": {
+          "$ref": "kill.schema.json#/$defs/KillMode"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "supersedes": {
+          "type": "array",
+          "items": {
+            "$ref": "kill.schema.json#/$defs/EventId"
+          },
+          "maxItems": 256,
+          "uniqueItems": true
+        },
+        "reviews": {
+          "type": "array",
+          "items": {
+            "$ref": "kill.schema.json#/$defs/KillReview"
+          },
+          "maxItems": 2
+        },
+        "eventId": {
+          "$ref": "kill.schema.json#/$defs/EventId"
+        }
+      },
+      "required": [
+        "id",
+        "requesterUserId",
+        "kind",
+        "state",
+        "revision",
+        "authorizationEpoch",
+        "createdAtUnixMs",
+        "expiresAtUnixMs",
+        "reason",
+        "supersedes",
+        "reviews"
+      ]
+    },
+    "KillTrustKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Organization fleet public key delivered only by the fixed certificate-authenticated Control origin.",
+      "properties": {
+        "kid": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "n": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "e": {
+          "type": "string",
+          "const": "AQAB"
+        }
+      },
+      "required": [
+        "kid",
+        "n",
+        "e"
+      ]
+    },
+    "KillTrustDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Direct HTTPS key bootstrap; never accept it from a worker or relayed push.",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "kill.schema.json#/$defs/KillTrustKey"
+          }
+        }
+      },
+      "required": [
+        "tenantId",
+        "authorizationEpoch",
+        "keys"
+      ]
+    },
+    "KillExecutionScope": {
+      "type": "object",
+      "description": "Immutable per-attempt Control facts returned only after online permit consumption. Absent facts are unknown and match scoped kills conservatively; empty pool/image means known not applicable.",
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "packageDigest": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "publisher": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "toolId": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "poolId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "imageDigest": {
+          "type": "string",
+          "maxLength": 256,
+          "pattern": "^(|sha256:[a-f0-9]{64})$"
+        }
+      },
+      "required": [
+        "packageDigest",
+        "toolId"
+      ]
+    },
+    "BreakGlassApprovalClaims": {
+      "type": "object",
+      "description": "Exact JCS offline approval payload. Issued-to-expiry window is at most ten minutes; two or three distinct current operator keys must approve identical claims.",
+      "additionalProperties": false,
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "requestId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "scope": {
+          "$ref": "kill.schema.json#/$defs/KillScope"
+        },
+        "mode": {
+          "$ref": "kill.schema.json#/$defs/KillMode"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "issuedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "notAfterUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "tenantId",
+        "requestId",
+        "scope",
+        "mode",
+        "reason",
+        "issuedAtUnixMs",
+        "notAfterUnixMs"
+      ]
+    },
+    "NativePermitConsumed": {
+      "type": "object",
+      "description": "Current native endpoint consumption: accepted invocation, live lease and frozen kill facts from one Control transaction. Not a Tool Host admission response.",
+      "additionalProperties": false,
+      "properties": {
+        "invocation": {
+          "$ref": "../v1/enterprise.schema.json#/$defs/EnterpriseInvocation"
+        },
+        "fencingToken": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "leaseExpiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "killScope": {
+          "$ref": "kill.schema.json#/$defs/KillExecutionScope"
+        }
+      },
+      "required": [
+        "invocation",
+        "fencingToken",
+        "leaseExpiresAtUnixMs",
+        "authorizationEpoch",
+        "killScope"
+      ]
+    },
+    "KillComponentKind": {
+      "type": "string",
+      "enum": [
+        "TOOL_HOST",
+        "ENDPOINT",
+        "GATEWAY"
+      ],
+      "description": "Registered revocation consumer kind."
+    },
+    "KillComponentDelivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Current registered consumer and its latest authenticated acknowledgement, if any.",
+      "properties": {
+        "kind": {
+          "$ref": "kill.schema.json#/$defs/KillComponentKind"
+        },
+        "componentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "authorizationEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "acknowledgedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "deliveryPath": {
+          "$ref": "kill.schema.json#/$defs/KillDeliveryPath"
+        }
+      },
+      "required": [
+        "kind",
+        "componentId"
+      ]
+    },
+    "KillOverview": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authoritative current kill state, registered delivery status and retained archive counts.",
+      "properties": {
+        "state": {
+          "$ref": "kill.schema.json#/$defs/KillPush"
+        },
+        "components": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "kill.schema.json#/$defs/KillComponentDelivery"
+          }
+        },
+        "retainedEventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "archivedEventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "state",
+        "components",
+        "retainedEventCount",
+        "archivedEventCount",
+        "observedAtUnixMs"
       ]
     }
   }

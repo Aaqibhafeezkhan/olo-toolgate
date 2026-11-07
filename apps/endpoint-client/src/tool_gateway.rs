@@ -92,6 +92,9 @@ pub struct HttpsGateway {
     config: crate::config::Config,
     settings: Settings,
     executing: tokio::sync::Mutex<Option<EnterpriseInvocation>>,
+    authority: std::sync::Mutex<Option<olo_toolgate_contracts::v2::NativePermitConsumed>>,
+    kill_execution: std::sync::Mutex<Option<olo_toolgate_tenant_identity::revocation::Execution>>,
+    revocations: Arc<crate::revocation::Shared>,
 }
 impl HttpsGateway {
     pub async fn catalog(&self, agent: Option<&str>) -> Result<LocalToolCatalog> {
@@ -112,10 +115,11 @@ impl HttpsGateway {
         self.contracts
             .decode("LocalToolCatalog", &body(response).await?)
     }
-    pub fn new(
+    pub(crate) fn new(
         settings: &Settings,
         config: &crate::config::Config,
         contracts: Arc<Contracts>,
+        revocations: Arc<crate::revocation::Shared>,
     ) -> Result<Self> {
         settings.validate()?;
         Ok(Self {
@@ -126,6 +130,9 @@ impl HttpsGateway {
             config: config.clone(),
             settings: settings.clone(),
             executing: tokio::sync::Mutex::new(None),
+            authority: std::sync::Mutex::new(None),
+            kill_execution: std::sync::Mutex::new(None),
+            revocations,
         })
     }
     fn device(
@@ -191,10 +198,33 @@ impl HttpsGateway {
     }
 }
 impl AuthorizationPort for HttpsGateway {
+    fn revoked(&self) -> Call<'_, ()> {
+        Box::pin(async {
+            let accepted = self
+                .authority
+                .lock()
+                .map_err(|_| Failure::Unavailable)?
+                .clone()
+                .ok_or(Failure::Unauthorized)?;
+            let deadline = accepted.invocation.expires_at_unix_ms;
+            let (identity, control, _) = self.device()?;
+            let execution = self
+                .kill_execution
+                .lock()
+                .map_err(|_| Failure::Unavailable)?
+                .clone()
+                .ok_or(Failure::Unauthorized)?;
+            tokio::select! {
+                _=crate::lease::supervise(&control,identity,accepted,deadline)=>{},
+                _=self.revocations.terminated(&execution)=>{},
+            }
+            Err(Failure::Revoked)
+        })
+    }
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
         Box::pin(async move { self.authorize_bound(request).await.map(|_| ()) })
     }
-    fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, Option<u64>> {
+    fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, u64> {
         Box::pin(async move {
             use crate::transport::ControlPort;
             let mut executing = self.executing.lock().await;
@@ -262,7 +292,17 @@ impl AuthorizationPort for HttpsGateway {
                 "effect-journal.json",
                 &self.contracts.encode("EnterpriseInvocation", &i)?,
             )?;
-            let next = control
+            let execution =
+                self.revocations
+                    .register(olo_toolgate_tenant_identity::revocation::Subject {
+                        package_id: None,
+                        package_digest: Some(e.package_digest.clone()),
+                        publisher: None,
+                        tool_id: Some(e.tool_id.clone()),
+                        pool_id: None,
+                        image_digest: None,
+                    })?;
+            let accepted = control
                 .consume_effect(
                     identity,
                     EnterprisePermitConsumption {
@@ -275,20 +315,26 @@ impl AuthorizationPort for HttpsGateway {
                     },
                 )
                 .await?;
-            if next.id != i.id
-                || next.evaluation != i.evaluation
-                || next.state != EnterpriseInvocationState::Executing
-                || next.revision != i.revision + 1
-            {
-                return Err(Failure::Unauthorized);
-            }
+            crate::execution::accepted_native(&accepted, &i)?;
+            execution
+                .accept(
+                    accepted.authorization_epoch,
+                    crate::revocation::subject(&accepted.kill_scope),
+                )
+                .map_err(|_| Failure::Unauthorized)?;
+            *self
+                .kill_execution
+                .lock()
+                .map_err(|_| Failure::Unavailable)? = Some(execution);
+            *self.authority.lock().map_err(|_| Failure::Unavailable)? = Some(accepted.clone());
+            let next = accepted.invocation;
             store.write(
                 "effect-journal.json",
                 &self.contracts.encode("EnterpriseInvocation", &next)?,
             )?;
             let until = next.expires_at_unix_ms;
             *executing = Some(next);
-            Ok(Some(until))
+            Ok(until)
         })
     }
     fn complete(
@@ -332,6 +378,7 @@ impl AuthorizationPort for HttpsGateway {
                 &self.contracts.encode("EnterpriseInvocation", &next)?,
             )?;
             *executing = None;
+            *self.authority.lock().map_err(|_| Failure::Unavailable)? = None;
             Ok(())
         })
     }

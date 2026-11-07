@@ -19,6 +19,7 @@ use std::{sync::Arc, time::Instant};
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Journal {
     format_version: u64,
+    revocations: crate::revocation::Stored,
     server_url: String,
     tenant_id: Option<String>,
     manifest: Option<TenantDiscovery>,
@@ -56,6 +57,7 @@ pub struct ClientService {
     /// Shared by every gateway connection on this device; the runtime installs the saved switch.
     pub(crate) power: Arc<crate::power::Power>,
     remote_job: Option<crate::remote::Job>,
+    revocations: Arc<crate::revocation::Shared>,
     remote_result: Option<RemoteToolResult>,
     adoption: Option<EndpointAdoption>,
     deployment: crate::deployment::State,
@@ -78,12 +80,14 @@ pub struct ClientService {
 /// Control relays and authorizes (ADR 027), so signed releases work on devices with no local Gateway settings.
 fn local_authorization(
     config: &crate::config::Config,
+    revocations: Arc<crate::revocation::Shared>,
 ) -> Result<Arc<dyn crate::execution::AuthorizationPort>> {
     Ok(match &config.gateway {
         Some(gateway) => Arc::new(crate::tool_gateway::HttpsGateway::new(
             gateway,
             config,
             Arc::new(crate::contracts::Contracts::new()?),
+            revocations,
         )?),
         None => Arc::new(crate::execution::RelayOnly),
     })
@@ -91,22 +95,26 @@ fn local_authorization(
 
 fn read_journal(config: &Config, store: &ProtectedStore) -> Result<Journal> {
     let journal: Journal = match store.read("journal.json")? {
-        Some(bytes) => serde_json::from_slice(&bytes).map_err(|_| Failure::Validation)?,
+        Some(bytes) => serde_json::from_value(
+            crate::json::strict_json(&bytes).map_err(|_| Failure::Validation)?,
+        )
+        .map_err(|_| Failure::Validation)?,
         None => {
             if store.read("device-key")?.is_some() {
                 return Err(Failure::Validation);
             }
             Journal {
-                format_version: 3,
+                format_version: 4,
                 server_url: crate::config::origin(&config.server_url)?,
                 tenant_id: config.tenant_id.clone(),
                 ..Journal::default()
             }
         }
     };
-    if journal.format_version != 3 {
+    if journal.format_version != 4 {
         return Err(Failure::Validation);
     }
+    crate::revocation::validate(journal.tenant_id.as_deref(), &journal.revocations)?;
     if journal.server_url != crate::config::origin(&config.server_url)? {
         return Err(Failure::TenantMismatch);
     }
@@ -219,10 +227,12 @@ impl ClientService {
         } else {
             EndpointState::Unenrolled
         };
+        let revocations =
+            crate::revocation::Shared::restore(journal.tenant_id.as_deref(), &journal.revocations)?;
         let execution = match &config.execution {
             Some(settings) => Some(crate::execution::Manager::new(
                 settings.clone(),
-                local_authorization(&config)?,
+                local_authorization(&config, revocations.clone())?,
             )?),
             None => None,
         };
@@ -236,6 +246,7 @@ impl ClientService {
             schedule_changed: Arc::new(tokio::sync::Notify::new()),
             power: crate::power::Power::volatile(),
             remote_job: None,
+            revocations,
             remote_result: None,
             adoption: match store.read("adoption.json")? {
                 Some(bytes) => {
@@ -304,6 +315,7 @@ impl ClientService {
             settings,
             &self.config,
             Arc::new(crate::contracts::Contracts::new()?),
+            self.revocations.clone(),
         )?;
         let visible = gateway.catalog(agent).await?;
         let installed = self.local_catalog();
@@ -362,10 +374,24 @@ impl ClientService {
             .output)
     }
     fn save(&self) -> Result<()> {
-        self.store.write(
+        let result = self.store.write(
             "journal.json",
             &serde_json::to_vec(&self.journal).map_err(|_| Failure::Validation)?,
-        )
+        );
+        if result.is_err() {
+            self.revocations.fail();
+        }
+        result
+    }
+    async fn refresh_kills(&mut self, identity: &DeviceIdentity) -> Result<()> {
+        let trust = self.control.kill_keys(identity.clone()).await?;
+        let push = self.control.kill_state(identity.clone()).await?;
+        let prepared = self.revocations.prepare(&identity.tenant_id, trust, push)?;
+        let epoch = prepared.epoch;
+        self.journal.revocations = prepared.stored.clone();
+        self.save()?;
+        self.revocations.publish(prepared)?;
+        self.control.kill_ack(identity.clone(), epoch).await
     }
     /// Runtime status is distinct from enrolled-device readiness.
     pub fn runtime_health(&self) -> Result<LocalRuntimeHealth> {
@@ -466,7 +492,7 @@ impl ClientService {
             return Ok(());
         }
         let base = self.config.execution.clone().ok_or(Failure::Unsupported)?;
-        let authorization = local_authorization(&self.config)?;
+        let authorization = local_authorization(&self.config, self.revocations.clone())?;
         // Fence old assigned tools immediately, preserving only administrator-local registrations.
         if let Some(old) = self.execution.take() {
             old.shutdown().await?;
@@ -717,6 +743,7 @@ impl ClientService {
             identity.clone(),
             task,
             self.activity.clone(),
+            self.revocations.clone(),
         ));
         Ok(())
     }
@@ -1167,15 +1194,9 @@ impl ClientService {
             let bytes =
                 crate::contracts::Contracts::new()?.encode("EndpointAdoption", &configuration)?;
             self.store.write("adoption.json", &bytes)?;
-            if self
-                .adoption
-                .as_ref()
-                .is_some_and(|old| old.authorization_epoch != configuration.authorization_epoch)
-            {
-                if let Some(job) = &self.remote_job {
-                    job.cancel();
-                }
-            }
+            // Metadata alone cannot distinguish STOP_NEW or an unrelated scoped kill
+            // from revoked execution authority. Signed kill state and the independent
+            // live-lease watchdog supervise already consumed work.
             self.adoption = Some(configuration);
         }
         self.journal.sequence = request.sequence;
@@ -1190,6 +1211,8 @@ impl ClientService {
             result = "accepted",
             sequence = self.journal.sequence
         );
+        let identity = self.journal.identity.clone().ok_or(Failure::Unauthorized)?;
+        self.refresh_kills(&identity).await?;
         // Switched off: no task, package or builder work is taken from this or any later reply.
         if !self.power.is_on() {
             return Ok(());
@@ -1295,8 +1318,39 @@ mod tests {
         interval_ms: AtomicU64,
         consumption: std::sync::Mutex<Option<EnterpriseInvocation>>,
         reports: std::sync::Mutex<Vec<Option<DevicePower>>>,
+        adoption: std::sync::Mutex<Option<EndpointAdoption>>,
+        kill: std::sync::Mutex<(u64, Option<String>)>,
     }
     impl ControlPort for Gateway {
+        fn kill_keys(
+            &self,
+            identity: DeviceIdentity,
+        ) -> Call<'_, olo_toolgate_contracts::v2::KillTrustDocument> {
+            Box::pin(async move {
+                let epoch = self.kill.lock().unwrap().0;
+                Ok(crate::revocation::testing::trust(
+                    &identity.tenant_id,
+                    epoch,
+                ))
+            })
+        }
+        fn kill_state(
+            &self,
+            identity: DeviceIdentity,
+        ) -> Call<'_, olo_toolgate_contracts::v2::KillPush> {
+            Box::pin(async move {
+                let (epoch, mode) = self.kill.lock().unwrap().clone();
+                Ok(crate::revocation::testing::push(
+                    &identity.tenant_id,
+                    epoch,
+                    mode.as_deref(),
+                ))
+            })
+        }
+        fn kill_ack(&self, _identity: DeviceIdentity, _epoch: u64) -> Call<'_, ()> {
+            Box::pin(async { Ok(()) })
+        }
+
         fn ping(&self, request: EndpointPresencePing) -> Call<'_, EndpointConnectionDirective> {
             Box::pin(async move {
                 self.pings.fetch_add(1, Ordering::SeqCst);
@@ -1321,7 +1375,7 @@ mod tests {
             &self,
             identity: DeviceIdentity,
             request: EnterprisePermitConsumption,
-        ) -> Call<'_, EnterpriseInvocation> {
+        ) -> Call<'_, olo_toolgate_contracts::v2::NativePermitConsumed> {
             Box::pin(async move {
                 if self.revoked.load(Ordering::SeqCst) {
                     return Err(Failure::Revoked);
@@ -1340,7 +1394,20 @@ mod tests {
                 assert_eq!(value.evaluation.package_digest, request.package_digest);
                 value.state = EnterpriseInvocationState::Executing;
                 value.revision += 1;
-                Ok(value)
+                Ok(olo_toolgate_contracts::v2::NativePermitConsumed {
+                    fencing_token: value.reserved_nonce.clone().ok_or(Failure::Validation)?,
+                    lease_expires_at_unix_ms: (crate::now() + 30000).min(value.expires_at_unix_ms),
+                    authorization_epoch: value.authorization_epoch,
+                    kill_scope: olo_toolgate_contracts::v2::KillExecutionScope {
+                        package_id: None,
+                        package_digest: format!("sha256:{}", value.evaluation.package_digest),
+                        publisher: None,
+                        tool_id: value.evaluation.tool_id.clone(),
+                        pool_id: None,
+                        image_digest: None,
+                    },
+                    invocation: value,
+                })
             })
         }
         fn discovery(&self) -> Call<'_, SignedTenantDiscovery> {
@@ -1387,7 +1454,7 @@ mod tests {
                     server_time_unix_ms: crate::now(),
                     next_interval_ms: self.interval_ms.load(Ordering::SeqCst),
                     identity: None,
-                    adoption: None,
+                    adoption: self.adoption.lock().unwrap().clone(),
                     task: None,
                     server_name: None,
                 })
@@ -1417,6 +1484,8 @@ mod tests {
     }
 
     fn test_service() -> (ClientService, Arc<Gateway>, std::path::PathBuf) {
+        // Key provisioning is outside the scheduling/timer assertions below.
+        let _ = crate::revocation::testing::trust("10000000-0000-4000-8000-000000000001", 0);
         #[cfg(windows)]
         let base = std::path::PathBuf::from(std::env::var_os("ProgramData").unwrap());
         #[cfg(target_os = "macos")]
@@ -1474,6 +1543,8 @@ mod tests {
             interval_ms: AtomicU64::new(500),
             consumption: std::sync::Mutex::new(None),
             reports: std::sync::Mutex::new(vec![]),
+            adoption: std::sync::Mutex::new(None),
+            kill: std::sync::Mutex::new((0, None)),
         });
         let service = ClientService::open(config, store, |_| Ok(gateway.clone())).unwrap();
         (service, gateway, directory)
@@ -1630,10 +1701,13 @@ mod tests {
         }
     }
     fn fixtures() -> serde_json::Value {
-        serde_json::from_str(include_str!(
+        let mut value: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/contracts/v1/valid.json"
         ))
-        .unwrap()
+        .unwrap();
+        // These service fixtures represent an enrolled current tenant, not generic identifier examples.
+        value["DeviceIdentity"]["tenantId"] = "10000000-0000-4000-8000-000000000001".into();
+        value
     }
     fn remote_task(identity: &DeviceIdentity, deadline: u64) -> RemoteToolTask {
         let mut task: RemoteToolTask =
@@ -1699,6 +1773,7 @@ mod tests {
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         gateway.blocked.store(true, Ordering::SeqCst);
         assert_eq!(service.tick().await, Err(Failure::Unavailable));
@@ -1721,6 +1796,7 @@ mod tests {
         let tenant = identity.tenant_id.clone();
         let device = identity.device_id.clone();
         let fingerprint = service.key.fingerprint();
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         gateway.tenant_mismatch.store(true, Ordering::SeqCst);
         assert_eq!(service.tick().await, Err(Failure::TenantMismatch));
@@ -1749,6 +1825,7 @@ mod tests {
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         service.tick().await.unwrap();
         assert!(service.health().ready);
@@ -1847,6 +1924,7 @@ mod tests {
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         service.journal.sequence = 4;
         for state in [EndpointState::Offline, EndpointState::Revoked] {
@@ -1994,6 +2072,7 @@ mod tests {
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         service.journal.sequence = 4;
         gateway.deleted.store(true, Ordering::SeqCst);
@@ -2082,6 +2161,7 @@ mod tests {
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() - 1000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         assert_eq!(service.tick().await, Err(Failure::Unsupported));
         assert_eq!(gateway.polls.load(Ordering::SeqCst), 0);
@@ -2096,6 +2176,7 @@ mod tests {
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         service.tick().await.unwrap();
         assert_eq!(service.next_delay_millis(), 500);
@@ -2116,15 +2197,64 @@ mod tests {
         std::fs::remove_dir_all(directory).unwrap();
     }
     #[tokio::test]
+    async fn adoption_epoch_changes_do_not_cancel_consumed_work_during_stop_new() {
+        let (mut service, gateway, directory) = test_service();
+        let mut identity: DeviceIdentity =
+            serde_json::from_value(fixtures()["DeviceIdentity"].clone()).unwrap();
+        identity.expires_at_unix_ms = crate::now() + 60000;
+        let mut manifest = tenant_manifest();
+        manifest.expires_at_unix_ms = crate::now() + 120000;
+        let adoption = EndpointAdoption {
+            server_id: manifest.server_id.clone(),
+            device_id: identity.device_id.clone(),
+            revision: 1,
+            authorization_epoch: 0,
+            digest: "a".repeat(64),
+        };
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
+        service.journal.identity = Some(identity);
+        service.journal.manifest = Some(manifest);
+        service.adoption = Some(adoption.clone());
+        service.remote_job = Some(crate::remote::Job::waiting(
+            serde_json::from_value(fixtures()["RemoteToolTask"].clone()).unwrap(),
+        ));
+        *gateway.adoption.lock().unwrap() = Some(EndpointAdoption {
+            revision: 2,
+            authorization_epoch: 1,
+            ..adoption
+        });
+        *gateway.kill.lock().unwrap() = (1, Some("STOP_NEW".into()));
+        service.tick().await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        assert!(
+            service
+                .remote_job
+                .as_mut()
+                .unwrap()
+                .completed()
+                .await
+                .is_none(),
+            "Adoption metadata must not override the signed STOP_NEW semantics"
+        );
+        assert_eq!(service.adoption.as_ref().unwrap().authorization_epoch, 1);
+        assert_eq!(
+            service.revocations.require_epoch(0),
+            Err(Failure::Unauthorized)
+        );
+        assert_eq!(service.revocations.require_epoch(1), Ok(()));
+        service.remote_job.as_ref().unwrap().cancel();
+        drop(service);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[tokio::test]
     async fn polls_continue_during_a_job_and_revocation_cancels_it() {
         let (mut service, gateway, directory) = test_service();
-        let fixtures: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/contracts/v1/valid.json"
-        ))
-        .unwrap();
+        let fixtures = fixtures();
         let mut identity: DeviceIdentity =
             serde_json::from_value(fixtures["DeviceIdentity"].clone()).unwrap();
         identity.expires_at_unix_ms = crate::now() + 60000;
+        service.journal.tenant_id = Some(identity.tenant_id.clone());
         service.journal.identity = Some(identity);
         service.config.deployment = Some(crate::deployment::Settings {
             organization_keys: vec![],

@@ -853,7 +853,9 @@
     "mode": "TERMINATE",
     "reason": "Advisory TG-2026-07",
     "issuedAtUnixMs": 1791676800000,
-    "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+    "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "authorizationEpoch": 1
   },
   "KillEventPage": {
     "kills": [
@@ -867,7 +869,9 @@
         "mode": "TERMINATE",
         "reason": "Advisory TG-2026-07",
         "issuedAtUnixMs": 1791676800000,
-        "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+        "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "authorizationEpoch": 1
       }
     ],
     "recoveries": [],
@@ -889,7 +893,9 @@
         "mode": "TERMINATE",
         "reason": "Advisory TG-2026-07",
         "issuedAtUnixMs": 1791676800000,
-        "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+        "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "authorizationEpoch": 1
       }
     ],
     "recoveries": [
@@ -904,7 +910,9 @@
           "admin-2"
         ],
         "issuedAtUnixMs": 1791680400000,
-        "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+        "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+        "tenantId": "10000000-0000-4000-8000-000000000001",
+        "authorizationEpoch": 1
       }
     ],
     "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
@@ -1390,7 +1398,16 @@
   "PermitConsumed": {
     "invocationId": "inv-5",
     "fencingToken": "nonce-77",
-    "leaseExpiresAtUnixMs": 1791676830000
+    "leaseExpiresAtUnixMs": 1791676830000,
+    "authorizationEpoch": 1,
+    "killScope": {
+      "packageId": "acme.orders",
+      "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "publisher": "Acme",
+      "toolId": "acme.orders/orders.refund",
+      "poolId": "pool-1",
+      "imageDigest": ""
+    }
   },
   "PermitConsumption": {
     "invocationId": "inv-5",
@@ -1466,7 +1483,9 @@
       "admin-2"
     ],
     "issuedAtUnixMs": 1791680400000,
-    "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+    "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "authorizationEpoch": 1
   },
   "RecoveryRequest": {
     "supersedes": [
@@ -3469,5 +3488,176 @@
     "claimToken": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "httpRequestDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "executorKeySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "KillAcknowledgement": {
+    "authorizationEpoch": 1,
+    "deliveryPath": "POLL"
+  },
+  "KillDeliveryPath": "POLL",
+  "KillProposalKind": "KILL",
+  "KillProposalState": "PENDING",
+  "KillReview": {
+    "reviewerUserId": "reviewer-1",
+    "approved": true,
+    "reviewedAtUnixMs": 1791676800000
+  },
+  "KillProposalDecision": {
+    "expectedRevision": 1,
+    "approve": true
+  },
+  "KillProposal": {
+    "id": "kill-proposal",
+    "requesterUserId": "maker",
+    "kind": "KILL",
+    "state": "PENDING",
+    "revision": 1,
+    "authorizationEpoch": 1,
+    "createdAtUnixMs": 1791676800000,
+    "expiresAtUnixMs": 1791677400000,
+    "scope": {
+      "kind": "TENANT"
+    },
+    "mode": "TERMINATE",
+    "reason": "Emergency",
+    "supersedes": [],
+    "reviews": []
+  },
+  "KillTrustKey": {
+    "kid": "organization",
+    "n": "gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "e": "AQAB"
+  },
+  "KillTrustDocument": {
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "authorizationEpoch": 1,
+    "keys": [
+      {
+        "kid": "organization",
+        "n": "gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "e": "AQAB"
+      }
+    ]
+  },
+  "KillExecutionScope": {
+    "packageId": "acme.orders",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "publisher": "Acme",
+    "toolId": "acme.orders/orders.refund",
+    "poolId": "pool-1",
+    "imageDigest": ""
+  },
+  "BreakGlassApprovalClaims": {
+    "tenantId": "10000000-0000-4000-8000-000000000001",
+    "requestId": "incident-551",
+    "scope": {
+      "kind": "TOOL",
+      "value": "acme.orders/orders.refund"
+    },
+    "mode": "STOP_NEW",
+    "reason": "Incident 551",
+    "issuedAtUnixMs": 1700000000000,
+    "notAfterUnixMs": 1700000600000
+  },
+  "NativePermitConsumed": {
+    "invocation": {
+      "id": "example",
+      "requestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evaluation": {
+        "context": {
+          "requestId": "example",
+          "tenantId": "example",
+          "mode": "HUMAN",
+          "chain": [],
+          "bindingId": "example",
+          "deviceId": "example"
+        },
+        "toolId": "example",
+        "action": "example",
+        "argumentsDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "resources": [],
+        "toolDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "packageDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "nowUnixMs": 0,
+        "authorityRevision": 0,
+        "online": false
+      },
+      "state": "PENDING_APPROVAL",
+      "revision": 1,
+      "authorizationEpoch": 0,
+      "expiresAtUnixMs": 0,
+      "completedResources": [],
+      "diagnosticId": "example"
+    },
+    "fencingToken": "nonce-77",
+    "leaseExpiresAtUnixMs": 1700000030000,
+    "authorizationEpoch": 1,
+    "killScope": {
+      "packageId": "acme.orders",
+      "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "publisher": "Acme",
+      "toolId": "acme.orders/orders.refund",
+      "poolId": "pool-1",
+      "imageDigest": ""
+    }
+  },
+  "KillComponentKind": "TOOL_HOST",
+  "KillComponentDelivery": {
+    "kind": "TOOL_HOST",
+    "componentId": "host-1",
+    "authorizationEpoch": 1,
+    "acknowledgedAtUnixMs": 1700000000000,
+    "deliveryPath": "POLL"
+  },
+  "KillOverview": {
+    "state": {
+      "tenantId": "tenant-1",
+      "authorizationEpoch": 42,
+      "kills": [
+        {
+          "eventId": "control-breakglass:3",
+          "issuer": "control-breakglass",
+          "scope": {
+            "kind": "PACKAGE_DIGEST",
+            "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "mode": "TERMINATE",
+          "reason": "Advisory TG-2026-07",
+          "issuedAtUnixMs": 1791676800000,
+          "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "authorizationEpoch": 1
+        }
+      ],
+      "recoveries": [
+        {
+          "eventId": "control:118",
+          "issuer": "control",
+          "supersedes": [
+            "control-breakglass:3"
+          ],
+          "reviewers": [
+            "admin-1",
+            "admin-2"
+          ],
+          "issuedAtUnixMs": 1791680400000,
+          "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl",
+          "tenantId": "10000000-0000-4000-8000-000000000001",
+          "authorizationEpoch": 1
+        }
+      ],
+      "signature": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl"
+    },
+    "components": [
+      {
+        "kind": "TOOL_HOST",
+        "componentId": "host-1",
+        "authorizationEpoch": 1,
+        "acknowledgedAtUnixMs": 1700000000000,
+        "deliveryPath": "POLL"
+      }
+    ],
+    "retainedEventCount": 2,
+    "archivedEventCount": 0,
+    "observedAtUnixMs": 1700000000000
   }
 }

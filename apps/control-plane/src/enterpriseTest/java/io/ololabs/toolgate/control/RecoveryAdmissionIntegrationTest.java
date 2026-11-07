@@ -117,7 +117,30 @@ final class RecoveryAdmissionIntegrationTest {
                 .put("argumentsDigest",claims.argumentsDigest()).put("toolDescriptorDigest",target.toolDescriptorDigest())
                 .put("packageDigest",target.packageDigest()).put("artifactDigest",target.artifactDigest());
         consumption.set("permit",JSON.valueToTree(signed));
-        rig.operations.consumeInvocation(rig.gateway.tenant(),tx->"device",consumption.toString());
+        var reply=rig.operations.consumeInvocation(rig.gateway.tenant(),tx->"device",consumption.toString());
+        var accepted=rig.graph.codec.model(reply.body(),io.ololabs.toolgate.contracts.v2.PermitConsumed.class);
+        assertEquals(claims.nonce(),accepted.fencingToken());
+        assertEquals(claims.invocationId(),accepted.invocationId());
+        assertTrue(accepted.leaseExpiresAtUnixMs()>rig.clock.millis());
+        assertTrue(accepted.leaseExpiresAtUnixMs()<=claims.deadlineUnixMs());
+        var scope=accepted.killScope();
+        assertEquals("acme.test",scope.packageId());assertEquals(target.packageDigest(),scope.packageDigest());
+        assertEquals(target.toolId(),scope.toolId());assertEquals("acme",scope.publisher());
+        assertEquals("devices-a",scope.poolId());assertEquals(IMAGE,scope.imageDigest());
+        rig.store.transaction(rig.gateway.tenant(),false,tx->{
+            assertEquals(tx.enterprise().authorizationEpoch(),accepted.authorizationEpoch());
+            var pinned=tx.kills().scope(claims.nonce()).subject();
+            assertEquals(pinned.poolId(),scope.poolId());assertEquals(pinned.publisher(),scope.publisher());
+            return null;
+        });
+    }
+    @Test void acceptedScopeRetainsPermitPlacementAfterHostRegistrationChanges()throws Exception{
+        var fixture=fixture(true,false);var rig=fixture.bridge().rig;var signed=permit(fixture,"pinned-kill-scope");
+        rig.store.transaction(rig.gateway.tenant(),true,tx->{
+            var registration=(ObjectNode)rig.graph.codec.value(tx.packages().toolHost("device"));
+            registration.put("poolId","devices-b");tx.packages().saveToolHost("device",registration.toString());return null;
+        });
+        consume(fixture,signed);
     }
     private EnterpriseInvocation failAfterConsumption(Fixture fixture,SignedInvocationPermit signed) {
         consume(fixture,signed);
@@ -607,10 +630,49 @@ final class RecoveryAdmissionIntegrationTest {
         late.put("fencingToken","not-an-issued-attempt");
         assertEquals(403,assertThrows(Failure.class,()->fixture.packages().result(rig.gateway.tenant(),tx->device,failed.id(),relayResult(late))).status());
     }
+    @Test void consumedRelayedCallsOutliveAdmissionPermitButNeverTheirExecutionDeadline() throws Exception {
+        var fixture=fixture(true,false);var rig=fixture.bridge().rig;
+        var signed=permit(fixture,"admitted-after-permit-expiry");var claims=rig.signer.verifyInvocation(signed);
+        assertTrue(claims.exp()<claims.deadlineUnixMs());
+        var device=new EndpointDeviceRecord("device",rig.gateway.tenant().value(),"alice","f".repeat(64),
+                EndpointState.ACTIVE,1L,0L,0L,null,null,true,1L,null,null);
+        var dispatch=JSON.createObjectNode();dispatch.set("permit",JSON.valueToTree(signed));
+        dispatch.set("arguments",JSON.valueToTree(fixture.bridge().request(claims.invocationId()).request().arguments()));
+        fixture.packages().relay(rig.gateway,dispatch.toString());
+        assertEquals(200,fixture.packages().next(rig.gateway.tenant(),tx->device).status());
+        consume(fixture,signed);
+        var afterPermit=new ServerPackages(rig.store,rig.graph.codec,rig.operations,
+                java.time.Clock.fixed(java.time.Instant.ofEpochMilli(claims.exp()+1),java.time.ZoneOffset.UTC));
+        assertEquals("CLAIMED",JSON.readTree(afterPermit.relayed(rig.gateway,claims.invocationId()).body()).path("state").asText());
+        var admission=JSON.createObjectNode().put("kind","ADMITTED").put("invocationId",claims.invocationId()).put("fencingToken","wrong-fence");
+        assertEquals(409,assertThrows(Failure.class,()->afterPermit.admission(rig.gateway.tenant(),tx->device,claims.invocationId(),admission.toString())).status());
+        admission.put("fencingToken",claims.nonce());
+        assertEquals("ADMITTED",JSON.readTree(afterPermit.admission(rig.gateway.tenant(),tx->device,claims.invocationId(),admission.toString()).body()).path("state").asText());
+        assertEquals("ADMITTED",JSON.readTree(afterPermit.relayed(rig.gateway,claims.invocationId()).body()).path("state").asText());
+        var expired=new ServerPackages(rig.store,rig.graph.codec,rig.operations,
+                java.time.Clock.fixed(java.time.Instant.ofEpochMilli(claims.deadlineUnixMs()+1),java.time.ZoneOffset.UTC));
+        assertEquals("EXPIRED",JSON.readTree(expired.relayed(rig.gateway,claims.invocationId()).body()).path("state").asText());
+        assertEquals(EnterpriseInvocationState.EXECUTING,rig.store.transaction(rig.gateway.tenant(),false,
+                tx->tx.enterprise().invocation(claims.invocationId())).state());
+
+        // A merely claimed permit still expires. Metadata does not consume it.
+        var unused=permit(fixture,"never-consumed-relay");var unusedClaims=rig.signer.verifyInvocation(unused);
+        dispatch.set("permit",JSON.valueToTree(unused));
+        dispatch.set("arguments",JSON.valueToTree(fixture.bridge().request(unusedClaims.invocationId()).request().arguments()));
+        fixture.packages().relay(rig.gateway,dispatch.toString());
+        assertEquals(200,fixture.packages().next(rig.gateway.tenant(),tx->device).status());
+        var neverConsumed=new ServerPackages(rig.store,rig.graph.codec,rig.operations,
+                java.time.Clock.fixed(java.time.Instant.ofEpochMilli(unusedClaims.exp()+1),java.time.ZoneOffset.UTC));
+        assertEquals("EXPIRED",JSON.readTree(neverConsumed.relayed(rig.gateway,unusedClaims.invocationId()).body()).path("state").asText());
+        admission.put("invocationId",unusedClaims.invocationId()).put("fencingToken",unusedClaims.nonce());
+        assertEquals(409,assertThrows(Failure.class,()->neverConsumed.admission(rig.gateway.tenant(),tx->device,unusedClaims.invocationId(),admission.toString())).status());
+    }
+
     @Test void signedScopeAndLeaseRecoveryAlsoHoldUnderThePostgresRuntimeRole() throws Exception {
         Assumptions.assumeTrue(System.getenv("CONTROL_TEST_URL")!=null&&System.getenv("CONTROL_TEST_PASSWORD")!=null,
                 "Requires isolated PostgreSQL fixture");
         postgres=true;
+        consumedRelayedCallsOutliveAdmissionPermitButNeverTheirExecutionDeadline();
         realSignedAdmissionCapturesScopeBeforeConsumptionAndBindsEverySignedDigest();
         anExecutorTierReportCannotEnableRecoveryWithoutTheIndependentOperatorPin();
         aPinnedOciExecutorWithAnOrdinaryHttpRouteStillCannotQualify();
