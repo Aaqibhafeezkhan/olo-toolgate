@@ -29,6 +29,11 @@ public interface EnterpriseStore {
     default OperationFinalizationPolicy.Facts finalizationFacts(String operation,long now){throw Failure.unavailable();}
     /** Ordered metadata only; no dispatch capabilities, arguments or target claim tokens. */
     default List<EnterpriseEffectHistory> effectHistory(String operation,int offset,int limit){throw Failure.unavailable();}
+    /** Distinct effects by frozen reviewed fencing; an effect without an intent counts as unfenced. */
+    record EffectFencing(long fenced,long unfenced) {}
+    default EffectFencing effectFencing(String operation){throw Failure.unavailable();}
+    /** Latest recorded derivation of operations last derived in [from,to), bounded for analytics. */
+    default List<EnterpriseOperationOutcome> latestOutcomes(long from,long to,int limit){throw Failure.unavailable();}
     /** Original admission ownership, never retroactively inferred after a transfer. */
     default java.util.Set<String> reviewOwners(String operation){throw Failure.unavailable();}
     default void saveReviewOwners(String operation,long directoryRevision,java.util.Set<String> owners){throw Failure.unavailable();}

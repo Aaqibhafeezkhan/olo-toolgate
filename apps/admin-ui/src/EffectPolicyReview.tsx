@@ -1,7 +1,9 @@
 // Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 import type {EffectClassification, EffectIntentBlueprint, RouteDeclaration, RouteEffectPolicy, FencedTarget, FencedTargetClass} from '@olo-labs/toolgate-contracts/v2';
 
-export type EffectDraft = {classification: EffectClassification | ''; consent: boolean; risk: boolean; intent: string; fencedTarget?: FencedTarget};
+export type EffectDraft = {classification: EffectClassification | ''; consent: boolean; risk: boolean; intent: string; fencedTarget?: FencedTarget;
+  /** ADR 059: reviewer declares the target commits before a synchronous success response. */
+  authoritative?: boolean};
 export type EffectDrafts = Record<string, EffectDraft>;
 export function draft(): EffectDraft { return {classification: '', consent: false, risk: false, intent: ''}; }
 export function reviewedEffects(routes: readonly RouteDeclaration[], drafts: EffectDrafts): RouteEffectPolicy[] {
@@ -20,7 +22,8 @@ export function reviewedEffects(routes: readonly RouteDeclaration[], drafts: Eff
     } catch { throw new Error('Enter a request intent JSON object for ' + route.id + '.'); }
     return {routeId: route.id, classification: value.classification, consentRequired: value.consent,
       acknowledgedUnfencedRisk: critical && !value.fencedTarget && value.risk, intent,
-      ...(value.fencedTarget ? {fencedTarget: value.fencedTarget} : {})};
+      ...(value.fencedTarget ? {fencedTarget: value.fencedTarget} : {}),
+      ...(value.authoritative && value.classification !== 'READ' ? {authoritativeResponse: true} : {})};
   });
 }
 
@@ -68,6 +71,11 @@ export function EffectPolicyReview({routes, values, disabled, onChange}: {
         <label><input type="checkbox" checked={value.consent} onChange={e => change(route.id, {consent: e.target.checked})} />
           Require exact effect consent for {route.id}</label>
         {value.consent && <p>Calls on this route are blocked until exact effect consent is available.</p>}
+        {value.classification && value.classification !== 'READ' && <label><input type="checkbox" checked={Boolean(value.authoritative)}
+          onChange={e => change(route.id, {authoritative: e.target.checked})} />
+          {route.id} commits the effect before it returns a success response</label>}
+        {value.authoritative && value.classification !== 'READ' && <p>Broker-seen responses on this route are shown as broker-observed evidence, which depends on an intact host.
+          They do not resolve the outcome; target confirmation or review is still required.</p>}
         {critical && !value.fencedTarget && <label><input type="checkbox" required checked={value.risk}
           onChange={e => change(route.id, {risk: e.target.checked})} />
           I acknowledge that {route.id} has an unfenced {value.classification.toLowerCase()} effect and may need reconciliation.</label>}

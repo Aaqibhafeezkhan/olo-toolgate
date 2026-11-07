@@ -181,7 +181,7 @@ def review_owned_native_attempt(api,ok,tokens,invocation_id,reported,image_id):
     assert approved['state']=='APPLIED',approved
     refreshed=ok(api(prefix+'invocations/'+invocation_id+'/history',tokens['admin']))
     outcome=refreshed['operation']
-    assert outcome['state']=='SUCCEEDED' and outcome['finalized'] is True and outcome['grade']=='REVIEWER_CONFIRMED',outcome
+    assert outcome['state']=='SUCCEEDED' and outcome['finalized'] is True and outcome['grade']=='HUMAN_RECONCILED',outcome
     return dict(operationId=invocation_id,reviewId=proposed['id'],reviewers=reviewers,
                 evidenceDigest=digest,grade=outcome['grade'])
 

@@ -1551,6 +1551,7 @@ export interface RouteEffectPolicy {
   readonly intent: EffectIntentBlueprint;
   readonly targetDedupeGuarantee?: TargetDedupeGuarantee;
   readonly fencedTarget?: FencedTarget;
+  readonly authoritativeResponse?: boolean;
 }
 /** Review stamp created by Control, never accepted from package or worker input. */
 export interface RouteEffectReview {

@@ -244,7 +244,7 @@ class EnterpriseOperationTest {
         assertEquals(RemoteToolState.DONE,response.record().state());
         assertEquals("Hello World",response.result().output().get("message").asText());
         assertEquals(EnterpriseOperationState.OUTCOME_UNKNOWN,response.operationOutcome().state());
-        assertEquals(EnterpriseOutcomeGrade.REPORTED,response.operationOutcome().grade());
+        assertEquals(EnterpriseOutcomeGrade.UNKNOWN,response.operationOutcome().grade());
         assertFalse(response.operationOutcome().retryable());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,2L,"human-host")).status());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(reviewer,1L,"human-host")).status());

@@ -99,23 +99,51 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
     public List<EnterpriseEffectHistory> effectHistory(String operation,int offset,int limit){
         if(offset<0||offset>4096||limit<1||limit>101)throw Failure.validation();
         var result=new ArrayList<EnterpriseEffectHistory>();
+        String evidence="EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND ";
         try(var s=query("SELECT e.effect_id,g.generation,g.attempt_id,e.route_id,e.request_digest,g.state,g.consumer,g.claim_token,"
                 +"(SELECT count(*) FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation),"
-                +"CASE WHEN EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END "
+                +"CASE WHEN "+evidence+"w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END,"
+                +"CASE WHEN "+evidence+"w.source='BROKER') THEN 1 ELSE 0 END,"
+                +"CASE WHEN "+evidence+"substr(w.source,1,7)='TARGET:') THEN 1 ELSE 0 END,"
+                +"CASE WHEN "+evidence+"substr(w.source,1,14)='"+EffectStore.LOOKUP_SOURCE_PREFIX+"') THEN 1 ELSE 0 END,"
+                +"i.fenced_target_class,CASE WHEN i.authoritative_response THEN 1 ELSE 0 END "
                 +"FROM control_effects e JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id "
-                +"WHERE e.tenant_id=? AND e.operation_id=? ORDER BY e.effect_id,g.generation LIMIT ? OFFSET ?",operation,limit,offset);var rows=s.executeQuery()){
+                +"LEFT JOIN control_effect_intents i ON i.tenant_id=e.tenant_id AND i.effect_id=e.effect_id "
+                +"WHERE e.tenant_id=? AND e.operation_id=? ORDER BY e.effect_id,g.generation LIMIT ? OFFSET ?",
+                operation,limit,offset);var rows=s.executeQuery()){
             while(rows.next()){
                 String state=rows.getString(6),consumer=rows.getString(7),claim=rows.getString(8);
                 boolean witnessed=consumer!=null&&claim!=null&&rows.getInt(10)==1;
                 String receipt=witnessed&&state.equals("COMPLETED")
                         ?JdbcOperationFinalization.receipt(tenant,rows.getString(1),consumer,claim):null;
-                var grade=witnessed?EnterpriseOutcomeGrade.TARGET_CONFIRMED:state.equals("RELEASED")
-                        ?EnterpriseOutcomeGrade.CONTROL_PROVEN:EnterpriseOutcomeGrade.REPORTED;
+                var observations=EnumSet.noneOf(EnterpriseEvidenceObservation.class);
+                if(consumer!=null)observations.add(EnterpriseEvidenceObservation.AUTHORIZATION_CONSUMED);
+                if(rows.getInt(11)==1)observations.add(EnterpriseEvidenceObservation.BROKER_RESPONSE);
+                if(rows.getInt(12)==1)observations.add(EnterpriseEvidenceObservation.TARGET_OUTCOME);
+                if(rows.getInt(13)==1)observations.add(EnterpriseEvidenceObservation.RECONCILER_LOOKUP);
+                var fencing=rows.getString(14)!=null?EnterpriseEffectFencing.FENCED:EnterpriseEffectFencing.UNFENCED;
+                var grade=OutcomeGrading.effect(state,witnessed,observations,rows.getInt(15)==1);
                 result.add(new EnterpriseEffectHistory(rows.getString(1),rows.getLong(2),rows.getString(3),
                         rows.getString(4),rows.getString(5),EnterpriseEffectGenerationState.valueOf(state),
-                        grade,rows.getLong(9),receipt));
+                        grade,fencing,List.copyOf(observations),rows.getLong(9),receipt));
             }
             return List.copyOf(result);
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public EffectFencing effectFencing(String operation){
+        try(var s=query("SELECT COALESCE(SUM(CASE WHEN i.fenced_target_class IS NOT NULL THEN 1 ELSE 0 END),0),"
+                +"COALESCE(SUM(CASE WHEN i.fenced_target_class IS NULL THEN 1 ELSE 0 END),0) FROM control_effects e "
+                +"LEFT JOIN control_effect_intents i ON i.tenant_id=e.tenant_id AND i.effect_id=e.effect_id "
+                +"WHERE e.tenant_id=? AND e.operation_id=?",operation);var rows=s.executeQuery()){
+            if(!rows.next())throw Failure.unavailable();return new EffectFencing(rows.getLong(1),rows.getLong(2));
+        }catch(SQLException failure){throw Failure.unavailable();}
+    }
+    public List<EnterpriseOperationOutcome> latestOutcomes(long from,long to,int limit){
+        if(from<0||to<=from||limit<1||limit>10001)throw Failure.validation();var result=new ArrayList<EnterpriseOperationOutcome>();
+        try(var s=query("SELECT o.document FROM control_operation_outcomes o WHERE o.tenant_id=? AND o.recorded_at>=? AND o.recorded_at<? "
+                +"AND o.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=o.tenant_id AND x.operation_id=o.operation_id) "
+                +"ORDER BY o.operation_id LIMIT ?",from,to,limit);var rows=s.executeQuery()){
+            while(rows.next())result.add(codec.model(rows.getString(1),EnterpriseOperationOutcome.class));return List.copyOf(result);
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     public Set<String> reviewOwners(String operation){

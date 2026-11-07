@@ -1304,10 +1304,13 @@ CREATE TABLE public.control_effect_intents (
     profile_digest text NOT NULL,
     classification text NOT NULL,
     document text NOT NULL,
+    fenced_target_class text,
+    authoritative_response boolean NOT NULL,
     recorded_at bigint NOT NULL,
     CONSTRAINT control_effect_intents_arguments_digest_check CHECK ((arguments_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
     CONSTRAINT control_effect_intents_classification_check CHECK ((classification = ANY (ARRAY['READ'::text, 'WRITE'::text, 'DESTRUCTIVE'::text, 'FINANCIAL'::text]))),
     CONSTRAINT control_effect_intents_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_effect_intents_fenced_target_class_check CHECK (((fenced_target_class IS NULL) OR (fenced_target_class = ANY (ARRAY['SHARED_SQL'::text, 'SQL_WITH_EXTERNAL_ACTION'::text])))),
     CONSTRAINT control_effect_intents_profile_digest_check CHECK ((profile_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
     CONSTRAINT control_effect_intents_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
     CONSTRAINT control_effect_intents_request_digest_check CHECK ((request_digest ~ '^sha256:[a-f0-9]{64}$'::text))

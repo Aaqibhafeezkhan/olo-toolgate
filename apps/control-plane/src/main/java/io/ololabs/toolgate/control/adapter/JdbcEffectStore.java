@@ -58,16 +58,17 @@ final class JdbcEffectStore implements EffectStore {
         evidence(g,LOOKUP_SOURCE_PREFIX+receiptDigest.substring(7),outcome,resultDigest,now);
     }
     public Intent intent(String effectId){
-        try(var s=query("SELECT request_digest,arguments_digest,profile_digest,classification,document,recorded_at FROM control_effect_intents WHERE tenant_id=? AND effect_id=?",effectId);var rows=s.executeQuery()){
-            return rows.next()?new Intent(effectId,rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getLong(6)):null;
+        try(var s=query("SELECT request_digest,arguments_digest,profile_digest,classification,document,fenced_target_class,authoritative_response,recorded_at FROM control_effect_intents WHERE tenant_id=? AND effect_id=?",effectId);var rows=s.executeQuery()){
+            return rows.next()?new Intent(effectId,rows.getString(1),rows.getString(2),rows.getString(3),rows.getString(4),rows.getString(5),rows.getString(6),rows.getBoolean(7),rows.getLong(8)):null;
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     public void recordIntent(Intent intent){
         text(intent.effectId());digest(intent.requestDigest());digest(intent.argumentsDigest());digest(intent.profileDigest());
         var existing=intent(intent.effectId());
         if(existing!=null){if(!existing.equals(intent))throw Failure.conflict();return;}
-        try(var s=query("INSERT INTO control_effect_intents(tenant_id,effect_id,request_digest,arguments_digest,profile_digest,classification,document,recorded_at) VALUES(?,?,?,?,?,?,?,?)",
-                intent.effectId(),intent.requestDigest(),intent.argumentsDigest(),intent.profileDigest(),intent.classification(),intent.document(),intent.recordedAt())){s.executeUpdate();}
+        try(var s=query("INSERT INTO control_effect_intents(tenant_id,effect_id,request_digest,arguments_digest,profile_digest,classification,document,fenced_target_class,authoritative_response,recorded_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                intent.effectId(),intent.requestDigest(),intent.argumentsDigest(),intent.profileDigest(),intent.classification(),intent.document(),
+                intent.fencedTargetClass(),intent.authoritativeResponse(),intent.recordedAt())){s.executeUpdate();}
         catch(SQLException failure){throw Failure.unavailable();}
     }
     public Generation byNonce(String nonce){

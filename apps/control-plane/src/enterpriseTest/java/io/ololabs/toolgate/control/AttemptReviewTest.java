@@ -71,7 +71,7 @@ final class AttemptReviewTest {
     @Test void pendingProposalCannotSettleAndApprovedProofDoesNotRewriteExecutorState(){
         var f=fixture(true,false,"admin");
         assertThrows(Failure.class,()->apply(f));approved(f);var outcome=apply(f);
-        assertEquals(EnterpriseOperationState.SUCCEEDED,outcome.state());assertEquals(EnterpriseOutcomeGrade.REVIEWER_CONFIRMED,outcome.grade());
+        assertEquals(EnterpriseOperationState.SUCCEEDED,outcome.state());assertEquals(EnterpriseOutcomeGrade.HUMAN_RECONCILED,outcome.grade());
         assertFalse(outcome.retryable());
         assertEquals(f.invocation(),rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().invocation(f.invocation().id())));
         assertEquals(1,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attempts(f.invocation().id(),rig.clock.millis())).size());
@@ -79,7 +79,7 @@ final class AttemptReviewTest {
     }
     @Test void reviewedUnknownAttemptSettlesWithoutTurningItsReportIntoSuccessOrFailure(){
         var f=fixture(false,false,"admin");approved(f);var outcome=apply(f);
-        assertEquals(EnterpriseOperationState.FAILED,outcome.state());assertEquals(EnterpriseOutcomeGrade.REVIEWER_CONFIRMED,outcome.grade());
+        assertEquals(EnterpriseOperationState.FAILED,outcome.state());assertEquals(EnterpriseOutcomeGrade.HUMAN_RECONCILED,outcome.grade());
         assertEquals(EnterpriseInvocationState.OUTCOME_UNKNOWN,rig.store.transaction(rig.gateway.tenant(),false,
                 tx->tx.enterprise().invocation(f.invocation().id())).state());
         var facts=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().finalizationFacts(f.invocation().id(),rig.clock.millis()));
@@ -132,7 +132,7 @@ final class AttemptReviewTest {
         var applied=rig.graph.codec.model(rig.operations.reconcile(checker(),proposal.id(),decision(proposal,true)).body(),EnterpriseReconciliation.class);
         assertEquals(EnterpriseReconciliationState.APPLIED,applied.state());
         var view=rig.graph.codec.model(rig.operations.history(rig.reviewer,f.invocation().id(),null,10).body(),EnterpriseOperationHistoryPage.class);
-        assertEquals(EnterpriseOperationState.SUCCEEDED,view.operation().state());assertEquals(EnterpriseOutcomeGrade.REVIEWER_CONFIRMED,view.operation().grade());
+        assertEquals(EnterpriseOperationState.SUCCEEDED,view.operation().state());assertEquals(EnterpriseOutcomeGrade.HUMAN_RECONCILED,view.operation().grade());
         assertEquals(EnterpriseAttemptEffectScope.REVIEWER_WITNESSED,view.attempts().getFirst().scope());assertTrue(view.attempts().getFirst().settled());
         assertEquals(f.invocation(),rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().invocation(f.invocation().id())));
         String audit=rig.store.transaction(rig.gateway.tenant(),false,tx->tx.auditPage(0,100));

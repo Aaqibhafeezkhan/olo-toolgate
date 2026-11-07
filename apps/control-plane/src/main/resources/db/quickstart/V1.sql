@@ -183,6 +183,8 @@ CREATE TABLE control_effect_intents(
  profile_digest TEXT NOT NULL CHECK(length(profile_digest)=71 AND substr(profile_digest,1,7)='sha256:' AND substr(profile_digest,8) NOT GLOB '*[^a-f0-9]*'),
  classification TEXT NOT NULL CHECK(classification IN('READ','WRITE','DESTRUCTIVE','FINANCIAL')),
  document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=1048576 AND json_valid(document) AND json_type(document)='object'),
+ fenced_target_class TEXT CHECK(fenced_target_class IS NULL OR fenced_target_class IN('SHARED_SQL','SQL_WITH_EXTERNAL_ACTION')),
+ authoritative_response INTEGER NOT NULL CHECK(authoritative_response IN(0,1)),
  recorded_at INTEGER NOT NULL CHECK(recorded_at BETWEEN 0 AND 9007199254740991),
  PRIMARY KEY(tenant_id,effect_id),
  FOREIGN KEY(tenant_id,effect_id) REFERENCES control_effects(tenant_id,effect_id)

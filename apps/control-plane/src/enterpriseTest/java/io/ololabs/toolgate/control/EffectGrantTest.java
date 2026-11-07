@@ -272,7 +272,7 @@ class EffectGrantTest {
         assertNotNull(retained);assertEquals(issue.httpRequestDigest(),retained.requestDigest());
         assertThrows(Failure.class,()->base.rig.store.transaction(base.rig.gateway.tenant(),true,tx->{
             tx.effects().recordIntent(new EffectStore.Intent(effectId,retained.requestDigest(),retained.argumentsDigest(),
-                retained.profileDigest(),"READ",retained.document(),retained.recordedAt()));return null;
+                retained.profileDigest(),"READ",retained.document(),retained.fencedTargetClass(),retained.authoritativeResponse(),retained.recordedAt()));return null;
         }));
         assertEquals(retained,base.rig.store.transaction(base.rig.gateway.tenant(),false,tx->tx.effects().intent(effectId)));
     }

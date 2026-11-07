@@ -78,6 +78,10 @@
         },
         "fencedTarget": {
           "$ref": "effect-authorization.schema.json#/$defs/FencedTarget"
+        },
+        "authoritativeResponse": {
+          "type": "boolean",
+          "description": "Reviewer declaration that the target commits before a synchronous success response. Lets a broker response grade an effect BROKER_OBSERVED for presentation; absent means observation only. Frozen per effect at first authorization."
         }
       },
       "required": [

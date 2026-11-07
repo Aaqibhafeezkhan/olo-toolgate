@@ -502,7 +502,7 @@ final class RecoveryAdmissionIntegrationTest {
                 io.ololabs.toolgate.contracts.EnterpriseOperationHistoryPage.class);
         assertEquals(io.ololabs.toolgate.contracts.EnterpriseOperationState.SUCCEEDED,history.operation().state());
         assertEquals(EnterpriseInvocationState.SUCCEEDED,history.attempts().getFirst().state());
-        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOutcomeGrade.REPORTED,history.attempts().getFirst().grade());
+        assertEquals(io.ololabs.toolgate.contracts.EnterpriseOutcomeGrade.EXECUTOR_REPORTED,history.attempts().getFirst().grade());
         assertTrue(history.attempts().getFirst().settled());assertFalse(history.operation().retryable());
         assertTrue(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().recoveries(claims.invocationId(),100)).isEmpty());
     }

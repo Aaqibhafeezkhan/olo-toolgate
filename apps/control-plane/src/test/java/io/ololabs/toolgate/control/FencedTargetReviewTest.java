@@ -20,21 +20,21 @@ class FencedTargetReviewTest {
         """,EffectIntentBlueprint.class);}
     @Test void bothExplicitTargetClassesRemainExactReviewedWritesWithMandatoryCriticalConsent()throws Exception{
         for(var type:FencedTargetClass.values()){
-            var policy=new RouteEffectPolicy("send",EffectClassification.FINANCIAL,false,false,intent(),null,new FencedTarget("billing",type));
+            var policy=new RouteEffectPolicy("send",EffectClassification.FINANCIAL,false,false,intent(),null,new FencedTarget("billing",type),null);
             assertDoesNotThrow(()->EffectIntentValidation.review(policy,route()));
             assertTrue(EffectIntentValidation.requiresConsent(policy.classification(),policy.consentRequired()));
         }
     }
     @Test void serverRefusesFencedReadsContradictoryRiskMalformedIdentityAndWorkerPermitHeaders()throws Exception{
         var route=route();var intent=intent();var target=new FencedTarget("billing",FencedTargetClass.SHARED_SQL);
-        for(var policy:List.of(new RouteEffectPolicy("send",EffectClassification.READ,false,false,intent,null,target),
-                new RouteEffectPolicy("send",EffectClassification.WRITE,false,true,intent,null,target),
-                new RouteEffectPolicy("send",EffectClassification.WRITE,false,false,intent,null,new FencedTarget("../billing",FencedTargetClass.SHARED_SQL)),
-                new RouteEffectPolicy("send",EffectClassification.FINANCIAL,false,false,intent,null,null)))
+        for(var policy:List.of(new RouteEffectPolicy("send",EffectClassification.READ,false,false,intent,null,target,null),
+                new RouteEffectPolicy("send",EffectClassification.WRITE,false,true,intent,null,target,null),
+                new RouteEffectPolicy("send",EffectClassification.WRITE,false,false,intent,null,new FencedTarget("../billing",FencedTargetClass.SHARED_SQL),null),
+                new RouteEffectPolicy("send",EffectClassification.FINANCIAL,false,false,intent,null,null,null)))
             assertThrows(Failure.class,()->EffectIntentValidation.review(policy,route));
         var node=(com.fasterxml.jackson.databind.node.ObjectNode)json.valueToTree(intent);
         node.withObject("/headers").put("toolgate-effect-permit","worker-selected");
-        var forged=new RouteEffectPolicy("send",EffectClassification.WRITE,false,false,json.treeToValue(node,EffectIntentBlueprint.class),null,target);
+        var forged=new RouteEffectPolicy("send",EffectClassification.WRITE,false,false,json.treeToValue(node,EffectIntentBlueprint.class),null,target,null);
         assertThrows(Failure.class,()->EffectIntentValidation.review(forged,route));
     }
 }

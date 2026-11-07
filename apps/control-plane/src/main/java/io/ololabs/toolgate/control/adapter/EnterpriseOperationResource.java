@@ -64,6 +64,8 @@ public class EnterpriseOperationResource {
     public Response relay(String document){return reply(packages.relay(gateway(),PackageResource.large(document)));}
     @GET @Path("dispatches/{id}") @RolesAllowed("toolgate-relay-gateway")
     public Response relayed(@PathParam("id")String id){return reply(packages.relayed(gateway(),id));}
+    @GET @Path("operations/evidence") @io.quarkus.security.Authenticated
+    public Response evidence(@QueryParam("after")String after,@QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.evidenceExport(actors.human(),after,limit));}
     @GET @Path("invocations") @io.quarkus.security.Authenticated
     public Response invocations(@QueryParam("after")String after,@QueryParam("limit")@DefaultValue("50")int limit){return reply(operations.page(actors.human(),after,limit));}
     @POST @Path("invocations/{id}/reconciliation") @Consumes("application/json") @io.quarkus.security.Authenticated

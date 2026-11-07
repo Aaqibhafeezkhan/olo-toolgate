@@ -52,7 +52,7 @@ public final class EffectGrants {
             if(descriptors.size()!=1)throw ManagementAccess.denied();
             var descriptor=descriptors.getFirst();
             EffectClassification classification;boolean consentRequired;EffectConsentMappedRequest consentRequest;
-            TargetDedupeGuarantee targetGuarantee=null;FencedTarget fencedTarget=null;
+            TargetDedupeGuarantee targetGuarantee=null;FencedTarget fencedTarget=null;boolean authoritativeResponse=false;
             if(nativeMcp){
                 if(!claims.target().routes().isEmpty())throw ManagementAccess.denied();
                 var doc=ServerPackages.proxyDocument(tx,version,codec);
@@ -73,6 +73,7 @@ public final class EffectGrants {
                 catch(Failure invalid){if(consentBound&&invalid.status()==403)throw EffectConsents.mismatch();throw invalid;}
                 classification=policy.classification();consentRequired=EffectIntentValidation.requiresConsent(classification,policy.consentRequired());
                 targetGuarantee=policy.targetDedupeGuarantee();fencedTarget=policy.fencedTarget();
+                authoritativeResponse=Boolean.TRUE.equals(policy.authoritativeResponse());
                 if(fencedTarget!=null)TargetFencing.currentReview(tx,codec,profile,manifest.routeId(),fencedTarget,now);
                 consentRequest=EffectIntentValidation.preview(profile,manifest.routeId(),arguments);
                 credentialHeaders(descriptor,profile,manifest);
@@ -100,7 +101,9 @@ public final class EffectGrants {
             var intent=tx.effects().intent(effectId);
             if(previous!=null&&(intent==null||!intent.requestDigest().equals(request.httpRequestDigest())
                 ||!intent.argumentsDigest().equals(claims.argumentsDigest())||!intent.profileDigest().equals(manifest.profileDigest())
-                ||!intent.classification().equals(classification.name())||!intent.document().equals(codec.json(manifest))))
+                ||!intent.classification().equals(classification.name())||!intent.document().equals(codec.json(manifest))
+                ||!java.util.Objects.equals(intent.fencedTargetClass(),fencedTarget==null?null:fencedTarget.targetClass().name())
+                ||intent.authoritativeResponse()!=authoritativeResponse))
                 throw Failure.conflict();
             String nonce;EffectStore.Generation generation;boolean replay=false;
             if(previous!=null&&previous.state().equals("AUTHORIZED")){
@@ -122,7 +125,7 @@ public final class EffectGrants {
             }
             if(consentRequired)EffectConsents.reserve(tx,codec,invocation,consentRequest,effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),now);
             if(intent==null)tx.effects().recordIntent(new EffectStore.Intent(effectId,request.httpRequestDigest(),claims.argumentsDigest(),manifest.profileDigest(),
-                classification.name(),codec.json(manifest),now));
+                classification.name(),codec.json(manifest),fencedTarget==null?null:fencedTarget.targetClass().name(),authoritativeResponse,now));
             var downstream=TargetEffectKeys.bind(tx,codec,operations.signer(),tenant.value(),invocation,profile,targetGuarantee,manifest,effectId,now);
             var grant=operations.signer().signEffect(new EffectGrantClaims(operations.issuer(),device,now,now,expiry,tenant.value(),
                 invocation.id(),request.fencingToken(),invocation.authorizationEpoch(),effectId,generation.generation(),nonce,

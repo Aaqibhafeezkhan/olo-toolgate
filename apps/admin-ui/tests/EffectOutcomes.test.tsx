@@ -10,7 +10,7 @@ import {ControlClient} from '../src/api';
 afterEach(cleanup);
 const invocation={id:'effect-1',revision:7,state:'OUTCOME_UNKNOWN',completedResources:[],evaluation:{toolId:'payment',argumentsDigest:'a'.repeat(64),context:{deviceId:'device-1'},resources:[{kind:'CUSTOM',locator:'account/123'}]}} as unknown as EnterpriseInvocation;
 it('proposes an exact unknown outcome with downstream evidence and retains its retry key',async()=>{
-  const transport=vi.fn<typeof fetch>().mockImplementation(async(url,options)=>new Response(JSON.stringify(options?.method==='POST'?{code:'DEPENDENCY_UNAVAILABLE'}:String(url).includes('/history')?{operation:{operationId:invocation.id,state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false}:{items:[invocation]}),{status:options?.method==='POST'?503:200}));
+  const transport=vi.fn<typeof fetch>().mockImplementation(async(url,options)=>new Response(JSON.stringify(options?.method==='POST'?{code:'DEPENDENCY_UNAVAILABLE'}:String(url).includes('/history')?{operation:{operationId:invocation.id,state:'OUTCOME_UNKNOWN',revision:1,grade:'UNKNOWN',retryable:false},attempts:[],effects:[],truncated:false}:{items:[invocation]}),{status:options?.method==='POST'?503:200}));
   render(<EffectOutcomes client={new ControlClient('secret-token',vi.fn(),transport)}/>);
   fireEvent.click(await screen.findByRole('button',{name:'effect-1'}));
   fireEvent.change(screen.getByLabelText('External evidence SHA-256'),{target:{value:'b'.repeat(64)}});
@@ -26,8 +26,8 @@ it('proposes an exact unknown outcome with downstream evidence and retains its r
 it('shows verified business history separately from reported success and restarts stale pagination',async()=>{
  const reported={...invocation,state:'SUCCEEDED'};
  let stale=false;
- const first={operation:{operationId:invocation.id,state:'OUTCOME_UNKNOWN',revision:4,grade:'REPORTED',retryable:false},
-  attempts:[],effects:[{effectId:'effect-a',generation:1,state:'AMBIGUOUS',grade:'REPORTED'}],next:'4:50',truncated:false};
+ const first={operation:{operationId:invocation.id,state:'OUTCOME_UNKNOWN',revision:4,grade:'UNKNOWN',coverage:'UNMEDIATED_POSSIBLE',fencedEffectCount:0,unfencedEffectCount:1,retryable:false},
+  attempts:[],effects:[{effectId:'effect-a',generation:1,state:'AMBIGUOUS',grade:'UNKNOWN',fencing:'UNFENCED',observations:[]}],next:'4:50',truncated:false};
  const transport=vi.fn<typeof fetch>().mockImplementation(async(url)=>{
   const path=String(url);
   if(path.includes('/history')){
@@ -42,6 +42,9 @@ it('shows verified business history separately from reported success and restart
  expect(screen.getByText('OUTCOME_UNKNOWN')).toBeTruthy();
  expect(screen.getByText('Disabled')).toBeTruthy();
  expect(screen.getByText(/Reported state: SUCCEEDED/)).toBeTruthy();
+ expect(screen.getByText(/Nothing outcome-bearing is recorded/)).toBeTruthy();
+ expect(screen.getByText('Unmediated effects possible')).toBeTruthy();
+ expect(screen.getByText(/Unfenced target: it cannot check authority with Control; observed: nothing/)).toBeTruthy();
  fireEvent.click(screen.getByRole('button',{name:'More effect history'}));
  await screen.findByRole('alert');
  fireEvent.click(screen.getByRole('button',{name:'Refresh history'}));
@@ -59,9 +62,9 @@ it('binds explicit attempt attestation to refreshed evidence and clears consent 
    return new Response(JSON.stringify({id:'review-1',invocationId:invocation.id,requesterUserId:'admin',request,requestDigest:'d'.repeat(64),revision:1,state:'PENDING'}));
   }
   if(path.includes('/history'))return new Response(JSON.stringify({
-   operation:{operationId:invocation.id,state:'OUTCOME_UNKNOWN',revision:outcomeRevision,grade:'REPORTED',journalComplete:true,
+   operation:{operationId:invocation.id,state:'OUTCOME_UNKNOWN',revision:outcomeRevision,grade:'UNKNOWN',journalComplete:true,
     unresolvedEffectCount:0,unsettledAttemptCount:1,retryable:false},
-   attempts:[{attemptId:'attempt-1',ordinal:1,state:'SUCCEEDED',consumed:true,scope:'LEGACY_UNKNOWN',manifestSealed:true,manifestEffectCount:0,settled:false,grade:'REPORTED'}],
+   attempts:[{attemptId:'attempt-1',ordinal:1,state:'SUCCEEDED',consumed:true,scope:'LEGACY_UNKNOWN',manifestSealed:true,manifestEffectCount:0,settled:false,grade:'UNKNOWN'}],
    effects:[],truncated:false
   }));
   if(path.endsWith('/invocations/effect-1')){revision=8;outcomeRevision=5;return new Response(JSON.stringify({...reported,revision}));}

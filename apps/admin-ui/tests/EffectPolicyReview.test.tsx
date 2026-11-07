@@ -46,3 +46,18 @@ it('reviews a fenced class and target identity and clears fencing when changing 
  expect(screen.queryByLabelText('Fenced target identity for send')).toBeNull();
  expect((screen.getByLabelText('Target fencing for send') as HTMLSelectElement).disabled).toBe(true);
 });
+it('declares an authoritative response only when the reviewer says so, never for reads',()=>{
+ expect(reviewedEffects([route],{send:{classification:'WRITE',consent:false,risk:false,intent:'{}'}})[0]).not.toHaveProperty('authoritativeResponse');
+ expect(reviewedEffects([route],{send:{classification:'WRITE',consent:false,risk:false,intent:'{}',authoritative:true}})[0])
+  .toMatchObject({authoritativeResponse:true});
+ expect(reviewedEffects([route],{send:{classification:'READ',consent:false,risk:false,intent:'{}',authoritative:true}})[0]).not.toHaveProperty('authoritativeResponse');
+ function Review(){
+  const [values,setValues]=useState<EffectDrafts>({send:{classification:'WRITE',consent:false,risk:false,intent:'{}'}});
+  return <><EffectPolicyReview routes={[route]} values={values} disabled={false} onChange={setValues}/>
+   <output data-testid="policy">{JSON.stringify(reviewedEffects([route],values)[0])}</output></>;
+ }
+ render(<Review/>);
+ fireEvent.click(screen.getByLabelText('send commits the effect before it returns a success response'));
+ expect(screen.getByText(/do not resolve the outcome/)).toBeTruthy();
+ expect(JSON.parse(screen.getByTestId('policy').textContent!)).toMatchObject({authoritativeResponse:true});
+});

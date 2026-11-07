@@ -1019,6 +1019,7 @@ export interface EnterpriseDecision {
   readonly diagnosticId: string;
 }
 export type EnterpriseDecisionReason = "MATCHED" | "NO_GRANT" | "IDENTITY_DISABLED" | "INVALID_CONTEXT" | "GROUP_UNAVAILABLE" | "NO_BINDING" | "DEVICE_UNTRUSTED" | "RESOURCE_REJECTED" | "BLOCKED" | "APPROVAL_REQUIRED" | "EVIDENCE_MISSING" | "EXPIRED" | "STALE_AUTHORITY" | "QUOTA_EXCEEDED" | "VERSION_MISMATCH" | "MANAGEMENT_DENIED";
+export type EnterpriseEffectFencing = "FENCED" | "UNFENCED";
 export type EnterpriseEffectGenerationState = "AUTHORIZED" | "RELEASED" | "SENDING" | "CONSUMED" | "AMBIGUOUS" | "COMPLETED" | "FAILED" | "CONFLICT";
 /** One immutable authorization-generation identity and its current evidence-derived state; response digests do not prove business-receipt equivalence. */
 export interface EnterpriseEffectHistory {
@@ -1029,6 +1030,8 @@ export interface EnterpriseEffectHistory {
   readonly requestDigest: string;
   readonly state: EnterpriseEffectGenerationState;
   readonly grade: EnterpriseOutcomeGrade;
+  readonly fencing: EnterpriseEffectFencing;
+  readonly observations: ReadonlyArray<EnterpriseEvidenceObservation>;
   readonly evidenceCount: number;
   readonly receiptDigest?: string;
 }
@@ -1073,6 +1076,8 @@ export interface EnterpriseEvaluation {
   readonly amountMinorUnits?: number;
   readonly operation?: string;
 }
+export type EnterpriseEvidenceObservation = "AUTHORIZATION_CONSUMED" | "BROKER_RESPONSE" | "TARGET_OUTCOME" | "RECONCILER_LOOKUP";
+export type EnterpriseExecutionCoverage = "NO_AUTHORITY_CONSUMED" | "MEDIATED_ONLY" | "UNMEDIATED_POSSIBLE";
 export type EnterpriseExtractorKind = "FIXED" | "FIELDS" | "FILESYSTEM" | "NETWORK" | "SQL" | "SHELL";
 export type EnterpriseGrantPurpose = "HUMAN" | "CAPABILITY" | "SERVICE" | "SECRET";
 export type EnterpriseGroupType = "TEAM" | "AGENT_GROUP" | "TOOL_GROUP" | "DEVICE_GROUP";
@@ -1141,6 +1146,12 @@ export interface EnterpriseManagementRule {
   readonly deviceScope?: string;
 }
 export type EnterpriseMemberType = "USER" | "AGENT" | "TOOL" | "DEVICE";
+/** Bounded tenant export of current derived operation outcomes with grade, coverage and fencing counts. Ordered by operation id; never execution authority. */
+export interface EnterpriseOperationEvidenceExportPage {
+  readonly items: ReadonlyArray<EnterpriseOperationOutcome>;
+  readonly next?: string;
+  readonly exportedAtUnixMs: number;
+}
 /** Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots. */
 export interface EnterpriseOperationHistoryPage {
   readonly operation: EnterpriseOperationOutcome;
@@ -1155,9 +1166,12 @@ export interface EnterpriseOperationOutcome {
   readonly state: EnterpriseOperationState;
   readonly revision: number;
   readonly grade: EnterpriseOutcomeGrade;
+  readonly coverage: EnterpriseExecutionCoverage;
   readonly journalComplete: boolean;
   readonly attemptCount: number;
   readonly effectCount: number;
+  readonly fencedEffectCount: number;
+  readonly unfencedEffectCount: number;
   readonly unresolvedEffectCount: number;
   readonly unsettledAttemptCount: number;
   readonly finalized: boolean;
@@ -1177,7 +1191,7 @@ export interface EnterpriseOperationalStatus {
   readonly authorityCacheGraceMs: number;
   readonly readyProbeFreshnessMs: number;
 }
-export type EnterpriseOutcomeGrade = "REPORTED" | "CONTROL_PROVEN" | "TARGET_CONFIRMED" | "REVIEWER_CONFIRMED" | "TARGET_DEDUPLICATION_ASSUMED";
+export type EnterpriseOutcomeGrade = "TARGET_CONFIRMED" | "BROKER_OBSERVED" | "HUMAN_RECONCILED" | "CONTROL_PROVEN" | "EXECUTOR_REPORTED" | "UNKNOWN";
 /** Short-lived audience-bound permit for one exact invocation and target. */
 export interface EnterprisePermitClaims {
   readonly issuer: string;

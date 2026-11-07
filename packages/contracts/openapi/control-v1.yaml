@@ -8450,6 +8450,38 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v1/enterprise.schema.json#/$defs/EnterpriseOperationalStatus
+  /api/control/v1/access/operations/evidence:
+    get:
+      operationId: exportOperationEvidence
+      description: Bounded export of operations the caller may currently read,
+        ordered by operation id and re-derived when exported, each with its outcome
+        grade, execution coverage and fenced/unfenced effect counts. Grades present
+        recorded evidence; never execution authority.
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: Success; no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v1/operation.schema.json#/$defs/EnterpriseOperationEvidenceExportPage
+        '400':
+          description: Invalid cursor or limit
+        '403':
+          description: Current access denied
+      parameters:
+      - name: after
+        in: query
+        schema:
+          $ref: ../schemas/v1/identifiers.schema.json#/$defs/Identifier
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
   /api/control/v1/packages/uploads:
     post:
       operationId: uploadServerPackage

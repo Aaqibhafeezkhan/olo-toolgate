@@ -34,24 +34,24 @@ public final class OperationFinalizer {
                 &&facts.effects().stream().mapToInt(e->e.generations().size()).sum()<=4096;
         boolean finalized=Set.of(EnterpriseOperationState.SUCCEEDED,EnterpriseOperationState.PARTIAL,
                 EnterpriseOperationState.FAILED).contains(state);
-        var grade=!finalized?EnterpriseOutcomeGrade.REPORTED
-                :assumed?EnterpriseOutcomeGrade.TARGET_DEDUPLICATION_ASSUMED
-                :store.hasAttemptReviews(operation)?EnterpriseOutcomeGrade.REVIEWER_CONFIRMED
-                :facts.effects().stream().flatMap(e->e.generations().stream()).anyMatch(g->
-                    g.witnessed()&&Set.of("COMPLETED","FAILED").contains(g.state()))?EnterpriseOutcomeGrade.TARGET_CONFIRMED
-                :state==EnterpriseOperationState.FAILED?EnterpriseOutcomeGrade.CONTROL_PROVEN
-                :EnterpriseOutcomeGrade.REPORTED;
+        // ADR 059: presentation only. Derived state, resolution and settlement are unchanged.
+        var coverage=OutcomeGrading.coverage(facts.attempts(),attempt->store.recoveryScope(attempt)!=null);
+        var fencing=store.effectFencing(operation);
+        boolean witnessed=facts.effects().stream().flatMap(e->e.generations().stream()).anyMatch(g->
+                g.witnessed()&&Set.of("COMPLETED","FAILED").contains(g.state()));
+        var grade=OutcomeGrading.operation(finalized,finalized&&store.hasAttemptReviews(operation),coverage,
+                facts.effects().size(),witnessed);
         // Exclude wall time and this projection's own revision/audit to keep unchanged reads stable.
         var source=new LinkedHashMap<String,Object>();
         source.put("format","toolgate-operation-outcome-v1");
         source.put("operationId",operation);source.put("requestDigest",invocation.requestDigest());
         source.put("invocationRevision",invocation.revision());source.put("facts",facts);
         source.put("evidenceHead",store.operationEvidenceHead(operation));
-        source.put("derived",derived);source.put("state",state);source.put("grade",grade);source.put("deduplicationAssumed",assumed);
+        source.put("derived",derived);source.put("state",state);source.put("grade",grade);source.put("coverage",coverage);source.put("fencing",fencing);source.put("deduplicationAssumed",assumed);
         String digest=DirectoryService.digest(codec.json(source));
         if(previous!=null&&previous.sourceDigest().equals(digest))return previous.value();
         var outcome=new EnterpriseOperationOutcome(operation,state,previous==null?1L:previous.value().revision()+1,
-                grade,complete,(long)facts.attempts().size(),(long)facts.effects().size(),
+                grade,coverage,complete,(long)facts.attempts().size(),(long)facts.effects().size(),fencing.fenced(),fencing.unfenced(),
                 (long)derived.unresolvedEffects(),(long)derived.unsettledAttempts(),finalized,false,
                 assumed,now);
         var saved=store.recordOperationOutcome(outcome,digest,invocation.revision());

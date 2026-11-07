@@ -106,3 +106,5 @@ Use `000-template.md`.
 - [ADR 057: Generalized target fencing](057-generalized-target-fencing.md)
 
 - [ADR 058: Scoped revocation and authenticated dispatch](058-scoped-revocation-and-dispatch.md)
+
+- [ADR 059: Outcome grades and honest presentation](059-outcome-grades-and-honest-presentation.md)

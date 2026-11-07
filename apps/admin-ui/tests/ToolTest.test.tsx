@@ -32,7 +32,7 @@ describe('ToolTest', () => {
   it('runs the verified default through the normal invocation API and shows the actual responses in cursor order', async () => {
     let polls = 0; const keys: string[] = []; const bodies: unknown[] = [];
     const transport = vi.fn(async (input: string, init?: RequestInit) => {
-      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false});
+      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'UNKNOWN',retryable:false},attempts:[],effects:[],truncated:false});
 
       if (input.includes('/directory/bindings') || input.includes('/bindings')) return response({ items: [{ id: 'hello-binding', name: 'Hello binding', enabled: true, revision: 1, toolGroupId: 'g', deviceGroupId: 'd', actions: [], allowedPackageDigests: [], requireOnline: false, ownerDependency: false }] });
       if (input.includes('/devices')) return response({ items: [{ id: 'tool-host-1', name: 'Tool Host', enabled: true, revision: 1, ownerUserId: 'root' }] });
@@ -89,7 +89,7 @@ describe('ToolTest', () => {
     const policyTool = { ...tool, businessKeyPolicy: { required: true, namespace: 'DELEGATED_USER', argument: 'paymentKey' },
       inputSchema: { type: 'object', properties: { paymentKey: { type: 'string', default: 'workflow-42' }, text: { type: 'string', default: 'first' } } } };
     vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
-      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false});
+      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'UNKNOWN',retryable:false},attempts:[],effects:[],truncated:false});
 
       if (input.includes('/bindings')) return response({ items: [{ id: 'b', name: 'B', enabled: true }] });
       if (input.endsWith('/human/catalog')) return response({ tools: [policyTool] });
@@ -127,7 +127,7 @@ describe('ToolTest', () => {
   it('stops following when access is revoked and reports gaps, truncation and drops explicitly', async () => {
     let calls = 0;
     vi.stubGlobal('fetch', vi.fn(async (input: string) => {
-      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'REPORTED',retryable:false},attempts:[],effects:[],truncated:false});
+      if (input.includes('/history')) return response({operation:{operationId:input.split('/invocations/')[1].split('/')[0],state:'OUTCOME_UNKNOWN',revision:1,grade:'UNKNOWN',retryable:false},attempts:[],effects:[],truncated:false});
 
       if (input.includes('/bindings')) return response({ items: [{ id: 'b', name: 'B', enabled: true }] });
       if (input.includes('/devices')) return response({ items: [{ id: 'host', name: 'Host', enabled: true }] });

@@ -16,7 +16,12 @@ public final class TenantAnalytics {
     public TenantAnalytics(Store store, Codec codec, InsightsService insights) {
         this.store = store; this.codec = codec; this.insights = insights;
     }
-    public record Overview(String tenantId, InsightsMode mode, InsightsSeries series, InsightsSeries tools, InsightsInvocationPage invocations) {}
+    /** ADR 059: Control-derived evidence grades, separate from Gateway-recorded call states. */
+    public record Evidence(java.util.Map<String, Long> grades, java.util.Map<String, Long> coverage,
+                           long fencedEffects, long unfencedEffects, long operations, boolean truncated) {}
+    public record Overview(String tenantId, InsightsMode mode, InsightsSeries series, InsightsSeries tools, InsightsInvocationPage invocations,
+                           Evidence evidence) {}
+    public static final int EVIDENCE_LIMIT = 10_000;
     public Overview overview(DirectoryService.Actor actor, InsightsMode mode, long from, long to, long now) {
         return overview(actor, mode, from, to, now, null, null);
     }
@@ -32,9 +37,24 @@ public final class TenantAnalytics {
         if (tool != null && (tool.isBlank() || tool.length() > 256) || after != null && tool == null) throw Failure.validation();
         var granularity = to - from <= 48L * 3_600_000 ? InsightsGranularity.HOUR : InsightsGranularity.DAY;
         String tenant = actor.tenant().value();
+        long start = from, end = to;
+        var outcomes = store.transaction(actor.tenant(), false, tx -> tx.enterprise().latestOutcomes(start, end + 1, EVIDENCE_LIMIT + 1));
         return new Overview(tenant, mode,
             insights.series(granularity, from, to, null, tenant, tool, null, now),
             insights.series(granularity, from, to, "TOOL", tenant, null, null, now),
-            tool == null ? null : insights.invocations(tenant, from, to, tool, null, null, null, after, 50));
+            tool == null ? null : insights.invocations(tenant, from, to, tool, null, null, null, after, 50),
+            evidence(outcomes));
+    }
+    public static Evidence evidence(java.util.List<io.ololabs.toolgate.contracts.EnterpriseOperationOutcome> outcomes) {
+        boolean truncated = outcomes.size() > EVIDENCE_LIMIT;
+        var grades = new java.util.TreeMap<String, Long>();var coverage = new java.util.TreeMap<String, Long>();
+        for (var grade : io.ololabs.toolgate.contracts.EnterpriseOutcomeGrade.values()) grades.put(grade.name(), 0L);
+        for (var value : io.ololabs.toolgate.contracts.EnterpriseExecutionCoverage.values()) coverage.put(value.name(), 0L);
+        long fenced = 0, unfenced = 0, count = 0;
+        for (var outcome : outcomes.subList(0, Math.min(outcomes.size(), EVIDENCE_LIMIT))) {
+            grades.merge(outcome.grade().name(), 1L, Long::sum);coverage.merge(outcome.coverage().name(), 1L, Long::sum);
+            fenced += outcome.fencedEffectCount();unfenced += outcome.unfencedEffectCount();count++;
+        }
+        return new Evidence(grades, coverage, fenced, unfenced, count, truncated);
     }
 }
