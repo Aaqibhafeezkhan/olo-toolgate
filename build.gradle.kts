@@ -191,13 +191,29 @@ configure(javaSdkModules.map { project(it) }) {
     }
 }
 
+// The SDK runtime reads trigger frames through the shared contracts, so they are published beside it.
+project(":contracts-java") {
+    afterEvaluate {
+        extensions.configure<PublishingExtension> {
+            repositories {
+                maven {
+                    name = "sdkLocal"
+                    url = uri(rootProject.layout.buildDirectory.dir("sdk-repo"))
+                }
+            }
+        }
+    }
+}
+
 tasks.register("publishJavaSdkLocally") {
     group = "publishing"
-    description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins, to build/sdk-repo."
+    description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins and the contracts it uses, to build/sdk-repo."
     dependsOn(javaSdkModules.map { "$it:publishAllPublicationsToSdkLocalRepository" })
+    dependsOn(":contracts-java:publishMavenJavaPublicationToSdkLocalRepository")
 }
 tasks.register("publishJavaSdkToMavenLocal") {
     group = "publishing"
-    description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins, to the local Maven repository, where toolgate init projects find it."
+    description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins and the contracts it uses, to the local Maven repository, where toolgate init projects find it."
     dependsOn(javaSdkModules.map { "$it:publishToMavenLocal" })
+    dependsOn(":contracts-java:publishToMavenLocal")
 }

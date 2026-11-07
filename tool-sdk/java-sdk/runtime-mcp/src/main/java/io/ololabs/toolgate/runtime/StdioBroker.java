@@ -24,10 +24,17 @@ final class StdioBroker implements TestExchanges, DeviceFiles {
     static final int MAX_CALLS = 1024;
     private static final int MAX_LINE = 8 * 1024 * 1024;
     private static final ObjectMapper JSON = new ObjectMapper();
-    private final InputStream in; private final Consumer<ObjectNode> out;
+    private final Responses responses; private final Consumer<ObjectNode> out;
     private int calls;
 
-    StdioBroker(InputStream in, Consumer<ObjectNode> out) { this.in = in; this.out = out; }
+    /** Where answers come from: stdin itself for a tool, the frame reader for a trigger, which also receives other frames. */
+    interface Responses { byte[] next() throws IOException; }
+
+    StdioBroker(InputStream in, Consumer<ObjectNode> out) { this(() -> line(in), out); }
+    StdioBroker(Responses responses, Consumer<ObjectNode> out) { this.responses = responses; this.out = out; }
+
+    /** A trigger runs many checks in one process: each check gets the per-invocation budget afresh. */
+    synchronized void resetBudget() { calls = 0; }
 
     /** Thrown when the executor refuses or the channel fails; carries the executor's message. */
     static final class Refused extends RuntimeException {
@@ -43,13 +50,13 @@ final class StdioBroker implements TestExchanges, DeviceFiles {
         frame.set("request", request);
         out.accept(frame);
         JsonNode response;
-        try { response = JSON.readTree(line()); } catch (IOException e) { throw new Refused("The executor's broker channel failed"); }
+        try { response = JSON.readTree(responses.next()); } catch (IOException e) { throw new Refused("The executor's broker channel failed"); }
         if (response == null || !"BROKER_RESPONSE".equals(response.path("kind").asText()) || !id.equals(response.path("requestId").asText()))
             throw new Refused("The executor's broker answered out of order");
         if (response.has("error")) throw new Refused(response.path("error").path("message").asText("The executor refused the operation"));
         return response.path("result").isObject() ? response.get("result") : JSON.createObjectNode();
     }
-    private byte[] line() throws IOException {
+    private static byte[] line(InputStream in) throws IOException {
         var buffer = new ByteArrayOutputStream();
         for (int b = in.read(); b != '\n'; b = in.read()) {
             if (b == -1) throw new IOException("closed");

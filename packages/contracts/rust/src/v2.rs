@@ -2148,6 +2148,8 @@ pub struct PackageManifest {
     pub compatibility: PackageCompatibility,
     pub runtimes: Vec<RuntimeDeclaration>,
     pub tools: Vec<ToolDefinition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<TriggerDefinition>>,
     pub descriptor_set_digest: String,
     pub artifacts: Vec<PackagedArtifact>,
     pub credential_references: Vec<String>,
@@ -3618,6 +3620,16 @@ pub struct TriggerCounters {
     pub broker_calls: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub possible_loss_on_crash: Option<u64>,
+}
+/// Trigger export (ADR 058, plan 5.9): the signed trigger descriptor plus packaging members outside the digest. Trigger names share the package export namespace with tools.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDefinition {
+    pub descriptor: TriggerDescriptor,
+    pub trigger_descriptor_digest: String,
+    pub runtime_id: String,
+    pub entry_point: String,
+    pub artifact_ids: Vec<String>,
 }
 /// Signed semantic descriptor of one trigger export (plan 5.9).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

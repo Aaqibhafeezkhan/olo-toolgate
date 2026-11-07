@@ -72,6 +72,9 @@ public final class PackageArchive {
         catch (Json.ParseException e) { throw reject(MANIFEST + " is not strict JSON: " + e.getMessage()); }
         if (!manifest.isObject() || manifest.path("schemaVersion").asInt() != 2 || !manifest.path("id").isTextual() || !manifest.path("version").isTextual())
             throw reject(MANIFEST + " is not a schemaVersion 2 manifest with a text id and version");
+        // Trigger exports (ADR 058) are accepted once Control implements trigger definitions (triggers module 4); until then
+        // a package carrying them is refused, never accepted with its triggers ignored.
+        if (manifest.has("triggers")) throw reject("trigger exports are not accepted by this Control version");
         String packageId = manifest.get("id").asText();
         if (!packageId.matches("^[a-z][a-z0-9-]{1,30}(\\.[a-z][a-z0-9-]{1,30}){1,3}$")) throw reject("not a package id: " + packageId);
 

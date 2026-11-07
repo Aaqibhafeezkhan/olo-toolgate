@@ -5,6 +5,7 @@ package io.ololabs.toolgate.sdkbuild;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.ololabs.toolgate.testing.ExampleResult;
 import io.ololabs.toolgate.testing.ToolHarness;
+import io.ololabs.toolgate.testing.TriggerHarness;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,8 +16,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * {@code toolgateCheck} / {@code toolgate:check}: the checks a build runs before packaging. {@code toolgate.dev.json}
- * must not be tracked by git (runtime-modes.md §5), and every declared {@code @Example} must pass in test mode
- * (execution.md §7), with the dev file's globals, secrets, claims and destinations as fixtures.
+ * must not be tracked by git (runtime-modes.md §5), every declared {@code @Example} must pass in test mode
+ * (execution.md §7), with the dev file's globals, secrets, claims and destinations as fixtures, and every
+ * {@code @TriggerExample} must pass one check through {@code TriggerHarness}.
  */
 public final class Checks {
     /** What the checks found: the problems, and a line per example that ran. */
@@ -43,13 +45,27 @@ public final class Checks {
             dev.path("claims").properties().forEach(e -> harness.claim(e.getKey(), e.getValue()));
             for (Map.Entry<String, JsonNode> e : dev.path("destinations").properties()) harness.destination(e.getKey(), e.getValue().asText());
         }
-        try (ToolHarness h = harness.build()) {
-            for (ExampleResult r : h.runExamples()) {
-                ran.add(r.toString());
-                if (!r.passed()) problems.add(r.toString());
+        if (hasTools(tools)) {
+            try (ToolHarness h = harness.build()) {
+                for (ExampleResult r : h.runExamples()) {
+                    ran.add(r.toString());
+                    if (!r.passed()) problems.add(r.toString());
+                }
             }
         }
+        // Every @TriggerExample: one check through the real trigger runtime and its frames (plan 5.6).
+        for (TriggerHarness.ExampleResult r : TriggerHarness.runExamples(tools)) {
+            ran.add(r.toString());
+            if (!r.passed()) problems.add(r.toString());
+        }
         return new Report(problems, ran);
+    }
+
+    /** Whether the class path's package index lists any tool; a package may export triggers only. */
+    static boolean hasTools(ClassLoader tools) throws IOException {
+        try (java.io.InputStream in = tools.getResourceAsStream("META-INF/toolgate/package.json")) {
+            return in == null || Staging.JSON.readTree(in).path("tools").size() > 0;
+        }
     }
 
     /** Whether git tracks {@code file}; false when the directory is not a repository or git is missing. */

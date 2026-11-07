@@ -1165,6 +1165,7 @@ export interface PackageManifest {
   readonly compatibility: PackageCompatibility;
   readonly runtimes: ReadonlyArray<RuntimeDeclaration>;
   readonly tools: ReadonlyArray<ToolDefinition>;
+  readonly triggers?: ReadonlyArray<TriggerDefinition>;
   readonly descriptorSetDigest: string;
   readonly artifacts: ReadonlyArray<PackagedArtifact>;
   readonly credentialReferences: ReadonlyArray<string>;
@@ -1939,6 +1940,14 @@ export interface TriggerCounters {
   readonly restarts: number;
   readonly brokerCalls?: number;
   readonly possibleLossOnCrash?: number;
+}
+/** Trigger export (ADR 058, plan 5.9): the signed trigger descriptor plus packaging members outside the digest. Trigger names share the package export namespace with tools. */
+export interface TriggerDefinition {
+  readonly descriptor: TriggerDescriptor;
+  readonly triggerDescriptorDigest: string;
+  readonly runtimeId: string;
+  readonly entryPoint: string;
+  readonly artifactIds: ReadonlyArray<string>;
 }
 /** Signed semantic descriptor of one trigger export (plan 5.9). */
 export interface TriggerDescriptor {

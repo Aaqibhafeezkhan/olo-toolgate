@@ -378,7 +378,7 @@ fn write_annotations(
 fn print_report(report: &package::Report) {
     println!("packageDigest {}", report.package_digest);
     println!("descriptorSetDigest {}", report.descriptor_set_digest);
-    for (tool_id, digest) in &report.tools {
-        println!("{digest}  {tool_id}");
+    for (export_id, digest) in report.tools.iter().chain(&report.triggers) {
+        println!("{digest}  {export_id}");
     }
 }
