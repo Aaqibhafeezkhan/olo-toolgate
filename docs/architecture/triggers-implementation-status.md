@@ -373,6 +373,7 @@ through `tools/control/check.py`):
 | `tests/contracts` (181 tests) | 176 pass, 2 skipped. The same 3 environment failures as on `main` (2 symlink, 1 scorecard) |
 | TypeScript contracts check, build and tests; admin UI `ui:check` and tests | Pass: 2 contract tests; 255 UI tests in 36 files |
 | PHP 8.2 round trips and lint | Pass: 298 v1 and 367 v2 round trips; 665 files linted |
+| `tools/ci/secret-scan.mjs` (gitleaks over the staged tree) | Failed first on module 4's `TriggerPageToken` fixture, `eyJhZnRlciI6ImZpbmFuY2UifQ` (base64url of `{"after":"finance"}`, a sample cursor, not a credential), under the `generic-api-key` rule. The fixture now uses `after-finance`, which matches the schema's pattern. Then pass, with `fixtures.py --check`, `test_trigger_contracts.py`, and the Rust, PHP, TypeScript and Java contract round trips re-run |
 
 **Not run:** the machine-readable evidence file that `tools/enterprise/check.py` writes after the Gradle tests; the
 script stops at the `TargetClaimsTest` environment failure above, so the results come from the JUnit reports. The M12
