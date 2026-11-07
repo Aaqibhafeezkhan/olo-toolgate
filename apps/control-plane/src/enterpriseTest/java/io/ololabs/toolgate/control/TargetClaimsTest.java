@@ -127,7 +127,11 @@ class TargetClaimsTest {
     void postgresScenario(FencedTargetClass type,Scenario scenario)throws Exception{
         String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
         Assumptions.assumeTrue(base!=null&&password!=null,"Requires isolated PostgreSQL");
-        temp=java.nio.file.Files.createDirectory(temp.resolve("case-"+UUID.randomUUID()));
+        // Each case gets a sibling directory; nesting would exhaust SQLite's path budget.
+        Path suite=temp;temp=java.nio.file.Files.createDirectory(suite.resolve("case-"+UUID.randomUUID()));
+        try{postgresCase(base,password,type,scenario);}finally{temp=suite;}
+    }
+    void postgresCase(String base,String password,FencedTargetClass type,Scenario scenario)throws Exception{
         setupTarget(type);
         String database="target_fencing_"+UUID.randomUUID().toString().replace("-","");
         try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var q=c.createStatement()){q.execute("CREATE DATABASE "+database);}

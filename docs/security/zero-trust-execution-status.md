@@ -4457,3 +4457,65 @@ Real mTLS transport tests exercise retry, unchanged-state suppression and stale
 ack refusal. The Host retains negative state on a receipt failure and returns
 unavailable so its sender retries. A new full joined checkpoint remains required
 after these changes. No stage weight or completed-phase claim is awarded.
+
+
+### S22 Windows workstation verification pass — 2026-11-08
+
+Source is the pushed working checkpoint 0147a387ab7d635200862e265f617e3c2e61650a
+on codex/zero-trust-revocation-dispatch, plus the three working-tree repairs
+below. That checkpoint is an intermediate push, not the S22 stage commit. This
+host is Windows with Docker Desktop. It has no runuser/systemd/cgroup OCI
+runtime and no Linux Native owner, so OCI, deployment and Native qualification
+were not run here. Logs are under build/security/stages/s22/ (*-windows*.log).
+
+Executed results:
+- Rust (rust:1.94-bookworm container): fmt check, workspace tests (352 passed,
+  0 failed, 17 explicit environment/harness ignores) and strict all-target
+  Clippy with warnings denied all pass.
+- UI and contracts: contract check/build/tests pass; admin UI typecheck,
+  262 tests and the production build pass. The UI operation drift gate failed
+  because the S22 Gateway signed-state reader routes (getGatewayKillKeys,
+  getGatewayKillState) were in current OpenAPI but not in the generated
+  bindings. The bindings were regenerated; there is no other UI change.
+- Python: preflight, release notes, quality and tests/ci (413 tests, 10 skips)
+  pass on Windows. tests/contracts passes except two symlink cases (Windows
+  privilege) and one scorecard log-parsing case. A Linux container passes
+  those three but cannot run two git-dependent scorecard cases, which pass on
+  Windows. Every contract case therefore passes in at least one environment.
+  Quickstart (43 tests) passes only on Linux, because its supervisor uses
+  fcntl; that requirement predates S22.
+- Java (owned PostgreSQL): javaCheck build plus enterpriseTest ran 446
+  enterprise tests with 4 failures. Two were the same test-path nesting defect
+  previously repaired in the review matrix: the KillAuthorityTest and
+  TargetClaimsTest PostgreSQL matrices nested a new case directory per
+  scenario, exhausting the SQLite path budget (SQLITE_CANTOPEN on Windows).
+  Both helpers now restore the suite directory after each case; production
+  storage checks are unchanged. The rerun passes KillAuthorityTest (9),
+  TargetClaimsTest (11) and EnterpriseOperationTest (87) with zero skips. A
+  third failure, a 409-vs-503 PostgreSQL business-key case under full-suite
+  load, did not reproduce in isolation. The fourth,
+  KillSwitchTest's operator TLS fixture, calls POSIX file permissions and
+  cannot run on Windows; it previously passed on Linux and was not rerun here.
+  The complete Java gate has not been rerun after the fixture repair.
+- Joined Quickstart HOST_NATIVE --revocation (image at 0147a387): both runs
+  pass all eight pre-existing installation/identity/Gateway/revocation gates
+  and fail the first S22 STOP_NEW observation. Run 1: Control tenant database
+  admission returned 429 on the Gateway catalog lookup during the kill commit,
+  and Gateway reported a retryable 503 rather than a kill refusal. This fails
+  closed, but a 503 is not accepted as kill-attributable refusal. Run 2:
+  correct refusal in 1.107 s against the unchanged one-second bound. Discovery
+  p50 on this host is 271 ms. Neither run is accepted as timing evidence, and no
+  bound or assertion was relaxed. Diagnostics: quickstart-run{1,2}-*.
+
+Open finding for review: Quickstart's SQLite pool has four connections while
+tenant database admission defaults to eight concurrent transactions. Host
+long-poll rechecks open a short transaction every 100 ms. On slower hosts,
+contention around a kill commit can reject unrelated catalog reads with 429.
+No capacity or polling behavior was changed in this pass.
+
+S22 remains in progress with no partial weight. Phase/vertical-slice and
+C3b/C7/C8 entries are unchanged and partial. Remaining: full Java gate rerun,
+Linux joined Host/Native runs on the final source, OCI isolated rerun,
+connectivity-class timing, complete phase-3 exit mapping, deployment and
+memory/RAG checks, then the single stage commit. Weighted baseline remains
+56.0% delivered / 44.0% pending, 21/33 stages, 0/7 full phases accepted.

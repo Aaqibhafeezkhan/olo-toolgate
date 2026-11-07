@@ -278,6 +278,8 @@ export const operations = {
   nativeKillState: { method: 'GET', path: '/api/control/v1/endpoints/kills' },
   acknowledgeNativeKillState: { method: 'POST', path: '/api/control/v1/endpoints/kills/acknowledgements' },
   killDeliveryOverview: { method: 'GET', path: '/api/control/v1/kill-events/status' },
+  getGatewayKillKeys: { method: 'GET', path: '/api/control/v1/gateways/kills/keys' },
+  getGatewayKillState: { method: 'GET', path: '/api/control/v1/gateways/kills' },
   acknowledgeGatewayKillCatalog: { method: 'POST', path: '/api/control/v1/gateways/kills/acknowledgements' },
 } as const;
 export interface DirectoryRecords {
