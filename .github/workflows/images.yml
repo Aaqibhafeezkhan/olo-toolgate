@@ -430,7 +430,7 @@ jobs:
         # Hot-folder trigger (issue #274, modules 5 and 10-12): the profile overlay enables triggers and assigns
         # file-dropped; a dropped file reaches the LangGraph agent over toolgate.triggers.v1.
         python -m pip install -r requirements.txt
-        docker compose -f compose.yaml -f compose.triggers.yaml up -d --wait --wait-timeout 180 quickstart linux-device
+        docker compose -f compose.yaml -f compose.triggers.yaml up -d --build --wait --wait-timeout 180 quickstart linux-device
         python trigger_e2e.py
       if: ${{ inputs.run_tests }}
     - name: Preserve LangChain diagnostics

@@ -1,0 +1,3 @@
+# Only the profile goes into the build context: .state holds credentials and is never sent to the builder.
+*
+!hotfolder-trigger.profile.json

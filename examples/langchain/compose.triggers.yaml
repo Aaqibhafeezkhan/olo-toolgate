@@ -1,16 +1,20 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 #
-# Hot-folder trigger overlay: docker compose -f compose.yaml -f compose.triggers.yaml ...
+# Hot-folder trigger overlay: docker compose -f compose.yaml -f compose.triggers.yaml up --build ...
 # Control applies hotfolder-trigger.profile.json at startup and every minute. The profile releases the trigger-only
 # examples.inbox-watch package to ReadAndWriteDeviceGroup and assigns its new-file trigger to inbox/ .txt files; a profile
-# that declares a trigger enables triggers, so no separate feature flag is set. The package resolves from the lock
-# that `manage.py prepare` writes next to the built package; it replaces the image's default core lock and profile.
+# that declares a trigger enables triggers, so no separate feature flag is set. The package resolves from the sealed lock
+# that `manage.py prepare` writes next to the built package. triggers.Dockerfile bakes the profile and lock into the
+# selected Quickstart image (root-owned, as Control requires of mounted custody material); they replace the image's
+# default core lock and profile.
 services:
   quickstart:
-    environment:
-      TOOLGATE_CONTROL_PROFILE_PATH: /opt/toolgate/example/hotfolder-trigger.profile.json
-      TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /opt/toolgate/example-core/core-packages.lock.json
-    volumes:
-      - ./hotfolder-trigger.profile.json:/opt/toolgate/example/hotfolder-trigger.profile.json:ro
-      - ${TOOLGATE_LANGCHAIN_STATE:-.state}/package:/opt/toolgate/example-core:ro
+    image: toolgate-langchain-quickstart-triggers:local
+    build:
+      context: .
+      dockerfile: triggers.Dockerfile
+      additional_contexts:
+        package: ${TOOLGATE_LANGCHAIN_STATE:-.state}/package
+      args:
+        QUICKSTART_IMAGE: ${TOOLGATE_QUICKSTART_IMAGE:-ololab/olo-toolgate-quickstart:dev}

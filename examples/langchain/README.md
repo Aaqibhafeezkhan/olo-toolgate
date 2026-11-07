@@ -111,7 +111,7 @@ devices that join the group later.
 
 ```sh
 python manage.py prepare        # also writes .state/package/core-packages.lock.json
-docker compose -f compose.yaml -f compose.triggers.yaml up -d --wait --wait-timeout 180 quickstart linux-device
+docker compose -f compose.yaml -f compose.triggers.yaml up -d --build --wait --wait-timeout 180 quickstart linux-device
 python manage.py setup --bootstrap-local --approve-linux-device --target linux
 pip install -r requirements.txt
 python trigger_agent.py --target linux
