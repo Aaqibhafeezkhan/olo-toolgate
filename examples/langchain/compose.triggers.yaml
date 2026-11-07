@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Hot-folder trigger overlay: docker compose -f compose.yaml -f compose.triggers.yaml ...
-# Control applies hotfolder-trigger.profile.json at startup and every minute. The profile releases the HotFolder
-# package to ReadAndWriteDeviceGroup and assigns its file-dropped trigger there with {"folder": "inbox"}; a profile
+# Control applies hotfolder-trigger.profile.json at startup and every minute. The profile releases the trigger-only
+# examples.inbox-watch package to ReadAndWriteDeviceGroup and assigns its new-file trigger to inbox/ .txt files; a profile
 # that declares a trigger enables triggers, so no separate feature flag is set. The package resolves from the lock
 # that `manage.py prepare` writes next to the built package; it replaces the image's default core lock and profile.
 services:

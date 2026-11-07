@@ -3,7 +3,7 @@
 """Hot folder: a file dropped into the device's HotFolder inbox triggers a LangGraph flow that displays the file
 and moves it to processed/.
 
-The HotFolder package's `file-dropped` client trigger runs on the device (assigned by the deployment profile
+The `examples.inbox-watch` package's `new-file` client trigger runs on the device (assigned by the deployment profile
 `hotfolder-trigger.profile.json`) and reports each new file to Control. This agent consumes those events through an
 `EventSource`; each event runs one graph: read the file, display it, move it to `processed/<name>`. Every file
 operation is a real package tool call through the Gateway, under the agent's own grants.
@@ -27,7 +27,7 @@ from langgraph.graph import END, START, StateGraph
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-EVENT_TYPE = 'examples.hotfolder.file-dropped.v1'
+EVENT_TYPE = 'examples.files.observed.v1'
 ASSIGNMENT = 'hotfolder-inbox'
 SUBSCRIPTION = 'hotfolder-agent'
 PROTOCOL = 'toolgate.triggers.v1'

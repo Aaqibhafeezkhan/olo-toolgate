@@ -72,7 +72,7 @@ class GraphTest(unittest.TestCase):
     def test_events_outside_the_inbox_contract_are_ignored_without_a_tool_call(self):
         folder = Folder({'inbox/a.txt': 'a'})
         graph = self.graph(folder)
-        for bad in (event('a.txt', type='examples.files.observed.v1'), event('a.txt', path='outbox/a.txt'),
+        for bad in (event('a.txt', type='examples.hotfolder.file-dropped.v1'), event('a.txt', path='outbox/a.txt'),
                     event('../a.txt', path='inbox/../a.txt'), event('sub/a.txt', path='inbox/sub/a.txt'),
                     dict(type=ta.EVENT_TYPE, data='inbox/a.txt')):
             self.assertEqual(graph.invoke({'event': bad})['outcome'], 'ignored', bad)
@@ -222,11 +222,11 @@ class ProfileTest(unittest.TestCase):
     def test_the_profile_assigns_the_trigger_to_the_example_device_group(self):
         profile = json.loads((HERE / 'hotfolder-trigger.profile.json').read_text(encoding='utf-8'))
         package, = profile['packages']
-        self.assertEqual((package['packageId'], package['source']), ('examples.hotfolder', 'PREBUILT_CORE'))
+        self.assertEqual((package['packageId'], package['source']), ('examples.inbox-watch', 'PREBUILT_CORE'))
         self.assertEqual(package['deviceGroupIds'], ['ReadAndWriteDeviceGroup'])
         trigger, = package['triggers']
-        self.assertEqual(trigger, dict(assignment=ta.ASSIGNMENT, triggerId='examples.hotfolder/file-dropped',
-                                       config=dict(folder=ta.INBOX)))
+        self.assertEqual(trigger, dict(assignment=ta.ASSIGNMENT, triggerId='examples.inbox-watch/new-file',
+                                       config=dict(folder=ta.INBOX, extension='.txt')))
 
 
 if __name__ == '__main__':

@@ -102,8 +102,10 @@ A file dropped into the device's `inbox/` folder triggers a LangGraph flow
 ([trigger_agent.py](trigger_agent.py)). The flow displays the file's content and
 then moves it to `processed/`. The feature is enabled by a deployment profile, not by a flag:
 [hotfolder-trigger.profile.json](hotfolder-trigger.profile.json) releases the
-HotFolder package to `ReadAndWriteDeviceGroup` and assigns its `file-dropped`
-client trigger there with `{"folder": "inbox"}`. Any Control that applies the
+trigger-only [`examples.inbox-watch`](../java-tools/inbox-watch/README.md) package to
+`ReadAndWriteDeviceGroup` and assigns its `new-file` client trigger there with
+`{"folder": "inbox", "extension": ".txt"}`. The HotFolder package stays tools-only, so the
+base setup above works without triggers. Any Control that applies the
 profile enables triggers and creates (or updates) the assignment, including on
 devices that join the group later.
 
@@ -116,8 +118,8 @@ python trigger_agent.py --target linux
 docker compose exec linux-device sh -c 'echo "2 x widget" > /var/lib/olo-toolgate/hotfolder/inbox/order-1042.txt'
 ```
 
-The device polls `inbox/` every 10 seconds and reports each new `.txt` file once
-(`examples.hotfolder.file-dropped.v1`, a `STATE_SNAPSHOT` source). Control stores
+The device polls `inbox/` every minute and reports each new `.txt` file once
+(`examples.files.observed.v1`, a `STATE_SNAPSHOT` source). Control stores
 each event once, keyed by its source and id. The agent reads it, prints the
 content and moves the file with the package's `move` tool. A file that is already
 gone is skipped. An operation whose outcome the Gateway cannot confirm is

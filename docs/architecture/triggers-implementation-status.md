@@ -399,10 +399,11 @@ owned M12 scenarios (9, 13 allocation and ingest parts, 33, 38, 39 client crash 
   A deployment profile may declare trigger assignments (`ProfilePackage.triggers`): applying it releases the
   package to its device groups and creates or updates each assignment in a new `ASSIGN` step. A profile that
   declares a trigger enables triggers for the installation (*Baseline changes*).
-- **Use case (matures with modules 10–12):** the HotFolder package's `file-dropped` POLL trigger, and in
-  `examples/langchain` a deployment profile, a Compose overlay with a core lock, and a LangGraph agent. The agent
-  takes each dropped file, displays it and moves it to `processed/`. It reads events from Control's events API now;
-  module 12's socket will be another event source.
+- **Use case:** the trigger-only `examples.inbox-watch` package's `new-file` POLL trigger on `inbox/` `.txt`
+  files, and in `examples/langchain` a deployment profile, a Compose overlay with a core lock, and a LangGraph
+  agent. The agent takes each dropped file, displays it and moves it to `processed/` with HotFolder tools. The
+  HotFolder package stays tools-only: Control refuses trigger exports at upload while triggers are off, and the base
+  LangChain setup uploads HotFolder without the triggers profile (CI run 42398105431).
 - **Contracts:** `FleetTriggerRegistration`, `TriggerStoredEvent`, `TriggerEventPage`, `TriggerDispositionView`,
   `ProfileTrigger`, instance-view fields and the `ASSIGN` step; regenerated (1394 files) with valid fixtures.
 

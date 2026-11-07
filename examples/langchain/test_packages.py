@@ -54,15 +54,15 @@ class PackageFlowTests(unittest.TestCase):
         from pathlib import Path
         with tempfile.TemporaryDirectory() as directory:
             directory=Path(directory)
-            with zipfile.ZipFile(directory/'hotfolder.tgpkg','w') as archive:
-                archive.writestr('toolgate-package.json',json.dumps(dict(id=packages.PACKAGE_ID,version='0.1.0',sdk=dict(version='1.0.0-dev.1'))))
+            with zipfile.ZipFile(directory/'inbox-watch.tgpkg','w') as archive:
+                archive.writestr('toolgate-package.json',json.dumps(dict(id=packages.TRIGGER_PACKAGE_ID,version='0.1.0',sdk=dict(version='1.0.0-dev.1'))))
                 archive.writestr('CHECKSUMS.sha256','abc  toolgate-package.json\n')
             lock=packages.core_lock(directory)
             self.assertEqual(json.loads((directory/'core-packages.lock.json').read_text()),lock)
             entry,=lock['packages']
-            self.assertEqual((lock['sdkVersion'],entry['id'],entry['version'],entry['artifact']),('1.0.0-dev.1',packages.PACKAGE_ID,'0.1.0','hotfolder.tgpkg'))
+            self.assertEqual((lock['sdkVersion'],entry['id'],entry['version'],entry['artifact']),('1.0.0-dev.1',packages.TRIGGER_PACKAGE_ID,'0.1.0','inbox-watch.tgpkg'))
             self.assertEqual(entry['packageDigest'],'sha256:'+hashlib.sha256(b'abc  toolgate-package.json\n').hexdigest())
-            self.assertEqual(entry['artifactSha256'],hashlib.sha256((directory/'hotfolder.tgpkg').read_bytes()).hexdigest())
+            self.assertEqual(entry['artifactSha256'],hashlib.sha256((directory/'inbox-watch.tgpkg').read_bytes()).hexdigest())
 
     def test_api_failure_does_not_echo_credential_or_response_body(self):
         from urllib.error import HTTPError
