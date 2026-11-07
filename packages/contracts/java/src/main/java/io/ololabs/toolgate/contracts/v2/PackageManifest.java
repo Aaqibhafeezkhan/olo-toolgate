@@ -14,6 +14,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param compatibility canonical compatibility value
  * @param runtimes canonical runtimes value
  * @param tools canonical tools value
+ * @param triggers canonical triggers value
  * @param descriptorSetDigest canonical descriptorSetDigest value
  * @param artifacts canonical artifacts value
  * @param credentialReferences canonical credentialReferences value
@@ -32,6 +33,7 @@ public record PackageManifest(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "compatibility", required = true) PackageCompatibility compatibility,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "runtimes", required = true) java.util.List<RuntimeDeclaration> runtimes,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "tools", required = true) java.util.List<ToolDefinition> tools,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggers", required = false) java.util.List<TriggerDefinition> triggers,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "descriptorSetDigest", required = true) String descriptorSetDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "artifacts", required = true) java.util.List<PackagedArtifact> artifacts,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "credentialReferences", required = true) java.util.List<String> credentialReferences,
@@ -50,6 +52,7 @@ public record PackageManifest(
      * @param compatibility canonical compatibility value
      * @param runtimes canonical runtimes value
      * @param tools canonical tools value
+     * @param triggers canonical triggers value
      * @param descriptorSetDigest canonical descriptorSetDigest value
      * @param artifacts canonical artifacts value
      * @param credentialReferences canonical credentialReferences value
@@ -69,6 +72,7 @@ public record PackageManifest(
         runtimes = runtimes == null ? null : java.util.List.copyOf(runtimes);
         java.util.Objects.requireNonNull(tools, "tools");
         tools = tools == null ? null : java.util.List.copyOf(tools);
+        triggers = triggers == null ? null : java.util.List.copyOf(triggers);
         java.util.Objects.requireNonNull(descriptorSetDigest, "descriptorSetDigest");
         java.util.Objects.requireNonNull(artifacts, "artifacts");
         artifacts = artifacts == null ? null : java.util.List.copyOf(artifacts);

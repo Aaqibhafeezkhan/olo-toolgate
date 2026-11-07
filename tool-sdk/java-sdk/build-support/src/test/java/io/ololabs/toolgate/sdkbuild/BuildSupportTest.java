@@ -98,6 +98,13 @@ class BuildSupportTest {
         assertEquals("[{\"artifactId\":\"tool\",\"path\":\"artifacts/tool.jar\",\"mediaType\":\"application/java-archive\",\"runtimeId\":\"jvm\"}]",
                 m.path("artifacts").toString());
         assertFalse(tool.has("toolDescriptorDigest"), "digests are the packer's");
+        JsonNode trigger = m.path("triggers").get(0);
+        assertEquals("acme.stock/stock-low", trigger.path("descriptor").path("triggerId").asText());
+        assertEquals("POLL", trigger.path("descriptor").path("mode").asText());
+        assertEquals(Staging.ENTRY_POINT, trigger.path("entryPoint").asText());
+        assertEquals("jvm", trigger.path("runtimeId").asText());
+        assertEquals("[\"tool\"]", trigger.path("artifactIds").toString());
+        assertFalse(trigger.has("triggerDescriptorDigest"), "digests are the packer's");
         try (Stream<Path> files = Files.walk(out.resolve("artifacts"))) {
             assertEquals(List.of(out.resolve(Staging.TOOL_JAR)), files.filter(Files::isRegularFile).collect(Collectors.toList()));
         }
@@ -153,9 +160,12 @@ class BuildSupportTest {
         Path project = Files.createTempDirectory("toolgate-project");
         Files.writeString(project.resolve("toolgate.dev.json"), "{\"globals\": {\"Warehouse\": \"north\"}}");
         Checks.Report report = Checks.run(getClass().getClassLoader(), project);
-        assertEquals(2, report.ran().size(), report.toString());
-        assertEquals(1, report.problems().size(), report.toString());
+        assertEquals(4, report.ran().size(), report.toString());
+        assertEquals(2, report.problems().size(), report.toString());
         assertTrue(report.problems().get(0).contains("expected error OUT_OF_STOCK but got UNKNOWN_SKU"), report.toString());
+        // Trigger examples run one check through the real trigger runtime.
+        assertTrue(report.ran().contains("trigger stock-low example low passed"), report.toString());
+        assertTrue(report.problems().get(1).startsWith("trigger stock-low example wrong: expected 0 events but got 1"), report.toString());
     }
 
     @Test

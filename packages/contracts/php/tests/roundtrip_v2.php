@@ -312,6 +312,7 @@ $models = [
     'TriggerConditionStatus',
     'TriggerConditionType',
     'TriggerCounters',
+    'TriggerDefinition',
     'TriggerDescriptor',
     'TriggerDesiredDocument',
     'TriggerDesiredInstance',

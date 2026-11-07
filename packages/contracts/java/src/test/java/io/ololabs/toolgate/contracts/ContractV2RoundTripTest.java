@@ -316,6 +316,7 @@ final class ContractV2RoundTripTest {
         "TriggerConditionStatus",
         "TriggerConditionType",
         "TriggerCounters",
+        "TriggerDefinition",
         "TriggerDescriptor",
         "TriggerDesiredDocument",
         "TriggerDesiredInstance",

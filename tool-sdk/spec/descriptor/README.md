@@ -46,7 +46,8 @@ All members are always present unless marked optional. Optional members are **om
 | Digest | Definition |
 |---|---|
 | `toolDescriptorDigest` | `"sha256:" + lowercase hex SHA-256 of the canonical bytes of one semantic descriptor` |
-| `descriptorSetDigest` | Same, over the array of `{toolId, toolDescriptorDigest}` for every tool in the package, sorted by `toolId` |
+| `triggerDescriptorDigest` | The same, over the canonical bytes of one trigger descriptor (`TriggerDescriptor`, [ADR 058](../../../docs/adr/058-triggers.md)) |
+| `descriptorSetDigest` | Same, over one array holding `{toolId, toolDescriptorDigest}` for every tool and `{triggerId, triggerDescriptorDigest}` for every trigger in the package, sorted by id. Tools and triggers share one export namespace, so no id appears twice; a package without triggers has exactly the tool set digest |
 | `artifactDigest`, `packageDigest` | Over exact bytes; defined by the package format (platform-requirements.md §7.2) and frozen at D1. They are never used to decide semantic equality. |
 
 Generation 1 emits integers only for numeric values it derives (bounds of `INT` and `LONG`, sizes, durations). Author-declared `NUMBER` bounds and defaults are serialised by JCS's number rules; the packager rejects values that are not finite doubles.

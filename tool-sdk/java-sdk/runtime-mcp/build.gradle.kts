@@ -10,6 +10,8 @@ base { archivesName.set("toolgate-sdk-runtime-mcp") }
 dependencies {
     api(project(":sdk-java-api"))
     api(project(":sdk-java-protocol"))
+    // Trigger-mode frames use the generated bindings of trigger.schema.json (ADR 058).
+    implementation(project(":contracts-java"))
     implementation(libs.sqlite.jdbc)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.launcher)

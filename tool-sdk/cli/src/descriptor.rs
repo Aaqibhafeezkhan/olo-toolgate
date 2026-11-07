@@ -25,16 +25,35 @@ pub fn descriptor_set_digest(descriptors: &[Value]) -> Result<String, Error> {
 }
 
 /// The set digest from `(toolId, toolDescriptorDigest)` pairs already computed.
-pub fn set_digest_of(mut entries: Vec<(String, String)>) -> Result<String, Error> {
+pub fn set_digest_of(entries: Vec<(String, String)>) -> Result<String, Error> {
+    export_set_digest(entries, Vec::new())
+}
+
+/// `descriptorSetDigest` of a package's exports (ADR 058): the digest of one array holding
+/// `{toolId, toolDescriptorDigest}` per tool and `{triggerId, triggerDescriptorDigest}` per trigger,
+/// sorted by id. Tools and triggers share one export namespace, so no two exports share an id.
+/// Without triggers it is exactly the tool set digest.
+pub fn export_set_digest(
+    tools: Vec<(String, String)>,
+    triggers: Vec<(String, String)>,
+) -> Result<String, Error> {
+    let mut entries: Vec<(String, Value)> = tools
+        .into_iter()
+        .map(|(id, d)| (id.clone(), json!({"toolId": id, "toolDescriptorDigest": d})))
+        .chain(triggers.into_iter().map(|(id, d)| {
+            (
+                id.clone(),
+                json!({"triggerId": id, "triggerDescriptorDigest": d}),
+            )
+        }))
+        .collect();
     entries.sort_by(|a, b| utf16_key(&a.0).cmp(&utf16_key(&b.0)));
     if entries.windows(2).any(|w| w[0].0 == w[1].0) {
-        return Err(Error::Invalid("two tools share a toolId".into()));
+        return Err(Error::Invalid(
+            "two exports share an id; tools and triggers share one namespace".into(),
+        ));
     }
-    let list: Vec<Value> = entries
-        .into_iter()
-        .map(|(tool_id, d)| json!({"toolId": tool_id, "toolDescriptorDigest": d}))
-        .collect();
-    digest(&Value::Array(list))
+    digest(&Value::Array(entries.into_iter().map(|(_, v)| v).collect()))
 }
 
 /// Equivalence under the closed rewrite list, version 1 (§4).
