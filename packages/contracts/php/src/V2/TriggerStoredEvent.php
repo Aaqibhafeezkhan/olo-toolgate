@@ -11,19 +11,21 @@ final readonly class TriggerStoredEvent implements \JsonSerializable {
         public TriggerCloudEvent $event,
         public TriggerProducer $producer,
         public int $receivedAtUnixMs,
-        public ?TriggerDispositionView $disposition = null
+        public ?TriggerDispositionView $disposition = null,
+        public ?TriggerClassification $classification = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['event', 'producer', 'receivedAtUnixMs', 'disposition']) || array_diff(['event', 'producer', 'receivedAtUnixMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['event', 'producer', 'receivedAtUnixMs', 'disposition', 'classification']) || array_diff(['event', 'producer', 'receivedAtUnixMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             TriggerCloudEvent::fromArray($data['event']),
             TriggerProducer::fromArray($data['producer']),
             $data['receivedAtUnixMs'],
-            array_key_exists('disposition', $data) ? TriggerDispositionView::fromArray($data['disposition']) : null
+            array_key_exists('disposition', $data) ? TriggerDispositionView::fromArray($data['disposition']) : null,
+            array_key_exists('classification', $data) ? TriggerClassification::from($data['classification']) : null
         );
     }
 

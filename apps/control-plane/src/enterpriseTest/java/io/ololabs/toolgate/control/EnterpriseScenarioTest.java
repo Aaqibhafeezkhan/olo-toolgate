@@ -37,17 +37,17 @@ class EnterpriseScenarioTest {
     }
     @Test void roleInheritanceRetainsIndependentTeamWitnessesAndRevokesLive(){
         f.remove(Kind.GRANT,"human");f.add(Kind.ROLE,new ControlRole("reporting","Reporting",true,1L,UserRole.BASIC,EnterpriseRoleType.HUMAN,List.of()));
-        for(var team:List.of("team-a","team-b"))f.add(Kind.TEAM,new ControlTeam(team,team,true,1L,List.of("alice"),List.of("reporting")));
+        for(var team:List.of("team-a","team-b"))f.add(Kind.TEAM,new ControlTeam(team,team,true,1L,List.of("alice"),List.of("reporting"),null));
         f.grant("reporting-grant","reporting",EnterpriseSourceType.ROLE,EnterpriseGrantPurpose.HUMAN,f.scope("tools-a","devices-a"));
         assertEquals(Set.of("team-a","team-b"),new HashSet<>(human().witnesses().stream().map(EnterpriseWitness::teamId).toList()));
-        f.add(Kind.TEAM,new ControlTeam("team-a","Team A",true,2L,List.of(),List.of("reporting")));
+        f.add(Kind.TEAM,new ControlTeam("team-a","Team A",true,2L,List.of(),List.of("reporting"),null));
         assertEquals("team-b",human().witnesses().getFirst().teamId());
         enabled(Kind.ROLE,"reporting",false);assertEquals(Decision.BLOCK,human().decision());
     }
     @Test void actionRulesDoNotPromoteReadToWrite(){
         var s=f.scope("tools-a","devices-a");f.grant("human","team-a",EnterpriseSourceType.TEAM,EnterpriseGrantPurpose.HUMAN,new EnterpriseScope(s.toolGroups(),s.deviceGroups(),List.of("read"),false,s.resources(),s.conditions()));
         assertEquals(Decision.ALLOW,input("read",true,null,null).decision());assertEquals(Decision.BLOCK,input("write",true,null,null).decision());
-        f.add(Kind.ROLE,new ControlRole("writer","Writer",true,1L,UserRole.BASIC,EnterpriseRoleType.HUMAN,List.of()));f.add(Kind.TEAM,new ControlTeam("team-a","Team A",true,1L,List.of("alice"),List.of("writer")));
+        f.add(Kind.ROLE,new ControlRole("writer","Writer",true,1L,UserRole.BASIC,EnterpriseRoleType.HUMAN,List.of()));f.add(Kind.TEAM,new ControlTeam("team-a","Team A",true,1L,List.of("alice"),List.of("writer"),null));
         f.grant("write","writer",EnterpriseSourceType.ROLE,EnterpriseGrantPurpose.HUMAN,new EnterpriseScope(s.toolGroups(),s.deviceGroups(),List.of("write"),false,s.resources(),s.conditions()));
         assertEquals(Decision.ALLOW,input("write",true,null,null).decision());f.policy("block",Decision.BLOCK);assertEquals(Decision.BLOCK,input("write",true,null,null).decision());
     }
@@ -85,7 +85,7 @@ class EnterpriseScenarioTest {
         assertEquals(Decision.BLOCK,delegated().decision());
     }
     @Test void downstreamAgentCannotExceedAnyUpstreamCeilingOrReuseIdentity(){
-        f.add(Kind.AGENT,new ControlAgent("downstream","Downstream",null,true,1L,"bob"));f.add(Kind.AGENT_GROUP,new ControlAgentGroup("downstream-group","Downstream",null,true,1L,List.of("downstream"),List.of()));
+        f.add(Kind.AGENT,new ControlAgent("downstream","Downstream",null,true,1L,"bob"));f.add(Kind.AGENT_GROUP,new ControlAgentGroup("downstream-group","Downstream",null,true,1L,List.of("downstream"),List.of(),null));
         f.workload("child-workload","downstream",RequestMode.DELEGATED,"alice","workload");
         f.grant("child-capability","downstream-group",EnterpriseSourceType.AGENT_GROUP,EnterpriseGrantPurpose.CAPABILITY,f.scope("tools-a","devices-a"));
         f.add(Kind.AGENT_DELEGATION,new ControlAgentDelegation("edge","Edge",true,1L,"group-a","downstream-group",f.scope("tools-a","devices-a"),1L));

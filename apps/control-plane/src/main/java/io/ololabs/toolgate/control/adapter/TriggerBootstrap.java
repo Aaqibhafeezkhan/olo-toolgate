@@ -50,4 +50,27 @@ public class TriggerBootstrap {
     public TriggerIngest ingest(io.ololabs.toolgate.control.domain.Ids.TenantId tenant) { return new TriggerIngest(forTenant(tenant), codec); }
 
     @Produces @jakarta.enterprise.context.RequestScoped TriggerService triggers() { return forTenant(request.tenant()); }
+
+    /** Operator ceiling for event retention (plan 12.1); tenants configure at most this many days. */
+    int ceilingDays() { return config.getOptionalValue("toolgate.triggers.retention.ceiling-days", Integer.class).orElse(30); }
+
+    /** Router, retention and subscriptions of a tenant (modules 10-12); the router matches the tenant's subscriptions. */
+    public TriggerRouter router(io.ololabs.toolgate.control.domain.Ids.TenantId tenant) {
+        var service = forTenant(tenant);
+        return new TriggerRouter(store, codec, service, java.time.Clock.systemUTC(), tenant.value(), ceilingDays())
+            .subscriptions(new TriggerSubscriptions(store, codec, service, java.time.Clock.systemUTC(), tenant.value()));
+    }
+    public TriggerSubscriptions subscriptions(io.ololabs.toolgate.control.domain.Ids.TenantId tenant) {
+        return new TriggerSubscriptions(store, codec, forTenant(tenant), java.time.Clock.systemUTC(), tenant.value());
+    }
+    public TriggerStream stream(io.ololabs.toolgate.control.domain.Ids.TenantId tenant) {
+        var service = forTenant(tenant);
+        var subscriptions = new TriggerSubscriptions(store, codec, service, java.time.Clock.systemUTC(), tenant.value());
+        var router = new TriggerRouter(store, codec, service, java.time.Clock.systemUTC(), tenant.value(), ceilingDays()).subscriptions(subscriptions);
+        return new TriggerStream(store, codec, service, subscriptions, router, java.time.Clock.systemUTC(), tenant.value());
+    }
+    @Produces @jakarta.enterprise.context.RequestScoped TriggerRouter requestRouter() { return router(request.tenant()); }
+    @Produces @jakarta.enterprise.context.RequestScoped TriggerSubscriptions requestSubscriptions() { return subscriptions(request.tenant()); }
+    @Produces @jakarta.enterprise.context.RequestScoped TriggerStream requestStream() { return stream(request.tenant()); }
+    public boolean enabled() { return enabled(config); }
 }

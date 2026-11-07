@@ -3648,6 +3648,18 @@ pub struct TriggerCheckpointUploadRequest {
     pub size_bytes: u64,
     pub digest: String,
 }
+/// Canonical TriggerClassification wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerClassification {
+    #[serde(rename = "PUBLIC")]
+    Public,
+    #[serde(rename = "INTERNAL")]
+    Internal,
+    #[serde(rename = "CONFIDENTIAL")]
+    Confidential,
+    #[serde(rename = "RESTRICTED")]
+    Restricted,
+}
 /// CloudEvents 1.0 JSON envelope written by the supervisor; authors never set source, type, dataschema or tg* attributes (plan 6.4).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3711,6 +3723,16 @@ pub enum TriggerConditionType {
     #[serde(rename = "Unexpected")]
     Unexpected,
 }
+/// Canonical TriggerConsumerKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerConsumerKind {
+    #[serde(rename = "SUBSCRIPTION")]
+    Subscription,
+    #[serde(rename = "ACTION")]
+    Action,
+    #[serde(rename = "TEST")]
+    Test,
+}
 /// Monotonic counters for the current process lifetime of one instance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3725,6 +3747,15 @@ pub struct TriggerCounters {
     pub broker_calls: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub possible_loss_on_crash: Option<u64>,
+}
+/// Tenant fail-closed defaults for unlabelled data, per integration kind (plan 12.3). A default may be raised, never lowered below the shipped value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDefaultClassifications {
+    pub sdk_package: TriggerClassification,
+    pub mcp_proxy: TriggerClassification,
+    pub external: TriggerClassification,
+    pub unknown: TriggerClassification,
 }
 /// Trigger export (ADR 058, plan 5.9): the signed trigger descriptor plus packaging members outside the digest. Trigger names share the package export namespace with tools.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3755,6 +3786,61 @@ pub struct TriggerDefinitionRecord {
     pub trigger_descriptor_digest: String,
     pub descriptor: TriggerDescriptor,
     pub security_delta: Vec<SecurityDeltaItem>,
+}
+/// One delivery of a routed event to one consumer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDelivery {
+    pub delivery_id: String,
+    pub consumer: TriggerDeliveryConsumer,
+    pub cursor: String,
+    pub event_source: String,
+    pub event_id: String,
+    pub event_type: String,
+    pub assignment: String,
+    pub state: TriggerDeliveryState,
+    pub attempts: u64,
+    pub created_at_unix_ms: u64,
+    pub updated_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_attempt_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+/// The consumer of a delivery.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDeliveryConsumer {
+    pub kind: TriggerConsumerKind,
+    pub name: String,
+}
+/// One page of deliveries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDeliveryPage {
+    pub items: Vec<TriggerDelivery>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
+}
+/// Canonical TriggerDeliveryState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerDeliveryState {
+    #[serde(rename = "Pending")]
+    Pending,
+    #[serde(rename = "InFlight")]
+    Inflight,
+    #[serde(rename = "Delivered")]
+    Delivered,
+    #[serde(rename = "RetryWait")]
+    Retrywait,
+    #[serde(rename = "Held")]
+    Held,
+    #[serde(rename = "Superseded")]
+    Superseded,
+    #[serde(rename = "DeadLettered")]
+    Deadlettered,
+    #[serde(rename = "Skipped")]
+    Skipped,
 }
 /// Signed semantic descriptor of one trigger export (plan 5.9).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4312,6 +4398,13 @@ pub struct TriggerSchedule {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resync_interval_ms: Option<u64>,
 }
+/// Tenant trigger settings (GET and PUT /api/control/v1/triggers/settings).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSettings {
+    pub event_retention_days: u64,
+    pub default_classification: TriggerDefaultClassifications,
+}
 /// Declared SnapshotState bounds (plan 5.6).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -4383,6 +4476,157 @@ pub struct TriggerStoredEvent {
     pub received_at_unix_ms: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub disposition: Option<TriggerDispositionView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub classification: Option<TriggerClassification>,
+}
+/// A client message on `toolgate.triggers.v1`. subscribe: subscription, optional resumeAfter. watch: sources, optional filter. ack: subscription, cursor. credit: n. unsubscribe: subscription.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerStreamClientMessage {
+    pub r#type: TriggerStreamClientType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_after: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sources: Option<TriggerSubscriptionSources>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub n: Option<u64>,
+}
+/// Canonical TriggerStreamClientType wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerStreamClientType {
+    #[serde(rename = "subscribe")]
+    Subscribe,
+    #[serde(rename = "watch")]
+    Watch,
+    #[serde(rename = "ack")]
+    Ack,
+    #[serde(rename = "credit")]
+    Credit,
+    #[serde(rename = "unsubscribe")]
+    Unsubscribe,
+}
+/// An error on the stream, with the status and code an HTTP call would get.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerStreamError {
+    pub status: u64,
+    pub code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+/// A server message on `toolgate.triggers.v1`. subscribed: subscription. event: subscription (absent for watch), cursor, event. gap: subscription, fromCursor, toCursor, reason RetentionExpired. revoked: subscription, reason. error: error.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerStreamServerMessage {
+    pub r#type: TriggerStreamServerType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<TriggerViewEvent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<TriggerStreamError>,
+}
+/// Canonical TriggerStreamServerType wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerStreamServerType {
+    #[serde(rename = "subscribed")]
+    Subscribed,
+    #[serde(rename = "event")]
+    Event,
+    #[serde(rename = "gap")]
+    Gap,
+    #[serde(rename = "revoked")]
+    Revoked,
+    #[serde(rename = "error")]
+    Error,
+}
+/// A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerStreamTicket {
+    pub ticket: String,
+    pub expires_at_unix_ms: u64,
+}
+/// Subscription resource.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSubscription {
+    #[serde(deserialize_with = "const_trigger_subscription_api_version")]
+    pub api_version: String,
+    #[serde(deserialize_with = "const_trigger_subscription_kind")]
+    pub kind: String,
+    pub metadata: TriggerAssignmentMetadata,
+    pub spec: TriggerSubscriptionSpec,
+    pub status: TriggerSubscriptionStatus,
+}
+/// Body of POST /api/control/v1/triggers/subscriptions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSubscriptionCreate {
+    pub name: String,
+    pub spec: TriggerSubscriptionSpec,
+}
+/// One page of subscriptions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSubscriptionPage {
+    pub items: Vec<TriggerSubscription>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
+}
+/// Canonical TriggerSubscriptionPhase wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerSubscriptionPhase {
+    #[serde(rename = "Active")]
+    Active,
+    #[serde(rename = "Suspended")]
+    Suspended,
+    #[serde(rename = "Expired")]
+    Expired,
+}
+/// Explicit sources of a subscription (plan 13.1); there is no wildcard. Control refuses a source listed twice.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSubscriptionSources {
+    pub assignments: Vec<String>,
+}
+/// A durable socket subscription (plan 13.1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSubscriptionSpec {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    pub sources: TriggerSubscriptionSources,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_state: Option<bool>,
+    pub expires_at_unix_ms: u64,
+}
+/// Subscription status.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerSubscriptionStatus {
+    pub phase: TriggerSubscriptionPhase,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    pub clearance: TriggerClassification,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acked_cursor: Option<String>,
 }
 /// Trigger block of every executor check-in (plan 8.2, 8.5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4441,6 +4685,24 @@ pub enum TriggerTerminalRejectionPolicy {
     Halt,
     #[serde(rename = "SKIP_AND_RECORD")]
     SkipAndRecord,
+}
+/// A routed event as one reader may see it (plan 12.2 rule 5): the envelope always; data and subject only when the reader's clearance covers the event's label.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerViewEvent {
+    #[serde(deserialize_with = "const_trigger_view_event_specversion")]
+    pub specversion: String,
+    pub id: String,
+    pub source: String,
+    pub r#type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub tgclassification: TriggerClassification,
+    pub tgredacted: bool,
 }
 /// Canonical ValueSource wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4559,6 +4821,17 @@ const_field!(const_trigger_reconcile_frame_kind, String, "RECONCILE");
 const_field!(const_trigger_resume_frame_kind, String, "RESUME");
 const_field!(const_trigger_start_frame_kind, String, "TRIGGER_START");
 const_field!(const_trigger_stop_frame_kind, String, "STOP");
+const_field!(
+    const_trigger_subscription_api_version,
+    String,
+    "toolgate.olo/v1"
+);
+const_field!(
+    const_trigger_subscription_kind,
+    String,
+    "TriggerSubscription"
+);
+const_field!(const_trigger_view_event_specversion, String, "1.0");
 /// Embedded canonical schemas for offline boundary validation.
 pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (

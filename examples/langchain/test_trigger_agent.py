@@ -122,6 +122,102 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(lines, ['inbox/a.txt: processed'])
 
 
+class FakeSocket:
+    """A toolgate.triggers.v1 server stand-in: queued server messages, recorded client messages, then a close."""
+
+    def __init__(self, server, script):
+        self.server, self.inbox, self.sent, self.closed = server, list(script), [], False
+
+    def send(self, text):
+        self.sent.append(json.loads(text))
+
+    def recv(self, timeout):
+        if self.closed:
+            raise ConnectionError('closed')
+        if not self.inbox:
+            raise TimeoutError()
+        item = self.inbox.pop(0)
+        if item == 'close':
+            self.closed = True
+            raise ConnectionError('closed by server')
+        return json.dumps(item)
+
+    def close(self):
+        self.closed = True
+
+
+class SocketServer:
+    def __init__(self, scripts):
+        self.scripts, self.sockets, self.tickets, self.offered = list(scripts), [], 0, []
+
+    def ticket(self):
+        self.tickets += 1
+        return 'T' * 42 + str(self.tickets % 10)
+
+    def connect(self, subprotocols):
+        self.offered.append(subprotocols)
+        socket = FakeSocket(self, self.scripts.pop(0))
+        self.sockets.append(socket)
+        return socket
+
+
+def message(name, cursor):
+    return dict(type='event', subscription=ta.SUBSCRIPTION, cursor=cursor, event=event(name))
+
+
+class SocketEventsTest(unittest.TestCase):
+    def test_events_are_acknowledged_after_handling_deduplicated_and_resumed_with_a_new_ticket(self):
+        server = SocketServer([
+            [dict(type='subscribed', subscription=ta.SUBSCRIPTION), message('a.txt', '0000000000000001'), 'close'],
+            [dict(type='subscribed', subscription=ta.SUBSCRIPTION), message('a.txt', '0000000000000001'), message('b.txt', '0000000000000002')],
+        ])
+        lines = []
+        source = ta.SocketEvents(server.connect, server.ticket, wait=0.05, report=lambda line, **_: lines.append(line))
+        handled = []
+        for item in source.poll():
+            # The ack for this cursor is not sent before the graph has handled the event.
+            self.assertFalse(any(m.get('type') == 'ack' for m in server.sockets[0].sent))
+            handled.append(item['subject'])
+        self.assertEqual(handled, ['inbox/a.txt'])
+        first = server.sockets[0].sent
+        self.assertEqual(first[0], dict(type='subscribe', subscription=ta.SUBSCRIPTION))
+        self.assertEqual(first[1], dict(type='ack', subscription=ta.SUBSCRIPTION, cursor='0000000000000001'))
+        # The server closed: the next poll reconnects with a fresh single-use ticket and resumes.
+        handled += [item['subject'] for item in source.poll()]
+        self.assertEqual(handled, ['inbox/a.txt', 'inbox/b.txt'], 'a re-delivered event is handled once')
+        self.assertEqual(server.tickets, 2)
+        self.assertEqual([offer[0] for offer in server.offered], [ta.PROTOCOL, ta.PROTOCOL])
+        self.assertTrue(all(offer[1].startswith('ticket.') for offer in server.offered))
+        acks = [m['cursor'] for m in server.sockets[1].sent if m['type'] == 'ack']
+        self.assertEqual(acks, ['0000000000000001', '0000000000000002'], 'every delivery is acknowledged, duplicates too')
+
+    def test_gaps_are_reported_and_revocation_stops_the_agent(self):
+        server = SocketServer([[dict(type='gap', subscription=ta.SUBSCRIPTION, fromCursor='0000000000000002', toCursor='0000000000000009',
+                                     reason='RetentionExpired'), dict(type='revoked', subscription=ta.SUBSCRIPTION, reason='GrantRevoked')]])
+        lines = []
+        source = ta.SocketEvents(server.connect, server.ticket, wait=0.05, report=lambda line, **_: lines.append(line))
+        with self.assertRaisesRegex(ValueError, 'GrantRevoked'):
+            list(source.poll())
+        self.assertIn('gap 0000000000000002..0000000000000009: RetentionExpired', lines)
+
+    def test_the_subscription_is_created_once(self):
+        calls = []
+
+        def api(path, body=None):
+            calls.append((path, body))
+            if body is None and len(calls) == 1:
+                raise ValueError('HTTP 404')
+            return {'metadata': {'name': ta.SUBSCRIPTION}}
+
+        ta.ensure_subscription(api, 1000)
+        created = calls[1][1]
+        self.assertEqual(created['spec']['sources'], {'assignments': [ta.ASSIGNMENT]})
+        self.assertEqual(created['spec']['expiresAtUnixMs'], 1000 + 30 * 86400000)
+        calls.clear()
+        ta.ensure_subscription(lambda path, body=None: calls.append((path, body)) or {'metadata': {}}, 1000)
+        self.assertEqual(len(calls), 1, 'an existing subscription is kept')
+
+
 class ProfileTest(unittest.TestCase):
     def test_the_profile_assigns_the_trigger_to_the_example_device_group(self):
         profile = json.loads((HERE / 'hotfolder-trigger.profile.json').read_text(encoding='utf-8'))

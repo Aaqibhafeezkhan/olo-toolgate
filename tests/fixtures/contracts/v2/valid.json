@@ -4643,5 +4643,230 @@
       }
     ],
     "nextPageToken": "after-finance"
+  },
+  "TriggerClassification": "CONFIDENTIAL",
+  "TriggerDefaultClassifications": {
+    "sdkPackage": "INTERNAL",
+    "mcpProxy": "CONFIDENTIAL",
+    "external": "CONFIDENTIAL",
+    "unknown": "RESTRICTED"
+  },
+  "TriggerSettings": {
+    "eventRetentionDays": 7,
+    "defaultClassification": {
+      "sdkPackage": "INTERNAL",
+      "mcpProxy": "CONFIDENTIAL",
+      "external": "CONFIDENTIAL",
+      "unknown": "RESTRICTED"
+    }
+  },
+  "TriggerCursor": "0000000000000042",
+  "TriggerDeliveryState": "DeadLettered",
+  "TriggerConsumerKind": "SUBSCRIPTION",
+  "TriggerDeliveryConsumer": {
+    "kind": "TEST",
+    "name": "router-test"
+  },
+  "TriggerDelivery": {
+    "deliveryId": "sub-hotfolder/0000000000000042",
+    "consumer": {
+      "kind": "SUBSCRIPTION",
+      "name": "hotfolder-agent"
+    },
+    "cursor": "0000000000000042",
+    "eventSource": "toolgate:tenant:t1:trigger-instance:ti-1",
+    "eventId": "file:inbox/order-1042.txt:10",
+    "eventType": "examples.hotfolder.file-dropped.v1",
+    "assignment": "hotfolder-inbox",
+    "state": "RetryWait",
+    "attempts": 2,
+    "createdAtUnixMs": 1793442600000,
+    "updatedAtUnixMs": 1793442602000,
+    "nextAttemptAtUnixMs": 1793442606000,
+    "reason": "ConsumerUnavailable"
+  },
+  "TriggerDeliveryPage": {
+    "items": [
+      {
+        "deliveryId": "sub-hotfolder/0000000000000042",
+        "consumer": {
+          "kind": "SUBSCRIPTION",
+          "name": "hotfolder-agent"
+        },
+        "cursor": "0000000000000042",
+        "eventSource": "toolgate:tenant:t1:trigger-instance:ti-1",
+        "eventId": "file:inbox/order-1042.txt:10",
+        "eventType": "examples.hotfolder.file-dropped.v1",
+        "assignment": "hotfolder-inbox",
+        "state": "RetryWait",
+        "attempts": 2,
+        "createdAtUnixMs": 1793442600000,
+        "updatedAtUnixMs": 1793442602000,
+        "nextAttemptAtUnixMs": 1793442606000,
+        "reason": "ConsumerUnavailable"
+      }
+    ],
+    "nextPageToken": "after-finance"
+  },
+  "TriggerViewEvent": {
+    "specversion": "1.0",
+    "id": "file:inbox/order-1042.txt:10",
+    "source": "toolgate:tenant:t1:trigger-instance:ti-1",
+    "type": "examples.hotfolder.file-dropped.v1",
+    "subject": "inbox/order-1042.txt",
+    "time": "2026-10-31T10:29:58Z",
+    "data": {
+      "name": "order-1042.txt",
+      "path": "inbox/order-1042.txt",
+      "size": 10
+    },
+    "tgclassification": "INTERNAL",
+    "tgredacted": false
+  },
+  "TriggerSubscriptionSources": {
+    "assignments": [
+      "hotfolder-inbox"
+    ]
+  },
+  "TriggerSubscriptionSpec": {
+    "owner": "user:alice",
+    "sources": {
+      "assignments": [
+        "hotfolder-inbox"
+      ]
+    },
+    "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+    "includeState": false,
+    "expiresAtUnixMs": 1793529000000
+  },
+  "TriggerSubscriptionPhase": "Suspended",
+  "TriggerSubscriptionStatus": {
+    "phase": "Suspended",
+    "reason": "GrantRevoked",
+    "clearance": "INTERNAL"
+  },
+  "TriggerSubscription": {
+    "apiVersion": "toolgate.olo/v1",
+    "kind": "TriggerSubscription",
+    "metadata": {
+      "name": "finance-inbox-pdf",
+      "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      "generation": 3,
+      "configRevision": 2,
+      "resourceVersion": "W/\"5\"",
+      "labels": [
+        {
+          "key": "team",
+          "value": "finance"
+        }
+      ],
+      "createdAtUnixMs": 1793413600000,
+      "updatedAtUnixMs": 1793413660000
+    },
+    "spec": {
+      "owner": "user:alice",
+      "sources": {
+        "assignments": [
+          "hotfolder-inbox"
+        ]
+      },
+      "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+      "includeState": false,
+      "expiresAtUnixMs": 1793529000000
+    },
+    "status": {
+      "phase": "Active",
+      "clearance": "INTERNAL",
+      "ackedCursor": "0000000000000042"
+    }
+  },
+  "TriggerSubscriptionCreate": {
+    "name": "hotfolder-agent",
+    "spec": {
+      "owner": "user:alice",
+      "sources": {
+        "assignments": [
+          "hotfolder-inbox"
+        ]
+      },
+      "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+      "includeState": false,
+      "expiresAtUnixMs": 1793529000000
+    }
+  },
+  "TriggerSubscriptionPage": {
+    "items": [
+      {
+        "apiVersion": "toolgate.olo/v1",
+        "kind": "TriggerSubscription",
+        "metadata": {
+          "name": "finance-inbox-pdf",
+          "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "generation": 3,
+          "configRevision": 2,
+          "resourceVersion": "W/\"5\"",
+          "labels": [
+            {
+              "key": "team",
+              "value": "finance"
+            }
+          ],
+          "createdAtUnixMs": 1793413600000,
+          "updatedAtUnixMs": 1793413660000
+        },
+        "spec": {
+          "owner": "user:alice",
+          "sources": {
+            "assignments": [
+              "hotfolder-inbox"
+            ]
+          },
+          "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+          "includeState": false,
+          "expiresAtUnixMs": 1793529000000
+        },
+        "status": {
+          "phase": "Active",
+          "clearance": "INTERNAL",
+          "ackedCursor": "0000000000000042"
+        }
+      }
+    ]
+  },
+  "TriggerStreamTicket": {
+    "ticket": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "expiresAtUnixMs": 1793442630000
+  },
+  "TriggerStreamClientType": "ack",
+  "TriggerStreamClientMessage": {
+    "type": "subscribe",
+    "subscription": "hotfolder-agent",
+    "resumeAfter": "0000000000000042"
+  },
+  "TriggerStreamServerType": "gap",
+  "TriggerStreamError": {
+    "status": 403,
+    "code": "FORBIDDEN",
+    "detail": "Not permitted"
+  },
+  "TriggerStreamServerMessage": {
+    "type": "event",
+    "subscription": "hotfolder-agent",
+    "cursor": "0000000000000042",
+    "event": {
+      "specversion": "1.0",
+      "id": "file:inbox/order-1042.txt:10",
+      "source": "toolgate:tenant:t1:trigger-instance:ti-1",
+      "type": "examples.hotfolder.file-dropped.v1",
+      "subject": "inbox/order-1042.txt",
+      "time": "2026-10-31T10:29:58Z",
+      "data": {
+        "name": "order-1042.txt",
+        "path": "inbox/order-1042.txt",
+        "size": 10
+      },
+      "tgclassification": "INTERNAL",
+      "tgredacted": false
+    }
   }
 }

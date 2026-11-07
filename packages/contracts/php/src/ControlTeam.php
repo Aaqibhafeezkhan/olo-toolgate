@@ -13,12 +13,13 @@ final readonly class ControlTeam implements \JsonSerializable {
         public bool $enabled,
         public int $revision,
         public array $userIds,
-        public array $roleIds
+        public array $roleIds,
+        public ?ControlDataClearance $dataClearance = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'userIds', 'roleIds']) || array_diff(['id', 'name', 'enabled', 'revision', 'userIds', 'roleIds'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'name', 'enabled', 'revision', 'userIds', 'roleIds', 'dataClearance']) || array_diff(['id', 'name', 'enabled', 'revision', 'userIds', 'roleIds'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +28,8 @@ final readonly class ControlTeam implements \JsonSerializable {
             $data['enabled'],
             $data['revision'],
             array_map(static fn ($item) => $item, $data['userIds']),
-            array_map(static fn ($item) => $item, $data['roleIds'])
+            array_map(static fn ($item) => $item, $data['roleIds']),
+            array_key_exists('dataClearance', $data) ? ControlDataClearance::from($data['dataClearance']) : null
         );
     }
 

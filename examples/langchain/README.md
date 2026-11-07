@@ -123,20 +123,23 @@ content and moves the file with the package's `move` tool. A file that is alread
 gone is skipped. An operation whose outcome the Gateway cannot confirm is
 reported and never retried.
 
-What works now and what is still to come:
+The agent subscribes to `hotfolder-inbox` and receives events over Control's `toolgate.triggers.v1` WebSocket
+(`--transport poll` pages the stored-events API instead). It acknowledges each event only after handling it, so a
+crash re-delivers rather than loses an event. `python trigger_e2e.py` runs the whole path after setup, and CI runs
+it in the LangChain job.
 
-- **Module 5 (this delivery).** The profile-driven assignment, the device
-  trigger runner, check-in ingest with fencing and dedupe, and the stored-event
-  API that the agent pages (`ControlEvents`). Covered by unit tests
-  ([test_trigger_agent.py](test_trigger_agent.py), `HotFolderTest`,
-  `ClientReleasesTest`). This full Compose flow has not been run yet.
-- **Modules 10–12 and the end-to-end demo.** Push delivery over a
-  subscription socket replaces polling. It is another `EventSource`; the graph is
-  unchanged. The demo runs this flow end to end.
-- **Native HotFolder finality.** Until it is qualified (see the note at the
-  top), the Gateway reports `read_text` and `move` as `OUTCOME_UNKNOWN`. The
-  agent then shows `read-unconfirmed` or `move-unconfirmed` and leaves the
-  file in `inbox/`.
+Status (issue #274, draft PR #286):
+
+- **Delivered in that PR:**
+  - modules 5 and 10–12: the profile-driven assignment, the device trigger runner, check-in ingest, the event
+    router with retention, coarse labels and the subscription socket;
+  - unit tests: [test_trigger_agent.py](test_trigger_agent.py), `HotFolderTest`, `TriggerDeliveryTest`,
+    `TriggerIngestTest` and `ClientReleasesTest`.
+
+  The Compose run has not been executed locally.
+- **Native HotFolder finality** (see the note at the top): until it is qualified, the Gateway reports `read_text`
+  and `move` as `OUTCOME_UNKNOWN`. The agent then shows `read-unconfirmed` or `move-unconfirmed` and leaves the file
+  in `inbox/`.
 
 ## Windows device targeting
 

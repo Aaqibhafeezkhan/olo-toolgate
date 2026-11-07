@@ -9,13 +9,15 @@ package io.ololabs.toolgate.contracts.v2;
  * @param producer canonical producer value
  * @param receivedAtUnixMs canonical receivedAtUnixMs value
  * @param disposition canonical disposition value
+ * @param classification canonical classification value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record TriggerStoredEvent(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "event", required = true) TriggerCloudEvent event,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "producer", required = true) TriggerProducer producer,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "receivedAtUnixMs", required = true) Long receivedAtUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "disposition", required = false) TriggerDispositionView disposition
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "disposition", required = false) TriggerDispositionView disposition,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "classification", required = false) TriggerClassification classification
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,6 +25,7 @@ public record TriggerStoredEvent(
      * @param producer canonical producer value
      * @param receivedAtUnixMs canonical receivedAtUnixMs value
      * @param disposition canonical disposition value
+     * @param classification canonical classification value
      */
     public TriggerStoredEvent {
         java.util.Objects.requireNonNull(event, "event");

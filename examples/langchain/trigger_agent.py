@@ -8,8 +8,10 @@ The HotFolder package's `file-dropped` client trigger runs on the device (assign
 `EventSource`; each event runs one graph: read the file, display it, move it to `processed/<name>`. Every file
 operation is a real package tool call through the Gateway, under the agent's own grants.
 
-Event delivery today is `ControlEvents`, which pages Control's stored events (triggers module 5). Modules 10-12 add
-push delivery over a subscription socket; that is another `EventSource` and the graph does not change.
+Events arrive through an `EventSource`. `SocketEvents` (default) is push delivery over `toolgate.triggers.v1`
+(triggers modules 10-12): the agent owns a durable subscription to the assignment, redeems a single-use ticket per
+connection, and acknowledges each cursor only after its graph run, so a crash re-delivers rather than loses an event.
+`ControlEvents` (`--transport poll`) pages Control's stored events (module 5). The graph is the same for both.
 """
 import argparse
 import importlib.util
@@ -27,6 +29,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 EVENT_TYPE = 'examples.hotfolder.file-dropped.v1'
 ASSIGNMENT = 'hotfolder-inbox'
+SUBSCRIPTION = 'hotfolder-agent'
+PROTOCOL = 'toolgate.triggers.v1'
 INBOX, PROCESSED = 'inbox', 'processed'
 READ, MOVE = 'examples.hotfolder/read_text', 'examples.hotfolder/move'
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._ -]{0,127}$')
@@ -143,6 +147,79 @@ class ControlEvents:
                 self.tokens[instance], self.seen[instance] = page['nextPageToken'], set()
 
 
+class SocketEvents:
+    """Push delivery over `toolgate.triggers.v1` (plan 13.2).
+
+    `connect(subprotocols)` opens a socket and returns an object with `send(text)`, `recv(timeout)` (raises
+    TimeoutError when nothing arrives) and `close()`. `ticket()` returns a fresh single-use ticket. Each `poll()`
+    yields the events that arrive within `wait` seconds, acknowledging each cursor once the caller has handled the
+    event (the generator resumes), and reconnects with a new ticket after a close; the subscription resumes from its
+    acknowledged cursor. `gap` notices (events past retention) and `revoked` are reported, never hidden.
+    """
+
+    def __init__(self, connect, ticket, subscription: str = SUBSCRIPTION, wait: float = 5.0, report=print):
+        self.connect, self.ticket, self.subscription, self.wait, self.report = connect, ticket, subscription, wait, report
+        self.socket, self.seen = None, set()
+
+    def _open(self):
+        self.socket = self.connect([PROTOCOL, 'ticket.' + self.ticket()])
+        self.socket.send(json.dumps({'type': 'subscribe', 'subscription': self.subscription}))
+
+    def poll(self) -> Iterator[dict]:
+        deadline = time.monotonic() + self.wait
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            if self.socket is None:
+                self._open()
+            try:
+                message = json.loads(self.socket.recv(timeout=remaining))
+            except TimeoutError:
+                return
+            except Exception:   # closed: the next poll reconnects with a new ticket
+                self.close()
+                return
+            kind = message.get('type')
+            if kind == 'event':
+                event, cursor = message.get('event', {}), message.get('cursor')
+                key = (event.get('source'), event.get('id'))
+                if key not in self.seen:   # at least once: dedupe by (source, id)
+                    self.seen.add(key)
+                    if len(self.seen) > 10000:
+                        self.seen.clear()
+                    yield event
+                self.socket.send(json.dumps({'type': 'ack', 'subscription': self.subscription, 'cursor': cursor}))
+                self.socket.send(json.dumps({'type': 'credit', 'n': 1}))
+            elif kind == 'gap':
+                self.report(f"gap {message.get('fromCursor')}..{message.get('toCursor')}: {message.get('reason')}", flush=True)
+            elif kind == 'revoked':
+                self.report(f"subscription {message.get('subscription')} revoked: {message.get('reason')}", flush=True)
+                self.close()
+                raise ValueError('The subscription was revoked: ' + str(message.get('reason')))
+            elif kind == 'error':
+                raise ValueError('Trigger stream error: ' + str(message.get('error', {}).get('code')))
+
+    def close(self):
+        if self.socket is not None:
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+        self.socket = None
+
+
+def ensure_subscription(api, now_ms: int, days: int = 30, assignment: str = ASSIGNMENT, name: str = SUBSCRIPTION):
+    """Creates the agent's subscription to the assignment once (plan 13.1); an existing one is kept."""
+    try:
+        return api('/api/control/v1/triggers/subscriptions/' + name)
+    except ValueError:
+        pass
+    body = {'name': name, 'spec': {'sources': {'assignments': [assignment]},
+            'filter': f"event.type == '{EVENT_TYPE}'", 'expiresAtUnixMs': now_ms + days * 86400000}}
+    return api('/api/control/v1/triggers/subscriptions', body)
+
+
 def run(source: EventSource, graph, rounds: Optional[int] = None, interval: float = 5.0, report=print):
     """Runs the graph once per new event. With `rounds`, stops after that many polls (tests and --once)."""
     outcomes = []
@@ -183,6 +260,7 @@ def main():
     parser.add_argument('--target', choices=['any', 'linux', 'windows'], default='linux')
     parser.add_argument('--once', action='store_true', help='Poll once and exit')
     parser.add_argument('--interval', type=float, default=5.0)
+    parser.add_argument('--transport', choices=['socket', 'poll'], default='socket')
     args = parser.parse_args()
     sys.path.insert(0, str(HERE))
     import manage   # the host-side example configuration: Control origin and the installation's API login
@@ -194,7 +272,27 @@ def main():
     gateway = mimic.Agent(descriptor['gateway'], directory / (args.target + '.token'), directory / 'gateway-ca.crt')
     print(INSTRUCTIONS, flush=True)
     graph = build_graph(gateway_call(gateway, (mimic.UnconfirmedOperation,)))
-    run(ControlEvents(config.api), graph, rounds=1 if args.once else None, interval=args.interval)
+    if args.transport == 'poll':
+        source = ControlEvents(config.api)
+    else:
+        import ssl
+        from websockets.sync.client import connect
+        ensure_subscription(config.api, int(time.time() * 1000))
+        context = ssl.create_default_context(cafile=str(directory / 'gateway-ca.crt'))
+        url = descriptor['gateway'].replace('https://', 'wss://').rstrip('/') + '/api/control/v1/triggers/stream'
+
+        class Socket:
+            def __init__(self, subprotocols):
+                self.connection = connect(url, ssl=context, subprotocols=subprotocols, max_size=65536)
+            def send(self, text):
+                self.connection.send(text)
+            def recv(self, timeout):
+                return self.connection.recv(timeout=timeout)
+            def close(self):
+                self.connection.close()
+
+        source = SocketEvents(Socket, lambda: config.api('/api/control/v1/triggers/stream/tickets', {})['ticket'], wait=args.interval)
+    run(source, graph, rounds=1 if args.once else None, interval=0 if args.transport == 'socket' else args.interval)
 
 
 if __name__ == '__main__':

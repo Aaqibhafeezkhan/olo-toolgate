@@ -447,7 +447,8 @@
       "label": "Trigger",
       "actions": [
         "read",
-        "manage"
+        "manage",
+        "subscribe"
       ]
     },
     {

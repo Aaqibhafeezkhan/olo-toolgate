@@ -383,6 +383,10 @@
           },
           "maxItems": 32,
           "uniqueItems": true
+        },
+        "dataClearance": {
+          "$ref": "control.schema.json#/$defs/ControlDataClearance",
+          "description": "Absent means INTERNAL."
         }
       },
       "required": [

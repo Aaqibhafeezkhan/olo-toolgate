@@ -113,6 +113,7 @@ public final class TriggerIngest {
         final List<TriggerRetryLater> retryLater = new ArrayList<>();
         final List<TriggerRejection> rejected = new ArrayList<>();
         final java.util.Set<String> fenced = new java.util.HashSet<>(), throttled = new java.util.HashSet<>();
+        JsonNode settings;
     }
 
     /** {@code acceptedOutboxSeq} state of one (instance, lease epoch). */
@@ -185,12 +186,16 @@ public final class TriggerIngest {
         row.set("event", stored);
         row.set("producer", producer(instance, device, leaseEpoch));
         row.put("receivedAtUnixMs", now);
+        if (batch.settings == null) batch.settings = TriggerRouter.settings(tx);
+        // Module 11, coarse mode: one label per event type, computed here in Control from the signed descriptor.
+        row.put("classification", TriggerLabels.eventLabel(descriptor, batch.settings).name());
         String eventId = record.instanceId() + "/" + pad(leaseEpoch) + "/" + pad(seq);
+        long purgeAt = now + batch.settings.path("eventRetentionDays").asLong(TriggerRouter.DEFAULT_RETENTION_DAYS) * TriggerRouter.DAY;
         if (reason != null) {
             // A Control-side terminal rejection: a disposition, recorded once per record.
             batch.dispositions.add(new TriggerDisposition(record.instanceId(), leaseEpoch, seq, event.id(), TriggerDispositionKind.REJECTED_TERMINAL, reason));
             row.putObject("disposition").put("disposition", "REJECTED_TERMINAL").put("reason", reason);
-            if (tx.triggers().get(EVENT, eventId) == null) tx.triggers().save(EVENT, new TriggerStore.Row(eventId, 1, codec.json(row)), 0);
+            disposition(tx, eventId, row, purgeAt);
             if (skip) epoch.resolved.add(seq);
             else {
                 epoch.halted = seq;
@@ -199,13 +204,15 @@ public final class TriggerIngest {
         } else if ("rejected".equals(stored.path("tgkind").asText())) {
             // An executor loss record under SKIP_AND_RECORD: stored as an explicit disposition, with no dedupe key.
             row.putObject("disposition").put("disposition", "REJECTED_TERMINAL").put("reason", "LossRecord");
-            if (tx.triggers().get(EVENT, eventId) == null) tx.triggers().save(EVENT, new TriggerStore.Row(eventId, 1, codec.json(row)), 0);
+            disposition(tx, eventId, row, purgeAt);
             epoch.resolved.add(seq);
         } else {
             String dedupe = record.instanceId() + "/" + DirectoryService.digest(event.id());
             if (tx.triggers().get(KEY, dedupe) == null) {
                 tx.triggers().save(KEY, new TriggerStore.Row(dedupe, 1, codec.json(JSON.createObjectNode().put("event", eventId))), 0);
                 tx.triggers().save(EVENT, new TriggerStore.Row(eventId, 1, codec.json(row)), 0);
+                // Transactional outbox (plan 12): routed after commit, in the same transaction as the event.
+                tx.triggers().save(TriggerStore.Kind.OUTBOX, new TriggerStore.Row(eventId, 1, codec.json(JSON.createObjectNode().put("event", eventId))), 0);
                 lastEvent(tx, instance, now);
             }
             epoch.resolved.add(seq);
@@ -351,6 +358,14 @@ public final class TriggerIngest {
     }
 
     static String pad(long value) { return String.format("%016d", value); }
+
+    /** A disposition is stored once and purged with retention; it is not an event and is never routed. */
+    private void disposition(Store.Session tx, String eventId, ObjectNode row, long purgeAt) {
+        if (tx.triggers().get(EVENT, eventId) != null) return;
+        tx.triggers().save(EVENT, new TriggerStore.Row(eventId, 1, codec.json(row)), 0);
+        String key = pad(purgeAt) + "/EVENT/" + eventId;
+        tx.triggers().save(TriggerStore.Kind.EXPIRY, new TriggerStore.Row(key, 1, "{}"), 0);
+    }
 
     private static String bounded(String text, int max) { return text.length() <= max ? text : text.substring(0, max); }
 }

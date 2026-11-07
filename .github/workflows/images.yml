@@ -427,6 +427,11 @@ jobs:
         docker compose run --rm -T --no-deps --entrypoint python -v "$PWD/test_agent.py:/app/test_agent.py:ro" agent /app/test_agent.py
         docker compose run --rm -T --no-deps --entrypoint python -v "$PWD/test_trigger_agent.py:/app/test_trigger_agent.py:ro" agent /app/test_trigger_agent.py
         docker compose run --rm -T agent --target linux --verify-native-boundary
+        # Hot-folder trigger (issue #274, modules 5 and 10-12): the profile overlay enables triggers and assigns
+        # file-dropped; a dropped file reaches the LangGraph agent over toolgate.triggers.v1.
+        python -m pip install -r requirements.txt
+        docker compose -f compose.yaml -f compose.triggers.yaml up -d --wait --wait-timeout 180 quickstart linux-device
+        python trigger_e2e.py
       if: ${{ inputs.run_tests }}
     - name: Preserve LangChain diagnostics
       if: ${{ always() && inputs.run_tests }}

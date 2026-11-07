@@ -271,6 +271,17 @@ export const operations = {
   deleteTriggerAssignment: { method: 'DELETE', path: '/api/control/v1/triggers/assignments/{name}' },
   listTriggerInstances: { method: 'GET', path: '/api/control/v1/triggers/instances' },
   getTriggerDesiredDocument: { method: 'GET', path: '/api/control/v1/endpoint/triggers/desired' },
+  listTriggerEvents: { method: 'GET', path: '/api/control/v1/triggers/events' },
+  getTriggerSettings: { method: 'GET', path: '/api/control/v1/triggers/settings' },
+  updateTriggerSettings: { method: 'PUT', path: '/api/control/v1/triggers/settings' },
+  listTriggerDeliveries: { method: 'GET', path: '/api/control/v1/triggers/deliveries' },
+  redriveTriggerDelivery: { method: 'POST', path: '/api/control/v1/triggers/deliveries:redrive' },
+  createTriggerSubscription: { method: 'POST', path: '/api/control/v1/triggers/subscriptions' },
+  listTriggerSubscriptions: { method: 'GET', path: '/api/control/v1/triggers/subscriptions' },
+  getTriggerSubscription: { method: 'GET', path: '/api/control/v1/triggers/subscriptions/{name}' },
+  deleteTriggerSubscription: { method: 'DELETE', path: '/api/control/v1/triggers/subscriptions/{name}' },
+  createTriggerStreamTicket: { method: 'POST', path: '/api/control/v1/triggers/stream/tickets' },
+  getTriggerDescriptor: { method: 'GET', path: '/api/control/v1/endpoint/triggers/descriptors/{digest}' },
 } as const;
 export interface DirectoryRecords {
   agentDelegations: ControlAgentDelegation;

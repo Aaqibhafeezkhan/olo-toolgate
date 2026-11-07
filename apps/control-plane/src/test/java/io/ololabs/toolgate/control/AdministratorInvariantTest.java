@@ -30,7 +30,7 @@ final class AdministratorInvariantTest {
     private void second(PostgresStore store){change(store,entries->{
         TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser("second","Second administrator",true,1L, null, null, null));
         GroupGraph.addDefault(entries,codec,Ids.Kind.USER,"second");
-        TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("second-admins","Other administrators",true,1L,List.of("second"),List.of("test-recovery-role")));
+        TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("second-admins","Other administrators",true,1L,List.of("second"),List.of("test-recovery-role"),null));
     });}
     private void denied(Runnable change){assertEquals(409,assertThrows(Failure.class,change::run).status());}
 
@@ -39,7 +39,7 @@ final class AdministratorInvariantTest {
         denied(()->change(store,e->e.remove(Ids.Kind.USER.id("setup"))));
         denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.USER,new ControlUser("setup","Setup",false,2L, null, null, null))));
         denied(()->change(store,e->e.remove(Ids.Kind.TEAM.id("test-recovery-team"))));
-        denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.TEAM,new ControlTeam("test-recovery-team","Disabled",false,2L,List.of("setup"),List.of("test-recovery-role")))));
+        denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.TEAM,new ControlTeam("test-recovery-team","Disabled",false,2L,List.of("setup"),List.of("test-recovery-role"),null))));
         denied(()->change(store,e->TestSupport.put(e,codec,Ids.Kind.ROLE,new ControlRole("test-recovery-role","Demoted",true,2L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of()))));
         boolean setupIsAdmin=store.transaction(tenant,false,tx->new ManagementAccess(codec).superAdministrator(tx.load(),"setup"));assertTrue(setupIsAdmin);
     }

@@ -378,6 +378,7 @@
     "operation": "CREATE"
   },
   "ControlChangeKind": "CREATE",
+  "ControlDataClearance": "CONFIDENTIAL",
   "ControlDelegation": {
     "id": "example",
     "name": "example",

@@ -50,7 +50,7 @@ public final class DirectoryService {
     public Store.Reply export(Actor actor,boolean yaml) {actor.requireAdmin();return store.transaction(actor.tenant(),false,tx->{var d=tx.load();management.requireAll(d,actor.userId(),"configuration_backup.export",System.currentTimeMillis());
         var entries=new HashMap<Ids.RecordId,Directory.Entry>();var users=new TreeSet<String>();
         for(var e:d.entries().values()){if(!exported(e.id().kind()))continue;
-            if(e.id().kind()==Kind.TEAM){var t=codec.model(e.document(),ControlTeam.class);users.addAll(t.userIds());entries.put(e.id(),codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.of(),t.roleIds()))));continue;}
+            if(e.id().kind()==Kind.TEAM){var t=codec.model(e.document(),ControlTeam.class);users.addAll(t.userIds());entries.put(e.id(),codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.of(),t.roleIds(),t.dataClearance()))));continue;}
             for(var r:e.references())if(r.kind()==Kind.USER)users.add(r.value());entries.put(e.id(),e);}
         var fields=new HashMap<String,Object>();
         if(management.globallyAllowed(d,actor.userId(),"server_configuration.read",System.currentTimeMillis())&&management.globallyAllowed(d,actor.userId(),"device_configuration.read",System.currentTimeMillis())){var s=new ServerSettingsService(null,codec,ClientCheckInPolicy.QUICKSTART).current(tx);if(s.deviceApproval().ownerUserId()!=null)users.add(s.deviceApproval().ownerUserId());fields.put("settings",new io.ololabs.toolgate.contracts.v2.ControlServerSettingsPatch(s.gateway(),s.deviceApproval(),s.configuration()));}
@@ -191,7 +191,7 @@ public final class DirectoryService {
             var members=new LinkedHashSet<String>();var old=before.entries().get(team.id());if(old!=null)members.addAll(GroupGraph.members(old,codec));members.addAll(GroupGraph.members(team,codec));
             for(var r:resolved.teams().entrySet()){if(r.getValue().contains(team.id().value()))members.add(r.getKey());else if(input.removeUnlistedMemberships()&&!GroupGraph.protectedDefault(team.id()))members.remove(r.getKey());}
             for(var r:resolved.teams().values())for(var id:r)if(!entries.containsKey(Kind.TEAM.id(id)))throw Failure.validation();
-            if(!List.copyOf(members).equals(GroupGraph.members(team,codec))){var t=codec.model(team.document(),ControlTeam.class);var next=codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.copyOf(members),t.roleIds())));entries.put(team.id(),old!=null&&old.document().equals(codec.revision(next,old.revision()).document())?old:codec.revision(next,old==null?1:old.revision()+1));}
+            if(!List.copyOf(members).equals(GroupGraph.members(team,codec))){var t=codec.model(team.document(),ControlTeam.class);var next=codec.entry(Kind.TEAM,codec.json(new ControlTeam(t.id(),t.name(),t.enabled(),t.revision(),List.copyOf(members),t.roleIds(),t.dataClearance())));entries.put(team.id(),old!=null&&old.document().equals(codec.revision(next,old.revision()).document())?old:codec.revision(next,old==null?1:old.revision()+1));}
         }
         for(var e:List.copyOf(entries.values()))if(e.id().kind()==Kind.USER&&GroupGraph.memberships(new Directory(before.revision(),entries),codec,Kind.USER,e.id().value(),false).isEmpty())GroupGraph.addDefault(entries,codec,Kind.USER,e.id().value());
     }

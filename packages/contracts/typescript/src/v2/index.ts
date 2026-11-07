@@ -1975,6 +1975,7 @@ export interface TriggerCheckpointUploadRequest {
   readonly sizeBytes: number;
   readonly digest: string;
 }
+export type TriggerClassification = "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED";
 /** CloudEvents 1.0 JSON envelope written by the supervisor; authors never set source, type, dataschema or tg* attributes (plan 6.4). */
 export interface TriggerCloudEvent {
   readonly specversion: "1.0";
@@ -2001,6 +2002,7 @@ export interface TriggerCondition {
 }
 export type TriggerConditionStatus = "True" | "False" | "Unknown";
 export type TriggerConditionType = "Installed" | "Leased" | "Ready" | "Degraded" | "Reconciled" | "Stale" | "Unexpected";
+export type TriggerConsumerKind = "SUBSCRIPTION" | "ACTION" | "TEST";
 /** Monotonic counters for the current process lifetime of one instance. */
 export interface TriggerCounters {
   readonly emitted: number;
@@ -2010,6 +2012,14 @@ export interface TriggerCounters {
   readonly restarts: number;
   readonly brokerCalls?: number;
   readonly possibleLossOnCrash?: number;
+}
+export type TriggerCursor = string;
+/** Tenant fail-closed defaults for unlabelled data, per integration kind (plan 12.3). A default may be raised, never lowered below the shipped value. */
+export interface TriggerDefaultClassifications {
+  readonly sdkPackage: TriggerClassification;
+  readonly mcpProxy: TriggerClassification;
+  readonly external: TriggerClassification;
+  readonly unknown: TriggerClassification;
 }
 /** Trigger export (ADR 058, plan 5.9): the signed trigger descriptor plus packaging members outside the digest. Trigger names share the package export namespace with tools. */
 export interface TriggerDefinition {
@@ -2034,6 +2044,33 @@ export interface TriggerDefinitionRecord {
   readonly descriptor: TriggerDescriptor;
   readonly securityDelta: ReadonlyArray<SecurityDeltaItem>;
 }
+/** One delivery of a routed event to one consumer. */
+export interface TriggerDelivery {
+  readonly deliveryId: string;
+  readonly consumer: TriggerDeliveryConsumer;
+  readonly cursor: string;
+  readonly eventSource: string;
+  readonly eventId: string;
+  readonly eventType: string;
+  readonly assignment: string;
+  readonly state: TriggerDeliveryState;
+  readonly attempts: number;
+  readonly createdAtUnixMs: number;
+  readonly updatedAtUnixMs: number;
+  readonly nextAttemptAtUnixMs?: number;
+  readonly reason?: string;
+}
+/** The consumer of a delivery. */
+export interface TriggerDeliveryConsumer {
+  readonly kind: TriggerConsumerKind;
+  readonly name: string;
+}
+/** One page of deliveries. */
+export interface TriggerDeliveryPage {
+  readonly items: ReadonlyArray<TriggerDelivery>;
+  readonly nextPageToken?: string;
+}
+export type TriggerDeliveryState = "Pending" | "InFlight" | "Delivered" | "RetryWait" | "Held" | "Superseded" | "DeadLettered" | "Skipped";
 /** Signed semantic descriptor of one trigger export (plan 5.9). */
 export interface TriggerDescriptor {
   readonly kind: TriggerKind;
@@ -2306,6 +2343,11 @@ export interface TriggerSchedule {
   readonly resyncIntervalMs?: number;
 }
 export type TriggerSequence = number;
+/** Tenant trigger settings (GET and PUT /api/control/v1/triggers/settings). */
+export interface TriggerSettings {
+  readonly eventRetentionDays: number;
+  readonly defaultClassification: TriggerDefaultClassifications;
+}
 /** Declared SnapshotState bounds (plan 5.6). */
 export interface TriggerSnapshotCapacity {
   readonly capacity: number;
@@ -2350,6 +2392,79 @@ export interface TriggerStoredEvent {
   readonly producer: TriggerProducer;
   readonly receivedAtUnixMs: number;
   readonly disposition?: TriggerDispositionView;
+  readonly classification?: TriggerClassification;
+}
+/** A client message on `toolgate.triggers.v1`. subscribe: subscription, optional resumeAfter. watch: sources, optional filter. ack: subscription, cursor. credit: n. unsubscribe: subscription. */
+export interface TriggerStreamClientMessage {
+  readonly type: TriggerStreamClientType;
+  readonly subscription?: string;
+  readonly resumeAfter?: string;
+  readonly sources?: TriggerSubscriptionSources;
+  readonly filter?: string;
+  readonly cursor?: string;
+  readonly n?: number;
+}
+export type TriggerStreamClientType = "subscribe" | "watch" | "ack" | "credit" | "unsubscribe";
+/** An error on the stream, with the status and code an HTTP call would get. */
+export interface TriggerStreamError {
+  readonly status: number;
+  readonly code: string;
+  readonly detail?: string;
+}
+/** A server message on `toolgate.triggers.v1`. subscribed: subscription. event: subscription (absent for watch), cursor, event. gap: subscription, fromCursor, toCursor, reason RetentionExpired. revoked: subscription, reason. error: error. */
+export interface TriggerStreamServerMessage {
+  readonly type: TriggerStreamServerType;
+  readonly subscription?: string;
+  readonly cursor?: string;
+  readonly event?: TriggerViewEvent;
+  readonly fromCursor?: string;
+  readonly toCursor?: string;
+  readonly reason?: string;
+  readonly error?: TriggerStreamError;
+}
+export type TriggerStreamServerType = "subscribed" | "event" | "gap" | "revoked" | "error";
+/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`. */
+export interface TriggerStreamTicket {
+  readonly ticket: string;
+  readonly expiresAtUnixMs: number;
+}
+/** Subscription resource. */
+export interface TriggerSubscription {
+  readonly apiVersion: "toolgate.olo/v1";
+  readonly kind: "TriggerSubscription";
+  readonly metadata: TriggerAssignmentMetadata;
+  readonly spec: TriggerSubscriptionSpec;
+  readonly status: TriggerSubscriptionStatus;
+}
+/** Body of POST /api/control/v1/triggers/subscriptions. */
+export interface TriggerSubscriptionCreate {
+  readonly name: string;
+  readonly spec: TriggerSubscriptionSpec;
+}
+/** One page of subscriptions. */
+export interface TriggerSubscriptionPage {
+  readonly items: ReadonlyArray<TriggerSubscription>;
+  readonly nextPageToken?: string;
+}
+export type TriggerSubscriptionPhase = "Active" | "Suspended" | "Expired";
+/** Explicit sources of a subscription (plan 13.1); there is no wildcard. Control refuses a source listed twice. */
+export interface TriggerSubscriptionSources {
+  readonly assignments: ReadonlyArray<string>;
+}
+/** A durable socket subscription (plan 13.1). */
+export interface TriggerSubscriptionSpec {
+  readonly owner?: string;
+  readonly sources: TriggerSubscriptionSources;
+  readonly filter?: string;
+  readonly includeState?: boolean;
+  readonly expiresAtUnixMs: number;
+}
+/** Subscription status. */
+export interface TriggerSubscriptionStatus {
+  readonly phase: TriggerSubscriptionPhase;
+  readonly reason?: string;
+  readonly clearance: TriggerClassification;
+  readonly ackedCursor?: string;
 }
 /** Trigger block of every executor check-in (plan 8.2, 8.5). */
 export interface TriggerSync {
@@ -2382,6 +2497,18 @@ export interface TriggerTarget {
 }
 export type TriggerTerminalRejectionPolicy = "HALT" | "SKIP_AND_RECORD";
 export type TriggerTimestamp = string;
+/** A routed event as one reader may see it (plan 12.2 rule 5): the envelope always; data and subject only when the reader's clearance covers the event's label. */
+export interface TriggerViewEvent {
+  readonly specversion: "1.0";
+  readonly id: string;
+  readonly source: string;
+  readonly type: string;
+  readonly subject?: string;
+  readonly time?: string;
+  readonly data?: Record<string, unknown>;
+  readonly tgclassification: TriggerClassification;
+  readonly tgredacted: boolean;
+}
 export type UnixMs = number;
 export type ValueSource = "ENVIRONMENT" | "DATABASE" | "DEFAULT";
 export type ValueType = "STRING" | "INT" | "LONG" | "NUMBER" | "BOOLEAN" | "DATE" | "DATE_TIME" | "DURATION" | "ENUM" | "URI" | "OBJECT" | "ARRAY" | "BINARY";

@@ -3136,3 +3136,8 @@ next:
 3. **Everything else in later deliveries:** modules 6 to 9 and 13 to 18, in the order of 24.2 and the tracks of 24.5.
 
 This supersedes the "one branch and one PR per module" rule for modules 10–12 only.
+
+**Amended 2026-11-07 (user decision):** module 5 joins the same PR (olo-labs/olo-toolgate#286) instead of its own,
+and the PR merges only once the hot-folder use case runs end to end: a dropped file reaches the LangGraph agent over
+`toolgate.triggers.v1`. Modules 5, 10, 11 and 12 each still meet their own *Done when* and earn their weights (20%)
+only on that merge.

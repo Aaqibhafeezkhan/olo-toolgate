@@ -91,7 +91,16 @@ public class ContractCodec implements Codec {
         java.util.Map.entry("trigger.schema.json", "SignedTriggerDesiredDocument"),
         java.util.Map.entry("trigger.schema.json", "TriggerLease"),
         java.util.Map.entry("trigger.schema.json", "TriggerRevocation"),
-        java.util.Map.entry("trigger.schema.json", "TriggerEventPage"));
+        java.util.Map.entry("trigger.schema.json", "TriggerEventPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSettings"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDelivery"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDeliveryPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSubscription"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSubscriptionCreate"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSubscriptionPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerStreamTicket"),
+        java.util.Map.entry("trigger.schema.json", "TriggerStreamClientMessage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerStreamServerMessage"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",

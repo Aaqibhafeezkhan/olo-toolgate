@@ -262,6 +262,7 @@ export interface ControlAgentGroup {
   readonly revision: number;
   readonly agentIds: ReadonlyArray<string>;
   readonly roleIds: ReadonlyArray<string>;
+  readonly dataClearance?: ControlDataClearance;
 }
 /** Bounded canonical directory cursor page. */
 export interface ControlAgentGroupPage {
@@ -317,6 +318,7 @@ export interface ControlChange {
   readonly operation: ControlChangeKind;
 }
 export type ControlChangeKind = "CREATE" | "UPDATE" | "DELETE";
+export type ControlDataClearance = "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED";
 /** Delegated human operation requires grant and delegation through this same Team and capability through this same Agent Group. */
 export interface ControlDelegation {
   readonly id: string;
@@ -542,6 +544,7 @@ export interface ControlTeam {
   readonly revision: number;
   readonly userIds: ReadonlyArray<string>;
   readonly roleIds: ReadonlyArray<string>;
+  readonly dataClearance?: ControlDataClearance;
 }
 /** Cursor page; nextCursor is absent after the last item. */
 export interface ControlTeamPage {

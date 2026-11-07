@@ -66,6 +66,7 @@ fn shared_fixture_round_trips() {
         ControlAuditPage,
         ControlChange,
         ControlChangeKind,
+        ControlDataClearance,
         ControlDelegation,
         ControlDelegationPage,
         ControlDevice,

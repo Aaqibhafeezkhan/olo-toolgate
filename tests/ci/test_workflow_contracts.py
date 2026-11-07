@@ -52,6 +52,8 @@ class EarlyGateTests(unittest.TestCase):
         self.assertNotIn('--smoke',gate['run'])
         self.assertIn('test_agent.py',gate['run'])
         self.assertIn('test_trigger_agent.py',gate['run'])
+        self.assertIn('trigger_e2e.py',gate['run'])
+        self.assertIn('compose.triggers.yaml',gate['run'])
         self.assertIn('manage.py setup',gate['run'])
         self.assertNotIn('continue-on-error',gate)
         self.assertNotIn('continue-on-error',jobs['langchain'])

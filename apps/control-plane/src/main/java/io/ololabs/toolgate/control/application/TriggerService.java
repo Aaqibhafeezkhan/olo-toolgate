@@ -134,7 +134,7 @@ public final class TriggerService {
         return out;
     }
 
-    private Definition definition(Store.Session tx, String triggerId, String version) {
+    Definition definition(Store.Session tx, String triggerId, String version) {
         Definition found = null;
         for (var d : definitions(tx)) if (d.triggerId().equals(triggerId) && d.version().equals(version)) found = d;
         if (found == null) throw invalid("No uploaded package version " + version + " exports trigger " + triggerId);

@@ -30,7 +30,7 @@ For work implementing issue #274 (server and client triggers):
   `docs/architecture/device-triggers-plan.md`; its section 24.2 defines the modules, weights and *Done when* criteria.
 - One branch and one PR per module: branch `feature/triggers-m<NN>-<slug>` from the latest `main`, PR back to `main`.
   Modules on independent tracks (plan section 24.5) may have PRs open at the same time. Exception (plan 24.6):
-  modules 10, 11 and 12 and an end-to-end demo are delivered in one PR, each module still meeting its own
+  modules 5, 10, 11 and 12 and an end-to-end demo are delivered in one PR, each module still meeting its own
   *Done when*.
 - Within a module, iterate on small changes and focused tests without intermediate commits. When the module meets
   its *Done when*, run its full verification (module tests on SQLite and PostgreSQL where relevant, cross-tenant

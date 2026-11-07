@@ -17,12 +17,13 @@ dependencies {
     testImplementation(project(":service-authorization"))
     implementation(enforcedPlatform(libs.quarkus.bom))
     listOf("rest-jackson", "jdbc-postgresql", "flyway", "smallrye-jwt", "smallrye-health",
-        "micrometer-registry-prometheus", "opentelemetry", "logging-json", "smallrye-openapi")
+        "micrometer-registry-prometheus", "opentelemetry", "logging-json", "smallrye-openapi", "websockets-next")
         .forEach { implementation("io.quarkus:quarkus-$it") }
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation(libs.sqlite.jdbc)
     implementation(libs.jackson.yaml)
     implementation(libs.json.schema)
+    implementation(libs.cel)
     implementation(libs.bouncycastle.pkix)
     implementation(project(":package-archive"))
     implementation(project(":sdk-java-api"))
