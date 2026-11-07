@@ -26,7 +26,8 @@ import urllib.parse
 from langgraph.graph import END, START, StateGraph
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+# The checkout root on the host; the agent image copies these files flat into /app, where there is none.
+ROOT = HERE.parents[1] if len(HERE.parents) > 1 else HERE
 EVENT_TYPE = 'examples.files.observed.v1'
 ASSIGNMENT = 'hotfolder-inbox'
 SUBSCRIPTION = 'hotfolder-agent'
