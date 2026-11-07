@@ -4018,11 +4018,12 @@ pub struct TriggerReconcileFrame {
     #[serde(deserialize_with = "const_trigger_reconcile_frame_kind")]
     pub kind: String,
 }
-/// Drop these outbox entries, stop the instance and resync.
+/// Drop the outbox entries of this lease epoch, stop the instance and resync. Records of other epochs are unaffected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TriggerRejection {
     pub instance_id: String,
+    pub lease_epoch: u64,
     pub reason: TriggerRejectionReason,
 }
 /// Canonical TriggerRejectionReason wire values.

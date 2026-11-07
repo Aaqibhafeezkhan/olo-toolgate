@@ -7,6 +7,7 @@ ENV CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_BUILD_JOBS=4 RUST
 COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
 COPY packages/tenant-identity/rust packages/tenant-identity/rust
+COPY crates/trigger-supervisor crates/trigger-supervisor
 COPY apps/gateway apps/gateway
 COPY apps/endpoint-client/Cargo.toml apps/endpoint-client/Cargo.toml
 COPY apps/endpoint-client/src apps/endpoint-client/src

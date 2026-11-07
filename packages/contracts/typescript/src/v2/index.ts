@@ -2127,9 +2127,10 @@ export type TriggerReason = string;
 export interface TriggerReconcileFrame {
   readonly kind: "RECONCILE";
 }
-/** Drop these outbox entries, stop the instance and resync. */
+/** Drop the outbox entries of this lease epoch, stop the instance and resync. Records of other epochs are unaffected. */
 export interface TriggerRejection {
   readonly instanceId: string;
+  readonly leaseEpoch: number;
   readonly reason: TriggerRejectionReason;
 }
 export type TriggerRejectionReason = "UnknownInstance" | "NotAssigned" | "StaleLeaseEpoch" | "StaleConfigRevision";

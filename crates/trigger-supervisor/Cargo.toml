@@ -1,0 +1,31 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "olo-toolgate-trigger-supervisor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Trigger supervisor shared by the endpoint client and the Tool Host (issue #274, ADR 058)"
+publish = false
+
+[features]
+# In-memory store with crash and failure injection, for this crate's tests and executor tests.
+testing = []
+
+[dependencies]
+olo-toolgate-contracts.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+jsonschema.workspace = true
+sha2.workspace = true
+ring.workspace = true
+tokio.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+olo-toolgate-trigger-supervisor = { path = ".", features = ["testing"] }
+proptest.workspace = true
+proptest-state-machine.workspace = true

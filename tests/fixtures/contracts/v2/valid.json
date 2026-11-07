@@ -3892,6 +3892,7 @@
   },
   "TriggerRejection": {
     "instanceId": "c7b2-03",
+    "leaseEpoch": 6,
     "reason": "StaleLeaseEpoch"
   },
   "TriggerSnapshotPageAck": {
