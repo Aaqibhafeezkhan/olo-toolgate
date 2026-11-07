@@ -1137,11 +1137,14 @@
     },
     "TriggerRejection": {
       "type": "object",
-      "description": "Drop these outbox entries, stop the instance and resync.",
+      "description": "Drop the outbox entries of this lease epoch, stop the instance and resync. Records of other epochs are unaffected.",
       "additionalProperties": false,
       "properties": {
         "instanceId": {
           "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
         },
         "reason": {
           "$ref": "trigger.schema.json#/$defs/TriggerRejectionReason"
@@ -1149,6 +1152,7 @@
       },
       "required": [
         "instanceId",
+        "leaseEpoch",
         "reason"
       ]
     },

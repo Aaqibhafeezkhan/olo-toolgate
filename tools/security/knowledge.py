@@ -60,7 +60,7 @@ def verify(knowledge, version):
 
 
 
-RUNTIME_PATHS = ["apps", "backend-libs", "packages", "tool-sdk", "config", "Cargo.toml", "Cargo.lock",
+RUNTIME_PATHS = ["apps", "backend-libs", "crates", "packages", "tool-sdk", "config", "Cargo.toml", "Cargo.lock",
                  "rust-toolchain.toml", "gradle", "gradlew", "gradlew.bat", "gradle.properties",
                  "build.gradle.kts", "settings.gradle.kts", "VERSION", "LICENSE", "NOTICE.md",
                  "tools/ui", "tools/contracts", "tools/gateway", "tools/control", "tools/quickstart",

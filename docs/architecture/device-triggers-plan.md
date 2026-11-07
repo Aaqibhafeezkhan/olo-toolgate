@@ -1131,7 +1131,7 @@ confirms whether discovery already carries it.
     "retryLater": [ { "instanceId": "c7b2…", "leaseEpoch": 7, "fromOutboxSeq": 42, "retryAfterMs": 5000 } ],
     "leases":  [ { "instanceId": "c7b2…", "leaseEpoch": 7, "leaseToken": "…", "expiresAtUnixMs": 1793413660000 } ],
     "revoked": [ { "instanceId": "…", "reason": "AssignmentStopped" } ],
-    "rejected":[ { "instanceId": "…", "reason": "StaleLeaseEpoch" } ]
+    "rejected":[ { "instanceId": "…", "leaseEpoch": 6, "reason": "StaleLeaseEpoch" } ]
   }
 }
 ```
@@ -1143,7 +1143,8 @@ confirms whether discovery already carries it.
 - **`retryLater`** lists retryable rejections (`429`, temporary storage). The executor keeps those records and re-sends
   them after the delay. They are never acknowledged until stored.
 - **`generation`** higher than `observedGeneration` means the executor should fetch the desired document.
-- **`rejected`** tells the executor to drop those outbox entries, stop the instance and resync. Reasons:
+- **`rejected`** tells the executor to drop the outbox entries of that `leaseEpoch` (records of other epochs, such as
+  the current one, stay queued), stop the instance and resync. Reasons:
   `UnknownInstance`, `NotAssigned`, `StaleLeaseEpoch`, `StaleConfigRevision`.
 
 ### 8.4 Ingress rules
