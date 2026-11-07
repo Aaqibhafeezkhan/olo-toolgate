@@ -108,3 +108,5 @@ Use `000-template.md`.
 - [ADR 058: Scoped revocation and authenticated dispatch](058-scoped-revocation-and-dispatch.md)
 
 - [ADR 059: Outcome grades and honest presentation](059-outcome-grades-and-honest-presentation.md)
+
+- [ADR 060: Tenant audit hash chains](060-tenant-audit-hash-chains.md)

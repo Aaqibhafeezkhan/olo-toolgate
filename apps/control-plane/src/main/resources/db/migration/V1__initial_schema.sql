@@ -103,6 +103,26 @@ CREATE FUNCTION public.control_attempt_immutable() RETURNS trigger
     AS $$
 BEGIN RAISE EXCEPTION 'attempt journal is immutable'; END $$;
 
+CREATE FUNCTION public.control_audit_chain_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE head_index bigint; head_digest text;
+BEGIN
+ -- ADR 060: one linear chain per tenant; appends serialize on this tenant lock across replicas.
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text||'/audit-chain',0));
+ SELECT a.chain_index,a.row_digest INTO head_index,head_digest FROM public.control_audit a
+  WHERE a.tenant_id=NEW.tenant_id ORDER BY a.chain_index DESC LIMIT 1;
+ IF NEW.chain_index<>COALESCE(head_index,0)+1 OR NEW.previous_digest::text<>COALESCE(head_digest,repeat('0',64)) THEN
+  RAISE EXCEPTION 'audit chain link mismatch' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_audit_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN RAISE EXCEPTION 'audit chain is append-only'; END $$;
+
 CREATE FUNCTION public.control_attempt_manifest_seal_guard() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -1039,14 +1059,18 @@ ALTER TABLE ONLY public.control_attempt_snapshots FORCE ROW LEVEL SECURITY;
 CREATE TABLE public.control_audit (
     sequence bigint NOT NULL,
     tenant_id character varying(128) NOT NULL,
-    actor_id character(64) NOT NULL,
+    chain_index bigint NOT NULL,
+    previous_digest character(64) NOT NULL,
+    actor_id character varying(64) NOT NULL,
     operation character varying(40) NOT NULL,
     target character varying(256) NOT NULL,
     revision bigint NOT NULL,
     request_id character varying(128) NOT NULL,
-    request_digest character(64) NOT NULL,
+    request_digest character varying(64) NOT NULL,
     evidence text,
-    occurred_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    row_digest character(64) NOT NULL,
+    CONSTRAINT control_audit_chain_check CHECK (((chain_index >= 1) AND (previous_digest ~ '^[0-9a-f]{64}$'::text) AND (row_digest ~ '^[0-9a-f]{64}$'::text) AND ((chain_index > 1) OR (previous_digest = repeat('0'::text, 64))))),
     CONSTRAINT control_audit_evidence_check CHECK (((evidence IS NULL) OR (octet_length(evidence) <= 4096))),
     CONSTRAINT control_audit_operation_check CHECK (((operation)::text ~ '^[A-Z][A-Z0-9_]{0,39}$'::text))
 );
@@ -2275,6 +2299,9 @@ ALTER TABLE ONLY public.control_attempt_snapshots
 ALTER TABLE ONLY public.control_audit
     ADD CONSTRAINT control_audit_pkey PRIMARY KEY (sequence);
 
+ALTER TABLE ONLY public.control_audit
+    ADD CONSTRAINT control_audit_chain_unique UNIQUE (tenant_id, chain_index);
+
 ALTER TABLE ONLY public.control_authorization_outbox
     ADD CONSTRAINT control_authorization_outbox_pkey PRIMARY KEY (tenant_id, revision);
 
@@ -2608,6 +2635,10 @@ CREATE TRIGGER attempt_binding_guard BEFORE INSERT ON public.control_operation_a
 CREATE TRIGGER attempt_effect_guard BEFORE INSERT ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_effect_guard();
 
 CREATE TRIGGER attempt_effects_capacity AFTER INSERT ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_effects_capacity();
+
+CREATE TRIGGER audit_chain_guard BEFORE INSERT ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_audit_chain_guard();
+
+CREATE TRIGGER audit_immutable BEFORE DELETE OR UPDATE ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_audit_immutable();
 
 CREATE TRIGGER attempt_effects_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
 

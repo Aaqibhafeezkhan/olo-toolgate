@@ -12,6 +12,10 @@ from pathlib import Path
 import shutil
 import sqlite3
 import time
+try: import audit_chain  # Packaged beside this module in the Quickstart image.
+except ModuleNotFoundError:
+    import sys
+    sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'apps/quickstart'));import audit_chain
 from cryptography.hazmat.primitives import hashes,serialization
 from cryptography.hazmat.primitives.asymmetric import padding,rsa
 
@@ -216,7 +220,8 @@ def quarantine_connection(db,a,now,multiple=False):
     db.execute('INSERT INTO control_recovery_floors VALUES(?,?) ON CONFLICT(tenant_id) DO UPDATE SET snapshot_sequence=max(snapshot_sequence,excluded.snapshot_sequence)',(tenant,a['snapshotSequenceFloor']))
     db.execute('INSERT INTO control_authorization_outbox VALUES(?,?,?,?,NULL)',(tenant,revision,epoch,now))
     digest=hashlib.sha256(canonical(a)).hexdigest()
-    db.execute('INSERT INTO control_audit(tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES(?,?,?,?,?,?,?)',(tenant,hashlib.sha256(b'external-restore-review').hexdigest(),'RESTORE_QUARANTINE','directory',revision,'restore-'+digest[:32],digest))
+    # ADR 060: the quarantine record continues the restored tenant's verified audit chain.
+    audit_chain.append(db,tenant,hashlib.sha256(b'external-restore-review').hexdigest(),'RESTORE_QUARANTINE','directory',revision,'restore-'+digest[:32],digest,now_ms=now)
     db.execute('DELETE FROM control_idempotency WHERE tenant_id=?',(tenant,))
 
 def restore(source,target,review_path,trust_path,now=None):

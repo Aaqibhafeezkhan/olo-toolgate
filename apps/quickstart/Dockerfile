@@ -34,7 +34,7 @@ RUN /opt/quickstart-python/bin/python /opt/quickstart-python-notices.py
 COPY --from=rust-build /usr/local/bin/olo-toolgate-gateway /usr/local/bin/olo-toolgate-tool-host /usr/local/bin/
 COPY --from=rust-build /licenses /usr/share/licenses/olo-toolgate/quickstart-rust/
 COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
-COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py VERSION /opt/quickstart/
+COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py apps/quickstart/audit_chain.py VERSION /opt/quickstart/
 COPY packages/contracts/management-permissions.json /opt/quickstart/management-permissions.json
 # The default deployment profile; a deployment selects another with TOOLGATE_CONTROL_PROFILE_PATH.
 COPY deploy/profiles/fresh.json /opt/toolgate/profiles/fresh.json

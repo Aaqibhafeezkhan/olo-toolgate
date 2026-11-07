@@ -48,6 +48,10 @@ public interface Store {
         /** {@code evidence}: canonical {@code ControlAuditEvidence} JSON of an invocation event, or null (M4.4). */
         void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence);
         String auditPage(long after, int limit);
+        /** ADR 060: the tenant's committed chain head; {@link AuditChain.Head#EMPTY} before the first row. */
+        default AuditChain.Head auditHead() { throw Failure.unavailable(); }
+        /** ADR 060: stored chain rows after {@code afterIndex}, in chain order, bounded by {@code limit}. */
+        default java.util.List<AuditChain.Entry> auditChain(long afterIndex, int limit) { throw Failure.unavailable(); }
         long bundleSequence();
         BundleRecord bundle(long sequence);
         void publishBundle(BundleRecord bundle);

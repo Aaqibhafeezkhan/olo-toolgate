@@ -508,9 +508,40 @@ public class PostgresStore implements Store {
             } catch (SQLException e) { throw Failure.unavailable(); }
         }
         public void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence) {
-            try (var statement = statement("INSERT INTO control_audit (tenant_id,actor_id,operation,target,revision,request_id,request_digest,evidence) VALUES (?,?,?,?,?,?,?,?)",
-                actor, operation, target, revision, requestId, digest, evidence)) { statement.executeUpdate(); }
-            catch (SQLException e) { throw Failure.unavailable(); }
+            try {
+                boolean local = SqliteState.local(connection);
+                // ADR 060: serialize this tenant's appends across replicas before reading the head.
+                // SQLite writers already hold the database's single IMMEDIATE write reservation.
+                if (!local) try (var statement = statement("SELECT pg_advisory_xact_lock(hashtextextended(?::text||'/audit-chain',0))")) { statement.execute(); }
+                var head = auditHead();
+                long now = System.currentTimeMillis(); long index = head.chainIndex() + 1;
+                String row = io.ololabs.toolgate.control.application.AuditChain.digest(tenant, index, head.digest(), actor, operation, target, revision, requestId, digest, evidence, now);
+                Object occurred = local ? io.ololabs.toolgate.control.application.AuditChain.sqliteTime(now)
+                    : java.time.OffsetDateTime.ofInstant(java.time.Instant.ofEpochMilli(now), java.time.ZoneOffset.UTC);
+                try (var statement = statement("INSERT INTO control_audit (tenant_id,chain_index,previous_digest,actor_id,operation,target,revision,request_id,request_digest,evidence,occurred_at,row_digest) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    index, head.digest(), actor, operation, target, revision, requestId, digest, evidence, occurred, row)) { statement.executeUpdate(); }
+            } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        public io.ololabs.toolgate.control.application.AuditChain.Head auditHead() {
+            try (var statement = statement("SELECT chain_index,row_digest FROM control_audit WHERE tenant_id=? ORDER BY chain_index DESC LIMIT 1"); var rows = statement.executeQuery()) {
+                return rows.next() ? new io.ololabs.toolgate.control.application.AuditChain.Head(rows.getLong(1), rows.getString(2))
+                    : io.ololabs.toolgate.control.application.AuditChain.Head.EMPTY;
+            } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        public java.util.List<io.ololabs.toolgate.control.application.AuditChain.Entry> auditChain(long afterIndex, int limit) {
+            if (afterIndex < 0 || limit < 1 || limit > 10000) throw Failure.validation();
+            try (var statement = statement("SELECT sequence,tenant_id,chain_index,previous_digest,actor_id,operation,target,revision,request_id,request_digest,evidence,occurred_at,row_digest FROM control_audit WHERE tenant_id=? AND chain_index>? ORDER BY chain_index LIMIT ?", afterIndex, limit);
+                 var rows = statement.executeQuery()) {
+                boolean local = SqliteState.local(connection);
+                var entries = new java.util.ArrayList<io.ololabs.toolgate.control.application.AuditChain.Entry>();
+                while (rows.next()) {
+                    long occurred = local ? io.ololabs.toolgate.control.application.AuditChain.sqliteMillis(rows.getString(12))
+                        : io.ololabs.toolgate.control.application.AuditChain.instantMillis(rows.getObject(12, java.time.OffsetDateTime.class).toInstant());
+                    entries.add(new io.ololabs.toolgate.control.application.AuditChain.Entry(rows.getLong(1), rows.getString(2), rows.getLong(3), rows.getString(4),
+                        rows.getString(5), rows.getString(6), rows.getString(7), rows.getLong(8), rows.getString(9), rows.getString(10), rows.getString(11), occurred, rows.getString(13)));
+                }
+                return java.util.List.copyOf(entries);
+            } catch (SQLException e) { throw Failure.unavailable(); }
         }
         public String auditPage(long after, int limit) {
             try (var statement = statement("SELECT sequence,actor_id,operation,target,revision,request_id,request_digest,occurred_at,evidence FROM control_audit WHERE tenant_id=? AND sequence>? ORDER BY sequence LIMIT ?", after, limit + 1);
