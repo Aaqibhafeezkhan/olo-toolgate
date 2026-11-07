@@ -1494,7 +1494,7 @@ CREATE TRIGGER control_mcp_servers_capacity_delete AFTER DELETE ON control_mcp_s
 END;
 -- statement
 CREATE TRIGGER control_mcp_servers_capacity_update AFTER UPDATE ON control_mcp_servers BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1509,7 +1509,7 @@ CREATE TRIGGER control_mcp_snapshots_capacity_delete AFTER DELETE ON control_mcp
 END;
 -- statement
 CREATE TRIGGER control_mcp_snapshots_capacity_update AFTER UPDATE ON control_mcp_snapshots BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1524,7 +1524,7 @@ CREATE TRIGGER control_mcp_approvals_capacity_delete AFTER DELETE ON control_mcp
 END;
 -- statement
 CREATE TRIGGER control_mcp_approvals_capacity_update AFTER UPDATE ON control_mcp_approvals BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1539,7 +1539,7 @@ CREATE TRIGGER control_server_packages_capacity_delete AFTER DELETE ON control_s
 END;
 -- statement
 CREATE TRIGGER control_server_packages_capacity_update AFTER UPDATE ON control_server_packages BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.content AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.content AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.content AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.content AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1554,7 +1554,7 @@ CREATE TRIGGER control_server_documents_capacity_delete AFTER DELETE ON control_
 END;
 -- statement
 CREATE TRIGGER control_server_documents_capacity_update AFTER UPDATE ON control_server_documents BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1569,7 +1569,7 @@ CREATE TRIGGER control_secrets_capacity_delete AFTER DELETE ON control_secrets B
 END;
 -- statement
 CREATE TRIGGER control_secrets_capacity_update AFTER UPDATE ON control_secrets BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.cipher AS BLOB)),0))-(COALESCE(length(CAST(OLD.cipher AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.cipher AS BLOB)),0))-(COALESCE(length(CAST(OLD.cipher AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1584,7 +1584,7 @@ CREATE TRIGGER control_invocation_events_capacity_delete AFTER DELETE ON control
 END;
 -- statement
 CREATE TRIGGER control_invocation_events_capacity_update AFTER UPDATE ON control_invocation_events BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1599,7 +1599,7 @@ CREATE TRIGGER control_invocation_results_capacity_delete AFTER DELETE ON contro
 END;
 -- statement
 CREATE TRIGGER control_invocation_results_capacity_update AFTER UPDATE ON control_invocation_results BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.payload AS BLOB)),0))-(COALESCE(length(CAST(OLD.payload AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.payload AS BLOB)),0))-(COALESCE(length(CAST(OLD.payload AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1614,7 +1614,7 @@ CREATE TRIGGER control_policy_bundles_capacity_delete AFTER DELETE ON control_po
 END;
 -- statement
 CREATE TRIGGER control_policy_bundles_capacity_update AFTER UPDATE ON control_policy_bundles BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.policy AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.policy AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.policy AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.policy AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
@@ -1629,7 +1629,7 @@ CREATE TRIGGER control_triggers_capacity_delete AFTER DELETE ON control_triggers
 END;
 -- statement
 CREATE TRIGGER control_triggers_capacity_update AFTER UPDATE ON control_triggers BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((0)-(0)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- END TENANT CAPACITY

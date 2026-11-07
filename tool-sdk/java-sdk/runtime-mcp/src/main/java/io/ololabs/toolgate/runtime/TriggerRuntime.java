@@ -296,6 +296,7 @@ public final class TriggerRuntime {
                     try {
                         Thread.sleep(options.heartbeatMs());
                     } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                         return;
                     }
                     wire.send(new TriggerHeartbeatFrame("HEARTBEAT"));
@@ -429,6 +430,7 @@ public final class TriggerRuntime {
                             long wait = options.timer() && !paused && !halted ? Math.max(1, next - now) : 0;
                             signal.wait(wait);
                         } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
                             return;
                         }
                     }
@@ -437,6 +439,7 @@ public final class TriggerRuntime {
                 try {
                     cycle();
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     return;
                 }
                 options.afterCheck().run();

@@ -44,8 +44,12 @@ final class Triggers {
     static final String POLL_RESULT = "io.ololabs.toolgate.sdk.trigger.PollResult";
     /** The local-name part of {@code TriggerId}: no dots, unlike tool names. */
     static final Pattern NAME = Pattern.compile("^[a-z][a-z0-9_-]{0,47}$");
-    /** {@code TriggerEventType}. */
-    static final Pattern EVENT_TYPE = Pattern.compile("^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+\\.v[1-9][0-9]{0,3}$");
+    /**
+     * {@code TriggerEventType}. Possessive quantifiers never backtrack; the lookahead keeps the final {@code .vN} out
+     * of the repeated segments, so the language is the schema pattern's.
+     */
+    static final Pattern EVENT_TYPE =
+            Pattern.compile("^[a-z][a-z0-9-]*+(?:\\.(?!v[1-9][0-9]{0,3}$)[a-z][a-z0-9-]*+)++\\.v[1-9][0-9]{0,3}$");
     static final Pattern EXAMPLE_NAME = Pattern.compile("^[a-z][a-z0-9_.-]{0,63}$");
     static final int MAX_SCHEMA_BYTES = 65_536;
     static final int MAX_EXAMPLES = 32;
@@ -66,20 +70,20 @@ final class Triggers {
             Supplier<Class<?>> event, String eventType, SourceReplay sourceReplay, long intervalMs, long resyncIntervalMs,
             int maxEventsPerHour, int maxEventBytes, int maxCheckpointBytes, int memoryMiB, int maxBrokerCallsPerMinute,
             int stopGraceMs, OverflowPolicy overflow, boolean lossTolerant, TerminalRejectionPolicy onTerminalRejection,
-            int checkpointSchemaVersion, RuntimeTier[] tiers) {
+            int checkpointSchemaVersion, List<RuntimeTier> tiers) {
 
         static Declared of(ServerTrigger t) {
             return new Declared(false, t.name(), t.mode(), t.description(), t::config, t::event, t.eventType(), t.sourceReplay(),
                     t.intervalMs(), t.resyncIntervalMs(), t.maxEventsPerHour(), t.maxEventBytes(), t.maxCheckpointBytes(), t.memoryMiB(),
                     t.maxBrokerCallsPerMinute(), t.stopGraceMs(), t.overflow(), t.lossTolerant(), t.onTerminalRejection(),
-                    t.checkpointSchemaVersion(), new RuntimeTier[] {RuntimeTier.OCI_SANDBOX});
+                    t.checkpointSchemaVersion(), List.of(RuntimeTier.OCI_SANDBOX));
         }
 
         static Declared of(ClientTrigger t) {
             return new Declared(true, t.name(), t.mode(), t.description(), t::config, t::event, t.eventType(), t.sourceReplay(),
                     t.intervalMs(), t.resyncIntervalMs(), t.maxEventsPerHour(), t.maxEventBytes(), t.maxCheckpointBytes(), t.memoryMiB(),
                     t.maxBrokerCallsPerMinute(), t.stopGraceMs(), t.overflow(), t.lossTolerant(), t.onTerminalRejection(),
-                    t.checkpointSchemaVersion(), t.tiers());
+                    t.checkpointSchemaVersion(), List.of(t.tiers()));
         }
     }
 
@@ -220,7 +224,7 @@ final class Triggers {
         d.put("tcpDestinations", List.of());
         d.put("secrets", List.of());
         d.put("permissions", Jcs.sorted(permissions));
-        if (t.tiers().length == 0) throw new Problem(method, "a client trigger needs at least one tier");
+        if (t.tiers().isEmpty()) throw new Problem(method, "a client trigger needs at least one tier");
         List<String> tiers = new ArrayList<>();
         for (RuntimeTier tier : t.tiers()) tiers.add(tier.name());
         d.put("tiers", Jcs.sorted(DescriptorProcessor.unique(tiers, "tier", method)));
