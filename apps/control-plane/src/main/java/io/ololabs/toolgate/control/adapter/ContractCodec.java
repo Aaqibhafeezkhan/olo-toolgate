@@ -79,7 +79,18 @@ public class ContractCodec implements Codec {
         java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
         java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"), java.util.Map.entry("protocol.schema.json", "RunEventBatch"),
         java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"), java.util.Map.entry("package.schema.json", "ClientReleaseRequest"), java.util.Map.entry("package.schema.json", "ClientRelease"),
-        java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"));
+        java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignmentCreate"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignment"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignmentResult"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignmentPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerInstancePage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDefinitionPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDesiredInstance"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDesiredDocument"),
+        java.util.Map.entry("trigger.schema.json", "SignedTriggerDesiredDocument"),
+        java.util.Map.entry("trigger.schema.json", "TriggerLease"),
+        java.util.Map.entry("trigger.schema.json", "TriggerRevocation"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",

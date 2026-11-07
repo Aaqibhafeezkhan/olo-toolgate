@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 plugins {
     `java-library`
+    // TriggerPackages builds real packages with trigger exports for this library's and Control's tests.
+    `java-test-fixtures`
 }
 
 description = "The .tgpkg package validator shared by Control and the Marketplace helper. JDK only, no dependencies."
@@ -19,6 +21,8 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     systemProperty("toolgate.root", rootProject.projectDir.absolutePath)
+    // Parity with the CLI: TOOLGATE_TRIGGER_PACKAGE names a package `toolgate pack` built, such as the inbox-watch sample.
+    providers.environmentVariable("TOOLGATE_TRIGGER_PACKAGE").orNull?.let { systemProperty("toolgate.triggerPackage", it) }
 }
 
 tasks.jar { isPreserveFileTimestamps = false; isReproducibleFileOrder = true }

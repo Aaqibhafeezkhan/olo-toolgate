@@ -32,6 +32,7 @@ public final class ServerPackages {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private final Store store; private final Codec codec; private final EnterpriseOperations operations; private final Clock clock;
     private final Set<String> qualifiedRecoveryExecutors;
+    private volatile boolean triggers;
     public ServerPackages(Store store, Codec codec, EnterpriseOperations operations, Clock clock) {
         this(store,codec,operations,clock,Set.of());
     }
@@ -53,6 +54,9 @@ public final class ServerPackages {
         }
     }
 
+    /** Accepts uploads with trigger exports (ADR 058) while {@code toolgate.triggers.control-core.enabled} is on. */
+    public ServerPackages acceptTriggers(boolean triggers) { this.triggers = triggers; return this; }
+
     private JsonNode node(String document) { return (JsonNode) codec.value(document); }
     private Store.Reply reply(int status, Object value) { return new Store.Reply(status, codec.json(value), 0); }
     private static Failure notFound() { return new Failure(ErrorCode.NOT_FOUND, 404, "Package not found"); }
@@ -71,7 +75,7 @@ public final class ServerPackages {
 
     /** Package verification never confers authority; import permission is resolved against current roles. */
     public Store.Reply upload(DirectoryService.Actor actor, byte[] data, String requestId, Origin origin) {
-        var verified = PackageArchive.validate(data, this::node); var manifest = verified.manifest();
+        var verified = PackageArchive.validate(data, this::node, triggers); var manifest = verified.manifest();
         PackageCompatibility.require(PackageCompatibility.problems(manifest));
         codec.model(codec.json(manifest),io.ololabs.toolgate.contracts.v2.PackageManifest.class);
         // Only Control generates MCP_PROXY packages, from an approved MCP server snapshot.

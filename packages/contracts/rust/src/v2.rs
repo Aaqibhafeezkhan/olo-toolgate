@@ -3469,6 +3469,95 @@ pub struct TriggerAcceptedUpToFrame {
     pub kind: String,
     pub emit_seq: u64,
 }
+/// Declarative assignment resource (plan 9.1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignment {
+    #[serde(deserialize_with = "const_trigger_assignment_api_version")]
+    pub api_version: String,
+    #[serde(deserialize_with = "const_trigger_assignment_kind")]
+    pub kind: String,
+    pub metadata: TriggerAssignmentMetadata,
+    pub spec: TriggerAssignmentSpec,
+    pub status: TriggerAssignmentStatus,
+}
+/// One assignment condition.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentCondition {
+    pub r#type: TriggerAssignmentConditionType,
+    pub status: TriggerConditionStatus,
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    pub last_transition_time: String,
+}
+/// Canonical TriggerAssignmentConditionType wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerAssignmentConditionType {
+    #[serde(rename = "Available")]
+    Available,
+    #[serde(rename = "Progressing")]
+    Progressing,
+}
+/// Body of POST /api/control/v1/triggers/assignments.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentCreate {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub labels: Option<Vec<TriggerLabel>>,
+    pub spec: TriggerAssignmentSpec,
+}
+/// Server-assigned assignment metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentMetadata {
+    pub name: String,
+    pub uid: String,
+    pub generation: u64,
+    pub config_revision: u64,
+    pub resource_version: String,
+    pub labels: Vec<TriggerLabel>,
+    pub created_at_unix_ms: u64,
+    pub updated_at_unix_ms: u64,
+}
+/// One page of assignments.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentPage {
+    pub items: Vec<TriggerAssignment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
+}
+/// Result of an assignment mutation, or of its dry run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentResult {
+    pub assignment: TriggerAssignment,
+    pub dry_run: bool,
+    pub changes: Vec<TriggerInstanceChange>,
+}
+/// Desired assignment of one trigger definition (plan 9.1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentSpec {
+    pub trigger: String,
+    pub package_version: String,
+    pub target: TriggerTarget,
+    pub config: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub globals: Option<std::collections::BTreeMap<String, serde_json::Value>>,
+    pub desired_state: TriggerDesiredState,
+}
+/// Observed assignment status.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerAssignmentStatus {
+    pub observed_generation: u64,
+    pub instances: TriggerInstanceCounts,
+    pub conditions: Vec<TriggerAssignmentCondition>,
+}
 /// Barrier advanced to that checkpoint at that level.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3630,6 +3719,26 @@ pub struct TriggerDefinition {
     pub runtime_id: String,
     pub entry_point: String,
     pub artifact_ids: Vec<String>,
+}
+/// One page of definitions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDefinitionPage {
+    pub items: Vec<TriggerDefinitionRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
+}
+/// A trigger export of an uploaded package version (plan 10.2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerDefinitionRecord {
+    pub trigger_id: String,
+    pub package_id: String,
+    pub package_version: String,
+    pub package_digest: String,
+    pub trigger_descriptor_digest: String,
+    pub descriptor: TriggerDescriptor,
+    pub security_delta: Vec<SecurityDeltaItem>,
 }
 /// Signed semantic descriptor of one trigger export (plan 5.9).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3844,6 +3953,52 @@ pub struct TriggerHeartbeatFrame {
     #[serde(deserialize_with = "const_trigger_heartbeat_frame_kind")]
     pub kind: String,
 }
+/// One instance a mutation adds, changes or removes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerInstanceChange {
+    pub instance_id: String,
+    pub executor_id: String,
+    pub change: TriggerInstanceChangeKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old_desired_state: Option<TriggerDesiredState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_desired_state: Option<TriggerDesiredState>,
+}
+/// Canonical TriggerInstanceChangeKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TriggerInstanceChangeKind {
+    #[serde(rename = "Added")]
+    Added,
+    #[serde(rename = "Updated")]
+    Updated,
+    #[serde(rename = "Removed")]
+    Removed,
+    #[serde(rename = "Unchanged")]
+    Unchanged,
+}
+/// Instances of an assignment by phase.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerInstanceCounts {
+    pub desired: u64,
+    pub pending: u64,
+    pub starting: u64,
+    pub running: u64,
+    pub paused: u64,
+    pub stopped: u64,
+    pub failed: u64,
+    pub unsupported: u64,
+    pub stale: u64,
+}
+/// One page of instances.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerInstancePage {
+    pub items: Vec<TriggerInstanceView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
+}
 /// Executor snapshot entry for one held instance (plan 8.2).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -3861,6 +4016,27 @@ pub struct TriggerInstanceReport {
     pub counters: TriggerCounters,
     pub outbox: TriggerOutboxStatus,
 }
+/// Read-only instance resource (plan 9.2).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerInstanceView {
+    pub instance_id: String,
+    pub assignment: String,
+    pub trigger_id: String,
+    pub executor: TriggerExecutor,
+    pub executor_id: String,
+    pub package_digest: String,
+    pub trigger_descriptor_digest: String,
+    pub config_revision: u64,
+    pub desired_state: TriggerDesiredState,
+    pub desired_state_source: String,
+    pub phase: TriggerPhase,
+    pub conditions: Vec<TriggerCondition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lease_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_seen_at_unix_ms: Option<u64>,
+}
 /// Canonical TriggerKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TriggerKind {
@@ -3868,6 +4044,13 @@ pub enum TriggerKind {
     ServerTrigger,
     #[serde(rename = "CLIENT_TRIGGER")]
     ClientTrigger,
+}
+/// One assignment label.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerLabel {
+    pub key: String,
+    pub value: String,
 }
 /// Run lease for one instance (plan 7). It authorizes running and reporting only.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4190,6 +4373,18 @@ pub struct TriggerSyncAck {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshot_requested: Option<bool>,
 }
+/// Where an assignment runs (plan 9.1). CLIENT: devices and Device Groups, minus excluded devices. Entries are unique; Control refuses repeats.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerTarget {
+    pub executor: TriggerExecutor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub devices: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_groups: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude_devices: Option<Vec<String>>,
+}
 /// Canonical TriggerTerminalRejectionPolicy wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TriggerTerminalRejectionPolicy {
@@ -4284,6 +4479,12 @@ const_field!(
     String,
     "ACCEPTED_UPTO"
 );
+const_field!(
+    const_trigger_assignment_api_version,
+    String,
+    "toolgate.olo/v1"
+);
+const_field!(const_trigger_assignment_kind, String, "TriggerAssignment");
 const_field!(
     const_trigger_checkpoint_ack_frame_kind,
     String,

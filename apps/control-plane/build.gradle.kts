@@ -33,6 +33,7 @@ dependencies {
         implementation(project(":contracts-java"))
     }
     testImplementation(libs.junit.jupiter)
+    testImplementation(testFixtures(project(":package-archive")))
     testRuntimeOnly(libs.junit.launcher)
 }
 

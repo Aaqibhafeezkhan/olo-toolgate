@@ -157,6 +157,8 @@ public final class ManagementPermissionCatalog {
   "package.publish",
   "package.deploy",
   "package.delete",
+  "trigger.read",
+  "trigger.manage",
   "tool_builder.read",
   "tool_builder.build",
   "mcp_server.read",

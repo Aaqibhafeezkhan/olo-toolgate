@@ -1681,6 +1681,579 @@
         "kind",
         "code"
       ]
+    },
+    "TriggerAssignmentName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$",
+      "description": "Assignment name, unique per tenant (a DNS label)."
+    },
+    "TriggerLabel": {
+      "type": "object",
+      "description": "One assignment label.",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 63,
+          "pattern": "^[A-Za-z0-9._-]{0,63}$"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ]
+    },
+    "TriggerTarget": {
+      "type": "object",
+      "description": "Where an assignment runs (plan 9.1). CLIENT: devices and Device Groups, minus excluded devices. Entries are unique; Control refuses repeats.",
+      "additionalProperties": false,
+      "properties": {
+        "executor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutor"
+        },
+        "devices": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
+          },
+          "maxItems": 256
+        },
+        "deviceGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "maxItems": 64
+        },
+        "excludeDevices": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "executor"
+      ]
+    },
+    "TriggerAssignmentSpec": {
+      "type": "object",
+      "description": "Desired assignment of one trigger definition (plan 9.1).",
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "packageVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "target": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTarget"
+        },
+        "config": {
+          "type": "object",
+          "description": "Validated against the definition configSchema; at most 8 KiB.",
+          "x-toolgate-max-bytes": 8192
+        },
+        "globals": {
+          "type": "object",
+          "description": "Package globals for the instances; at most 8 KiB.",
+          "x-toolgate-max-bytes": 8192
+        },
+        "desiredState": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredState"
+        }
+      },
+      "required": [
+        "trigger",
+        "packageVersion",
+        "target",
+        "config",
+        "desiredState"
+      ]
+    },
+    "TriggerAssignmentMetadata": {
+      "type": "object",
+      "description": "Server-assigned assignment metadata.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "uid": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "generation": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "configRevision": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "resourceVersion": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 20,
+          "pattern": "^W/\"[0-9]{1,16}\"$",
+          "description": "ETag for If-Match."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerLabel"
+          },
+          "maxItems": 16
+        },
+        "createdAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "updatedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "name",
+        "uid",
+        "generation",
+        "configRevision",
+        "resourceVersion",
+        "labels",
+        "createdAtUnixMs",
+        "updatedAtUnixMs"
+      ]
+    },
+    "TriggerInstanceCounts": {
+      "type": "object",
+      "description": "Instances of an assignment by phase.",
+      "additionalProperties": false,
+      "properties": {
+        "desired": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "pending": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "starting": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "running": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "paused": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "stopped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "unsupported": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "stale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      },
+      "required": [
+        "desired",
+        "pending",
+        "starting",
+        "running",
+        "paused",
+        "stopped",
+        "failed",
+        "unsupported",
+        "stale"
+      ]
+    },
+    "TriggerAssignmentConditionType": {
+      "type": "string",
+      "enum": [
+        "Available",
+        "Progressing"
+      ],
+      "description": "Assignment condition type."
+    },
+    "TriggerAssignmentCondition": {
+      "type": "object",
+      "description": "One assignment condition.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentConditionType"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerConditionStatus"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        },
+        "message": {
+          "$ref": "trigger.schema.json#/$defs/TriggerMessage"
+        },
+        "lastTransitionTime": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        }
+      },
+      "required": [
+        "type",
+        "status",
+        "reason",
+        "lastTransitionTime"
+      ]
+    },
+    "TriggerAssignmentStatus": {
+      "type": "object",
+      "description": "Observed assignment status.",
+      "additionalProperties": false,
+      "properties": {
+        "observedGeneration": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "instances": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceCounts"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerAssignmentCondition"
+          },
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "observedGeneration",
+        "instances",
+        "conditions"
+      ]
+    },
+    "TriggerAssignment": {
+      "type": "object",
+      "description": "Declarative assignment resource (plan 9.1).",
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "toolgate.olo/v1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "TriggerAssignment"
+        },
+        "metadata": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentMetadata"
+        },
+        "spec": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentSpec"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentStatus"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "metadata",
+        "spec",
+        "status"
+      ]
+    },
+    "TriggerAssignmentCreate": {
+      "type": "object",
+      "description": "Body of POST /api/control/v1/triggers/assignments.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerLabel"
+          },
+          "maxItems": 16
+        },
+        "spec": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentSpec"
+        }
+      },
+      "required": [
+        "name",
+        "spec"
+      ]
+    },
+    "TriggerPageToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9_-]{1,256}$",
+      "description": "Opaque list cursor."
+    },
+    "TriggerAssignmentPage": {
+      "type": "object",
+      "description": "One page of assignments.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerAssignment"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "TriggerInstanceChangeKind": {
+      "type": "string",
+      "enum": [
+        "Added",
+        "Updated",
+        "Removed",
+        "Unchanged"
+      ],
+      "description": "How a mutation changes one instance."
+    },
+    "TriggerInstanceChange": {
+      "type": "object",
+      "description": "One instance a mutation adds, changes or removes.",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "executorId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
+        },
+        "change": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceChangeKind"
+        },
+        "oldDesiredState": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredState"
+        },
+        "newDesiredState": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredState"
+        }
+      },
+      "required": [
+        "instanceId",
+        "executorId",
+        "change"
+      ]
+    },
+    "TriggerAssignmentResult": {
+      "type": "object",
+      "description": "Result of an assignment mutation, or of its dry run.",
+      "additionalProperties": false,
+      "properties": {
+        "assignment": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignment"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerInstanceChange"
+          },
+          "maxItems": 4096
+        }
+      },
+      "required": [
+        "assignment",
+        "dryRun",
+        "changes"
+      ]
+    },
+    "TriggerDesiredStateSource": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 134,
+      "pattern": "^(Assignment|Device|Instance|Group:[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127})$",
+      "description": "Where the resolved desired state comes from (plan 9.2)."
+    },
+    "TriggerInstanceView": {
+      "type": "object",
+      "description": "Read-only instance resource (plan 9.2).",
+      "additionalProperties": false,
+      "properties": {
+        "instanceId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerInstanceId"
+        },
+        "assignment": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "executor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutor"
+        },
+        "executorId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "triggerDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "configRevision": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "desiredState": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredState"
+        },
+        "desiredStateSource": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredStateSource"
+        },
+        "phase": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPhase"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerCondition"
+          },
+          "maxItems": 7
+        },
+        "leaseEpoch": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSequence"
+        },
+        "lastSeenAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "instanceId",
+        "assignment",
+        "triggerId",
+        "executor",
+        "executorId",
+        "packageDigest",
+        "triggerDescriptorDigest",
+        "configRevision",
+        "desiredState",
+        "desiredStateSource",
+        "phase",
+        "conditions"
+      ]
+    },
+    "TriggerInstancePage": {
+      "type": "object",
+      "description": "One page of instances.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerInstanceView"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "TriggerDefinitionRecord": {
+      "type": "object",
+      "description": "A trigger export of an uploaded package version (plan 10.2).",
+      "additionalProperties": false,
+      "properties": {
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "packageVersion": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "triggerDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "descriptor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDescriptor"
+        },
+        "securityDelta": {
+          "type": "array",
+          "items": {
+            "$ref": "package.schema.json#/$defs/SecurityDeltaItem"
+          },
+          "maxItems": 64,
+          "description": "Against the same trigger in the package version uploaded before this one; all widening for a first version."
+        }
+      },
+      "required": [
+        "triggerId",
+        "packageId",
+        "packageVersion",
+        "packageDigest",
+        "triggerDescriptorDigest",
+        "descriptor",
+        "securityDelta"
+      ]
+    },
+    "TriggerDefinitionPage": {
+      "type": "object",
+      "description": "One page of definitions.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerDefinitionRecord"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
     }
   }
 }

@@ -443,6 +443,14 @@
       ]
     },
     {
+      "id": "trigger",
+      "label": "Trigger",
+      "actions": [
+        "read",
+        "manage"
+      ]
+    },
+    {
       "id": "tool_builder",
       "label": "Tool Builder",
       "actions": [
@@ -514,7 +522,8 @@
     "write": "Write",
     "request": "Request execution",
     "recover": "Reviewed installation administration",
-    "register": "Register"
+    "register": "Register",
+    "manage": "Manage"
   },
   "directoryRoutes": [
     "users",

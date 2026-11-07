@@ -14,7 +14,7 @@
     },
     "FleetSignatureHeader": {
       "type": "object",
-      "description": "Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.",
+      "description": "Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key.",
       "additionalProperties": false,
       "properties": {
         "alg": {
@@ -23,7 +23,7 @@
         },
         "typ": {
           "type": "string",
-          "pattern": "^toolgate-(package-release|fleet-desired|fleet-artifact)\\+jws$",
+          "pattern": "^toolgate-(package-release|fleet-desired|fleet-artifact|trigger-desired)\\+jws$",
           "maxLength": 64
         },
         "kid": {

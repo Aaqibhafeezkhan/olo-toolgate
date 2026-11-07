@@ -1853,6 +1853,67 @@ export interface TriggerAcceptedUpToFrame {
   readonly kind: "ACCEPTED_UPTO";
   readonly emitSeq: number;
 }
+/** Declarative assignment resource (plan 9.1). */
+export interface TriggerAssignment {
+  readonly apiVersion: "toolgate.olo/v1";
+  readonly kind: "TriggerAssignment";
+  readonly metadata: TriggerAssignmentMetadata;
+  readonly spec: TriggerAssignmentSpec;
+  readonly status: TriggerAssignmentStatus;
+}
+/** One assignment condition. */
+export interface TriggerAssignmentCondition {
+  readonly type: TriggerAssignmentConditionType;
+  readonly status: TriggerConditionStatus;
+  readonly reason: string;
+  readonly message?: string;
+  readonly lastTransitionTime: string;
+}
+export type TriggerAssignmentConditionType = "Available" | "Progressing";
+/** Body of POST /api/control/v1/triggers/assignments. */
+export interface TriggerAssignmentCreate {
+  readonly name: string;
+  readonly labels?: ReadonlyArray<TriggerLabel>;
+  readonly spec: TriggerAssignmentSpec;
+}
+/** Server-assigned assignment metadata. */
+export interface TriggerAssignmentMetadata {
+  readonly name: string;
+  readonly uid: string;
+  readonly generation: number;
+  readonly configRevision: number;
+  readonly resourceVersion: string;
+  readonly labels: ReadonlyArray<TriggerLabel>;
+  readonly createdAtUnixMs: number;
+  readonly updatedAtUnixMs: number;
+}
+export type TriggerAssignmentName = string;
+/** One page of assignments. */
+export interface TriggerAssignmentPage {
+  readonly items: ReadonlyArray<TriggerAssignment>;
+  readonly nextPageToken?: string;
+}
+/** Result of an assignment mutation, or of its dry run. */
+export interface TriggerAssignmentResult {
+  readonly assignment: TriggerAssignment;
+  readonly dryRun: boolean;
+  readonly changes: ReadonlyArray<TriggerInstanceChange>;
+}
+/** Desired assignment of one trigger definition (plan 9.1). */
+export interface TriggerAssignmentSpec {
+  readonly trigger: string;
+  readonly packageVersion: string;
+  readonly target: TriggerTarget;
+  readonly config: Record<string, unknown>;
+  readonly globals?: Record<string, unknown>;
+  readonly desiredState: TriggerDesiredState;
+}
+/** Observed assignment status. */
+export interface TriggerAssignmentStatus {
+  readonly observedGeneration: number;
+  readonly instances: TriggerInstanceCounts;
+  readonly conditions: ReadonlyArray<TriggerAssignmentCondition>;
+}
 /** Barrier advanced to that checkpoint at that level. */
 export interface TriggerCheckpointAckFrame {
   readonly kind: "CHECKPOINT_ACK";
@@ -1949,6 +2010,21 @@ export interface TriggerDefinition {
   readonly entryPoint: string;
   readonly artifactIds: ReadonlyArray<string>;
 }
+/** One page of definitions. */
+export interface TriggerDefinitionPage {
+  readonly items: ReadonlyArray<TriggerDefinitionRecord>;
+  readonly nextPageToken?: string;
+}
+/** A trigger export of an uploaded package version (plan 10.2). */
+export interface TriggerDefinitionRecord {
+  readonly triggerId: string;
+  readonly packageId: string;
+  readonly packageVersion: string;
+  readonly packageDigest: string;
+  readonly triggerDescriptorDigest: string;
+  readonly descriptor: TriggerDescriptor;
+  readonly securityDelta: ReadonlyArray<SecurityDeltaItem>;
+}
 /** Signed semantic descriptor of one trigger export (plan 5.9). */
 export interface TriggerDescriptor {
   readonly kind: TriggerKind;
@@ -1997,6 +2073,7 @@ export interface TriggerDesiredInstance {
 }
 export type TriggerDesiredJws = string;
 export type TriggerDesiredState = "Running" | "Paused" | "Stopped";
+export type TriggerDesiredStateSource = string;
 /** Control-side terminal rejection of one record. */
 export interface TriggerDisposition {
   readonly instanceId: string;
@@ -2049,7 +2126,33 @@ export interface TriggerHeartbeatFrame {
   readonly kind: "HEARTBEAT";
 }
 export type TriggerId = string;
+/** One instance a mutation adds, changes or removes. */
+export interface TriggerInstanceChange {
+  readonly instanceId: string;
+  readonly executorId: string;
+  readonly change: TriggerInstanceChangeKind;
+  readonly oldDesiredState?: TriggerDesiredState;
+  readonly newDesiredState?: TriggerDesiredState;
+}
+export type TriggerInstanceChangeKind = "Added" | "Updated" | "Removed" | "Unchanged";
+/** Instances of an assignment by phase. */
+export interface TriggerInstanceCounts {
+  readonly desired: number;
+  readonly pending: number;
+  readonly starting: number;
+  readonly running: number;
+  readonly paused: number;
+  readonly stopped: number;
+  readonly failed: number;
+  readonly unsupported: number;
+  readonly stale: number;
+}
 export type TriggerInstanceId = string;
+/** One page of instances. */
+export interface TriggerInstancePage {
+  readonly items: ReadonlyArray<TriggerInstanceView>;
+  readonly nextPageToken?: string;
+}
 /** Executor snapshot entry for one held instance (plan 8.2). */
 export interface TriggerInstanceReport {
   readonly instanceId: string;
@@ -2062,7 +2165,29 @@ export interface TriggerInstanceReport {
   readonly counters: TriggerCounters;
   readonly outbox: TriggerOutboxStatus;
 }
+/** Read-only instance resource (plan 9.2). */
+export interface TriggerInstanceView {
+  readonly instanceId: string;
+  readonly assignment: string;
+  readonly triggerId: string;
+  readonly executor: TriggerExecutor;
+  readonly executorId: string;
+  readonly packageDigest: string;
+  readonly triggerDescriptorDigest: string;
+  readonly configRevision: number;
+  readonly desiredState: TriggerDesiredState;
+  readonly desiredStateSource: string;
+  readonly phase: TriggerPhase;
+  readonly conditions: ReadonlyArray<TriggerCondition>;
+  readonly leaseEpoch?: number;
+  readonly lastSeenAtUnixMs?: number;
+}
 export type TriggerKind = "SERVER_TRIGGER" | "CLIENT_TRIGGER";
+/** One assignment label. */
+export interface TriggerLabel {
+  readonly key: string;
+  readonly value: string;
+}
 /** Run lease for one instance (plan 7). It authorizes running and reporting only. */
 export interface TriggerLease {
   readonly instanceId: string;
@@ -2101,6 +2226,7 @@ export interface TriggerOutboxStatus {
   readonly oldestAgeMs: number;
 }
 export type TriggerOverflow = "BLOCK" | "DROP_OLDEST" | "DROP_NEWEST";
+export type TriggerPageToken = string;
 /** Pause the instance. */
 export interface TriggerPauseFrame {
   readonly kind: "PAUSE";
@@ -2216,6 +2342,13 @@ export interface TriggerSyncAck {
   readonly rejected?: ReadonlyArray<TriggerRejection>;
   readonly snapshotPages?: ReadonlyArray<TriggerSnapshotPageAck>;
   readonly snapshotRequested?: boolean;
+}
+/** Where an assignment runs (plan 9.1). CLIENT: devices and Device Groups, minus excluded devices. Entries are unique; Control refuses repeats. */
+export interface TriggerTarget {
+  readonly executor: TriggerExecutor;
+  readonly devices?: ReadonlyArray<string>;
+  readonly deviceGroups?: ReadonlyArray<string>;
+  readonly excludeDevices?: ReadonlyArray<string>;
 }
 export type TriggerTerminalRejectionPolicy = "HALT" | "SKIP_AND_RECORD";
 export type TriggerTimestamp = string;

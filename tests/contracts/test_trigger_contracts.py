@@ -36,6 +36,11 @@ LONGEST = {
     'Digest': 'sha256:' + 'f' * 64,
     'traceparent': '00-' + 'f' * 32 + '-' + 'f' * 16 + '-01',
     'TriggerDesiredJws': 'a' * (4 * 1024 * 1024 - 4) + '.a.a',
+    'resourceVersion': 'W/"' + '9' * 16 + '"',
+    'TriggerDesiredStateSource': 'Group:' + 'a' * 128,
+    'SemanticVersion': '1.0.0-' + 'a' * 122,
+    'PackageId': '.'.join(['a' * 31] * 4),
+    'ToolId': 'a' * 31 + '.' + 'a' * 31 + '.' + 'a' * 31 + '/' + 'a' * 32,
 }
 
 

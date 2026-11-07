@@ -10,9 +10,10 @@ This is the live progress document for issue #274 (server and client triggers). 
 Updated: **2026-11-07**.
 
 **Overall: 5% complete; 95% pending.** 1 of 18 modules merged to `main`: module 1 (olo-labs/olo-toolgate#281,
-merge `16d0fd36`). Module 2 (Java SDK, POLL) is merged into `feature/triggers-m01-contracts` (#282) but is not on
-`main` yet, so it earns nothing until it is. Module 3 is implemented and verified in its own PR (see Module 3
-evidence).
+merge `16d0fd36`). Modules 2, 3 and 4 were each reviewed and merged into a stacked feature branch (#282 and #283
+into `feature/triggers-m01-contracts`, #284 into `feature/triggers-m02-java-sdk`), not into `main`. The integration
+PR from `feature/triggers-integration-m04` brings all three to `main` together; they earn their weight when it
+merges (5% → 27%).
 
 | Slice / gate | Needs modules | Status |
 |---|---|---|
@@ -30,9 +31,9 @@ evidence).
 | # | Module | Track | Weight | Status | Earned | PR |
 |---|---|---|---:|---|---:|---|
 | 1 | Contracts, ADR and model | A | 5% | ✅ Merged | 5% | #281 |
-| 2 | Java SDK, POLL | B | 6% | 🟡 Merged into `feature/triggers-m01-contracts`, not yet on `main` | 0% | #282 |
-| 3 | Supervisor crate | C | 8% | 🔵 In this PR | 0% | #283 |
-| 4 | Control core for client triggers | D | 8% | ⏳ Pending | 0% | — |
+| 2 | Java SDK, POLL | B | 6% | 🔵 In this PR (integration to `main`; reviewed in #282) | 0% | #282 |
+| 3 | Supervisor crate | C | 8% | 🔵 In this PR (integration to `main`; reviewed in #283) | 0% | #283 |
+| 4 | Control core for client triggers | D | 8% | 🔵 In this PR (integration to `main`; reviewed in #284) | 0% | #284 |
 | 5 | ★ Client integration and ingest | E | 8% | ⏳ Pending | 0% | — |
 | 6 | Lifecycle, rollout and raw page | D | 6% | ⏳ Pending | 0% | — |
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
@@ -68,6 +69,10 @@ their reasons.
 
 | Date | Change | Old | New | Reason |
 |---|---|---|---|---|
+| 2026-11-07 | Module 4 scope: package review and enable (plan 10.2 "existing review / enable routes") | Definitions are the triggers of enabled package versions; the existing review flow carries the security delta | Definitions are the trigger exports of every uploaded (`VERIFIED`) package version, each with a trigger security delta against the version uploaded before. Weights unchanged | Control has no review or enable state for SDK packages today (versions stay `VERIFIED`; tools deploy straight from them), so there is no existing flow to extend. Gating trigger use on a review step belongs with that flow when it exists |
+| 2026-11-07 | Module 4 scope: plan 10.1 conventions | Errors are RFC 9457 `application/problem+json`; bodies may be JSON or YAML | Errors use Control's existing error envelope with the same status codes (404 identical for unknown and cross-tenant, 412 stale ETag, 428 missing If-Match); bodies are JSON only | One error format per Control API: the console and every client parse the existing envelope. Changing it is a Control-wide decision, not a trigger one |
+| 2026-11-07 | Module 4 boundary: what later modules wire | — | Server targets are refused (module 8); lifecycle overrides and actions (module 6); leases reach devices through `TriggerSyncAck` in check-in (module 5), which calls `TriggerService.leases`; the `triggers.v1` capability gate on the desired route arrives with check-in negotiation (module 5) | Each is owned by its module in plan 24.2; module 4 builds and tests the Control side they call |
+| 2026-11-07 | Contract amendment for module 4 (ADR 058, *Amendment (triggers module 4)*) | No admin resource schemas; `FleetSignatureHeader.typ` has three types | Assignment, instance and definition resources in `trigger.schema.json`; `toolgate-trigger-desired+jws` | Module 1 left the admin resources to module 4 (its evidence says so); the desired document needs its own signature type. Edited in place and regenerated |
 | 2026-11-07 | Module 2 scope: server-trigger capabilities (plan 5.6, 5.8) | Module 2 builds `PollContext.routes()`, `tcp()` and `secrets()` for `@ServerTrigger`, and the processor accepts their declarations | The processor refuses routes, TCP destinations and secrets on triggers; `PollContext` has none of them. Module 8 (lease-bound broker and secrets, sample `mail-watch`) adds them. Weights unchanged (6% and 8%) | The module 1 contracts cannot carry them yet: `TriggerDescriptor.routes`, `tcpDestinations` and `secrets` are id lists without the route definitions a broker validates calls against, and `TriggerStartFrame.secretHandles` has no name-to-handle mapping. Building the SDK side now would fix a broker contract before module 8 designs it |
 | 2026-11-07 | Contract amendment for module 2 (ADR 058, *Amendment*) | `PackageManifest` has no trigger exports; `descriptorSetDigest` covers tools | `PackageManifest.triggers` (`TriggerDefinition`) and `triggers/<name>.json`; `descriptorSetDigest` covers tools and triggers; Control refuses packages with `triggers` until module 4 | `toolgate pack` support for trigger exports (module 2 *Done when*) needs them. Edited in place and regenerated (fresh build) |
 | 2026-11-07 | G-STATE item 1 bounds (plan 6.6.1) | TLC model-checks 3 events, 2 epochs, 2 executors | Exhaustive at 2 events, 2 epochs, 2 executors, with crash and failover in separate SKIP and lifecycle configurations (HALT combines every core fault); every fault combined at 3 events by a fixed-seed random simulation | With every fault combined the search did not finish: at 3 events, HALT still had a growing queue after 170 million distinct states (20 minutes; an earlier 3-event run filled about 12 GB of state files); at 2 events, SKIP after 244 million (30 minutes) before the state reductions below and after 46 million (7-minute cap) with them. Crash alone or failover alone completes at 2 events in seconds to minutes. The simulation is evidence, not proof, at the original bound. |
@@ -138,7 +143,7 @@ passes (plan 8.5); TLC passes on the model (plan 6.6.1).
 **Outstanding before the module is Done:** gate D0 review of the contracts and the delivery model in the PR. Admin resource schemas (`TriggerAssignment`, `TriggerInstance`) and the admin routes are part of module 4's
 definitions and assignments API, not of this module.
 
-### Module 2 — Java SDK, POLL (merged into `feature/triggers-m01-contracts`, #282; not yet on `main`)
+### Module 2 — Java SDK, POLL (merged into `feature/triggers-m01-contracts`, #282; to `main` in the integration PR)
 
 Scope: `@ClientTrigger` and `@ServerTrigger` in POLL mode, the processor's rules (plan 5.8) and the generated
 descriptor (5.9), `PollContext`, the runtime loop on the trigger-mode frames (6.2), `toolgate check` and
@@ -207,13 +212,13 @@ package packs and verifies.
 exercised by hand with the same `java -jar` command above); the Maven plugin end-to-end run (`tool-sdk/java-sdk/e2e`,
 needs `mvn`); M12 scenarios (module 2 owns none).
 
-**Outstanding before the module is Done:** review and merge after module 1 (gate D0). Known limits, by design of this
+**Outstanding before the module is Done:** the merge of the integration PR to `main` (reviewed and merged as #282). Known limits, by design of this
 module: PUSH mode, `SnapshotState`, `nativeMount` and the `ACCEPTED` checkpoint level are module 7; server-trigger
 routes, TCP destinations and secrets are module 8 (*Baseline changes*); `toolgate dev` does not serve triggers (they
 have no MCP surface); the trigger `description` is in the package index, not in the signed descriptor, which has no
 field for it — module 4's definitions API decides whether the contract needs one.
 
-### Module 3 — Supervisor crate (in this PR)
+### Module 3 — Supervisor crate (merged into `feature/triggers-m01-contracts`, #283; to `main` in the integration PR)
 
 Scope: `crates/trigger-supervisor`: process lifecycle, the trigger-mode stdio frames, the outbox with `outboxSeq`,
 the `LOCAL` barrier, rejection classes, loss records, backoff and crash loop, health, the sequence namespaces.
@@ -283,3 +288,66 @@ jobs build only the client, CLI and Tool Host packages, which link the crate fro
 backpressure blocks like `BLOCK` until the SDK scheduler reads `Degraded (Backpressure)`; clearing a Control-side
 halt after a fix is left to modules 5 and 6. The supervisor trusts its executor for lease tokens and the
 renew deadline (modules 5 and 8 verify them).
+
+### Module 4 — Control core for client triggers (merged into `feature/triggers-m02-java-sdk`, #284; to `main` in the integration PR)
+
+Scope: package acceptance of trigger exports and the security delta; the definitions API; `TriggerAssignment` CRUD
+for client targets (ETag, idempotency, dry run); instances; the signed `TriggerDesiredDocument`; client leases;
+permissions; audit; tenant tables.
+
+Done when: API tests including cross-tenant negatives; desired-document signing and verification tests.
+
+**Implemented** (branch `feature/triggers-m04-control-core`, stacked on module 2 at `1668ad26`; behind
+`toolgate.triggers.control-core.enabled`, off by default):
+
+- **Package acceptance:** `backend-libs/package-archive` validates trigger exports with the CLI's rules (digests,
+  `triggers/` files, one export namespace, executors, read-only device files, POLL/PUSH schedule, `DROP_*`,
+  checkpoint size) and the set digest over tools and triggers. Uploads accept them only while the module flag is on;
+  otherwise they are refused as before. A `testFixtures` builder makes real trigger packages for tests.
+- **Definitions:** `GET /triggers/definitions` lists the trigger exports of uploaded versions with a security delta
+  against the same trigger in the version uploaded before (new export, kind or mode, more executors, permissions,
+  routes, TCP destinations, secrets, tiers, `DROP_*`, `SKIP_AND_RECORD`, event type, a higher event rate).
+- **Assignments:** `POST/GET/PATCH/DELETE /triggers/assignments[/{name}]` with `trigger.manage` (writes) or
+  `trigger.read` (reads) on every target device and Device Group; the config validated against the signed
+  `configSchema` (local `$ref` only, so a tenant schema never makes Control fetch anything); JSON Merge Patch of labels
+  and spec; `If-Match` with a weak ETag (412 stale, 428 missing); `Idempotency-Key` replay; `?dryRun=true` with the
+  instance changes; label selectors and cursor pages; audit of every committed mutation. A removal tombstones the
+  row; the name can be reused. Bounds: 256 assignments per tenant, 4096 instances per assignment, 32 per device.
+- **Instances:** one per assignment and resolved device (devices and enabled group members, minus exclusions),
+  recomputed from current membership, so a device that joins a group later gets the instance on its next fetch.
+  `GET /triggers/instances` filters by assignment and executor. Phases stay `Pending` until ingest (module 5).
+- **Desired document:** `GET /endpoint/triggers/desired` (device certificate) returns a compact JWS, RS256, by the
+  organization deployment key with `typ` `toolgate-trigger-desired+jws`; 24 h expiry; the generation advances only
+  when the device's resolved set changes.
+- **Client leases:** `TriggerService.leases` issues or renews the lease of every Running or Paused instance a device
+  resolves to and lists revoked ones once; `leaseValid` checks executor, epoch, expiry and the token against its
+  stored SHA-256 digest. Stop releases, Remove revokes, and Run after Stop or a new config revision is a new epoch.
+- **Tables and permissions:** `control_triggers` in the fresh PostgreSQL `V1` schema (forced row-level security,
+  tenant fence, no-delete and revision guard, capacity accounting) and its SQLite quickstart twin, in
+  `schema-ownership.json`; `trigger.read` and `trigger.manage` in the permission catalog.
+- **Contracts and API spec:** the admin resources in `trigger.schema.json` (ADR 058 *Amendment (triggers module 4)*),
+  regenerated for Java, Rust, TypeScript and PHP with valid fixtures; the routes in the served `control-v1.yaml` (the
+  desired route moved out of the proposed spec) and the console's generated operations.
+
+**Checks run** (Windows workstation, 2026-11-07; PostgreSQL 17 in Docker via `tools/control/check.py`):
+
+| Check | Result |
+|---|---|
+| `TriggerTest` on SQLite and on an isolated PostgreSQL 17 (package acceptance and security delta; assignment lifecycle, ETags, idempotency, dry run, merge patch, stop/run/remove, later group join, pagination; desired-document signing and verification; cross-tenant 404s and permission negatives) | Pass: 4 tests, each scenario on both stores |
+| Control on PostgreSQL: `TriggerTest`, row security and ownership, capacity, SQLite and PostgreSQL stores, permissions, server packages, fleet, endpoint, package archive baseline, compatibility, provisioning, marketplace, SDK builder, MCP servers, core inventory, contract dependency, initialization, tenant lifecycle, domain, `adapter.*` | Pass: 189 tests in 49 suites, 4 skipped |
+| `backend-libs/package-archive` (`TriggerPackageTest` with a CLI-built `inbox-watch` package for parity, `PackageArchiveTest`) | Pass: 9 tests |
+| `generate.py --check`, `fixtures.py --check`, `tools/access/permissions.py --check`, `tools/tenancy/capacity_schema.py --check`, `tools/ui/generate.py --check`, `tools/quality.py`, `tools/ci/preflight.py` | Pass |
+| `tests/contracts` (incl. `test_trigger_contracts.py` longest-value and bounds tests for the new resources) | 176 pass, 2 skipped; the 3 that fail on unmodified `main` on this machine fail (2 symlink, 1 scorecard) |
+| `tests/ci` (`PYTHONUTF8=1`) | Pass: 403, 10 skipped |
+| Rust 1.94 (Docker): `cargo fmt --all --check`, contracts crate, `toolgate-cli`, `cargo check --tests` client and Tool Host | Pass: contracts 4, CLI 43 |
+| PHP 8.2 (Docker) round trips and lint; TypeScript contracts check and tests | Pass: 298 v1 and 367 v2 round trips; 2 TS tests |
+| Admin UI `ui:check` and tests (generated permissions and operations) | Pass: 255 tests in 36 files |
+
+**Not rerun for this module:** the Gradle `check` of the Java SDK modules and `contracts-java` after the contract
+additions (the Java bindings compiled inside the Control build; module 2's evidence has the last full SDK run); the
+repository pre-commit script.
+
+**Not run:** the M12 scenarios (module 4 owns none); the console page (module 6); an HTTP-level test of the resource
+class (the service is tested directly, as Fleet's is).
+
+**Outstanding before the module is Done:** the merge of the integration PR to `main` (reviewed and merged as #284).
