@@ -10,7 +10,8 @@ This is the live progress document for issue #274 (server and client triggers). 
 Updated: **2026-11-07**.
 
 **Overall: 0% complete; 100% pending.** 0 of 18 modules merged. Module 1 is implemented and verified, TLC
-included, and awaits gate D0 review in its PR (see Module 1 evidence).
+included, and awaits gate D0 review in its PR (see Module 1 evidence). Module 2 (Java SDK, POLL) is implemented and
+verified in its PR, which is based on module 1's branch until that merges (see Module 2 evidence).
 
 | Slice / gate | Needs modules | Status |
 |---|---|---|
@@ -28,7 +29,7 @@ included, and awaits gate D0 review in its PR (see Module 1 evidence).
 | # | Module | Track | Weight | Status | Earned | PR |
 |---|---|---|---:|---|---:|---|
 | 1 | Contracts, ADR and model | A | 5% | 🔵 In progress | 0% | — |
-| 2 | Java SDK, POLL | B | 6% | ⏳ Pending | 0% | — |
+| 2 | Java SDK, POLL | B | 6% | 🔵 In this PR | 0% | — |
 | 3 | Supervisor crate | C | 8% | ⏳ Pending | 0% | — |
 | 4 | Control core for client triggers | D | 8% | ⏳ Pending | 0% | — |
 | 5 | ★ Client integration and ingest | E | 8% | ⏳ Pending | 0% | — |
@@ -61,10 +62,13 @@ included, and awaits gate D0 review in its PR (see Module 1 evidence).
 
 ## Baseline changes
 
-The baseline is plan revision 12, section 24.2. Module weights and scope are unchanged.
+The baseline is plan revision 12, section 24.2. Module weights are unchanged; the scope moves below are recorded with
+their reasons.
 
 | Date | Change | Old | New | Reason |
 |---|---|---|---|---|
+| 2026-11-07 | Module 2 scope: server-trigger capabilities (plan 5.6, 5.8) | Module 2 builds `PollContext.routes()`, `tcp()` and `secrets()` for `@ServerTrigger`, and the processor accepts their declarations | The processor refuses routes, TCP destinations and secrets on triggers; `PollContext` has none of them. Module 8 (lease-bound broker and secrets, sample `mail-watch`) adds them. Weights unchanged (6% and 8%) | The module 1 contracts cannot carry them yet: `TriggerDescriptor.routes`, `tcpDestinations` and `secrets` are id lists without the route definitions a broker validates calls against, and `TriggerStartFrame.secretHandles` has no name-to-handle mapping. Building the SDK side now would fix a broker contract before module 8 designs it |
+| 2026-11-07 | Contract amendment for module 2 (ADR 058, *Amendment*) | `PackageManifest` has no trigger exports; `descriptorSetDigest` covers tools | `PackageManifest.triggers` (`TriggerDefinition`) and `triggers/<name>.json`; `descriptorSetDigest` covers tools and triggers; Control refuses packages with `triggers` until module 4 | `toolgate pack` support for trigger exports (module 2 *Done when*) needs them. Edited in place and regenerated (fresh build) |
 | 2026-11-07 | G-STATE item 1 bounds (plan 6.6.1) | TLC model-checks 3 events, 2 epochs, 2 executors | Exhaustive at 2 events, 2 epochs, 2 executors, with crash and failover in separate SKIP and lifecycle configurations (HALT combines every core fault); every fault combined at 3 events by a fixed-seed random simulation | With every fault combined the search did not finish: at 3 events, HALT still had a growing queue after 170 million distinct states (20 minutes; an earlier 3-event run filled about 12 GB of state files); at 2 events, SKIP after 244 million (30 minutes) before the state reductions below and after 46 million (7-minute cap) with them. Crash alone or failover alone completes at 2 events in seconds to minutes. The simulation is evidence, not proof, at the original bound. |
 
 ## Module evidence
@@ -132,3 +136,78 @@ passes (plan 8.5); TLC passes on the model (plan 6.6.1).
 
 **Outstanding before the module is Done:** gate D0 review of the contracts and the delivery model in the PR. Admin resource schemas (`TriggerAssignment`, `TriggerInstance`) and the admin routes are part of module 4's
 definitions and assignments API, not of this module.
+
+### Module 2 — Java SDK, POLL (in this PR)
+
+Scope: `@ClientTrigger` and `@ServerTrigger` in POLL mode, the processor's rules (plan 5.8) and the generated
+descriptor (5.9), `PollContext`, the runtime loop on the trigger-mode frames (6.2), `toolgate check` and
+`toolgate pack` for trigger exports, a test harness, and the sample `inbox-watch` in POLL form.
+
+Done when: processor compile-error tests (5.8) pass; runtime frame tests pass; harness tests for the sample pass; the
+package packs and verifies.
+
+**Implemented** (branch `feature/triggers-m02-java-sdk`, based on module 1 at `1af150e3`):
+
+- **API** (`tool-sdk/java-sdk/api`): `@ServerTrigger`, `@ClientTrigger`, `@TriggerExample`, `TriggerMode`,
+  `SourceReplay`, `OverflowPolicy`, `TerminalRejectionPolicy`; package `io.ololabs.toolgate.sdk.trigger` with
+  `PollContext`, `PollResult`, `TriggerEvent` and `Checkpoint` (an immutable JSON object).
+- **Processor**: every rule of plan 5.8 that applies to POLL is a compile error: the `PollResult<E> check(C,
+  PollContext)` shape on a public instance with a public no-argument constructor; public record config and event
+  types; reverse-DNS `eventType` with a major version (and no `io.ololabs.toolgate.` prefix); `intervalMs` ≥ 5000,
+  no `resyncIntervalMs` on POLL; `maxEventsPerHour` 1..3600; event data ≤ 16 KiB and checkpoints ≤ 16 KiB (128 KiB
+  needs `SnapshotState`, module 7); `DROP_*` only with `lossTolerant` and `SKIP_AND_RECORD`; `@DeviceFileAccess`
+  read-only and only on `@ClientTrigger`; no secrets, claims or globals on a trigger; one export namespace with tools;
+  `mode = PUSH` refused until module 7. Each trigger becomes `META-INF/toolgate/triggers/<name>.json`, the
+  `TriggerDescriptor` as RFC 8785 bytes, plus a `triggers` entry in `META-INF/toolgate/package.json`. A
+  `@ServerTrigger` without capabilities gets `executors: ["CLIENT", "SERVER"]` (plan 5.7).
+- **Runtime** (`TriggerRuntime`, selected by `TOOLGATE_EXECUTION_MODE=TRIGGER`): `TRIGGER_START` → config checked
+  against the signed `configSchema` (≤ 8 KiB, defaults filled) → `READY` → a check at once and every `intervalMs`;
+  `HEARTBEAT` every 10 s from its own thread; `EMIT` per event with process-scoped `emitSeq`; one `CHECKPOINT` per
+  check, sent only after every emit of that check is resolved; `RETRYABLE_REJECTION` re-sends the same frame and
+  `emitSeq` with full-jitter backoff; `TERMINAL_REJECTION` halts under `HALT` and resolves under `SKIP_AND_RECORD`;
+  `RECONCILE`, `PAUSE`, `RESUME`, `STOP` → `EXIT`; `FILES_LIST/READ/INFO` broker frames for client triggers. Events
+  are validated against `eventSchema` and `maxEventBytes` before anything is emitted. Every frame uses the generated
+  bindings (`toolgate-contracts`, now compiled for Java 17 and published with the SDK).
+- **Harness**: `ToolHarness.trigger(name)` / `TriggerHarness` run the real runtime over the real frames against a
+  fake supervisor (strict binding parsing, scripted rejections, files faults, `runExamples`). `toolgate check`
+  (`Checks`) runs every `@TriggerExample`; staging writes `triggers` into the source manifest and accepts packages
+  with triggers only.
+- **CLI** (`tool-sdk/cli`): `pack` writes `triggers/<name>.json` and `triggerDescriptorDigest`; `descriptorSetDigest`
+  covers tools and triggers; `validate` checks digests, files, artifacts, the shared namespace and the trigger rules
+  (executors, read-only device files, POLL/PUSH schedule, `DROP_*`, checkpoint size).
+- **Contracts**: `PackageManifest.triggers` / `TriggerDefinition` (ADR 058 *Amendment*), regenerated for Java, Rust,
+  TypeScript and PHP, with a valid fixture. Control's package validation refuses `triggers` until module 4.
+- **Sample** `examples/java-tools/inbox-watch`: a `@ClientTrigger` POLL `STATE_SNAPSHOT` source with stable ids
+  `file:<path>:<size>`, a pruned checkpoint, two `@TriggerExample`s and `InboxWatchTest`. The frame semantics the
+  supervisor (module 3) relies on are summarised in the shared notes of this session group.
+
+**Checks run** (Windows workstation, 2026-11-07; Rust 1.94 and PHP 8.2 in Docker):
+
+| Check | Result |
+|---|---|
+| Processor `TriggerDeclarationTest` (every 5.8 rule as a compile error; descriptor bound strictly to the generated `TriggerDescriptor`; canonical bytes and index digest) | Pass: 12 tests. Whole processor module: 62 tests in 7 suites |
+| Runtime `TriggerRuntimeTest` (frames on raw stdio, each parsed with its generated binding: barrier with out-of-order acks, retry with the same `emitSeq`, HALT and SKIP_AND_RECORD, STOP/EXIT, PAUSE/RESUME, starting checkpoint, failing and oversized checks, files broker, heartbeats, refused starts 65/78, protocol violation) | Pass: 14 tests. Whole runtime module: 115 tests in 15 suites |
+| Harness `TriggerHarnessTest`; `ToolHarnessTest`, `ConformanceTest` | Pass: 5, 7 and 1 tests |
+| Build support (`Checks` runs trigger examples; staging writes `triggers`) | Pass: 7 tests, 1 skipped (the CLI pack test needs a local `toolgate` binary, which this Windows machine does not have) |
+| Gradle `check` for `contracts-java`, `package-archive`, `service-authorization`, `sdk-json` and every `sdk-java-*` module | Pass (`BUILD SUCCESSFUL`) |
+| Sample `inbox-watch`: `InboxWatchTest` and `toolgateCheck` against the SDK published to the local Maven repository | Pass: 7 tests; both `@TriggerExample`s pass |
+| Sample package: `toolgate pack`, `validate`, `verify` (CLI built in Docker, Rust 1.94) on the staged package | Pass; `triggers/new-file.json` packaged, descriptor valid against `TriggerDescriptor` through `PackageManifest`; packing twice gives identical bytes |
+| Packed `artifacts/tool.jar` run with `java -jar` in trigger mode (`TRIGGER_START`, then `STOP`) | `READY`, `BROKER_REQUEST FILES_LIST`, `EXIT 0`; exit code 0 |
+| Every Java example (`examples/java-tools`, `examples/mocked-tools`) `gradlew check` | Pass: 13 java-tools packages (69 tests, 4 skipped) and 7 mocked-tools packages (31 tests), every `toolgateCheck` passed |
+| Rust (Docker): `cargo fmt --all --check`; `toolgate-cli` tests incl. new `tests/triggers.rs`; clippy `-D warnings` on the CLI; contracts crate tests; `cargo check --tests` for the client and Tool Host | Pass: CLI 43 tests (5 new), contracts crate 4 tests, clippy and checks clean |
+| `tools/contracts/generate.py --check`, `fixtures.py --check`, `tools/quality.py`, `tools/ci/preflight.py` | Pass |
+| `tests/contracts` (181 tests) | 176 pass, 2 skipped. 3 fail as on unmodified `main` on this machine: two need symlink privilege (WinError 1314), one scorecard observation |
+| `tests/ci` (`PYTHONUTF8=1`) | 402 pass, 10 skipped. `test_focused_start_builds_and_starts_without_unrelated_suites` timed out (30 s PowerShell harness) while Gradle and Docker builds ran beside it; it passes when run alone |
+| TypeScript contracts check, build and tests; PHP 8.2 (Docker) round trips and lint | Pass: 2 TS tests; 298 v1 and 349 v2 PHP round trips |
+| Repository pre-commit script `tools/ci/precommit.mjs` (`PYTHON=py`) on the staged change: preflight, PR policy, extension tests, secret scan, UI check and tests, browser downloads | Pass |
+| Control on an isolated PostgreSQL: `EndpointTest`, `ContractDependencyTest`, the package, marketplace, SDK-builder and server-package tests, `adapter.*`; `PackageArchiveTest` with the new trigger refusal | Pass: 145 tests in 38 suites, 4 skipped; package-archive 6 tests |
+
+**Not run:** `examples/run-java-examples.sh` (it needs bash with a local `cargo`; its new trigger-only branch was
+exercised by hand with the same `java -jar` command above); the Maven plugin end-to-end run (`tool-sdk/java-sdk/e2e`,
+needs `mvn`); M12 scenarios (module 2 owns none).
+
+**Outstanding before the module is Done:** review and merge after module 1 (gate D0). Known limits, by design of this
+module: PUSH mode, `SnapshotState`, `nativeMount` and the `ACCEPTED` checkpoint level are module 7; server-trigger
+routes, TCP destinations and secrets are module 8 (*Baseline changes*); `toolgate dev` does not serve triggers (they
+have no MCP surface); the trigger `description` is in the package index, not in the signed descriptor, which has no
+field for it — module 4's definitions API decides whether the contract needs one.

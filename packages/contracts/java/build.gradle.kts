@@ -25,6 +25,9 @@ tasks.test {
     systemProperty("toolgate.contractsVersion", project.version.toString())
 }
 
+// The Java Tool SDK runtime (Java 17) reads trigger frames through these bindings.
+tasks.named<JavaCompile>("compileJava") { options.release.set(17) }
+
 tasks.jar { isPreserveFileTimestamps = false; isReproducibleFileOrder = true }
 tasks.withType<Jar>().configureEach {
     from(project.file("LICENSE")) { into("META-INF") }

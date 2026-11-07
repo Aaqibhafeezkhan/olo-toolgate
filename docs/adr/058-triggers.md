@@ -43,6 +43,21 @@ ADR 027 (trigger frames and `FILES_WATCH`) and the Tool SDK authoring contract.
    legacy path (plan section 0). A contract change before release edits the schema in place and regenerates the
    bindings.
 
+## Amendment (triggers module 2)
+
+Packaging trigger exports needed a manifest member the module 1 contracts did not have, so module 2 adds it in place
+(fresh build, no compatibility):
+
+- `PackageManifest.triggers` lists `TriggerDefinition {descriptor, triggerDescriptorDigest, runtimeId, entryPoint,
+  artifactIds}`. `triggers/<name>.json` holds each descriptor's canonical bytes; `triggerDescriptorDigest` is their
+  SHA-256, like `toolDescriptorDigest`.
+- `descriptorSetDigest` covers both export kinds: the digest of one array of `{toolId, toolDescriptorDigest}` and
+  `{triggerId, triggerDescriptorDigest}` entries sorted by id. Without triggers it is the tool set digest unchanged.
+- Control refuses a package with `triggers` until it accepts trigger definitions (module 4), as it refuses a check-in
+  with `triggers` until ingest exists.
+- A retried emit (after `RETRYABLE_REJECTION`) is the same `EMIT` frame with the same `emitSeq`; an `emitSeq` never
+  names a different event. A POLL check's `CHECKPOINT` is sent only once every emit of that check is resolved.
+
 ## Consequences
 
 - Executors, Control and the SDKs share one frozen wire contract; later modules implement it without new transport.

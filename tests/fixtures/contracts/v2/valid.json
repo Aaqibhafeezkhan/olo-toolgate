@@ -3559,6 +3559,57 @@
       "OCI_SANDBOX"
     ]
   },
+  "TriggerDefinition": {
+    "descriptor": {
+      "kind": "SERVER_TRIGGER",
+      "triggerId": "examples.mail-idle/new-message",
+      "mode": "PUSH",
+      "executors": [
+        "SERVER"
+      ],
+      "eventType": "examples.mail.message.received.v1",
+      "configSchema": {
+        "type": "object"
+      },
+      "eventSchema": {
+        "type": "object"
+      },
+      "checkpointSchemaVersion": 1,
+      "sourceReplay": "STATE_SNAPSHOT",
+      "schedule": {
+        "resyncIntervalMs": 900000
+      },
+      "limits": {
+        "maxEventsPerHour": 600,
+        "maxEventBytes": 16384,
+        "maxCheckpointBytes": 16384,
+        "memoryMiB": 256,
+        "maxBrokerCallsPerMinute": 120,
+        "stopGraceMs": 10000
+      },
+      "overflow": "BLOCK",
+      "onTerminalRejection": "HALT",
+      "routes": [],
+      "tcpDestinations": [
+        "imap"
+      ],
+      "secrets": [
+        "imap-password"
+      ],
+      "permissions": [
+        "CREDENTIALS_IN_SANDBOX"
+      ],
+      "tiers": [
+        "OCI_SANDBOX"
+      ]
+    },
+    "triggerDescriptorDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "runtimeId": "jvm",
+    "entryPoint": "io.ololabs.toolgate.runtime.Main",
+    "artifactIds": [
+      "tool"
+    ]
+  },
   "TriggerCloudEvent": {
     "specversion": "1.0",
     "id": "AAMkAGI2-41",

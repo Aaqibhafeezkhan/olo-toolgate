@@ -318,6 +318,7 @@ fn v2_fixture_round_trips() {
         TriggerConditionStatus,
         TriggerConditionType,
         TriggerCounters,
+        TriggerDefinition,
         TriggerDescriptor,
         TriggerDesiredDocument,
         TriggerDesiredInstance,

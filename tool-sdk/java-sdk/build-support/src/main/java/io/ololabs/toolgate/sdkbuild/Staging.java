@@ -80,6 +80,7 @@ public final class Staging {
         ObjectNode index;
         JsonNode training = null;
         List<JsonNode> descriptors = new ArrayList<>();
+        List<JsonNode> triggers = new ArrayList<>();
         try (ZipFile jar = new ZipFile(appJar.toFile())) {
             if (jar.getEntry(TRAINING_RESOURCE) != null) training = read(jar, TRAINING_RESOURCE, TRAINING_RESOURCE);
             index = (ObjectNode) read(jar, "META-INF/toolgate/package.json", appJar
@@ -88,8 +89,12 @@ public final class Staging {
                 String name = tool.path("name").asText();
                 descriptors.add(read(jar, "META-INF/toolgate/tools/" + name + ".json", "the descriptor of " + name + " is missing from " + appJar));
             }
+            for (JsonNode trigger : index.path("triggers")) {
+                String name = trigger.path("name").asText();
+                triggers.add(read(jar, "META-INF/toolgate/triggers/" + name + ".json", "the trigger descriptor of " + name + " is missing from " + appJar));
+            }
         }
-        if (descriptors.isEmpty()) throw new IllegalArgumentException(appJar + " declares no tools");
+        if (descriptors.isEmpty() && triggers.isEmpty()) throw new IllegalArgumentException(appJar + " declares no tools or triggers");
 
         delete(out);
         Files.createDirectories(out.resolve("artifacts"));
@@ -123,6 +128,17 @@ public final class Staging {
             t.put("runtimeId", RUNTIME_ID);
             t.put("entryPoint", ENTRY_POINT);
             t.putArray("artifactIds").add("tool");
+        }
+        if (!triggers.isEmpty()) {
+            // ADR 058: trigger exports run from the same fat jar; the runtime's Main selects trigger mode.
+            ArrayNode exports = m.putArray("triggers");
+            for (JsonNode d : triggers) {
+                ObjectNode t = exports.addObject();
+                t.set("descriptor", d);
+                t.put("runtimeId", RUNTIME_ID);
+                t.put("entryPoint", ENTRY_POINT);
+                t.putArray("artifactIds").add("tool");
+            }
         }
         m.putArray("artifacts").addObject().put("artifactId", "tool").put("path", TOOL_JAR).put("mediaType", "application/java-archive")
                 .put("runtimeId", RUNTIME_ID);
