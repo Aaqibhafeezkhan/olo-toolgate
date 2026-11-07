@@ -2423,7 +2423,7 @@ export interface TriggerStreamServerMessage {
   readonly error?: TriggerStreamError;
 }
 export type TriggerStreamServerType = "subscribed" | "event" | "gap" | "revoked" | "error";
-/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`. */
+/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.` followed by the ticket value. */
 export interface TriggerStreamTicket {
   readonly ticket: string;
   readonly expiresAtUnixMs: number;

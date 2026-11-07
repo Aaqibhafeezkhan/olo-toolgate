@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`. */
+/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.` followed by the ticket value. */
 final readonly class TriggerStreamTicket implements \JsonSerializable {
     public function __construct(
         public string $ticket,

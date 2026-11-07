@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`.
+/** A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.` followed by the ticket value.
  *
  * @param ticket canonical ticket value
  * @param expiresAtUnixMs canonical expiresAtUnixMs value

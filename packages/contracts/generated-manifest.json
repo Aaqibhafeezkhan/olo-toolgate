@@ -37,7 +37,7 @@
     "packages/contracts/schemas/v2/protocol.schema.json": "0b007eab4c1bbfb953577a30f3b477e70b962d32e156986a3c78c44bffd280c7",
     "packages/contracts/schemas/v2/service-profile.schema.json": "380a26d4b259ed6e3156eb5989712d1846af0ea245d92cf453eb3ac242fb230a",
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a",
-    "packages/contracts/schemas/v2/trigger.schema.json": "81361fdf2ecec40c088cb7646a4b80b1726c3075ee3bf47d277dc60ad573bc80"
+    "packages/contracts/schemas/v2/trigger.schema.json": "91670ec01f26bf542e8bc3d68add25894a852c0446b70953c450d09f9582a0cd"
   },
   "generatorSha256": "97c8ba972f69933485098cf6ffdf8596c4bf1655603fd9c1d0026a23ccadd493",
   "outputs": [

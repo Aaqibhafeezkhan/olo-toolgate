@@ -4554,7 +4554,7 @@ pub enum TriggerStreamServerType {
     #[serde(rename = "error")]
     Error,
 }
-/// A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`.
+/// A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.` followed by the ticket value.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TriggerStreamTicket {

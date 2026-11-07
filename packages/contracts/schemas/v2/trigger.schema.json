@@ -2726,7 +2726,7 @@
     },
     "TriggerStreamTicket": {
       "type": "object",
-      "description": "A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.<ticket>`.",
+      "description": "A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.` followed by the ticket value.",
       "additionalProperties": false,
       "properties": {
         "ticket": {
