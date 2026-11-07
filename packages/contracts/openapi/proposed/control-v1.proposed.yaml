@@ -508,6 +508,293 @@ paths:
         '409': *id001
         '500': *id001
         '503': *id001
+  /api/control/v1/endpoint/triggers/desired:
+    get:
+      operationId: getTriggerDesiredDocument
+      security:
+      - workloadCertificate: []
+      description: Signed desired trigger state for the calling executor (ADR 058, plan 8.1). Executors without the triggers.v1
+        capability receive 404.
+      responses:
+        '200':
+          description: Compact JWS over TriggerDesiredDocument
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/trigger.schema.json#/$defs/SignedTriggerDesiredDocument
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/control/v1/endpoint/triggers/instances/{instanceId}/checkpoint-uploads:
+    post:
+      operationId: startTriggerCheckpointUpload
+      security:
+      - workloadCertificate: []
+      description: Start a chunked checkpoint upload bound to the caller's (executorId, leaseEpoch, leaseToken); idempotent on
+        (instanceId, version) (plan 8.6).
+      parameters:
+      - name: instanceId
+        in: path
+        required: true
+        description: Trigger instance id
+        schema:
+          type: string
+          maxLength: 64
+      - name: X-ToolGate-Lease-Token
+        in: header
+        required: true
+        description: The instance's current leaseToken (ADR 058)
+        schema:
+          type: string
+          maxLength: 43
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../../schemas/v2/trigger.schema.json#/$defs/TriggerCheckpointUploadRequest
+      responses:
+        '201':
+          description: Upload started
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/trigger.schema.json#/$defs/TriggerCheckpointUpload
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/control/v1/endpoint/triggers/instances/{instanceId}/checkpoint-uploads/{uploadId}/chunks/{chunk}:
+    put:
+      operationId: putTriggerCheckpointChunk
+      security:
+      - workloadCertificate: []
+      description: Upload one chunk of at most 64 KiB with its SHA-256 digest header. Idempotent; the lease binding is re-checked.
+      parameters:
+      - name: instanceId
+        in: path
+        required: true
+        description: Trigger instance id
+        schema:
+          type: string
+          maxLength: 64
+      - name: uploadId
+        in: path
+        required: true
+        description: Upload id
+        schema:
+          type: string
+          maxLength: 64
+      - name: chunk
+        in: path
+        required: true
+        description: Zero-based chunk index
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1
+      - name: X-ToolGate-Lease-Token
+        in: header
+        required: true
+        description: The instance's current leaseToken (ADR 058)
+        schema:
+          type: string
+          maxLength: 43
+      - name: X-ToolGate-Chunk-Digest
+        in: header
+        required: true
+        description: sha256:<hex> of the chunk body
+        schema:
+          type: string
+          maxLength: 71
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              maxLength: 65536
+      responses:
+        '204':
+          description: Chunk stored
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/control/v1/endpoint/triggers/instances/{instanceId}/checkpoint-uploads/{uploadId}:commit:
+    post:
+      operationId: commitTriggerCheckpointUpload
+      security:
+      - workloadCertificate: []
+      description: One transaction verifies size, digest, current lease, a greater version and, for ACCEPTED, afterOutboxSeq at most
+        acceptedOutboxSeq; then makes body, digest and version current together. A lease change refuses with StaleLeaseEpoch and
+        abandons the upload.
+      parameters:
+      - name: instanceId
+        in: path
+        required: true
+        description: Trigger instance id
+        schema:
+          type: string
+          maxLength: 64
+      - name: uploadId
+        in: path
+        required: true
+        description: Upload id
+        schema:
+          type: string
+          maxLength: 64
+      - name: X-ToolGate-Lease-Token
+        in: header
+        required: true
+        description: The instance's current leaseToken (ADR 058)
+        schema:
+          type: string
+          maxLength: 43
+      responses:
+        '200':
+          description: Committed checkpoint
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/trigger.schema.json#/$defs/TriggerCheckpointMetadata
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/control/v1/endpoint/triggers/instances/{instanceId}/checkpoint:
+    get:
+      operationId: getTriggerCheckpoint
+      security:
+      - workloadCertificate: []
+      description: Metadata of the last committed checkpoint, for failover and reinstallation (T14).
+      parameters:
+      - name: instanceId
+        in: path
+        required: true
+        description: Trigger instance id
+        schema:
+          type: string
+          maxLength: 64
+      - name: X-ToolGate-Lease-Token
+        in: header
+        required: true
+        description: The instance's current leaseToken (ADR 058)
+        schema:
+          type: string
+          maxLength: 43
+      responses:
+        '200':
+          description: Committed checkpoint
+          content:
+            application/json:
+              schema:
+                $ref: ../../schemas/v2/trigger.schema.json#/$defs/TriggerCheckpointMetadata
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /api/control/v1/endpoint/triggers/instances/{instanceId}/checkpoint/versions/{version}/chunks/{chunk}:
+    get:
+      operationId: getTriggerCheckpointChunk
+      security:
+      - workloadCertificate: []
+      description: One chunk of a committed checkpoint body; the executor verifies the digest before use.
+      parameters:
+      - name: instanceId
+        in: path
+        required: true
+        description: Trigger instance id
+        schema:
+          type: string
+          maxLength: 64
+      - name: version
+        in: path
+        required: true
+        description: Committed checkpoint version
+        schema:
+          type: integer
+          minimum: 1
+      - name: chunk
+        in: path
+        required: true
+        description: Zero-based chunk index
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 1
+      - name: X-ToolGate-Lease-Token
+        in: header
+        required: true
+        description: The instance's current leaseToken (ADR 058)
+        schema:
+          type: string
+          maxLength: 43
+      responses:
+        '200':
+          description: Chunk body
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                maxLength: 65536
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     adminAccessToken:

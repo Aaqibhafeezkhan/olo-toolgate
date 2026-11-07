@@ -83,7 +83,7 @@ public class ContractCodec implements Codec {
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
-                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json", "effect-authorization.schema.json")) {
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json", "effect-authorization.schema.json", "trigger.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));

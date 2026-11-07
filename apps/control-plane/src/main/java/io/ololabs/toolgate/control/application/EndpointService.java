@@ -350,7 +350,7 @@ public final class EndpointService {
         // not reinstall an expired certificate or fail the client's current clock-skew check.
         long serverTime=now-ack.serverTimeUnixMs()>300000?now:ack.serverTimeUnixMs();
         long next=checkInPolicy.nextIntervalMs();
-        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),forClient(ack.task(),taskContext),serverName);
+        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),forClient(ack.task(),taskContext),serverName,null);
         return new Store.Reply(reply.status(),codec.json(negotiated),reply.revision());
     }
     public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,String systemName,String ipAddress) {
@@ -361,6 +361,8 @@ public final class EndpointService {
         if(systemName!=null&&(systemName.length()>255||!systemName.matches("[a-zA-Z0-9._-]+")))throw Failure.validation();
         if(ipAddress!=null&&(ipAddress.length()>45||!ipAddress.matches("[0-9a-fA-F:.]{2,45}")))throw Failure.validation();
         var check=codec.model(body,EndpointCheckIn.class);Ids.valid(requestId);var claims=peer(peer,clock.millis());var fingerprint=claims.fingerprint();
+        // Trigger Sync ingest arrives with triggers module 5 (ADR 058); until then a triggers block is refused, never ignored.
+        if(check.triggers()!=null)throw Failure.validation();
         var digest=DirectoryService.digest(codec.json(check));
         return transaction((tx,now)->{var row=tx.endpointKey(fingerprint);if(row==null)throw forbidden();
             var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);
@@ -377,7 +379,7 @@ public final class EndpointService {
             DeviceIdentity renewed=null;if(peer.getNotAfter().getTime()-now<43200000&&peer.getNotAfter().getTime()<connectionExpires/1000*1000)renewed=issuer.issue(row.csr(),device.deviceId(),tenant.value(),device.userId(),server,now,connectionExpires);
             var configuration=new EndpointAdoptions(codec).poll(tx,device,server,check.adoptionDigest(),check.localTools());
             var task=off?null:relay().poll(tx,device,now,requestId);
-            var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,checkInPolicy.nextIntervalMs(),renewed,configuration,task,null);
+            var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,checkInPolicy.nextIntervalMs(),renewed,configuration,task,null,null);
             var updated=new EndpointDeviceRecord(device.deviceId(),tenant.value(),device.userId(),fingerprint,EndpointState.ACTIVE,device.revision()+1,now,check.sequence(),check.report(),device.connectionExpiresAtUnixMs(),device.connectionApproved(),device.approvalRevision(),systemName==null?device.systemName():systemName,ipAddress==null?device.ipAddress():ipAddress);
             var response=reply(ack,updated.revision());tx.saveEndpoint(new Store.EndpointRecord(row.id(),row.fingerprint(),codec.json(updated),row.csr(),digest,response.body()));
             tx.audit(fingerprint,renewed==null?"DEVICE_CHECK_IN":"DEVICE_RENEW","endpoint:"+row.id(),updated.revision(),requestId,digest);

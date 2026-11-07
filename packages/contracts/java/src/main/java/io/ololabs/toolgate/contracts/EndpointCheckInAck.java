@@ -13,6 +13,7 @@ package io.ololabs.toolgate.contracts;
  * @param adoption canonical adoption value
  * @param task canonical task value
  * @param serverName canonical serverName value
+ * @param triggers canonical triggers value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EndpointCheckInAck(
@@ -23,7 +24,8 @@ public record EndpointCheckInAck(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "identity", required = false) DeviceIdentity identity,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "adoption", required = false) EndpointAdoption adoption,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "task", required = false) RemoteToolTask task,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "serverName", required = false) String serverName
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "serverName", required = false) String serverName,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggers", required = false) io.ololabs.toolgate.contracts.v2.TriggerSyncAck triggers
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -35,6 +37,7 @@ public record EndpointCheckInAck(
      * @param adoption canonical adoption value
      * @param task canonical task value
      * @param serverName canonical serverName value
+     * @param triggers canonical triggers value
      */
     public EndpointCheckInAck {
         java.util.Objects.requireNonNull(deviceId, "deviceId");

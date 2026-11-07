@@ -3469,5 +3469,508 @@
     "claimToken": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "httpRequestDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "executorKeySha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  }
+  },
+  "TriggerId": "examples.mail-idle/new-message",
+  "TriggerInstanceId": "c7b2-01",
+  "TriggerExecutorId": "toolhost-a",
+  "TriggerEventType": "examples.mail.message.received.v1",
+  "TriggerEventId": "AAMkAGI2-41",
+  "TriggerReason": "Started",
+  "TriggerMessage": "imap reconnecting",
+  "TriggerLeaseToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "TriggerTimestamp": "2026-10-31T10:02:11Z",
+  "TriggerSequence": 41,
+  "TriggerCheckpointBody": "AQID",
+  "TriggerKind": "SERVER_TRIGGER",
+  "TriggerMode": "PUSH",
+  "TriggerExecutor": "SERVER",
+  "TriggerSourceReplay": "STATE_SNAPSHOT",
+  "TriggerOverflow": "BLOCK",
+  "TriggerTerminalRejectionPolicy": "HALT",
+  "TriggerDesiredState": "Running",
+  "TriggerPhase": "Running",
+  "TriggerConditionType": "Ready",
+  "TriggerConditionStatus": "True",
+  "TriggerCheckpointLevel": "ACCEPTED",
+  "TriggerEmitStatus": "LOCAL_DURABLE",
+  "TriggerHealthStatus": "DEGRADED",
+  "TriggerEventKind": "state",
+  "TriggerDispositionKind": "REJECTED_TERMINAL",
+  "TriggerRejectionReason": "StaleLeaseEpoch",
+  "TriggerRevocationReason": "AssignmentStopped",
+  "TriggerProducerKind": "DEVICE",
+  "TriggerLifecycleAction": "Pause",
+  "TriggerFrameKind": "EMIT",
+  "TriggerLimits": {
+    "maxEventsPerHour": 600,
+    "maxEventBytes": 16384,
+    "maxCheckpointBytes": 16384,
+    "memoryMiB": 256,
+    "maxBrokerCallsPerMinute": 120,
+    "stopGraceMs": 10000
+  },
+  "TriggerSchedule": {
+    "resyncIntervalMs": 900000
+  },
+  "TriggerSnapshotCapacity": {
+    "capacity": 1024,
+    "maxKeyBytes": 32
+  },
+  "TriggerDescriptor": {
+    "kind": "SERVER_TRIGGER",
+    "triggerId": "examples.mail-idle/new-message",
+    "mode": "PUSH",
+    "executors": [
+      "SERVER"
+    ],
+    "eventType": "examples.mail.message.received.v1",
+    "configSchema": {
+      "type": "object"
+    },
+    "eventSchema": {
+      "type": "object"
+    },
+    "checkpointSchemaVersion": 1,
+    "sourceReplay": "STATE_SNAPSHOT",
+    "schedule": {
+      "resyncIntervalMs": 900000
+    },
+    "limits": {
+      "maxEventsPerHour": 600,
+      "maxEventBytes": 16384,
+      "maxCheckpointBytes": 16384,
+      "memoryMiB": 256,
+      "maxBrokerCallsPerMinute": 120,
+      "stopGraceMs": 10000
+    },
+    "overflow": "BLOCK",
+    "onTerminalRejection": "HALT",
+    "routes": [],
+    "tcpDestinations": [
+      "imap"
+    ],
+    "secrets": [
+      "imap-password"
+    ],
+    "permissions": [
+      "CREDENTIALS_IN_SANDBOX"
+    ],
+    "tiers": [
+      "OCI_SANDBOX"
+    ]
+  },
+  "TriggerCloudEvent": {
+    "specversion": "1.0",
+    "id": "AAMkAGI2-41",
+    "source": "toolgate:trigger-instance:c7b2-01",
+    "type": "examples.mail.message.received.v1",
+    "subject": "ap@example.com",
+    "time": "2026-10-31T10:29:58Z",
+    "datacontenttype": "application/json",
+    "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+    "data": {
+      "messageId": "AAMkAGI2-41",
+      "subject": "Invoice 1031"
+    },
+    "tgleaseepoch": 7,
+    "tgsequence": 41,
+    "tgkind": "fired",
+    "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+  },
+  "TriggerProducer": {
+    "kind": "DEVICE",
+    "executorId": "device-42",
+    "deviceGroups": [
+      "finance-desktops"
+    ],
+    "assignment": "finance-inbox-pdf",
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 4,
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "TriggerDesiredInstance": {
+    "instanceId": "c7b2-01",
+    "triggerId": "examples.mail-idle/new-message",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "configRevision": 2,
+    "config": {
+      "user": "ap@example.com"
+    },
+    "bindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "desiredState": "Running"
+  },
+  "TriggerDesiredDocument": {
+    "formatVersion": 1,
+    "tenantId": "3f1c0000-0000-4000-8000-000000000001",
+    "executorId": "toolhost-a",
+    "executor": "SERVER",
+    "generation": 41,
+    "issuedAtUnixMs": 1793413600000,
+    "expiresAtUnixMs": 1793500000000,
+    "instances": [
+      {
+        "instanceId": "c7b2-01",
+        "triggerId": "examples.mail-idle/new-message",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "configRevision": 2,
+        "config": {
+          "user": "ap@example.com"
+        },
+        "bindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "desiredState": "Running"
+      }
+    ]
+  },
+  "SignedTriggerDesiredDocument": {
+    "document": "eyJhbGciOiJFZERTQSJ9.eyJmb3JtYXRWZXJzaW9uIjoxfQ.c2ln"
+  },
+  "TriggerCondition": {
+    "type": "Ready",
+    "status": "True",
+    "reason": "Started",
+    "lastTransitionTime": "2026-10-31T10:02:11Z"
+  },
+  "TriggerCounters": {
+    "emitted": 17,
+    "rejected": 0,
+    "dropped": 0,
+    "restarts": 0,
+    "brokerCalls": 31
+  },
+  "TriggerOutboxStatus": {
+    "depth": 0,
+    "oldestAgeMs": 0
+  },
+  "TriggerInstanceReport": {
+    "instanceId": "c7b2-01",
+    "configRevision": 2,
+    "leaseEpoch": 7,
+    "phase": "Running",
+    "conditions": [
+      {
+        "type": "Ready",
+        "status": "True",
+        "reason": "Started",
+        "lastTransitionTime": "2026-10-31T10:02:11Z"
+      }
+    ],
+    "lastEventAt": "2026-10-31T10:30:10Z",
+    "counters": {
+      "emitted": 17,
+      "rejected": 0,
+      "dropped": 0,
+      "restarts": 0,
+      "brokerCalls": 31
+    },
+    "outbox": {
+      "depth": 0,
+      "oldestAgeMs": 0
+    }
+  },
+  "TriggerSnapshotPage": {
+    "snapshotGeneration": 3,
+    "snapshotDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "page": 1,
+    "pageCount": 1,
+    "pageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "instances": [
+      {
+        "instanceId": "c7b2-01",
+        "configRevision": 2,
+        "leaseEpoch": 7,
+        "phase": "Running",
+        "conditions": [
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "Started",
+            "lastTransitionTime": "2026-10-31T10:02:11Z"
+          }
+        ],
+        "lastEventAt": "2026-10-31T10:30:10Z",
+        "counters": {
+          "emitted": 17,
+          "rejected": 0,
+          "dropped": 0,
+          "restarts": 0,
+          "brokerCalls": 31
+        },
+        "outbox": {
+          "depth": 0,
+          "oldestAgeMs": 0
+        }
+      }
+    ]
+  },
+  "TriggerCheckpointReport": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "afterOutboxSeq": 41,
+    "level": "LOCAL",
+    "version": 12,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sizeBytes": 3,
+    "inline": "AQID"
+  },
+  "TriggerOutboxRecord": {
+    "instanceId": "c7b2-01",
+    "event": {
+      "specversion": "1.0",
+      "id": "AAMkAGI2-41",
+      "source": "toolgate:trigger-instance:c7b2-01",
+      "type": "examples.mail.message.received.v1",
+      "subject": "ap@example.com",
+      "time": "2026-10-31T10:29:58Z",
+      "datacontenttype": "application/json",
+      "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+      "data": {
+        "messageId": "AAMkAGI2-41",
+        "subject": "Invoice 1031"
+      },
+      "tgleaseepoch": 7,
+      "tgsequence": 41,
+      "tgkind": "fired",
+      "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+    }
+  },
+  "TriggerSync": {
+    "observedGeneration": 41,
+    "snapshot": {
+      "snapshotGeneration": 3,
+      "snapshotDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "page": 1,
+      "pageCount": 1,
+      "pageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "instances": [
+        {
+          "instanceId": "c7b2-01",
+          "configRevision": 2,
+          "leaseEpoch": 7,
+          "phase": "Running",
+          "conditions": [
+            {
+              "type": "Ready",
+              "status": "True",
+              "reason": "Started",
+              "lastTransitionTime": "2026-10-31T10:02:11Z"
+            }
+          ],
+          "lastEventAt": "2026-10-31T10:30:10Z",
+          "counters": {
+            "emitted": 17,
+            "rejected": 0,
+            "dropped": 0,
+            "restarts": 0,
+            "brokerCalls": 31
+          },
+          "outbox": {
+            "depth": 0,
+            "oldestAgeMs": 0
+          }
+        }
+      ]
+    },
+    "checkpoints": [
+      {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "afterOutboxSeq": 41,
+        "level": "LOCAL",
+        "version": 12,
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 3,
+        "inline": "AQID"
+      }
+    ],
+    "events": [
+      {
+        "instanceId": "c7b2-01",
+        "event": {
+          "specversion": "1.0",
+          "id": "AAMkAGI2-41",
+          "source": "toolgate:trigger-instance:c7b2-01",
+          "type": "examples.mail.message.received.v1",
+          "subject": "ap@example.com",
+          "time": "2026-10-31T10:29:58Z",
+          "datacontenttype": "application/json",
+          "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+          "data": {
+            "messageId": "AAMkAGI2-41",
+            "subject": "Invoice 1031"
+          },
+          "tgleaseepoch": 7,
+          "tgsequence": 41,
+          "tgkind": "fired",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+        }
+      }
+    ],
+    "pending": 0
+  },
+  "TriggerOutboxAck": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "outboxSeq": 41
+  },
+  "TriggerDisposition": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "outboxSeq": 39,
+    "id": "AAMk-39",
+    "disposition": "REJECTED_TERMINAL",
+    "reason": "SchemaInvalid"
+  },
+  "TriggerRetryLater": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "fromOutboxSeq": 42,
+    "retryAfterMs": 5000
+  },
+  "TriggerLease": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "leaseToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "expiresAtUnixMs": 1793413660000
+  },
+  "TriggerRevocation": {
+    "instanceId": "c7b2-02",
+    "reason": "AssignmentStopped"
+  },
+  "TriggerRejection": {
+    "instanceId": "c7b2-03",
+    "reason": "StaleLeaseEpoch"
+  },
+  "TriggerSnapshotPageAck": {
+    "snapshotGeneration": 3,
+    "page": 1
+  },
+  "TriggerSyncAck": {
+    "generation": 42,
+    "maxCheckInBytes": 262144,
+    "checkInNow": false,
+    "acked": [
+      {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "outboxSeq": 41
+      }
+    ],
+    "leases": [
+      {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "leaseToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "expiresAtUnixMs": 1793413660000
+      }
+    ],
+    "snapshotPages": [
+      {
+        "snapshotGeneration": 3,
+        "page": 1
+      }
+    ]
+  },
+  "TriggerCheckpointUploadRequest": {
+    "version": 13,
+    "leaseEpoch": 7,
+    "afterOutboxSeq": 41,
+    "level": "ACCEPTED",
+    "sizeBytes": 38211,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "TriggerCheckpointUpload": {
+    "uploadId": "up-1",
+    "chunkBytes": 65536,
+    "expiresAtUnixMs": 1793417200000
+  },
+  "TriggerCheckpointMetadata": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "afterOutboxSeq": 41,
+    "level": "ACCEPTED",
+    "version": 13,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sizeBytes": 38211,
+    "chunkCount": 1
+  },
+  "TriggerStartFrame": {
+    "kind": "TRIGGER_START",
+    "triggerId": "examples.mail-idle/new-message",
+    "instanceId": "c7b2-01",
+    "configRevision": 2,
+    "leaseEpoch": 7,
+    "config": {
+      "user": "ap@example.com"
+    },
+    "globals": {
+      "imapHost": "imap.example.com"
+    },
+    "secretHandles": [
+      "h-1"
+    ],
+    "checkpoint": "AQID"
+  },
+  "TriggerEmitAckFrame": {
+    "kind": "EMIT_ACK",
+    "emitSeq": 1,
+    "status": "LOCAL_DURABLE",
+    "outboxSeq": 41
+  },
+  "TriggerAcceptedUpToFrame": {
+    "kind": "ACCEPTED_UPTO",
+    "emitSeq": 1
+  },
+  "TriggerCheckpointAckFrame": {
+    "kind": "CHECKPOINT_ACK",
+    "checkpointId": 1,
+    "level": "LOCAL"
+  },
+  "TriggerReconcileFrame": {
+    "kind": "RECONCILE"
+  },
+  "TriggerPauseFrame": {
+    "kind": "PAUSE"
+  },
+  "TriggerResumeFrame": {
+    "kind": "RESUME"
+  },
+  "TriggerStopFrame": {
+    "kind": "STOP",
+    "reason": "AssignmentStopped",
+    "graceMs": 10000
+  },
+  "TriggerReadyFrame": {
+    "kind": "READY"
+  },
+  "TriggerEmitFrame": {
+    "kind": "EMIT",
+    "emitSeq": 1,
+    "id": "AAMkAGI2-41",
+    "data": {
+      "messageId": "AAMkAGI2-41"
+    },
+    "position": "AQID"
+  },
+  "TriggerCheckpointFrame": {
+    "kind": "CHECKPOINT",
+    "checkpointId": 1,
+    "afterEmitSeq": 1,
+    "state": "AQID"
+  },
+  "TriggerHealthFrame": {
+    "kind": "HEALTH",
+    "status": "DEGRADED",
+    "reason": "imap reconnecting"
+  },
+  "TriggerHeartbeatFrame": {
+    "kind": "HEARTBEAT"
+  },
+  "TriggerExitFrame": {
+    "kind": "EXIT",
+    "code": 0
+  },
+  "TriggerDesiredJws": "eyJhbGciOiJFZERTQSJ9.eyJmb3JtYXRWZXJzaW9uIjoxfQ.c2ln"
 }

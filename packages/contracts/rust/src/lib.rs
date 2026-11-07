@@ -1128,6 +1128,8 @@ pub struct EndpointCheckIn {
     pub adoption_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_tools: Option<Vec<LocalToolInfo>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<v2::TriggerSync>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1145,6 +1147,8 @@ pub struct EndpointCheckInAck {
     pub task: Option<RemoteToolTask>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<v2::TriggerSyncAck>,
 }
 /// Canonical EndpointConnectionAction wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3481,5 +3485,9 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/settings.schema.json",
         include_str!("../schemas/v2/settings.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/trigger.schema.json",
+        include_str!("../schemas/v2/trigger.schema.json"),
     ),
 ];

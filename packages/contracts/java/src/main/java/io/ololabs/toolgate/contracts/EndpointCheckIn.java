@@ -9,13 +9,15 @@ package io.ololabs.toolgate.contracts;
  * @param report canonical report value
  * @param adoptionDigest canonical adoptionDigest value
  * @param localTools canonical localTools value
+ * @param triggers canonical triggers value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record EndpointCheckIn(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "sequence", required = true) Long sequence,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "report", required = true) ClientReport report,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "adoptionDigest", required = false) String adoptionDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "localTools", required = false) java.util.List<LocalToolInfo> localTools
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "localTools", required = false) java.util.List<LocalToolInfo> localTools,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggers", required = false) io.ololabs.toolgate.contracts.v2.TriggerSync triggers
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,6 +25,7 @@ public record EndpointCheckIn(
      * @param report canonical report value
      * @param adoptionDigest canonical adoptionDigest value
      * @param localTools canonical localTools value
+     * @param triggers canonical triggers value
      */
     public EndpointCheckIn {
         java.util.Objects.requireNonNull(sequence, "sequence");

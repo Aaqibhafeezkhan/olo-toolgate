@@ -701,6 +701,7 @@ export interface EndpointCheckIn {
   readonly report: ClientReport;
   readonly adoptionDigest?: string;
   readonly localTools?: ReadonlyArray<LocalToolInfo>;
+  readonly triggers?: V2.TriggerSync;
 }
 /** Endpoint identity foundation wire model. */
 export interface EndpointCheckInAck {
@@ -712,6 +713,7 @@ export interface EndpointCheckInAck {
   readonly adoption?: EndpointAdoption;
   readonly task?: RemoteToolTask;
   readonly serverName?: string;
+  readonly triggers?: V2.TriggerSyncAck;
 }
 export type EndpointConnectionAction = "ENROLL" | "CHECK_IN" | "WAIT";
 /** Server-authoritative response to a device presence ping; presence never grants tool access. */

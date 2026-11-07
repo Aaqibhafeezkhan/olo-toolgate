@@ -1607,6 +1607,10 @@ export interface SignedInvocationPermit {
 export interface SignedTenantDiscovery {
   readonly jws: string;
 }
+/** Response of GET /api/control/v1/endpoint/triggers/desired. */
+export interface SignedTriggerDesiredDocument {
+  readonly document: string;
+}
 export type Slug = string;
 export type Streaming = "NONE" | "RESPONSE" | "BIDIRECTIONAL";
 /** Authenticated target consumption of an exact accepted request, after its durable local claim commits. Replays return status only. */
@@ -1843,6 +1847,368 @@ export interface ToolVariables {
   readonly claims: ReadonlyArray<ClaimDeclaration>;
 }
 export type TransitionActor = "GATEWAY" | "CONTROL" | "TOOL_HOST" | "CLIENT" | "ADMIN";
+/** Every emit of this process up to emitSeq is resolved at Control. */
+export interface TriggerAcceptedUpToFrame {
+  readonly kind: "ACCEPTED_UPTO";
+  readonly emitSeq: number;
+}
+/** Barrier advanced to that checkpoint at that level. */
+export interface TriggerCheckpointAckFrame {
+  readonly kind: "CHECKPOINT_ACK";
+  readonly checkpointId: number;
+  readonly level: TriggerCheckpointLevel;
+}
+export type TriggerCheckpointBody = string;
+/** Explicit checkpoint; subject to the same barrier as position. */
+export interface TriggerCheckpointFrame {
+  readonly kind: "CHECKPOINT";
+  readonly checkpointId: number;
+  readonly afterEmitSeq: number;
+  readonly state: string;
+}
+export type TriggerCheckpointLevel = "LOCAL" | "ACCEPTED";
+/** Committed checkpoint of one instance. */
+export interface TriggerCheckpointMetadata {
+  readonly instanceId: string;
+  readonly leaseEpoch: number;
+  readonly afterOutboxSeq: number;
+  readonly level: TriggerCheckpointLevel;
+  readonly version: number;
+  readonly digest: string;
+  readonly sizeBytes: number;
+  readonly chunkCount: number;
+}
+/** Checkpoint metadata changed since the last ack; the body is inline only up to 4 KiB (plan 8.6). */
+export interface TriggerCheckpointReport {
+  readonly instanceId: string;
+  readonly leaseEpoch: number;
+  readonly afterOutboxSeq: number;
+  readonly level: TriggerCheckpointLevel;
+  readonly version: number;
+  readonly digest: string;
+  readonly sizeBytes: number;
+  readonly inline?: string;
+}
+/** Started upload. */
+export interface TriggerCheckpointUpload {
+  readonly uploadId: string;
+  readonly chunkBytes: 65536;
+  readonly expiresAtUnixMs: number;
+}
+/** Start a checkpoint upload; idempotent on (instanceId, version). */
+export interface TriggerCheckpointUploadRequest {
+  readonly version: number;
+  readonly leaseEpoch: number;
+  readonly afterOutboxSeq: number;
+  readonly level: TriggerCheckpointLevel;
+  readonly sizeBytes: number;
+  readonly digest: string;
+}
+/** CloudEvents 1.0 JSON envelope written by the supervisor; authors never set source, type, dataschema or tg* attributes (plan 6.4). */
+export interface TriggerCloudEvent {
+  readonly specversion: "1.0";
+  readonly id: string;
+  readonly source: string;
+  readonly type: string;
+  readonly subject?: string;
+  readonly time?: string;
+  readonly datacontenttype: "application/json";
+  readonly dataschema?: string;
+  readonly data: unknown;
+  readonly tgleaseepoch: number;
+  readonly tgsequence: number;
+  readonly tgkind: TriggerEventKind;
+  readonly traceparent?: string;
+}
+/** One instance condition. */
+export interface TriggerCondition {
+  readonly type: TriggerConditionType;
+  readonly status: TriggerConditionStatus;
+  readonly reason: string;
+  readonly message?: string;
+  readonly lastTransitionTime: string;
+}
+export type TriggerConditionStatus = "True" | "False" | "Unknown";
+export type TriggerConditionType = "Installed" | "Leased" | "Ready" | "Degraded" | "Reconciled" | "Stale" | "Unexpected";
+/** Monotonic counters for the current process lifetime of one instance. */
+export interface TriggerCounters {
+  readonly emitted: number;
+  readonly rejected: number;
+  readonly dropped: number;
+  readonly emitTimeouts?: number;
+  readonly restarts: number;
+  readonly brokerCalls?: number;
+  readonly possibleLossOnCrash?: number;
+}
+/** Signed semantic descriptor of one trigger export (plan 5.9). */
+export interface TriggerDescriptor {
+  readonly kind: TriggerKind;
+  readonly triggerId: string;
+  readonly mode: TriggerMode;
+  readonly executors: ReadonlyArray<TriggerExecutor>;
+  readonly eventType: string;
+  readonly lossTolerant?: boolean;
+  readonly configSchema: Record<string, unknown>;
+  readonly eventSchema: Record<string, unknown>;
+  readonly checkpointSchemaVersion: number;
+  readonly sourceReplay: TriggerSourceReplay;
+  readonly schedule: TriggerSchedule;
+  readonly limits: TriggerLimits;
+  readonly overflow: TriggerOverflow;
+  readonly onTerminalRejection: TriggerTerminalRejectionPolicy;
+  readonly snapshot?: TriggerSnapshotCapacity;
+  readonly routes?: ReadonlyArray<string>;
+  readonly tcpDestinations?: ReadonlyArray<string>;
+  readonly secrets?: ReadonlyArray<string>;
+  readonly permissions?: ReadonlyArray<string>;
+  readonly tiers?: ReadonlyArray<string>;
+  readonly selfTests?: ReadonlyArray<string>;
+}
+/** Signed desired trigger state for one executor; the payload of a compact JWS by the organization deployment key. */
+export interface TriggerDesiredDocument {
+  readonly formatVersion: 1;
+  readonly tenantId: string;
+  readonly executorId: string;
+  readonly executor: TriggerExecutor;
+  readonly generation: number;
+  readonly issuedAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly instances: ReadonlyArray<TriggerDesiredInstance>;
+}
+/** One resolved instance in the desired document (plan 8.1). */
+export interface TriggerDesiredInstance {
+  readonly instanceId: string;
+  readonly triggerId: string;
+  readonly packageDigest: string;
+  readonly triggerDescriptorDigest: string;
+  readonly configRevision: number;
+  readonly config: Record<string, unknown>;
+  readonly bindingDigest: string;
+  readonly desiredState: TriggerDesiredState;
+}
+export type TriggerDesiredJws = string;
+export type TriggerDesiredState = "Running" | "Paused" | "Stopped";
+/** Control-side terminal rejection of one record. */
+export interface TriggerDisposition {
+  readonly instanceId: string;
+  readonly leaseEpoch: number;
+  readonly outboxSeq: number;
+  readonly id: string;
+  readonly disposition: TriggerDispositionKind;
+  readonly reason: string;
+}
+export type TriggerDispositionKind = "REJECTED_TERMINAL";
+/** Completes or fails one emit() future. */
+export interface TriggerEmitAckFrame {
+  readonly kind: "EMIT_ACK";
+  readonly emitSeq: number;
+  readonly status: TriggerEmitStatus;
+  readonly reason?: string;
+  readonly outboxSeq?: number;
+}
+/** One event; the supervisor wraps it in the CloudEvents envelope. */
+export interface TriggerEmitFrame {
+  readonly kind: "EMIT";
+  readonly emitSeq: number;
+  readonly id?: string;
+  readonly subject?: string;
+  readonly time?: string;
+  readonly data: unknown;
+  readonly position?: string;
+}
+export type TriggerEmitStatus = "LOCAL_DURABLE" | "RETRYABLE_REJECTION" | "TERMINAL_REJECTION";
+export type TriggerEventId = string;
+export type TriggerEventKind = "fired" | "state" | "rejected";
+export type TriggerEventType = string;
+export type TriggerExecutor = "SERVER" | "CLIENT";
+export type TriggerExecutorId = string;
+/** Last frame on a clean stop. */
+export interface TriggerExitFrame {
+  readonly kind: "EXIT";
+  readonly code: number;
+}
+export type TriggerFrameKind = "TRIGGER_START" | "EMIT_ACK" | "ACCEPTED_UPTO" | "CHECKPOINT_ACK" | "RECONCILE" | "PAUSE" | "RESUME" | "STOP" | "READY" | "EMIT" | "CHECKPOINT" | "HEALTH" | "HEARTBEAT" | "EXIT";
+/** From reportHealth. */
+export interface TriggerHealthFrame {
+  readonly kind: "HEALTH";
+  readonly status: TriggerHealthStatus;
+  readonly reason?: string;
+}
+export type TriggerHealthStatus = "HEALTHY" | "DEGRADED" | "UNHEALTHY";
+/** Sent every 10 s by the SDK runtime. */
+export interface TriggerHeartbeatFrame {
+  readonly kind: "HEARTBEAT";
+}
+export type TriggerId = string;
+export type TriggerInstanceId = string;
+/** Executor snapshot entry for one held instance (plan 8.2). */
+export interface TriggerInstanceReport {
+  readonly instanceId: string;
+  readonly configRevision: number;
+  readonly leaseEpoch?: number;
+  readonly phase: TriggerPhase;
+  readonly conditions: ReadonlyArray<TriggerCondition>;
+  readonly lastEventAt?: string;
+  readonly lastReconcileAt?: string;
+  readonly counters: TriggerCounters;
+  readonly outbox: TriggerOutboxStatus;
+}
+export type TriggerKind = "SERVER_TRIGGER" | "CLIENT_TRIGGER";
+/** Run lease for one instance (plan 7). It authorizes running and reporting only. */
+export interface TriggerLease {
+  readonly instanceId: string;
+  readonly leaseEpoch: number;
+  readonly leaseToken: string;
+  readonly expiresAtUnixMs: number;
+}
+export type TriggerLeaseToken = string;
+export type TriggerLifecycleAction = "Deploy" | "Run" | "Pause" | "Stop" | "Remove" | "Clear";
+/** Declared per-instance limits. */
+export interface TriggerLimits {
+  readonly maxEventsPerHour: number;
+  readonly maxEventBytes: number;
+  readonly maxCheckpointBytes: number;
+  readonly memoryMiB?: number;
+  readonly maxBrokerCallsPerMinute?: number;
+  readonly stopGraceMs: number;
+  readonly emitTimeoutMs?: number;
+}
+export type TriggerMessage = string;
+export type TriggerMode = "POLL" | "PUSH";
+/** Highest contiguous resolved outboxSeq for one (instance, epoch). */
+export interface TriggerOutboxAck {
+  readonly instanceId: string;
+  readonly leaseEpoch: number;
+  readonly outboxSeq: number;
+}
+/** One outbox record sent to Control, oldest unacknowledged first. */
+export interface TriggerOutboxRecord {
+  readonly instanceId: string;
+  readonly event: TriggerCloudEvent;
+}
+/** Outbox depth for one instance. */
+export interface TriggerOutboxStatus {
+  readonly depth: number;
+  readonly oldestAgeMs: number;
+}
+export type TriggerOverflow = "BLOCK" | "DROP_OLDEST" | "DROP_NEWEST";
+/** Pause the instance. */
+export interface TriggerPauseFrame {
+  readonly kind: "PAUSE";
+}
+export type TriggerPhase = "Pending" | "Starting" | "Running" | "Paused" | "Stopped" | "Failed" | "Unsupported" | "Removed";
+/** Producer identity Control attaches from the mTLS certificate, lease and signed package; never from the payload. */
+export interface TriggerProducer {
+  readonly kind: TriggerProducerKind;
+  readonly executorId?: string;
+  readonly deviceGroups?: ReadonlyArray<string>;
+  readonly assignment: string;
+  readonly instanceId: string;
+  readonly leaseEpoch?: number;
+  readonly packageDigest?: string;
+  readonly triggerDescriptorDigest?: string;
+}
+export type TriggerProducerKind = "DEVICE" | "TOOL_HOST" | "SCHEDULE";
+/** start() completed (push) or config validated (poll). */
+export interface TriggerReadyFrame {
+  readonly kind: "READY";
+}
+export type TriggerReason = string;
+/** Run reconcile(). */
+export interface TriggerReconcileFrame {
+  readonly kind: "RECONCILE";
+}
+/** Drop these outbox entries, stop the instance and resync. */
+export interface TriggerRejection {
+  readonly instanceId: string;
+  readonly reason: TriggerRejectionReason;
+}
+export type TriggerRejectionReason = "UnknownInstance" | "NotAssigned" | "StaleLeaseEpoch" | "StaleConfigRevision";
+/** Resume the instance. */
+export interface TriggerResumeFrame {
+  readonly kind: "RESUME";
+}
+/** Retryable rejection; records from fromOutboxSeq are kept and re-sent. */
+export interface TriggerRetryLater {
+  readonly instanceId: string;
+  readonly leaseEpoch: number;
+  readonly fromOutboxSeq: number;
+  readonly retryAfterMs: number;
+}
+/** Revoked lease. */
+export interface TriggerRevocation {
+  readonly instanceId: string;
+  readonly reason: TriggerRevocationReason;
+}
+export type TriggerRevocationReason = "AssignmentStopped" | "AssignmentRemoved" | "PackageSuspended" | "KillSwitch" | "ExecutorDeregistered" | "DeviceRevoked" | "Compromised" | "Reassigned";
+/** POLL interval or PUSH resync interval. */
+export interface TriggerSchedule {
+  readonly intervalMs?: number;
+  readonly resyncIntervalMs?: number;
+}
+export type TriggerSequence = number;
+/** Declared SnapshotState bounds (plan 5.6). */
+export interface TriggerSnapshotCapacity {
+  readonly capacity: number;
+  readonly maxKeyBytes: number;
+}
+/** One page of a frozen executor snapshot (plan 8.5). Pages from different generations are never combined. */
+export interface TriggerSnapshotPage {
+  readonly snapshotGeneration: number;
+  readonly snapshotDigest: string;
+  readonly page: number;
+  readonly pageCount: number;
+  readonly pageDigest: string;
+  readonly instances: ReadonlyArray<TriggerInstanceReport>;
+}
+/** Acknowledged snapshot page. */
+export interface TriggerSnapshotPageAck {
+  readonly snapshotGeneration: number;
+  readonly page: number;
+}
+export type TriggerSourceReplay = "EVENT_LOG" | "STATE_SNAPSHOT" | "NON_REPLAYABLE";
+/** First stdin line, exactly once. */
+export interface TriggerStartFrame {
+  readonly kind: "TRIGGER_START";
+  readonly triggerId: string;
+  readonly instanceId: string;
+  readonly configRevision: number;
+  readonly leaseEpoch: number;
+  readonly config: Record<string, unknown>;
+  readonly globals?: Record<string, unknown>;
+  readonly secretHandles?: ReadonlyArray<string>;
+  readonly checkpoint?: string;
+}
+/** Graceful stop. */
+export interface TriggerStopFrame {
+  readonly kind: "STOP";
+  readonly reason: string;
+  readonly graceMs: number;
+}
+/** Trigger block of every executor check-in (plan 8.2, 8.5). */
+export interface TriggerSync {
+  readonly observedGeneration: number;
+  readonly snapshot?: TriggerSnapshotPage;
+  readonly checkpoints?: ReadonlyArray<TriggerCheckpointReport>;
+  readonly events?: ReadonlyArray<TriggerOutboxRecord>;
+  readonly pending: number;
+}
+/** Trigger block of the check-in ack (plan 8.3, 8.5). */
+export interface TriggerSyncAck {
+  readonly generation: number;
+  readonly maxCheckInBytes: number;
+  readonly checkInNow?: boolean;
+  readonly acked?: ReadonlyArray<TriggerOutboxAck>;
+  readonly dispositions?: ReadonlyArray<TriggerDisposition>;
+  readonly retryLater?: ReadonlyArray<TriggerRetryLater>;
+  readonly leases?: ReadonlyArray<TriggerLease>;
+  readonly revoked?: ReadonlyArray<TriggerRevocation>;
+  readonly rejected?: ReadonlyArray<TriggerRejection>;
+  readonly snapshotPages?: ReadonlyArray<TriggerSnapshotPageAck>;
+  readonly snapshotRequested?: boolean;
+}
+export type TriggerTerminalRejectionPolicy = "HALT" | "SKIP_AND_RECORD";
+export type TriggerTimestamp = string;
 export type UnixMs = number;
 export type ValueSource = "ENVIRONMENT" | "DATABASE" | "DEFAULT";
 export type ValueType = "STRING" | "INT" | "LONG" | "NUMBER" | "BOOLEAN" | "DATE" | "DATE_TIME" | "DURATION" | "ENUM" | "URI" | "OBJECT" | "ARRAY" | "BINARY";
