@@ -52,6 +52,10 @@ public interface Store {
         default AuditChain.Head auditHead() { throw Failure.unavailable(); }
         /** ADR 060: stored chain rows after {@code afterIndex}, in chain order, bounded by {@code limit}. */
         default java.util.List<AuditChain.Entry> auditChain(long afterIndex, int limit) { throw Failure.unavailable(); }
+        /** ADR 061: the tenant's highest recorded anchor, or null. The record is untrusted until verified. */
+        default AuditAnchoring.Recorded latestAuditAnchor() { throw Failure.unavailable(); }
+        /** ADR 061: insert-only record of an anchor already published to the external sink. */
+        default void recordAuditAnchor(AuditAnchoring.Recorded anchor) { throw Failure.unavailable(); }
         long bundleSequence();
         BundleRecord bundle(long sequence);
         void publishBundle(BundleRecord bundle);

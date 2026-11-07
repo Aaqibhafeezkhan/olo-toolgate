@@ -110,3 +110,5 @@ Use `000-template.md`.
 - [ADR 059: Outcome grades and honest presentation](059-outcome-grades-and-honest-presentation.md)
 
 - [ADR 060: Tenant audit hash chains](060-tenant-audit-hash-chains.md)
+
+- [ADR 061: Signed external audit anchors](061-signed-audit-anchors.md)

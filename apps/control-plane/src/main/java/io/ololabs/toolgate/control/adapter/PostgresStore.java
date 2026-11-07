@@ -528,6 +528,18 @@ public class PostgresStore implements Store {
                     : io.ololabs.toolgate.control.application.AuditChain.Head.EMPTY;
             } catch (SQLException e) { throw Failure.unavailable(); }
         }
+        public io.ololabs.toolgate.control.application.AuditAnchoring.Recorded latestAuditAnchor() {
+            try (var statement = statement("SELECT chain_index,head_digest,key_id,issued_at_unix_ms,document,signature,sink,location,content_sha256 FROM control_audit_anchors WHERE tenant_id=? ORDER BY chain_index DESC LIMIT 1");
+                 var rows = statement.executeQuery()) {
+                return rows.next() ? new io.ololabs.toolgate.control.application.AuditAnchoring.Recorded(rows.getLong(1), rows.getString(2), rows.getString(3),
+                    rows.getLong(4), rows.getString(5), rows.getString(6), rows.getString(7), rows.getString(8), rows.getString(9)) : null;
+            } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        public void recordAuditAnchor(io.ololabs.toolgate.control.application.AuditAnchoring.Recorded a) {
+            try (var statement = statement("INSERT INTO control_audit_anchors(tenant_id,chain_index,head_digest,key_id,issued_at_unix_ms,document,signature,sink,location,content_sha256) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                a.chainIndex(), a.headDigest(), a.keyId(), a.issuedAtUnixMs(), a.document(), a.signature(), a.sink(), a.location(), a.contentSha256())) { statement.executeUpdate(); }
+            catch (SQLException e) { throw Failure.unavailable(); }
+        }
         public java.util.List<io.ololabs.toolgate.control.application.AuditChain.Entry> auditChain(long afterIndex, int limit) {
             if (afterIndex < 0 || limit < 1 || limit > 10000) throw Failure.validation();
             try (var statement = statement("SELECT sequence,tenant_id,chain_index,previous_digest,actor_id,operation,target,revision,request_id,request_digest,evidence,occurred_at,row_digest FROM control_audit WHERE tenant_id=? AND chain_index>? ORDER BY chain_index LIMIT ?", afterIndex, limit);

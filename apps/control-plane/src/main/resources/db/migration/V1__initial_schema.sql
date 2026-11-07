@@ -1077,6 +1077,23 @@ CREATE TABLE public.control_audit (
 
 ALTER TABLE ONLY public.control_audit FORCE ROW LEVEL SECURITY;
 
+CREATE TABLE public.control_audit_anchors (
+    tenant_id character varying(128) NOT NULL,
+    chain_index bigint NOT NULL,
+    head_digest character(64) NOT NULL,
+    key_id character varying(128) NOT NULL,
+    issued_at_unix_ms bigint NOT NULL,
+    document text NOT NULL,
+    signature text NOT NULL,
+    sink character varying(64) NOT NULL,
+    location character varying(512) NOT NULL,
+    content_sha256 character(64) NOT NULL,
+    recorded_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT control_audit_anchors_check CHECK (((chain_index >= 1) AND (head_digest ~ '^[0-9a-f]{64}$'::text) AND (content_sha256 ~ '^[0-9a-f]{64}$'::text) AND ((issued_at_unix_ms >= 0) AND (issued_at_unix_ms <= '9007199254740991'::bigint)) AND (octet_length(document) <= 1024) AND ((octet_length(signature) >= 1) AND (octet_length(signature) <= 1024)) AND (length((key_id)::text) >= 1) AND (length((sink)::text) >= 1) AND (length((location)::text) >= 1)))
+);
+
+ALTER TABLE ONLY public.control_audit_anchors FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE public.control_audit ALTER COLUMN sequence ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.control_audit_sequence_seq
     START WITH 1
@@ -2302,6 +2319,9 @@ ALTER TABLE ONLY public.control_audit
 ALTER TABLE ONLY public.control_audit
     ADD CONSTRAINT control_audit_chain_unique UNIQUE (tenant_id, chain_index);
 
+ALTER TABLE ONLY public.control_audit_anchors
+    ADD CONSTRAINT control_audit_anchors_pkey PRIMARY KEY (tenant_id, chain_index);
+
 ALTER TABLE ONLY public.control_authorization_outbox
     ADD CONSTRAINT control_authorization_outbox_pkey PRIMARY KEY (tenant_id, revision);
 
@@ -2639,6 +2659,8 @@ CREATE TRIGGER attempt_effects_capacity AFTER INSERT ON public.control_attempt_e
 CREATE TRIGGER audit_chain_guard BEFORE INSERT ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_audit_chain_guard();
 
 CREATE TRIGGER audit_immutable BEFORE DELETE OR UPDATE ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_audit_immutable();
+
+CREATE TRIGGER audit_anchors_immutable BEFORE DELETE OR UPDATE ON public.control_audit_anchors FOR EACH ROW EXECUTE FUNCTION public.control_audit_immutable();
 
 CREATE TRIGGER attempt_effects_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
 
@@ -2995,6 +3017,9 @@ ALTER TABLE ONLY public.control_attempt_snapshots
 ALTER TABLE ONLY public.control_audit
     ADD CONSTRAINT control_audit_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
 
+ALTER TABLE ONLY public.control_audit_anchors
+    ADD CONSTRAINT control_audit_anchors_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
 ALTER TABLE ONLY public.control_authorization_outbox
     ADD CONSTRAINT control_authorization_outbox_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
 
@@ -3326,6 +3351,8 @@ ALTER TABLE public.control_attempt_snapshots ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.control_audit ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE public.control_audit_anchors ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE public.control_authorization_outbox ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.control_bootstrap_admins ENABLE ROW LEVEL SECURITY;
@@ -3492,6 +3519,8 @@ CREATE POLICY tenant_access ON public.control_attempt_snapshots USING (true) WIT
 
 CREATE POLICY tenant_access ON public.control_audit USING (true) WITH CHECK (true);
 
+CREATE POLICY tenant_access ON public.control_audit_anchors USING (true) WITH CHECK (true);
+
 CREATE POLICY tenant_access ON public.control_authorization_outbox USING (true) WITH CHECK (true);
 
 CREATE POLICY tenant_access ON public.control_bootstrap_admins USING (true) WITH CHECK (true);
@@ -3657,6 +3686,8 @@ CREATE POLICY tenant_fence ON public.control_attempt_settlements AS RESTRICTIVE 
 CREATE POLICY tenant_fence ON public.control_attempt_snapshots AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
 
 CREATE POLICY tenant_fence ON public.control_audit AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_audit_anchors AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
 
 CREATE POLICY tenant_fence ON public.control_authorization_outbox AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
 
@@ -3902,6 +3933,8 @@ GRANT SELECT,INSERT ON TABLE public.control_attempt_snapshots TO toolgate_contro
 
 GRANT SELECT,INSERT ON TABLE public.control_audit TO toolgate_control_runtime;
 GRANT SELECT,INSERT ON TABLE public.control_audit TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_audit_anchors TO toolgate_control_runtime;
 
 GRANT USAGE ON SEQUENCE public.control_audit_sequence_seq TO toolgate_control_runtime;
 
@@ -4710,4 +4743,16 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION control_policy_bundles_capacity() FROM PUBLIC;
 CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_policy_bundles FOR EACH ROW EXECUTE FUNCTION control_policy_bundles_capacity();
+
+CREATE FUNCTION control_audit_anchors_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.signature),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.signature),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_audit_anchors_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_audit_anchors FOR EACH ROW EXECUTE FUNCTION control_audit_anchors_capacity();
 -- END TENANT CAPACITY
