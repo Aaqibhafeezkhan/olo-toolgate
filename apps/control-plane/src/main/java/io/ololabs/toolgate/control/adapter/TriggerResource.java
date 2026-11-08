@@ -12,8 +12,8 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 
 /**
- * Trigger admin routes (plan 10.2) and the device's desired-state route (plan 8.1). Every reply carries the resource's
- * ETag and {@code Cache-Control: no-store}.
+ * Trigger admin routes (plan 10.2). Every reply carries the resource's ETag and {@code Cache-Control: no-store}. The
+ * device's routes under {@code endpoint/triggers} live in {@link EndpointTriggerResource}.
  */
 @Path("/api/control/v1") @Produces("application/json") @Blocking @PermitAll
 public class TriggerResource {
@@ -21,14 +21,6 @@ public class TriggerResource {
     @Inject TriggerRouter router; @Inject TriggerSubscriptions subscriptions; @Inject TriggerStream stream;
 
     private void tls() { if (!routing.request().isSSL()) throw new Failure(ErrorCode.UNAUTHORIZED, 401, "Direct TLS required"); }
-    private java.security.cert.X509Certificate peer() {
-        tls();
-        try {
-            var certificates = routing.request().sslSession().getPeerCertificates();
-            if (certificates.length == 0) throw new IllegalArgumentException();
-            return (java.security.cert.X509Certificate) certificates[0];
-        } catch (Exception failure) { throw new Failure(ErrorCode.UNAUTHORIZED, 401, "Device certificate required"); }
-    }
     private DirectoryService.Actor actor() { tls(); return actors.management(); }
     private static Response response(Store.Reply reply) {
         var builder = Response.status(reply.status()).header("Cache-Control", "no-store").entity(reply.body());
@@ -124,10 +116,4 @@ public class TriggerResource {
     /** A single-use socket ticket. The body is a credential: it is never logged (plan 13.2). */
     @POST @Path("triggers/stream/tickets") @io.quarkus.security.Authenticated
     public Response ticket(@HeaderParam("Origin") String origin) { return response(stream.ticket(actor(), origin)); }
-
-    @GET @Path("endpoint/triggers/desired")
-    public Response desired() { return response(service.desired(peer())); }
-
-    @GET @Path("endpoint/triggers/descriptors/{digest}")
-    public Response descriptor(@PathParam("digest") String digest) { return response(service.descriptor(peer(), digest)); }
 }
