@@ -137,14 +137,14 @@ def verify_native_boundary(gateway):
         gateway.rpc('tools/call', {'name': 'examples.hotfolder/list', 'arguments': {}})
     except UnconfirmedOperation as failure:
         outcome = failure.outcome
-        expected = dict(state='OUTCOME_UNKNOWN', grade='REPORTED', retryable=False,
+        expected = dict(state='OUTCOME_UNKNOWN', grade='UNKNOWN', retryable=False,
             finalized=False, journalComplete=True, deduplicationAssumed=False,
             attemptCount=1, effectCount=0, unresolvedEffectCount=0, unsettledAttemptCount=1)
         if not failure.tool_error or any(
                 type(outcome.get(key)) is not type(value) or outcome[key] != value
                 for key, value in expected.items()):
             raise ValueError('Unqualified native outcome did not preserve the current refusal contract') from None
-        print('PASS: unqualified native completion remains OUTCOME_UNKNOWN/REPORTED and non-retryable.')
+        print('PASS: unqualified native completion remains OUTCOME_UNKNOWN/UNKNOWN and non-retryable.')
         print('No write, retry, model call or native business-success claim was submitted.')
         return
     raise ValueError('An unqualified native call was incorrectly presented as a success')

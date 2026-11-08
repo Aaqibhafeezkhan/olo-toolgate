@@ -4621,6 +4621,16 @@ Not run here: the joined Quickstart image runs and Linux-only suites. No phase i
 accepted. Weighted baseline: 23.0 / 39.5 = 58.2% delivered, 41.8% pending,
 22/33 stages Done (S22 still in progress), 0/7 full phases accepted.
 
+Follow-up fix (2026-11-08): the joined `images / langchain` run on `main`
+(Actions run 42487870829) showed the S23 rename had missed the LangChain
+native-boundary check. `examples/langchain/agent.py --verify-native-boundary`
+still required the removed `REPORTED` grade and failed with "did not preserve
+the current refusal contract". The check and its fixture now require the
+unfinished-outcome grade `UNKNOWN`. Tests now also confirm that `REPORTED` and
+`EXECUTOR_REPORTED` are refused. Executed: `examples/langchain/test_agent.py`
+(14 tests) passes on Windows Python 3.13 with the image's module layout. The
+joined Linux image run has not been repeated for this change. No weight change.
+
 ### S24 tenant audit hash chains — implemented out of order (2026-11-08)
 
 Started at the user's explicit request, in parallel with S23, while S22 (pending
