@@ -49,7 +49,7 @@ def running(config, timeout=300):
 
 def main():
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), False)
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
     running(config)
     print('Instance Running on the device', flush=True)
     directory = manage.STATE / 'agents'
