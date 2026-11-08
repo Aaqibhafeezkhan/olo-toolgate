@@ -40,12 +40,15 @@ async fn supervise_with<F: Future<Output = Result<LeaseRenewal>>>(
         }
     }
 }
+/// The lease is bounded by the consumed invocation's expiry, the same bound
+/// `execution::accepted_native` enforces. A relayed task's shorter delivery
+/// window bounds the run itself, not the server-issued lease.
 pub(crate) async fn supervise(
     control: &dyn ControlPort,
     identity: DeviceIdentity,
     accepted: NativePermitConsumed,
-    deadline: u64,
 ) {
+    let deadline = accepted.invocation.expires_at_unix_ms;
     let id = accepted.invocation.id;
     let fence = accepted.fencing_token;
     let initial = LeaseRenewal {
@@ -136,6 +139,112 @@ mod tests {
             .unwrap();
             assert!(start.elapsed() >= Duration::from_millis(180));
         }
+    }
+    struct Renewing(std::sync::atomic::AtomicUsize);
+    impl ControlPort for Renewing {
+        fn ping(
+            &self,
+            _: olo_toolgate_contracts::EndpointPresencePing,
+        ) -> crate::transport::Call<'_, olo_toolgate_contracts::EndpointConnectionDirective>
+        {
+            Box::pin(async { Err(Failure::Unsupported) })
+        }
+        fn discovery(
+            &self,
+        ) -> crate::transport::Call<'_, olo_toolgate_contracts::v2::SignedTenantDiscovery> {
+            Box::pin(async { Err(Failure::Unsupported) })
+        }
+        fn start(
+            &self,
+            _: olo_toolgate_contracts::EndpointEnrollmentStart,
+        ) -> crate::transport::Call<'_, olo_toolgate_contracts::EndpointEnrollmentChallenge>
+        {
+            Box::pin(async { Err(Failure::Unsupported) })
+        }
+        fn poll(
+            &self,
+            _: olo_toolgate_contracts::EndpointEnrollmentPoll,
+        ) -> crate::transport::Call<'_, olo_toolgate_contracts::EndpointEnrollmentResult> {
+            Box::pin(async { Err(Failure::Unsupported) })
+        }
+        fn check_in(
+            &self,
+            _: DeviceIdentity,
+            _: olo_toolgate_contracts::EndpointCheckIn,
+        ) -> crate::transport::Call<'_, olo_toolgate_contracts::EndpointCheckInAck> {
+            Box::pin(async { Err(Failure::Unsupported) })
+        }
+        fn heartbeat(
+            &self,
+            _: DeviceIdentity,
+            request: LeaseHeartbeat,
+        ) -> crate::transport::Call<'_, LeaseRenewal> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async move {
+                Ok(LeaseRenewal {
+                    invocation_id: request.invocation_id,
+                    fencing_token: request.fencing_token,
+                    lease_expires_at_unix_ms: crate::now() + 300,
+                    cancel_requested: false,
+                    input_responses: None,
+                })
+            })
+        }
+    }
+    fn consumed(
+        invocation_expiry: u64,
+        lease_expiry: u64,
+    ) -> (DeviceIdentity, NativePermitConsumed) {
+        let fixtures: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/contracts/v1/valid.json"
+        ))
+        .unwrap();
+        let identity = serde_json::from_value(fixtures["DeviceIdentity"].clone()).unwrap();
+        let mut invocation: olo_toolgate_contracts::EnterpriseInvocation =
+            serde_json::from_value(fixtures["RemoteToolTask"]["invocation"].clone()).unwrap();
+        invocation.expires_at_unix_ms = invocation_expiry;
+        let consumed = NativePermitConsumed {
+            fencing_token: "attempt".into(),
+            lease_expires_at_unix_ms: lease_expiry,
+            authorization_epoch: 0,
+            kill_scope: olo_toolgate_contracts::v2::KillExecutionScope {
+                package_id: None,
+                package_digest: format!("sha256:{}", "0".repeat(64)),
+                publisher: None,
+                tool_id: invocation.evaluation.tool_id.clone(),
+                pool_id: None,
+                image_digest: None,
+            },
+            invocation,
+        };
+        (identity, consumed)
+    }
+    /// A relayed task's delivery window may end before the server-issued lease;
+    /// only the consumed invocation's expiry bounds the lease, so supervision
+    /// must keep renewing instead of reporting revocation before the run starts.
+    #[tokio::test]
+    async fn lease_is_bounded_by_the_consumed_invocation_not_a_shorter_window() {
+        let control = Renewing(Default::default());
+        let (identity, accepted) = consumed(crate::now() + 60000, crate::now() + 300);
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(500),
+                supervise(&control, identity, accepted)
+            )
+            .await
+            .is_err(),
+            "a lease inside the invocation expiry stays supervised"
+        );
+        assert!(control.0.load(std::sync::atomic::Ordering::SeqCst) >= 1);
+        let control = Renewing(Default::default());
+        let (identity, accepted) = consumed(crate::now() + 1000, crate::now() + 5000);
+        tokio::time::timeout(
+            Duration::from_millis(100),
+            supervise(&control, identity, accepted),
+        )
+        .await
+        .expect("a lease beyond the invocation expiry ends at once");
+        assert_eq!(control.0.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
     #[tokio::test]
     async fn explicit_cancellation_ends_a_live_lease_without_waiting_for_its_deadline() {

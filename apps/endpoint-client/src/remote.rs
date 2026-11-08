@@ -39,7 +39,7 @@ impl AuthorizationPort for Authorization {
                 .clone()
                 .ok_or(Failure::Unauthorized)?;
             tokio::select! {
-                _=crate::lease::supervise(self.control.as_ref(),self.identity.clone(),accepted,self.task.expires_at_unix_ms)=>{},
+                _=crate::lease::supervise(self.control.as_ref(),self.identity.clone(),accepted)=>{},
                 _=self.revocations.terminated(&execution)=>{},
             }
             Err(Failure::Revoked)

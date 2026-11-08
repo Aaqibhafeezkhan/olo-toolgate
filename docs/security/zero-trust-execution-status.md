@@ -4534,6 +4534,35 @@ memory/RAG checks, then the single stage commit. Weighted baseline remains
 56.0% delivered / 44.0% pending, 21/33 stages, 0/7 full phases accepted.
 
 
+### S22 relayed native lease-deadline repair — 2026-11-08
+
+Hosted `images / langchain` failed deterministically from S22 source onward
+(57a5d6b8, 25c6ec54, aceb6891, debc723b) with `MCP error -32000: FORBIDDEN`
+on the first relayed `examples.hotfolder/list` call. Diagnostics showed Control
+accepted native permit consumption and AUTHORIZE; the device itself reported
+`runtime_execution ... rejected` 18 ms later. Cause: the relayed path supervised
+the server-issued execution lease against the relayed task's delivery window
+(about 18 s), while Control issues `min(now+30 s, invocation expiry)`. The lease
+therefore failed the local validity check before any heartbeat, supervision
+returned, and the run was reported Revoked. The local HTTPS path already used
+the consumed invocation's expiry, the bound `accepted_native` enforces.
+
+`lease::supervise` now derives its deadline from the consumed invocation, so the
+relayed and local paths cannot diverge. The relayed task window still bounds the
+run itself through `invoke_inner`'s `permit_deadline.min(valid_until)`; no lease,
+permit or run is extended. A new unit regression shows a lease inside the
+invocation expiry stays supervised and renews, and a lease beyond it ends at once
+without a heartbeat. KillSwitchTest also passes the new ControlTeam clearance
+argument after the S23–S25 merge (separate commit debc723b).
+
+Executed in Docker rust:1.94-bookworm: `cargo fmt --check`, all-target Clippy with
+`-D warnings`, and `cargo test -p olo-toolgate-client` (lib 56 passed; four lease
+tests pass including the regression; joined native owner test remains ignored by
+design). The composed LangChain run was not re-executed locally; hosted
+`images / langchain` reevaluation is required. S22 remains in progress with no
+weight; phase, vertical-slice and claim entries are unchanged.
+
+
 ### S23 outcome grades and honest presentation — delivered, 2026-11-08
 
 Started at the user's explicit request while S22 remains undelivered (draft PR

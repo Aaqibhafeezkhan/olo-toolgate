@@ -206,7 +206,6 @@ impl AuthorizationPort for HttpsGateway {
                 .map_err(|_| Failure::Unavailable)?
                 .clone()
                 .ok_or(Failure::Unauthorized)?;
-            let deadline = accepted.invocation.expires_at_unix_ms;
             let (identity, control, _) = self.device()?;
             let execution = self
                 .kill_execution
@@ -215,7 +214,7 @@ impl AuthorizationPort for HttpsGateway {
                 .clone()
                 .ok_or(Failure::Unauthorized)?;
             tokio::select! {
-                _=crate::lease::supervise(&control,identity,accepted,deadline)=>{},
+                _=crate::lease::supervise(&control,identity,accepted)=>{},
                 _=self.revocations.terminated(&execution)=>{},
             }
             Err(Failure::Revoked)
