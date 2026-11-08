@@ -12,6 +12,8 @@ package io.ololabs.toolgate.contracts;
  * @param requestDigest canonical requestDigest value
  * @param state canonical state value
  * @param grade canonical grade value
+ * @param fencing canonical fencing value
+ * @param observations canonical observations value
  * @param evidenceCount canonical evidenceCount value
  * @param receiptDigest canonical receiptDigest value
  */
@@ -24,6 +26,8 @@ public record EnterpriseEffectHistory(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "requestDigest", required = true) String requestDigest,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "state", required = true) EnterpriseEffectGenerationState state,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "grade", required = true) EnterpriseOutcomeGrade grade,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencing", required = true) EnterpriseEffectFencing fencing,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "observations", required = true) java.util.List<EnterpriseEvidenceObservation> observations,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "evidenceCount", required = true) Long evidenceCount,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "receiptDigest", required = false) String receiptDigest
 ) {
@@ -36,6 +40,8 @@ public record EnterpriseEffectHistory(
      * @param requestDigest canonical requestDigest value
      * @param state canonical state value
      * @param grade canonical grade value
+     * @param fencing canonical fencing value
+     * @param observations canonical observations value
      * @param evidenceCount canonical evidenceCount value
      * @param receiptDigest canonical receiptDigest value
      */
@@ -47,6 +53,9 @@ public record EnterpriseEffectHistory(
         java.util.Objects.requireNonNull(requestDigest, "requestDigest");
         java.util.Objects.requireNonNull(state, "state");
         java.util.Objects.requireNonNull(grade, "grade");
+        java.util.Objects.requireNonNull(fencing, "fencing");
+        java.util.Objects.requireNonNull(observations, "observations");
+        observations = observations == null ? null : java.util.List.copyOf(observations);
         java.util.Objects.requireNonNull(evidenceCount, "evidenceCount");
     }
 }

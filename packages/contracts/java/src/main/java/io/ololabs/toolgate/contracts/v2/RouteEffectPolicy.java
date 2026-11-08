@@ -12,6 +12,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param intent canonical intent value
  * @param targetDedupeGuarantee canonical targetDedupeGuarantee value
  * @param fencedTarget canonical fencedTarget value
+ * @param authoritativeResponse canonical authoritativeResponse value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record RouteEffectPolicy(
@@ -21,7 +22,8 @@ public record RouteEffectPolicy(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "acknowledgedUnfencedRisk", required = true) Boolean acknowledgedUnfencedRisk,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "intent", required = true) EffectIntentBlueprint intent,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "targetDedupeGuarantee", required = false) TargetDedupeGuarantee targetDedupeGuarantee,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencedTarget", required = false) FencedTarget fencedTarget
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencedTarget", required = false) FencedTarget fencedTarget,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "authoritativeResponse", required = false) Boolean authoritativeResponse
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +34,7 @@ public record RouteEffectPolicy(
      * @param intent canonical intent value
      * @param targetDedupeGuarantee canonical targetDedupeGuarantee value
      * @param fencedTarget canonical fencedTarget value
+     * @param authoritativeResponse canonical authoritativeResponse value
      */
     public RouteEffectPolicy {
         java.util.Objects.requireNonNull(routeId, "routeId");

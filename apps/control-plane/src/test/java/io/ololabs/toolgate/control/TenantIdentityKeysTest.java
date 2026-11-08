@@ -58,7 +58,7 @@ final class TenantIdentityKeysTest {
         recoverySql(f,a.tenant,"INSERT INTO control_recovery_floors VALUES(?,1000)");
         assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,3,fresh,"missing-audit"));
         // The separately verified offline restore creates both the floor and this retained audit.
-        recoverySql(f,a.tenant,"INSERT INTO control_audit(tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES(?,'reviewer','RESTORE_QUARANTINE','directory',1,'restore-proof','review-digest')");
+        recoveryAudit(f,a.tenant);
         assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,3,a.references,"revive-retired"));
         assertThrows(Failure.class,()->f.registry.installIdentity(a.tenant,a.custody,2,fresh,"old-generation"));
         assertTrue(f.registry.installIdentity(a.tenant,a.custody,3,fresh,"recover-fresh"));
@@ -76,6 +76,22 @@ final class TenantIdentityKeysTest {
             c.setAutoCommit(false);
             if(f.runtime!=f.platform)try(var s=c.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){s.setString(1,tenant.value());s.execute();}
             try(var s=c.prepareStatement(sql)){s.setString(1,tenant.value());s.executeUpdate();}c.commit();
+        }
+    }
+    /** The offline restore's quarantine record continues the tenant's ADR 061 audit chain. */
+    private void recoveryAudit(Fixture f,Ids.TenantId tenant)throws Exception{
+        try(var c=f.owner.getConnection()){
+            c.setAutoCommit(false);boolean pg=f.runtime!=f.platform;
+            if(pg)try(var s=c.prepareStatement("SELECT set_config('app.tenant_id',?,true)")){s.setString(1,tenant.value());s.execute();}
+            long index=0;String previous=AuditChain.GENESIS;
+            try(var s=c.prepareStatement("SELECT chain_index,row_digest FROM control_audit WHERE tenant_id=? ORDER BY chain_index DESC LIMIT 1")){s.setString(1,tenant.value());try(var r=s.executeQuery()){if(r.next()){index=r.getLong(1);previous=r.getString(2);}}}
+            long now=System.currentTimeMillis();index++;
+            String row=AuditChain.digest(tenant.value(),index,previous,"reviewer","RESTORE_QUARANTINE","directory",1,"restore-proof","review-digest",null,now);
+            try(var s=c.prepareStatement("INSERT INTO control_audit(tenant_id,chain_index,previous_digest,actor_id,operation,target,revision,request_id,request_digest,occurred_at,row_digest) VALUES(?,?,?,'reviewer','RESTORE_QUARANTINE','directory',1,'restore-proof','review-digest',?,?)")){
+                s.setString(1,tenant.value());s.setLong(2,index);s.setString(3,previous);
+                s.setObject(4,pg?java.time.OffsetDateTime.ofInstant(java.time.Instant.ofEpochMilli(now),java.time.ZoneOffset.UTC):AuditChain.sqliteTime(now));s.setString(5,row);s.executeUpdate();
+            }
+            c.commit();
         }
     }
     @Test void sqliteStaleEndpointCannotSignAfterKeyPublication()throws Exception{staleEndpoint(fixture(false));}

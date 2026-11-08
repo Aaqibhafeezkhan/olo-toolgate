@@ -1133,7 +1133,7 @@
     "manifestSealed": false,
     "manifestEffectCount": 0,
     "settled": false,
-    "grade": "REPORTED"
+    "grade": "UNKNOWN"
   },
   "EnterpriseAttemptSettlementReview": {
     "expectedOutcomeRevision": 1,
@@ -1309,6 +1309,7 @@
     "diagnosticId": "example"
   },
   "EnterpriseDecisionReason": "MATCHED",
+  "EnterpriseEffectFencing": "FENCED",
   "EnterpriseEffectGenerationState": "AUTHORIZED",
   "EnterpriseEffectHistory": {
     "effectId": "effect-first",
@@ -1318,6 +1319,8 @@
     "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "state": "AUTHORIZED",
     "grade": "CONTROL_PROVEN",
+    "fencing": "UNFENCED",
+    "observations": [],
     "evidenceCount": 0
   },
   "EnterpriseEffectReport": {
@@ -1369,6 +1372,8 @@
     "authorityRevision": 0,
     "online": false
   },
+  "EnterpriseEvidenceObservation": "TARGET_OUTCOME",
+  "EnterpriseExecutionCoverage": "MEDIATED_ONLY",
   "EnterpriseExtractorKind": "FIXED",
   "EnterpriseGrantPurpose": "HUMAN",
   "EnterpriseGroupType": "TEAM",
@@ -1493,15 +1498,42 @@
     }
   },
   "EnterpriseMemberType": "USER",
+  "EnterpriseOperationEvidenceExportPage": {
+    "items": [
+      {
+        "operationId": "device-1",
+        "state": "RUNNING",
+        "revision": 1,
+        "grade": "UNKNOWN",
+        "coverage": "NO_AUTHORITY_CONSUMED",
+        "journalComplete": false,
+        "attemptCount": 0,
+        "effectCount": 0,
+        "fencedEffectCount": 0,
+        "unfencedEffectCount": 0,
+        "unresolvedEffectCount": 0,
+        "unsettledAttemptCount": 0,
+        "finalized": false,
+        "retryable": false,
+        "deduplicationAssumed": false,
+        "updatedAtUnixMs": 0
+      }
+    ],
+    "next": "device-1",
+    "exportedAtUnixMs": 0
+  },
   "EnterpriseOperationHistoryPage": {
     "operation": {
       "operationId": "device-1",
       "state": "RUNNING",
       "revision": 1,
-      "grade": "REPORTED",
+      "grade": "UNKNOWN",
+      "coverage": "NO_AUTHORITY_CONSUMED",
       "journalComplete": false,
       "attemptCount": 0,
       "effectCount": 0,
+      "fencedEffectCount": 0,
+      "unfencedEffectCount": 0,
       "unresolvedEffectCount": 0,
       "unsettledAttemptCount": 0,
       "finalized": false,
@@ -1517,10 +1549,13 @@
     "operationId": "device-1",
     "state": "RUNNING",
     "revision": 1,
-    "grade": "REPORTED",
+    "grade": "UNKNOWN",
+    "coverage": "NO_AUTHORITY_CONSUMED",
     "journalComplete": false,
     "attemptCount": 0,
     "effectCount": 0,
+    "fencedEffectCount": 0,
+    "unfencedEffectCount": 0,
     "unresolvedEffectCount": 0,
     "unsettledAttemptCount": 0,
     "finalized": false,
@@ -1539,7 +1574,7 @@
     "authorityCacheGraceMs": 0,
     "readyProbeFreshnessMs": 0
   },
-  "EnterpriseOutcomeGrade": "REPORTED",
+  "EnterpriseOutcomeGrade": "UNKNOWN",
   "EnterprisePermitClaims": {
     "issuer": "example",
     "audience": "example",

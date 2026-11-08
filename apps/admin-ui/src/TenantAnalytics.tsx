@@ -3,6 +3,7 @@
 import {useEffect,useState} from 'react';
 import {ControlClient,type TenantAnalyticsOverview} from './api';
 import {Failure} from './Failure';
+import {EvidenceSummary} from './EvidenceSummary';
 import {buckets,overview,ranking,duration,percent,time} from './insights/model';
 import {OutcomeChart,LatencyChart} from './insights/charts';
 import './insights/insights.css';
@@ -55,5 +56,6 @@ export function TenantAnalytics({client}:{client:ControlClient}){
         <h2>Busiest tools</h2><table><thead><tr><th>Tool</th><th>Calls</th><th>Failed</th><th>p95 duration</th></tr></thead>
           <tbody>{ranking(data.tools).map(tool=><tr key={tool.key}><td><a href={`#analytics?tool=${encodeURIComponent(tool.key)}`} aria-current={tool.key===toolFromHash()?'page':undefined}>{tool.key}</a></td><td>{tool.calls}</td><td>{tool.failed}</td><td>{duration(tool.p95)}</td></tr>)}</tbody></table>
       </>}
+    {data&&!error&&<EvidenceSummary client={client} evidence={data.evidence}/>}
   </section>;
 }

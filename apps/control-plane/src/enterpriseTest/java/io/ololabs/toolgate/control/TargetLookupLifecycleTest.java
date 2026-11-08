@@ -138,7 +138,8 @@ class TargetLookupLifecycleTest {
         lookups(this::completed).lookup(operator(),second.id(),effect);
         var result=outcome(second.id());
         assertEquals(EnterpriseOperationState.PARTIAL,result.state());assertTrue(result.finalized());
-        assertTrue(result.deduplicationAssumed());assertEquals(EnterpriseOutcomeGrade.TARGET_DEDUPLICATION_ASSUMED,result.grade());
+        assertTrue(result.deduplicationAssumed());// ADR 060: the dedupe reliance is a flag beside the evidence grade, not a grade.
+        assertEquals(EnterpriseOutcomeGrade.TARGET_CONFIRMED,result.grade());
         assertEquals(2,rig.store.transaction(rig.gateway.tenant(),false,tx->tx.effects().generations(effect)).size());
         assertEquals(0L,result.unresolvedEffectCount());assertEquals(0L,result.unsettledAttemptCount());
     }

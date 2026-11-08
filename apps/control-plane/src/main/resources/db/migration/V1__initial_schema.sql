@@ -103,6 +103,26 @@ CREATE FUNCTION public.control_attempt_immutable() RETURNS trigger
     AS $$
 BEGIN RAISE EXCEPTION 'attempt journal is immutable'; END $$;
 
+CREATE FUNCTION public.control_audit_chain_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE head_index bigint; head_digest text;
+BEGIN
+ -- ADR 061: one linear chain per tenant; appends serialize on this tenant lock across replicas.
+ PERFORM pg_advisory_xact_lock(hashtextextended(NEW.tenant_id::text||'/audit-chain',0));
+ SELECT a.chain_index,a.row_digest INTO head_index,head_digest FROM public.control_audit a
+  WHERE a.tenant_id=NEW.tenant_id ORDER BY a.chain_index DESC LIMIT 1;
+ IF NEW.chain_index<>COALESCE(head_index,0)+1 OR NEW.previous_digest::text<>COALESCE(head_digest,repeat('0',64)) THEN
+  RAISE EXCEPTION 'audit chain link mismatch' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.control_audit_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN RAISE EXCEPTION 'audit chain is append-only'; END $$;
+
 CREATE FUNCTION public.control_attempt_manifest_seal_guard() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -1039,19 +1059,40 @@ ALTER TABLE ONLY public.control_attempt_snapshots FORCE ROW LEVEL SECURITY;
 CREATE TABLE public.control_audit (
     sequence bigint NOT NULL,
     tenant_id character varying(128) NOT NULL,
-    actor_id character(64) NOT NULL,
+    chain_index bigint NOT NULL,
+    previous_digest character(64) NOT NULL,
+    actor_id character varying(64) NOT NULL,
     operation character varying(40) NOT NULL,
     target character varying(256) NOT NULL,
     revision bigint NOT NULL,
     request_id character varying(128) NOT NULL,
-    request_digest character(64) NOT NULL,
+    request_digest character varying(64) NOT NULL,
     evidence text,
-    occurred_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    occurred_at timestamp with time zone NOT NULL,
+    row_digest character(64) NOT NULL,
+    CONSTRAINT control_audit_chain_check CHECK (((chain_index >= 1) AND (previous_digest ~ '^[0-9a-f]{64}$'::text) AND (row_digest ~ '^[0-9a-f]{64}$'::text) AND ((chain_index > 1) OR (previous_digest = repeat('0'::text, 64))))),
     CONSTRAINT control_audit_evidence_check CHECK (((evidence IS NULL) OR (octet_length(evidence) <= 4096))),
     CONSTRAINT control_audit_operation_check CHECK (((operation)::text ~ '^[A-Z][A-Z0-9_]{0,39}$'::text))
 );
 
 ALTER TABLE ONLY public.control_audit FORCE ROW LEVEL SECURITY;
+
+CREATE TABLE public.control_audit_anchors (
+    tenant_id character varying(128) NOT NULL,
+    chain_index bigint NOT NULL,
+    head_digest character(64) NOT NULL,
+    key_id character varying(128) NOT NULL,
+    issued_at_unix_ms bigint NOT NULL,
+    document text NOT NULL,
+    signature text NOT NULL,
+    sink character varying(64) NOT NULL,
+    location character varying(512) NOT NULL,
+    content_sha256 character(64) NOT NULL,
+    recorded_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    CONSTRAINT control_audit_anchors_check CHECK (((chain_index >= 1) AND (head_digest ~ '^[0-9a-f]{64}$'::text) AND (content_sha256 ~ '^[0-9a-f]{64}$'::text) AND ((issued_at_unix_ms >= 0) AND (issued_at_unix_ms <= '9007199254740991'::bigint)) AND (octet_length(document) <= 1024) AND ((octet_length(signature) >= 1) AND (octet_length(signature) <= 1024)) AND (length((key_id)::text) >= 1) AND (length((sink)::text) >= 1) AND (length((location)::text) >= 1)))
+);
+
+ALTER TABLE ONLY public.control_audit_anchors FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE public.control_audit ALTER COLUMN sequence ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.control_audit_sequence_seq
@@ -1304,10 +1345,13 @@ CREATE TABLE public.control_effect_intents (
     profile_digest text NOT NULL,
     classification text NOT NULL,
     document text NOT NULL,
+    fenced_target_class text,
+    authoritative_response boolean NOT NULL,
     recorded_at bigint NOT NULL,
     CONSTRAINT control_effect_intents_arguments_digest_check CHECK ((arguments_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
     CONSTRAINT control_effect_intents_classification_check CHECK ((classification = ANY (ARRAY['READ'::text, 'WRITE'::text, 'DESTRUCTIVE'::text, 'FINANCIAL'::text]))),
     CONSTRAINT control_effect_intents_document_check CHECK (((octet_length(document) <= 1048576) AND (jsonb_typeof((document)::jsonb) = 'object'::text))),
+    CONSTRAINT control_effect_intents_fenced_target_class_check CHECK (((fenced_target_class IS NULL) OR (fenced_target_class = ANY (ARRAY['SHARED_SQL'::text, 'SQL_WITH_EXTERNAL_ACTION'::text])))),
     CONSTRAINT control_effect_intents_profile_digest_check CHECK ((profile_digest ~ '^sha256:[a-f0-9]{64}$'::text)),
     CONSTRAINT control_effect_intents_recorded_at_check CHECK (((recorded_at >= 0) AND (recorded_at <= '9007199254740991'::bigint))),
     CONSTRAINT control_effect_intents_request_digest_check CHECK ((request_digest ~ '^sha256:[a-f0-9]{64}$'::text))
@@ -2272,6 +2316,12 @@ ALTER TABLE ONLY public.control_attempt_snapshots
 ALTER TABLE ONLY public.control_audit
     ADD CONSTRAINT control_audit_pkey PRIMARY KEY (sequence);
 
+ALTER TABLE ONLY public.control_audit
+    ADD CONSTRAINT control_audit_chain_unique UNIQUE (tenant_id, chain_index);
+
+ALTER TABLE ONLY public.control_audit_anchors
+    ADD CONSTRAINT control_audit_anchors_pkey PRIMARY KEY (tenant_id, chain_index);
+
 ALTER TABLE ONLY public.control_authorization_outbox
     ADD CONSTRAINT control_authorization_outbox_pkey PRIMARY KEY (tenant_id, revision);
 
@@ -2605,6 +2655,12 @@ CREATE TRIGGER attempt_binding_guard BEFORE INSERT ON public.control_operation_a
 CREATE TRIGGER attempt_effect_guard BEFORE INSERT ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_effect_guard();
 
 CREATE TRIGGER attempt_effects_capacity AFTER INSERT ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_effects_capacity();
+
+CREATE TRIGGER audit_chain_guard BEFORE INSERT ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_audit_chain_guard();
+
+CREATE TRIGGER audit_immutable BEFORE DELETE OR UPDATE ON public.control_audit FOR EACH ROW EXECUTE FUNCTION public.control_audit_immutable();
+
+CREATE TRIGGER audit_anchors_immutable BEFORE DELETE OR UPDATE ON public.control_audit_anchors FOR EACH ROW EXECUTE FUNCTION public.control_audit_immutable();
 
 CREATE TRIGGER attempt_effects_immutable BEFORE DELETE OR UPDATE ON public.control_attempt_effects FOR EACH ROW EXECUTE FUNCTION public.control_attempt_immutable();
 
@@ -2961,6 +3017,9 @@ ALTER TABLE ONLY public.control_attempt_snapshots
 ALTER TABLE ONLY public.control_audit
     ADD CONSTRAINT control_audit_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
 
+ALTER TABLE ONLY public.control_audit_anchors
+    ADD CONSTRAINT control_audit_anchors_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
+
 ALTER TABLE ONLY public.control_authorization_outbox
     ADD CONSTRAINT control_authorization_outbox_tenant_owner FOREIGN KEY (tenant_id) REFERENCES public.control_tenants(tenant_id);
 
@@ -3292,6 +3351,8 @@ ALTER TABLE public.control_attempt_snapshots ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.control_audit ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE public.control_audit_anchors ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE public.control_authorization_outbox ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE public.control_bootstrap_admins ENABLE ROW LEVEL SECURITY;
@@ -3458,6 +3519,8 @@ CREATE POLICY tenant_access ON public.control_attempt_snapshots USING (true) WIT
 
 CREATE POLICY tenant_access ON public.control_audit USING (true) WITH CHECK (true);
 
+CREATE POLICY tenant_access ON public.control_audit_anchors USING (true) WITH CHECK (true);
+
 CREATE POLICY tenant_access ON public.control_authorization_outbox USING (true) WITH CHECK (true);
 
 CREATE POLICY tenant_access ON public.control_bootstrap_admins USING (true) WITH CHECK (true);
@@ -3623,6 +3686,8 @@ CREATE POLICY tenant_fence ON public.control_attempt_settlements AS RESTRICTIVE 
 CREATE POLICY tenant_fence ON public.control_attempt_snapshots AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
 
 CREATE POLICY tenant_fence ON public.control_audit AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
+
+CREATE POLICY tenant_fence ON public.control_audit_anchors AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
 
 CREATE POLICY tenant_fence ON public.control_authorization_outbox AS RESTRICTIVE USING ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(false))) WITH CHECK ((((tenant_id)::text = NULLIF(current_setting('app.tenant_id'::text, true), ''::text)) AND public.control_tenant_access(true)));
 
@@ -3868,6 +3933,8 @@ GRANT SELECT,INSERT ON TABLE public.control_attempt_snapshots TO toolgate_contro
 
 GRANT SELECT,INSERT ON TABLE public.control_audit TO toolgate_control_runtime;
 GRANT SELECT,INSERT ON TABLE public.control_audit TO toolgate_control_platform;
+
+GRANT SELECT,INSERT ON TABLE public.control_audit_anchors TO toolgate_control_runtime;
 
 GRANT USAGE ON SEQUENCE public.control_audit_sequence_seq TO toolgate_control_runtime;
 
@@ -4733,4 +4800,16 @@ BEGIN
 END;$$;
 REVOKE ALL ON FUNCTION control_triggers_capacity() FROM PUBLIC;
 CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_triggers FOR EACH ROW EXECUTE FUNCTION control_triggers_capacity();
+
+CREATE FUNCTION control_audit_anchors_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.signature),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.signature),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_audit_anchors_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_audit_anchors FOR EACH ROW EXECUTE FUNCTION control_audit_anchors_capacity();
 -- END TENANT CAPACITY

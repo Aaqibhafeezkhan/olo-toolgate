@@ -2918,6 +2918,8 @@ pub struct RouteEffectPolicy {
     pub target_dedupe_guarantee: Option<TargetDedupeGuarantee>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fenced_target: Option<FencedTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authoritative_response: Option<bool>,
 }
 /// Review stamp created by Control, never accepted from package or worker input.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

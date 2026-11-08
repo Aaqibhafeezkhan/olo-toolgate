@@ -14,6 +14,9 @@ export type TenantAnalyticsOverview = {
   series:import('@olo-labs/toolgate-contracts/v2').InsightsSeries;
   tools:import('@olo-labs/toolgate-contracts/v2').InsightsSeries;
   invocations?:import('@olo-labs/toolgate-contracts/v2').InsightsInvocationPage|null;
+  /** Control-derived evidence grades (ADR 060), separate from Gateway-recorded call states. */
+  evidence:{grades:Record<import('@olo-labs/toolgate-contracts').EnterpriseOutcomeGrade,number>;coverage:Record<import('@olo-labs/toolgate-contracts').EnterpriseExecutionCoverage,number>;
+    fencedEffects:number;unfencedEffects:number;operations:number;truncated:boolean};
 };
 export type MarketplaceVerdict = { readonly compatible: boolean; readonly reasons: readonly string[] };
 export type MarketplacePublisherSummary = { readonly slug: string; readonly displayName: string; readonly organization?: string | null; readonly avatarMediaId?: string | null; readonly profileUrl?: string | null };
@@ -256,6 +259,7 @@ export class ControlClient {
   revokeEffectConsent(id:string,body:import('@olo-labs/toolgate-contracts/v2').EffectConsentApprovalRequest):Promise<import('@olo-labs/toolgate-contracts/v2').EffectConsentView>{return this.send(operations.revokeEffectConsent,{id,body});}
   invocation(id:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseInvocation>{return this.send(operations.getEnterpriseInvocation,{id,signal});}
   operationHistory(id:string,cursor?:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseOperationHistoryPage>{const query=new URLSearchParams({limit:'50'});if(cursor)query.set('cursor',cursor);return this.send(operations.getEnterpriseOperationHistory,{id,query,signal});}
+  operationEvidence(after?:string,signal?:AbortSignal):Promise<import("@olo-labs/toolgate-contracts").EnterpriseOperationEvidenceExportPage>{const query=new URLSearchParams({limit:'100'});if(after)query.set('after',after);return this.send(operations.exportOperationEvidence,{query,signal});}
   cancelInvocation(id:string,revision:number):Promise<import("@olo-labs/toolgate-contracts").EnterpriseInvocation>{return this.send(operations.cancelEnterpriseInvocation,{id,revision});}
   approvals(cursor?: string, signal?: AbortSignal): Promise<EnterpriseApprovalPage> {
     const query = new URLSearchParams({ limit: '50' }); if (cursor) query.set('cursor', cursor);

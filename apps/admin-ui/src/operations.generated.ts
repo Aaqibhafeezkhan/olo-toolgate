@@ -215,6 +215,7 @@ export const operations = {
   shadowEnterpriseAccess: { method: 'POST', path: '/api/control/v1/access/shadow' },
   deliverRuntimeSecret: { method: 'POST', path: '/api/control/v1/access/secrets/deliver' },
   enterpriseOperationalStatus: { method: 'GET', path: '/api/control/v1/access/operations' },
+  exportOperationEvidence: { method: 'GET', path: '/api/control/v1/access/operations/evidence' },
   uploadServerPackage: { method: 'POST', path: '/api/control/v1/packages/uploads' },
   listServerPackageVersions: { method: 'GET', path: '/api/control/v1/packages' },
   listServerPackageDeployments: { method: 'GET', path: '/api/control/v1/packages/deployments' },

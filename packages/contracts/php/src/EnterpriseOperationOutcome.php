@@ -12,9 +12,12 @@ final readonly class EnterpriseOperationOutcome implements \JsonSerializable {
         public EnterpriseOperationState $state,
         public int $revision,
         public EnterpriseOutcomeGrade $grade,
+        public EnterpriseExecutionCoverage $coverage,
         public bool $journalComplete,
         public int $attemptCount,
         public int $effectCount,
+        public int $fencedEffectCount,
+        public int $unfencedEffectCount,
         public int $unresolvedEffectCount,
         public int $unsettledAttemptCount,
         public bool $finalized,
@@ -25,7 +28,7 @@ final readonly class EnterpriseOperationOutcome implements \JsonSerializable {
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['operationId', 'state', 'revision', 'grade', 'journalComplete', 'attemptCount', 'effectCount', 'unresolvedEffectCount', 'unsettledAttemptCount', 'finalized', 'retryable', 'deduplicationAssumed', 'updatedAtUnixMs']) || array_diff(['operationId', 'state', 'revision', 'grade', 'journalComplete', 'attemptCount', 'effectCount', 'unresolvedEffectCount', 'unsettledAttemptCount', 'finalized', 'retryable', 'deduplicationAssumed', 'updatedAtUnixMs'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['operationId', 'state', 'revision', 'grade', 'coverage', 'journalComplete', 'attemptCount', 'effectCount', 'fencedEffectCount', 'unfencedEffectCount', 'unresolvedEffectCount', 'unsettledAttemptCount', 'finalized', 'retryable', 'deduplicationAssumed', 'updatedAtUnixMs']) || array_diff(['operationId', 'state', 'revision', 'grade', 'coverage', 'journalComplete', 'attemptCount', 'effectCount', 'fencedEffectCount', 'unfencedEffectCount', 'unresolvedEffectCount', 'unsettledAttemptCount', 'finalized', 'retryable', 'deduplicationAssumed', 'updatedAtUnixMs'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -33,9 +36,12 @@ final readonly class EnterpriseOperationOutcome implements \JsonSerializable {
             EnterpriseOperationState::from($data['state']),
             $data['revision'],
             EnterpriseOutcomeGrade::from($data['grade']),
+            EnterpriseExecutionCoverage::from($data['coverage']),
             $data['journalComplete'],
             $data['attemptCount'],
             $data['effectCount'],
+            $data['fencedEffectCount'],
+            $data['unfencedEffectCount'],
             $data['unresolvedEffectCount'],
             $data['unsettledAttemptCount'],
             $data['finalized'],

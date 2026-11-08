@@ -48,6 +48,33 @@ class TargetClaimsTest {
             ref(OTHER),ServicePermitTargetOutcomeKind.COMPLETED,RESULT))));
         assertEquals(ServicePermitClaimState.COMPLETED,consume("billing",OWNER).status());
     }
+    @Test void historyAndExportPresentFrozenFencingObservationsAndHonestGrades(){
+        consume("billing",OWNER);
+        targets.outcome(f.base.rig.gateway,"billing",document(new ServicePermitTargetOutcome(ref(OWNER),ServicePermitTargetOutcomeKind.COMPLETED,RESULT)));
+        var codec=f.base.rig.graph.codec;
+        var history=codec.model(f.base.rig.operations.history(f.base.rig.reviewer,claims.invocationId(),null,10).body(),EnterpriseOperationHistoryPage.class);
+        var effect=history.effects().stream().filter(e->e.effectId().equals(claims.effectId())).findFirst().orElseThrow();
+        assertEquals(EnterpriseEffectFencing.FENCED,effect.fencing());
+        assertEquals(EnterpriseOutcomeGrade.TARGET_CONFIRMED,effect.grade());
+        assertTrue(effect.observations().containsAll(List.of(EnterpriseEvidenceObservation.AUTHORIZATION_CONSUMED,EnterpriseEvidenceObservation.TARGET_OUTCOME)));
+        assertFalse(effect.observations().contains(EnterpriseEvidenceObservation.BROKER_RESPONSE));
+        assertEquals(1L,history.operation().fencedEffectCount());assertEquals(0L,history.operation().unfencedEffectCount());
+        // A target witness on one effect never grades an unfinished operation.
+        if(!history.operation().finalized())assertEquals(EnterpriseOutcomeGrade.UNKNOWN,history.operation().grade());
+        var export=codec.model(f.base.rig.operations.evidenceExport(f.base.rig.reviewer,null,10).body(),EnterpriseOperationEvidenceExportPage.class);
+        var row=export.items().stream().filter(o->o.operationId().equals(claims.invocationId())).findFirst().orElseThrow();
+        assertEquals(history.operation().grade(),row.grade());assertEquals(history.operation().coverage(),row.coverage());
+        assertEquals(1L,row.fencedEffectCount());
+        long now=9007199254740990L;// any recorded time
+        var window=f.base.rig.store.transaction(f.base.rig.gateway.tenant(),false,tx->tx.enterprise().latestOutcomes(0,now+1,10));
+        assertEquals(List.of(row),window.stream().filter(o->o.operationId().equals(claims.invocationId())).toList());
+        // The reviewed classification is frozen with the intent; a direct rewrite is refused by storage.
+        var intent=f.base.rig.store.transaction(f.base.rig.gateway.tenant(),false,tx->tx.effects().intent(claims.effectId()));
+        assertEquals("SHARED_SQL",intent.fencedTargetClass());assertFalse(intent.authoritativeResponse());
+        assertThrows(Failure.class,()->f.base.rig.store.transaction(f.base.rig.gateway.tenant(),true,tx->{
+            tx.effects().recordIntent(new EffectStore.Intent(intent.effectId(),intent.requestDigest(),intent.argumentsDigest(),
+                intent.profileDigest(),intent.classification(),intent.document(),null,true,intent.recordedAt()));return null;}));
+    }
     @Test void revocationCommittedBeforeConsumptionPreventsAnyTargetAuthority(){
         f.base.rig.graph.remove(Ids.Kind.GRANT,"human");f.base.rig.saveGraph();
         assertThrows(Failure.class,()->consume("billing",OWNER));
@@ -160,7 +187,8 @@ class TargetClaimsTest {
                 this::conflictingTargetEvidenceFencesInsteadOfOverwritingCompletion,
                 this::claimCrashBeforeConsumptionRequiresExactNotStartedWitnessAndNeverGrantsAuthority,
                 this::concurrentReplicasSharingOneIdentityHaveOnlyOneConsumedClaim,
-                this::disabledReviewerCannotQualifyAnAlreadySentFencedGrant))
+                this::disabledReviewerCannotQualifyAnAlreadySentFencedGrant,
+                this::historyAndExportPresentFrozenFencingObservationsAndHonestGrades))
             postgresScenario(FencedTargetClass.SHARED_SQL,scenario);
     }
 

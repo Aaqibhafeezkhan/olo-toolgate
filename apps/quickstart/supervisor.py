@@ -38,6 +38,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import audit_chain
 from enterprise_bootstrap import Refused, execution_binding, prepare, workload_context
 
 DATA = Path('/data')
@@ -191,9 +192,10 @@ def identity_audit(operation, generation, request_id, user='admin'):
     path=DATA/'state/control.sqlite'
     if database_mode() == 'sqlite' and (not path.is_file() or path.is_symlink()): raise ValueError('Identity audit unavailable')
     with Database() as db:
-        db.execute('INSERT INTO control_audit(tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES(?,?,?,?,?,?,?)',
-                   (TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),operation,'local-identity:'+user,generation,request_id,
-                    hashlib.sha256((operation+'\n'+str(generation)).encode()).hexdigest()))
+        # ADR 061: one serialized, chained append to Control's per-tenant audit chain.
+        db.execute('BEGIN IMMEDIATE')
+        audit_chain.append(db,TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),operation,'local-identity:'+user,generation,request_id,
+                           hashlib.sha256((operation+'\n'+str(generation)).encode()).hexdigest(),postgres=db.pg)
         db.commit()
 
 

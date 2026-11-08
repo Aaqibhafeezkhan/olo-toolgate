@@ -19,13 +19,41 @@
     },
     "EnterpriseOutcomeGrade": {
       "type": "string",
-      "description": "Evidence source/limitation, independent of executor-reported state. A response digest is not a business receipt.",
+      "description": "Strongest outcome-bearing source behind an effect, or the weakest source an operation outcome depends on. Authorization consumption and dispatch are never outcome evidence; UNKNOWN means unresolved.",
       "enum": [
-        "REPORTED",
-        "CONTROL_PROVEN",
         "TARGET_CONFIRMED",
-        "REVIEWER_CONFIRMED",
-        "TARGET_DEDUPLICATION_ASSUMED"
+        "BROKER_OBSERVED",
+        "HUMAN_RECONCILED",
+        "CONTROL_PROVEN",
+        "EXECUTOR_REPORTED",
+        "UNKNOWN"
+      ]
+    },
+    "EnterpriseEffectFencing": {
+      "type": "string",
+      "description": "Reviewed target class frozen at the effect's first authorization. FENCED targets consume single-use authority at Control; UNFENCED targets do not.",
+      "enum": [
+        "FENCED",
+        "UNFENCED"
+      ]
+    },
+    "EnterpriseEvidenceObservation": {
+      "type": "string",
+      "description": "Recorded observation source for one effect generation. Only TARGET_OUTCOME, RECONCILER_LOOKUP and, on reviewed authoritative-response routes, BROKER_RESPONSE bear outcomes.",
+      "enum": [
+        "AUTHORIZATION_CONSUMED",
+        "BROKER_RESPONSE",
+        "TARGET_OUTCOME",
+        "RECONCILER_LOOKUP"
+      ]
+    },
+    "EnterpriseExecutionCoverage": {
+      "type": "string",
+      "description": "Whether the effect journal can describe everything consumed authority could do. UNMEDIATED_POSSIBLE means effects outside the journal are unknown.",
+      "enum": [
+        "NO_AUTHORITY_CONSUMED",
+        "MEDIATED_ONLY",
+        "UNMEDIATED_POSSIBLE"
       ]
     },
     "EnterpriseEffectGenerationState": {
@@ -70,6 +98,9 @@
         "grade": {
           "$ref": "operation.schema.json#/$defs/EnterpriseOutcomeGrade"
         },
+        "coverage": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseExecutionCoverage"
+        },
         "journalComplete": {
           "type": "boolean",
           "description": "Whether the bounded Control journal projection is complete; false means unresolved/unsettled counts may be incomplete."
@@ -83,6 +114,16 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
+        },
+        "fencedEffectCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "unfencedEffectCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
         },
         "unresolvedEffectCount": {
           "type": "integer",
@@ -116,9 +157,12 @@
         "state",
         "revision",
         "grade",
+        "coverage",
         "journalComplete",
         "attemptCount",
         "effectCount",
+        "fencedEffectCount",
+        "unfencedEffectCount",
         "unresolvedEffectCount",
         "unsettledAttemptCount",
         "finalized",
@@ -225,6 +269,17 @@
         "grade": {
           "$ref": "operation.schema.json#/$defs/EnterpriseOutcomeGrade"
         },
+        "fencing": {
+          "$ref": "operation.schema.json#/$defs/EnterpriseEffectFencing"
+        },
+        "observations": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 4,
+          "items": {
+            "$ref": "operation.schema.json#/$defs/EnterpriseEvidenceObservation"
+          }
+        },
         "evidenceCount": {
           "type": "integer",
           "minimum": 0,
@@ -242,6 +297,8 @@
         "requestDigest",
         "state",
         "grade",
+        "fencing",
+        "observations",
         "evidenceCount"
       ]
     },
@@ -311,6 +368,32 @@
         "expectedOutcomeRevision",
         "attemptIds",
         "noFurtherEffects"
+      ]
+    },
+    "EnterpriseOperationEvidenceExportPage": {
+      "type": "object",
+      "description": "Bounded tenant export of current derived operation outcomes with grade, coverage and fencing counts. Ordered by operation id; never execution authority.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "operation.schema.json#/$defs/EnterpriseOperationOutcome"
+          }
+        },
+        "next": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "exportedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "exportedAtUnixMs"
       ]
     }
   }

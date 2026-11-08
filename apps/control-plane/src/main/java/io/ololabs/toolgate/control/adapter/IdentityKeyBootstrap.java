@@ -23,7 +23,8 @@ public class IdentityKeyBootstrap {
         try{custody=new TenantIdentityCustody(codec,Path.of(root.get()),forbidden());return custody;}
         catch(Exception invalid){throw new IllegalStateException("Dedicated tenant identity custody required");}
     }
-    private List<java.math.BigInteger> forbidden()throws Exception{
+    /** Every configured custody modulus, including operator approval keys; key domains must not share one. */
+    List<java.math.BigInteger> forbidden()throws Exception{
         var result=new ArrayList<>(nonOperatorModuli());
         var path=config.getOptionalValue("toolgate.control.breakglass.operator-keys-path",String.class);
         if(path.isPresent()){
@@ -38,7 +39,7 @@ public class IdentityKeyBootstrap {
         var result=new ArrayList<java.math.BigInteger>();
         String location=config.getValue("mp.jwt.verify.publickey.location",String.class);
         collect(ProtectedCustody.text(location.startsWith("file:")?Path.of(java.net.URI.create(location)):Path.of(location),16384),result);
-        for(String setting:List.of("toolgate.control.bundle.private-key-path","toolgate.control.fleet.private-key-path","toolgate.control.package-release.private-key-path","toolgate.control.effect.private-key-path")){
+        for(String setting:List.of("toolgate.control.bundle.private-key-path","toolgate.control.fleet.private-key-path","toolgate.control.package-release.private-key-path","toolgate.control.effect.private-key-path","toolgate.control.audit-anchor.private-key-path")){
             var path=config.getOptionalValue(setting,String.class);if(path.isPresent())collect(ProtectedCustody.privateText(Path.of(path.get()),16384),result);
         }
         for(var path:config.getOptionalValue("quarkus.http.ssl.certificate.files",String.class).orElse("").split(","))if(!path.isBlank())collect(ProtectedCustody.text(Path.of(path.trim()),65536),result);

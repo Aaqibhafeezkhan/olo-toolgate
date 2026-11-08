@@ -11,7 +11,9 @@ public interface EffectStore {
     /** False on replay: observing a previous authorization is not permission to dispatch it again. */
     record Authorization(Generation generation,boolean newAuthority) {}
     /** Exact reconstructed request, retained without raw admitted arguments. */
-    record Intent(String effectId,String requestDigest,String argumentsDigest,String profileDigest,String classification,String document,long recordedAt) {}
+    /** fencedTargetClass and authoritativeResponse freeze the reviewed presentation facts at first authorization (ADR 060). */
+    record Intent(String effectId,String requestDigest,String argumentsDigest,String profileDigest,String classification,String document,
+                  String fencedTargetClass,boolean authoritativeResponse,long recordedAt) {}
     default void recordIntent(Intent intent){throw Failure.unavailable();}
     default Intent intent(String effectId){throw Failure.unavailable();}
     record TargetBinding(String effectId,String operationId,String routeId,String profileDigest,String guaranteeDigest,

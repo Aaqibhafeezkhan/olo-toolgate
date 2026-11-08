@@ -73,7 +73,9 @@ CREATE TABLE control_attempt_snapshots (
  FOREIGN KEY(tenant_id,operation_id,attempt_id) REFERENCES control_operation_attempts(tenant_id,operation_id,attempt_id)
 );
 -- statement
-CREATE TABLE control_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,actor_id TEXT NOT NULL,operation TEXT NOT NULL,target TEXT NOT NULL,revision INTEGER NOT NULL,request_id TEXT NOT NULL,request_digest TEXT NOT NULL,evidence TEXT CHECK(evidence IS NULL OR length(CAST(evidence AS BLOB))<=4096),occurred_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ','now')));
+CREATE TABLE control_audit(sequence INTEGER PRIMARY KEY AUTOINCREMENT,tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,chain_index INTEGER NOT NULL CHECK(chain_index>=1),previous_digest TEXT NOT NULL CHECK(length(previous_digest)=64 AND previous_digest NOT GLOB '*[^0-9a-f]*' AND (chain_index>1 OR previous_digest='0000000000000000000000000000000000000000000000000000000000000000')),actor_id TEXT NOT NULL,operation TEXT NOT NULL,target TEXT NOT NULL,revision INTEGER NOT NULL,request_id TEXT NOT NULL,request_digest TEXT NOT NULL,evidence TEXT CHECK(evidence IS NULL OR length(CAST(evidence AS BLOB))<=4096),occurred_at TEXT NOT NULL,row_digest TEXT NOT NULL CHECK(length(row_digest)=64 AND row_digest NOT GLOB '*[^0-9a-f]*'),UNIQUE(tenant_id,chain_index));
+-- statement
+CREATE TABLE control_audit_anchors(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,chain_index INTEGER NOT NULL CHECK(chain_index>=1),head_digest TEXT NOT NULL CHECK(length(head_digest)=64 AND head_digest NOT GLOB '*[^0-9a-f]*'),key_id TEXT NOT NULL CHECK(length(key_id) BETWEEN 1 AND 128),issued_at_unix_ms INTEGER NOT NULL CHECK(issued_at_unix_ms BETWEEN 0 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=1024),signature TEXT NOT NULL CHECK(length(signature) BETWEEN 1 AND 1024),sink TEXT NOT NULL CHECK(length(sink) BETWEEN 1 AND 64),location TEXT NOT NULL CHECK(length(location) BETWEEN 1 AND 512),content_sha256 TEXT NOT NULL CHECK(length(content_sha256)=64 AND content_sha256 NOT GLOB '*[^0-9a-f]*'),recorded_at TEXT NOT NULL DEFAULT(strftime('%Y-%m-%dT%H:%M:%fZ','now')),PRIMARY KEY(tenant_id,chain_index));
 -- statement
 CREATE TABLE control_authorization_outbox(tenant_id varchar(128) REFERENCES control_tenants(tenant_id) NOT NULL,revision bigint NOT NULL,authorization_epoch bigint NOT NULL,occurred_at bigint NOT NULL,published_at bigint,PRIMARY KEY(tenant_id,revision));
 -- statement
@@ -183,6 +185,8 @@ CREATE TABLE control_effect_intents(
  profile_digest TEXT NOT NULL CHECK(length(profile_digest)=71 AND substr(profile_digest,1,7)='sha256:' AND substr(profile_digest,8) NOT GLOB '*[^a-f0-9]*'),
  classification TEXT NOT NULL CHECK(classification IN('READ','WRITE','DESTRUCTIVE','FINANCIAL')),
  document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=1048576 AND json_valid(document) AND json_type(document)='object'),
+ fenced_target_class TEXT CHECK(fenced_target_class IS NULL OR fenced_target_class IN('SHARED_SQL','SQL_WITH_EXTERNAL_ACTION')),
+ authoritative_response INTEGER NOT NULL CHECK(authoritative_response IN(0,1)),
  recorded_at INTEGER NOT NULL CHECK(recorded_at BETWEEN 0 AND 9007199254740991),
  PRIMARY KEY(tenant_id,effect_id),
  FOREIGN KEY(tenant_id,effect_id) REFERENCES control_effects(tenant_id,effect_id)
@@ -721,11 +725,17 @@ CREATE TRIGGER control_attempt_snapshots_immutable_delete BEFORE DELETE ON contr
 -- statement
 CREATE TRIGGER control_attempt_snapshots_immutable_update BEFORE UPDATE ON control_attempt_snapshots BEGIN SELECT RAISE(ABORT,'attempt journal is immutable'); END;
 -- statement
+CREATE TRIGGER control_audit_chain BEFORE INSERT ON control_audit WHEN NEW.chain_index IS NOT COALESCE((SELECT max(chain_index) FROM control_audit WHERE tenant_id=NEW.tenant_id),0)+1 OR NEW.previous_digest IS NOT COALESCE((SELECT row_digest FROM control_audit WHERE tenant_id=NEW.tenant_id ORDER BY chain_index DESC LIMIT 1),'0000000000000000000000000000000000000000000000000000000000000000') BEGIN SELECT RAISE(ABORT,'audit chain link mismatch'); END;
+-- statement
 CREATE TRIGGER control_audit_delete BEFORE DELETE ON control_audit BEGIN SELECT RAISE(ABORT,'append-only local state'); END;
 -- statement
 CREATE TRIGGER control_audit_tenant_immutable BEFORE UPDATE OF tenant_id ON control_audit WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 -- statement
 CREATE TRIGGER control_audit_update BEFORE UPDATE ON control_audit BEGIN SELECT RAISE(ABORT,'append-only local state'); END;
+-- statement
+CREATE TRIGGER control_audit_anchors_delete BEFORE DELETE ON control_audit_anchors BEGIN SELECT RAISE(ABORT,'append-only local state'); END;
+-- statement
+CREATE TRIGGER control_audit_anchors_update BEFORE UPDATE ON control_audit_anchors BEGIN SELECT RAISE(ABORT,'append-only local state'); END;
 -- statement
 CREATE TRIGGER control_authorization_outbox_tenant_immutable BEFORE UPDATE OF tenant_id ON control_authorization_outbox WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 -- statement
@@ -1926,6 +1936,21 @@ END;
 -- statement
 CREATE TRIGGER control_triggers_capacity_update AFTER UPDATE ON control_triggers BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_audit_anchors_capacity_insert AFTER INSERT ON control_audit_anchors BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.signature AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_audit_anchors_capacity_delete AFTER DELETE ON control_audit_anchors BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.signature AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_audit_anchors_capacity_update AFTER UPDATE ON control_audit_anchors BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.signature AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.signature AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- END TENANT CAPACITY

@@ -33,6 +33,7 @@ TRACKED={
  'control_invocation_results':(['payload'],None),
  'control_policy_bundles':(['document','policy'],None),
  'control_triggers':(['document'],None),
+ 'control_audit_anchors':(['document','signature'],None),
 }
 
 def expression(row,fields,queued,postgres):

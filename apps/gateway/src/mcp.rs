@@ -935,8 +935,9 @@ mod tests {
     #[test]
     fn operation_metadata_overrides_worker_forgery_and_unknown_is_an_error() {
         let operation = serde_json::from_value::<olo_toolgate_contracts::EnterpriseOperationOutcome>(json!({
-            "operationId":"op-1","state":"OUTCOME_UNKNOWN","revision":3,"grade":"REPORTED",
-            "journalComplete":true,"attemptCount":1,"effectCount":1,
+            "operationId":"op-1","state":"OUTCOME_UNKNOWN","revision":3,"grade":"UNKNOWN",
+            "coverage":"UNMEDIATED_POSSIBLE","journalComplete":true,"attemptCount":1,"effectCount":1,
+            "fencedEffectCount":0,"unfencedEffectCount":1,
             "unresolvedEffectCount":1,"unsettledAttemptCount":1,
             "finalized":false,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
         })).unwrap();
@@ -963,7 +964,8 @@ mod tests {
     fn verified_success_preserves_reported_error_and_other_metadata() {
         let operation = serde_json::from_value::<olo_toolgate_contracts::EnterpriseOperationOutcome>(json!({
             "operationId":"op-1","state":"SUCCEEDED","revision":3,"grade":"TARGET_CONFIRMED",
-            "journalComplete":true,"attemptCount":1,"effectCount":1,
+            "coverage":"MEDIATED_ONLY","journalComplete":true,"attemptCount":1,"effectCount":1,
+            "fencedEffectCount":1,"unfencedEffectCount":0,
             "unresolvedEffectCount":0,"unsettledAttemptCount":0,
             "finalized":true,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
         })).unwrap();

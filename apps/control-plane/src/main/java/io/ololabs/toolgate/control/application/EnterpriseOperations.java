@@ -568,6 +568,26 @@ public final class EnterpriseOperations {
                 i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),
                 i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation(),outcome);
     }
+    /** ADR 060 attempt grade: never authority consumed or Control settlement proof beats an executor report. */
+    static EnterpriseOutcomeGrade attemptGrade(boolean reviewed,boolean consumed,boolean settled,String reported){
+        if(reviewed)return EnterpriseOutcomeGrade.HUMAN_RECONCILED;
+        if(!consumed)return EnterpriseOutcomeGrade.CONTROL_PROVEN;
+        if(Set.of("SUCCEEDED","FAILED").contains(reported))return EnterpriseOutcomeGrade.EXECUTOR_REPORTED;
+        return settled?EnterpriseOutcomeGrade.CONTROL_PROVEN:EnterpriseOutcomeGrade.UNKNOWN;
+    }
+    /** ADR 060 export: readable operations only, each re-derived now; presentation, never authority. */
+    public Store.Reply evidenceExport(DirectoryService.Actor actor,String after,int limit){
+        if(actor.userId()==null||limit<1||limit>100)throw Failure.validation();if(after!=null)Ids.valid(after);
+        return store.transaction(actor.tenant(),true,tx->{long time=now(tx);String cursor=after==null?"":after;
+            var values=new ArrayList<EnterpriseOperationOutcome>();boolean more=false;
+            for(int scan=0;scan<100;scan++){var rows=tx.enterprise().invocations(cursor,100);if(rows.isEmpty())break;
+                for(var i:rows){cursor=i.id();
+                    try{scope(tx,actor.userId(),i,"read",time);}catch(Failure denied){if(denied.status()!=403)throw denied;continue;}
+                    values.add(new OperationFinalizer(codec).refresh(tx,i.id(),time));
+                    if(values.size()==limit){more=true;break;}}
+                if(more||rows.size()<100)break;}
+            return reply(new EnterpriseOperationEvidenceExportPage(values,more?cursor:null,time),tx.load().revision());});
+    }
     /** Authorized, bounded metadata. A cursor is pinned to one derived evidence revision. */
     public Store.Reply history(DirectoryService.Actor actor,String id,String cursor,int limit){
         historyPageInput(cursor,limit);
@@ -598,7 +618,7 @@ public final class EnterpriseOperations {
                 entries.add(new EnterpriseAttemptHistory(a.id(),(long)n+1,EnterpriseInvocationState.valueOf(reported),
                         a.consumedAt()!=null,a.issuedAt(),a.expiresAt(),a.evidenceCount(),scope,seal!=null,
                         seal==null?0L:(long)seal.effectCount(),seal==null?null:seal.digest(),settlement!=null||reviewed!=null,
-                        reviewed!=null?EnterpriseOutcomeGrade.REVIEWER_CONFIRMED:settlement==null||Set.of("SUCCEEDED","FAILED").contains(reported)?EnterpriseOutcomeGrade.REPORTED:EnterpriseOutcomeGrade.CONTROL_PROVEN));
+                        attemptGrade(reviewed!=null,a.consumedAt()!=null,settlement!=null,reported)));
             }
             int nextOffset=Math.addExact(offset,limit);
             var rows=tx.enterprise().effectHistory(i.id(),offset,Math.addExact(limit,1));

@@ -73,6 +73,26 @@ Do not bypass these checks to make a deployment ready.
 
 See [current ASK approval behavior](approvals.md) and the [security model](../security/enterprise-access-control.md) before configuring reviewer authority.
 
+## Signed audit anchors
+
+Each tenant's Control audit rows form a hash chain ([ADR 061](../adr/061-tenant-audit-hash-chains.md)).
+To sign and externally anchor chain heads ([ADR 062](../adr/062-signed-audit-anchors.md)), set
+`toolgate.control.audit-anchor.enabled=true` with:
+
+| Setting | Value |
+|---|---|
+| `toolgate.control.audit-anchor.private-key-path` | Protected PKCS#8 RSA 3072/4096-bit key used only for anchors. |
+| `toolgate.control.audit-anchor.key-id` | Its id; it must be the single `ACTIVE` key of the keyring. |
+| `toolgate.control.audit-anchor.keyring-path` | Pinned `AUDIT_ANCHOR` public keyring with key states and validity windows. |
+| `toolgate.control.audit-anchor.sink-directory` | Existing append-only directory on a separately administered mount. |
+| `toolgate.control.audit-anchor.interval-seconds` | Anchoring period, 10–86400 (default 300). |
+
+Startup fails closed when anchoring is enabled and the key is missing, weak, not the pinned active
+key, or shares a modulus with any other Control custody domain. Rotate by publishing a keyring that
+marks the old key `RETIRED` with `retiredAtUnixMs` and adds the new `ACTIVE` key, then switch the
+private key and id. Mark a compromised key `REVOKED`. Keep every keyring version with the anchors.
+Helm chart wiring for these settings is not yet provided.
+
 ## Optional shared cache
 
 For optional external Redis/Valkey directory caching, including environment variables,
