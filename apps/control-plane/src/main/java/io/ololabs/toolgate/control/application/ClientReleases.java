@@ -110,7 +110,9 @@ public final class ClientReleases {
         if (supported.isEmpty() && triggers.isEmpty()) throw incompatible("No export of this package can run on a client device");
 
         var image = push(packageId, version, jar, python);
-        var runtime = JSON.objectNode().put("id", runtimeId).put("kind", python ? "PYTHON_SDK" : "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
+        // Each release owns its runtime: a device merges every assigned release and refuses a runtime id two packages share.
+        String releaseRuntimeId = releaseRuntimeId(runtimeId, packageId);
+        var runtime = JSON.objectNode().put("id", releaseRuntimeId).put("kind", python ? "PYTHON_SDK" : "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
         var document = JSON.objectNode().put("formatVersion", 1).put("packageId", packageId).put("version", version);
         var platforms = document.putArray("platforms"); settings.platforms().forEach(platforms::add);
         var architectures = document.putArray("architectures"); image.architectures().forEach(architectures::add);
@@ -119,7 +121,7 @@ public final class ClientReleases {
         var tools = document.putArray("tools"); var tests = document.putArray("selfTests"); var records = new ArrayList<ObjectNode[]>();
         for (var tool : supported) {
             var d = tool.path("descriptor"); String toolId = d.path("toolId").asText(); var authorization = PackageAuthorization.of(d);
-            var registration = JSON.objectNode().put("toolId", toolId).put("action", authorization.action()).put("runtimeId", runtimeId)
+            var registration = JSON.objectNode().put("toolId", toolId).put("action", authorization.action()).put("runtimeId", releaseRuntimeId)
                 .put("entryPoint", "/opt/tool/" + packageId + "/" + filename);
             registration.set("inputSchema", d.get("inputSchema")); registration.set("outputSchema", d.get("outputSchema"));
             // The device brokers its files area only as the signed registration grants (ADR 027).
@@ -159,7 +161,7 @@ public final class ClientReleases {
                 boolean reads = false;
                 for (var permission : d.path("permissions")) reads |= permission.asText().equals("DEVICE_FILES_READ");
                 registrations.addObject().put("triggerId", d.path("triggerId").asText())
-                    .put("triggerDescriptorDigest", trigger.path("triggerDescriptorDigest").asText()).put("runtimeId", runtimeId)
+                    .put("triggerDescriptorDigest", trigger.path("triggerDescriptorDigest").asText()).put("runtimeId", releaseRuntimeId)
                     .put("entryPoint", "/opt/tool/" + packageId + "/" + filename).put("fileAccess", reads ? "READ" : "NONE");
             }
         }
@@ -190,6 +192,11 @@ public final class ClientReleases {
     }
 
     /** A trigger export a device can run: declared for clients, on the SDK runtime and entry point of this release. */
+    /** The release's runtime id: the SDK runtime scoped to its package ({@code jvm:examples.hotfolder}), at most 128 characters. */
+    public static String releaseRuntimeId(String sdkRuntimeId, String packageId) {
+        String scoped = sdkRuntimeId + ":" + packageId;
+        return scoped.length() <= 128 ? scoped : sdkRuntimeId + ":" + DirectoryService.digest(packageId).substring(0, 64);
+    }
     private static boolean clientTrigger(JsonNode trigger, String runtimeId) {
         boolean client = false;
         for (var executor : trigger.path("descriptor").path("executors")) client |= executor.asText().equals("CLIENT");

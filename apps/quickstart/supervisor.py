@@ -379,6 +379,14 @@ def dependencies_ready():
         return False
 
 
+# Control resources that accept a management session only over direct TLS (their actor() calls tls()).
+DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/', '/api/control/v1/triggers/')
+
+
+def direct_tls(path):
+    return path.startswith(DIRECT_TLS_PREFIXES)
+
+
 def origin_target(value):
     """Only origin-form targets may reach the fixed loopback upstream."""
     if not isinstance(value, str) or not value.startswith('/') or value.startswith('//') or any(ord(c)<32 or ord(c)==127 for c in value) or '\\' in value:
@@ -912,7 +920,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if mcp_http or path.startswith(('/console/', '/api/control/v1/', '/api/public/v1/clients', '/api/public/v1/installers')) or path in ('/','/console'):
                 # Direct TLS adapter is used for enrollment administration; device peers use :8443 itself.
                 # A Marketplace import fetches and verifies the package in Control (60 s per request), so it waits longer.
-                secure = path.startswith(('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/'))
+                secure = direct_tls(path)
                 client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 75 if path=='/api/control/v1/marketplace/imports' else 10)
                 forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent','toolgate-tenant-id'}
                 if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))

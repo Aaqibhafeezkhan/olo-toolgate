@@ -35,16 +35,17 @@ def device(command):
 
 
 def running(config, timeout=300):
-    deadline = time.monotonic() + timeout
+    deadline, last = time.monotonic() + timeout, 'no response'
     while time.monotonic() < deadline:
         try:
             items = config.api('/api/control/v1/triggers/instances?assignment=' + ta.ASSIGNMENT)['items']
             if any(item.get('phase') == 'Running' for item in items):
                 return items
-        except ValueError:
-            pass
+            last = json.dumps([{key: item.get(key) for key in ('phase', 'conditions')} for item in items])[:2000]
+        except ValueError as failure:
+            last = str(failure)
         time.sleep(5)
-    raise ValueError('The profile assignment hotfolder-inbox has no Running instance; inspect the device report and Control logs')
+    raise ValueError('The profile assignment hotfolder-inbox has no Running instance; last observation: ' + last)
 
 
 def main():
@@ -73,7 +74,9 @@ def main():
 
     name = 'e2e-' + secrets.token_hex(4) + '.txt'
     text = 'hot folder end to end ' + name
-    device(f"printf '%s' '{text}' > {FOLDER}/inbox/{name}")
+    # The files area is owner-only custody (docs/client/hotfolder.md): a group- or world-readable entry fails the whole
+    # inventory closed, so the dropped file is created owner-only, as a user's copy into the area must be.
+    device(f"umask 077 && printf '%s' '{text}' > {FOLDER}/inbox/{name}")
     print('Dropped inbox/' + name, flush=True)
     shown, outcomes = [], []
     graph = ta.build_graph(ta.gateway_call(gateway, (mimic.UnconfirmedOperation,)), lambda path, content: shown.append((path, content)))
