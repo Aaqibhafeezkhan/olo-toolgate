@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package io.ololabs.toolgate.control.adapter;
 
-import io.ololabs.toolgate.control.application.*;
+import io.ololabs.toolgate.control.application.Failure;
+import io.ololabs.toolgate.control.application.Store;
+import io.ololabs.toolgate.control.application.TriggerService;
 import io.ololabs.toolgate.contracts.ErrorCode;
 import io.smallrye.common.annotation.Blocking;
 import io.vertx.ext.web.RoutingContext;
@@ -12,11 +14,9 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 
 /**
- * The device's trigger routes (plan 8.1), authenticated by the device certificate over direct TLS.
- * <p>
- * They have their own root resource: JAX-RS selects the root class by the longest literal {@code @Path} before it
- * matches methods, so under {@code /api/control/v1} they were shadowed by {@link EndpointResource}
- * ({@code /api/control/v1/endpoint}) and every device got 404.
+ * The device's trigger desired-state and descriptor routes (plan 8.1), authenticated by the direct TLS peer.
+ * They have their own class-level path: under {@link EndpointResource}'s more specific
+ * {@code /api/control/v1/endpoint} a {@code /api/control/v1} class never receives these requests.
  */
 @Path("/api/control/v1/endpoint/triggers") @Produces("application/json") @Blocking @PermitAll
 public class EndpointTriggerResource {

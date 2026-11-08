@@ -12,8 +12,8 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 
 /**
- * Trigger admin routes (plan 10.2). The device's routes are in {@link EndpointTriggerResource}. Every reply carries the
- * resource's ETag and {@code Cache-Control: no-store}.
+ * Trigger admin routes (plan 10.2). Every reply carries the resource's ETag and {@code Cache-Control: no-store}. The
+ * device's routes under {@code endpoint/triggers} live in {@link EndpointTriggerResource}.
  */
 @Path("/api/control/v1") @Produces("application/json") @Blocking @PermitAll
 public class TriggerResource {
