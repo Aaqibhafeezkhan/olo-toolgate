@@ -22,6 +22,27 @@ For work implementing or fixing issue #230 and its attached execution plan:
 
 Follow `CONTRIBUTING.md` and the component's verification requirements as well.
 
+## Issue #274: Triggers progress
+
+For work implementing issue #274 (server and client triggers):
+
+- `docs/architecture/triggers-implementation-status.md` is the authoritative live progress document. The design is
+  `docs/architecture/device-triggers-plan.md`; its section 24.2 defines the modules, weights and *Done when* criteria.
+- One branch and one PR per module: branch `feature/triggers-m<NN>-<slug>` from the latest `main`, PR back to `main`.
+  Modules on independent tracks (plan section 24.5) may have PRs open at the same time. Exception (plan 24.6):
+  modules 5, 10, 11 and 12 and an end-to-end demo are delivered in one PR, each module still meeting its own
+  *Done when*.
+- Within a module, iterate on small changes and focused tests without intermediate commits. When the module meets
+  its *Done when*, run its full verification (module tests on SQLite and PostgreSQL where relevant, cross-tenant
+  negatives, contract regeneration checks, the component gates from `CONTRIBUTING.md`, and the M12 scenarios it
+  owns), fix failures, then make one commit with code, tests, docs and the progress update, and open the PR.
+- Every PR description contains the module progress table from the status document, with this module shown as
+  "In this PR" and the overall percentage before and after merge. A module earns its weight only when merged.
+- Record only checks actually run, with their results. Record scope or weight changes explicitly under *Baseline
+  changes*; never change the denominator silently. Do not invent the SHA of the commit being created.
+- Triggers are unreleased: plan section 0 forbids backward compatibility, database migrations and legacy code. The
+  fresh-build constraint below applies to #274 as well.
+
 ## Fresh breaking-build constraint
 
 For issue #230, current and future implementation uses current contracts and

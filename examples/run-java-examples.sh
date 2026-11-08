@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Builds, tests and packs every Java example tool (java-tools and mocked-tools) against the SDK in this checkout, then
-# proves each package's fat jar lists its tools with `java -jar` and an empty environment, as a device runs it. Needs a
-# JDK and cargo.
+# proves each package's fat jar lists its tools with `java -jar` and an empty environment, as a device runs it, or, for
+# a package of triggers alone, starts and stops its trigger in trigger mode. Needs a JDK and cargo.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
@@ -35,6 +35,20 @@ for package in "$here"/java-tools/*/build/toolgate/*.tgpkg "$here"/mocked-tools/
     dev="$(dirname "$package")/../../toolgate.dev.example.json"
     (cd "$out/$name" && echo "$request" | env -i TOOLGATE_MODE=development "TOOLGATE_DEV_JSON=$dev" "$java" -jar artifacts/tool.jar \
       >"$out/$name.txt" 2>"$out/$name.log") || true
+  fi
+  if (cd "$out/$name" && jar xf "$package" toolgate-package.json && grep -q '"tools":\[\]' toolgate-package.json && grep -q '"triggers":\[' toolgate-package.json); then
+    # A package of triggers alone has no MCP tools; prove the jar runs its first trigger in trigger mode instead (ADR 058).
+    trigger="$(grep -o '"triggerId":"[^"]*"' "$out/$name/toolgate-package.json" | head -1 | cut -d'"' -f4)"
+    target=SERVER; grep -q '"kind":"CLIENT_TRIGGER"' "$out/$name/toolgate-package.json" && target=CLIENT
+    config="$(dirname "$package")/../../trigger-config.example.json"
+    start="{\"kind\":\"TRIGGER_START\",\"triggerId\":\"$trigger\",\"instanceId\":\"examples\",\"configRevision\":1,\"leaseEpoch\":1,\"config\":$(cat "$config")}"
+    (cd "$out/$name" && printf '%s\n%s\n' "$start" '{"kind":"STOP","reason":"Examples","graceMs":100}' \
+      | env -i TOOLGATE_PROTOCOL=2 TOOLGATE_EXECUTION_MODE=TRIGGER "TOOLGATE_EXECUTION_TARGET=$target" "$java" -jar artifacts/tool.jar \
+      >"$out/$name.txt" 2>"$out/$name.log") || true
+    grep -q '"kind":"READY"' "$out/$name.txt" && grep -q '"kind":"EXIT"' "$out/$name.txt" \
+      || { echo "examples: $name did not run its trigger"; cat "$out/$name.txt" "$out/$name.log"; exit 1; }
+    count=$((count + 1))
+    continue
   fi
   if grep -q 'CLIENT_TOOLS_UNAVAILABLE' "$out/$name.txt" "$out/$name.log"; then
     # Only devices broker ClientTools (ADR 027), so a package of ClientTools alone refuses to run standalone; its

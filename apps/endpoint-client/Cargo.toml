@@ -13,6 +13,7 @@ olo-toolgate-tenant-identity.workspace = true
 axum.workspace = true
 subtle.workspace = true
 olo-toolgate-contracts.workspace = true
+olo-toolgate-trigger-supervisor.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

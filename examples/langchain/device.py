@@ -13,6 +13,9 @@ def configure(path):
     state = Path(settings['stateDirectory'])
     folder = state / 'hotfolder'
     folder.mkdir(mode=0o700, exist_ok=True)
+    # The hot-folder trigger watches inbox/; its agent files each dropped file in processed/.
+    for sub in ('inbox', 'processed'):
+        (folder / sub).mkdir(mode=0o700, exist_ok=True)
     # Seed only missing, fictional inputs. Existing inputs and generated reports are preserved.
     for fixture in FIXTURES.iterdir():
         target = folder / fixture.name

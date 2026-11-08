@@ -419,6 +419,8 @@ pub struct ControlAgentGroup {
     pub revision: u64,
     pub agent_ids: Vec<String>,
     pub role_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_clearance: Option<ControlDataClearance>,
 }
 /// Bounded canonical directory cursor page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -505,6 +507,18 @@ pub enum ControlChangeKind {
     Update,
     #[serde(rename = "DELETE")]
     Delete,
+}
+/// Canonical ControlDataClearance wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ControlDataClearance {
+    #[serde(rename = "PUBLIC")]
+    Public,
+    #[serde(rename = "INTERNAL")]
+    Internal,
+    #[serde(rename = "CONFIDENTIAL")]
+    Confidential,
+    #[serde(rename = "RESTRICTED")]
+    Restricted,
 }
 /// Delegated human operation requires grant and delegation through this same Team and capability through this same Agent Group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -883,6 +897,8 @@ pub struct ControlTeam {
     pub revision: u64,
     pub user_ids: Vec<String>,
     pub role_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_clearance: Option<ControlDataClearance>,
 }
 /// Cursor page; nextCursor is absent after the last item.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1128,6 +1144,8 @@ pub struct EndpointCheckIn {
     pub adoption_digest: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_tools: Option<Vec<LocalToolInfo>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<v2::TriggerSync>,
 }
 /// Endpoint identity foundation wire model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1145,6 +1163,8 @@ pub struct EndpointCheckInAck {
     pub task: Option<RemoteToolTask>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<v2::TriggerSyncAck>,
 }
 /// Canonical EndpointConnectionAction wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2463,7 +2483,7 @@ pub struct FleetDesiredSnapshot {
     pub generation: u64,
     pub assignments: Vec<FleetAssignment>,
 }
-/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
+/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. A package carries at least one tool or trigger.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetPackageDocument {
@@ -2476,6 +2496,8 @@ pub struct FleetPackageDocument {
     pub runtimes: Vec<ManagedRuntime>,
     pub tools: Vec<LocalToolRegistration>,
     pub self_tests: Vec<FleetSelfTest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub triggers: Option<Vec<FleetTriggerRegistration>>,
 }
 /// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2561,7 +2583,7 @@ pub struct FleetSelfTest {
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
     pub expected_output: std::collections::BTreeMap<String, serde_json::Value>,
 }
-/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission.
+/// Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetSignatureHeader {
@@ -2574,6 +2596,16 @@ pub struct FleetSignatureHeader {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetSignedDocument {
     pub jws: String,
+}
+/// A trigger export of a released package (ADR 058): how a device runs it. The device fetches the full descriptor by digest and checks it against this signed digest and the signed desired document.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct FleetTriggerRegistration {
+    pub trigger_id: String,
+    pub trigger_descriptor_digest: String,
+    pub runtime_id: String,
+    pub entry_point: String,
+    pub file_access: LocalFileAccess,
 }
 /// Explicit RSA public trust key; no private material or implicit domain sharing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3481,5 +3513,9 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/settings.schema.json",
         include_str!("../schemas/v2/settings.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/trigger.schema.json",
+        include_str!("../schemas/v2/trigger.schema.json"),
     ),
 ];

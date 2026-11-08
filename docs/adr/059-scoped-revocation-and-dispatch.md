@@ -1,5 +1,5 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# ADR 058: Scoped revocation, delivery and authenticated dispatch
+# ADR 059: Scoped revocation, delivery and authenticated dispatch
 
 **Status:** In implementation for S22; no stage or phase acceptance.
 

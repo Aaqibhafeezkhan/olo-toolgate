@@ -31,10 +31,36 @@
         "toolGroupId"
       ]
     },
+    "ProfileTrigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment.",
+      "properties": {
+        "assignment": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "config": {
+          "type": "object",
+          "description": "Validated against the trigger's signed configSchema; at most 8 KiB.",
+          "x-toolgate-max-bytes": 8192
+        },
+        "desiredState": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDesiredState"
+        }
+      },
+      "required": [
+        "assignment",
+        "triggerId",
+        "config"
+      ]
+    },
     "ProfilePackage": {
       "type": "object",
       "additionalProperties": false,
-      "description": "One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.",
+      "description": "One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups.",
       "properties": {
         "packageId": {
           "$ref": "identifiers.schema.json#/$defs/PackageId"
@@ -81,6 +107,14 @@
           "items": {
             "$ref": "identifiers.schema.json#/$defs/Identifier"
           },
+          "maxItems": 16
+        },
+        "triggers": {
+          "type": "array",
+          "items": {
+            "$ref": "profile.schema.json#/$defs/ProfileTrigger"
+          },
+          "minItems": 1,
           "maxItems": 16
         }
       },
@@ -168,9 +202,10 @@
         "RELEASE",
         "ROLLOUT",
         "ACTIVATE",
+        "ASSIGN",
         "DONE"
       ],
-      "description": "The step a package reached; DONE once imported, deployed or released to devices, rolled out and activated."
+      "description": "The step a package reached; DONE once imported, deployed or released to devices, rolled out, activated and its trigger assignments applied."
     },
     "ProvisioningPackageStatus": {
       "type": "object",
@@ -229,6 +264,14 @@
         },
         "globalsDigest": {
           "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "triggerAssignments": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+          },
+          "maxItems": 16,
+          "description": "Trigger assignments the profile applied for this package."
         }
       },
       "required": [

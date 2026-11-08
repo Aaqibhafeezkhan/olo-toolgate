@@ -30,6 +30,7 @@ pub mod storage;
 pub mod tool_gateway;
 pub mod trace;
 pub mod transport;
+pub mod triggers;
 
 /// Fixed, redacted failures; underlying TLS/key/OS error strings never cross IPC or logs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

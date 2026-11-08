@@ -85,7 +85,8 @@ public final class DescriptorProcessor extends AbstractProcessor {
 
     private static final List<Class<? extends Annotation>> ANNOTATIONS = List.of(ToolPackage.class, ServerTool.class,
             ClientTool.class, io.ololabs.toolgate.sdk.annotations.DeviceFileAccess.class, io.ololabs.toolgate.sdk.annotations.Authorization.class, Destination.class, HttpAuth.class, HttpRoute.class,
-            TcpDestination.class);
+            TcpDestination.class, io.ololabs.toolgate.sdk.annotations.ServerTrigger.class, io.ololabs.toolgate.sdk.annotations.ClientTrigger.class,
+            io.ololabs.toolgate.sdk.annotations.TriggerExample.class);
 
     private boolean done;
     private boolean failed;
@@ -110,7 +111,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
         if (done || round.processingOver()) return false;
         Set<Element> roots = new LinkedHashSet<>();
         for (Class<? extends Annotation> a : ANNOTATIONS) roots.addAll(round.getElementsAnnotatedWithAny(Set.of(a)));
-        for (String container : List.of("Destinations", "HttpAuths", "HttpRoutes", "TcpDestinations")) {
+        for (String container : List.of("Destinations", "HttpAuths", "HttpRoutes", "TcpDestinations", "TriggerExamples")) {
             TypeElement c = processingEnv.getElementUtils().getTypeElement("io.ololabs.toolgate.sdk.annotations." + container);
             roots.addAll(round.getElementsAnnotatedWith(c));
         }
@@ -146,6 +147,7 @@ public final class DescriptorProcessor extends AbstractProcessor {
         private final Map<String, Declared<HttpRoute>> routes = new TreeMap<>();
         private final Map<String, Declared<TcpDestination>> tcps = new TreeMap<>();
         private final Map<String, ExecutableElement> tools = new TreeMap<>();
+        private final Map<String, Triggers.Export> triggers = new TreeMap<>();
         private final Map<String, String> reconcilers = new HashMap<>();
         private TypeElement packageType;
         private ToolPackage pkg;
@@ -161,6 +163,24 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 guard(() -> register((ExecutableElement) e));
             }
             for (Element e : round.getElementsAnnotatedWith(Reconcile.class)) guard(() -> reconciler((ExecutableElement) e));
+            Triggers exports = new Triggers(processingEnv);
+            for (Element e : round.getElementsAnnotatedWithAny(Set.of(io.ololabs.toolgate.sdk.annotations.ServerTrigger.class,
+                    io.ololabs.toolgate.sdk.annotations.ClientTrigger.class))) {
+                guard(() -> {
+                    ExecutableElement method = (ExecutableElement) e;
+                    if (toolName(method) != null) throw new Problem(method, "a method is a tool handler or a trigger, not both");
+                    Triggers.Export export = exports.export(pkg.id(), method);
+                    // plan 5.8: trigger names share the package export namespace with tools.
+                    if (tools.containsKey(export.name())) throw new Problem(method, "trigger " + export.name() + " has the name of a tool; tools and triggers share one namespace");
+                    if (triggers.put(export.name(), export) != null) throw new Problem(method, "trigger " + export.name() + " is declared twice");
+                });
+            }
+            for (Element e : round.getElementsAnnotatedWithAny(Set.of(io.ololabs.toolgate.sdk.annotations.TriggerExample.class,
+                    io.ololabs.toolgate.sdk.annotations.TriggerExamples.class))) {
+                guard(() -> {
+                    if (Triggers.name((ExecutableElement) e) == null) throw new Problem(e, "@TriggerExample belongs on a @ServerTrigger or @ClientTrigger method");
+                });
+            }
             for (Element e : round.getElementsAnnotatedWith(io.ololabs.toolgate.sdk.annotations.Training.class)) {
                 guard(() -> {
                     if (toolName((ExecutableElement) e) == null) throw new Problem(e, "@Training belongs on a @ServerTool or @ClientTool handler");
@@ -283,7 +303,8 @@ public final class DescriptorProcessor extends AbstractProcessor {
             Set<? extends Element> declared = round.getElementsAnnotatedWith(ToolPackage.class);
             if (declared.size() != 1) {
                 Element at = declared.isEmpty()
-                        ? round.getElementsAnnotatedWithAny(Set.of(ServerTool.class, ClientTool.class)).stream().findFirst().orElse(null)
+                        ? round.getElementsAnnotatedWithAny(Set.of(ServerTool.class, ClientTool.class, io.ololabs.toolgate.sdk.annotations.ServerTrigger.class,
+                                io.ololabs.toolgate.sdk.annotations.ClientTrigger.class)).stream().findFirst().orElse(null)
                         : declared.iterator().next();
                 throw new Problem(at, "exactly one @ToolPackage is required per package; found " + declared.size());
             }
@@ -903,6 +924,19 @@ public final class DescriptorProcessor extends AbstractProcessor {
                 manifest.put("publisher", pkg.publisher());
                 if (!pkg.description().isEmpty()) manifest.put("description", pkg.description());
                 manifest.put("tools", index);
+                List<Object> triggerIndex = new ArrayList<>();
+                for (Triggers.Export t : triggers.values()) {
+                    byte[] bytes = Jcs.bytes(t.descriptor());
+                    try (OutputStream out = processingEnv.getFiler()
+                            .createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/toolgate/triggers/" + t.name() + ".json", packageType)
+                            .openOutputStream()) {
+                        out.write(bytes);
+                    }
+                    Map<String, Object> entry = new LinkedHashMap<>(t.index());
+                    entry.put("triggerDescriptorDigest", Jcs.sha256(bytes));
+                    triggerIndex.add(entry);
+                }
+                if (!triggerIndex.isEmpty()) manifest.put("triggers", triggerIndex);
                 try (OutputStream out = processingEnv.getFiler()
                         .createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/toolgate/package.json", packageType)
                         .openOutputStream()) {

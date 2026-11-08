@@ -25,7 +25,7 @@ class EnterpriseRecoveryTest {
         var conditions=new EnterpriseConditions(EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+60000,List.of(),List.of(),List.of(),List.of(),true,false,null,null);
         var rules=Arrays.stream(EnterpriseGroupType.values()).map(kind->new EnterpriseManagementRule(List.of("administration.recover","user.read"),kind,new GroupSelection(List.of(),true),List.of(),conditions,null)).toList();
         graph.add(Ids.Kind.ROLE,new ControlRole("reviewed-recovery","Emergency recovery",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,rules));
-        graph.add(Ids.Kind.TEAM,new ControlTeam("reviewed-recovery-team","Reviewed recovery",true,1L,List.of("admin"),List.of("reviewed-recovery")));
+        graph.add(Ids.Kind.TEAM,new ControlTeam("reviewed-recovery-team","Reviewed recovery",true,1L,List.of("admin"),List.of("reviewed-recovery"),null));
         authorization=new EnterpriseRecoveryAuthorization(1L,EnterpriseConformanceTest.TENANT.value(),7L,graph.codec.model(graph.codec.snapshot(EnterpriseConformanceTest.TENANT,graph.directory(),false),ControlSnapshot.class),"b".repeat(64),EnterpriseConformanceTest.NOW,EnterpriseConformanceTest.NOW+60000);
     }
     EnterpriseReviewedRecovery signed(EnterpriseRecoveryAuthorization value)throws Exception{

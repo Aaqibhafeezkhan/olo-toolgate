@@ -3492,5 +3492,224 @@
         "definitionDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     }
+  ],
+  "TriggerId": [
+    {
+      "case": "TriggerId case 1",
+      "value": "Examples.Mail/new"
+    },
+    {
+      "case": "TriggerId case 2",
+      "value": "examples.mail-idle"
+    }
+  ],
+  "TriggerEventType": [
+    {
+      "case": "TriggerEventType case 1",
+      "value": "examples.mail.message.received"
+    },
+    {
+      "case": "TriggerEventType case 2",
+      "value": "examples.mail.v0"
+    }
+  ],
+  "TriggerLeaseToken": [
+    {
+      "case": "TriggerLeaseToken case 1",
+      "value": "short"
+    }
+  ],
+  "TriggerCloudEvent": [
+    {
+      "case": "TriggerCloudEvent case 1",
+      "value": {
+        "specversion": "0.3",
+        "id": "AAMkAGI2-41",
+        "source": "toolgate:trigger-instance:c7b2-01",
+        "type": "examples.mail.message.received.v1",
+        "subject": "ap@example.com",
+        "time": "2026-10-31T10:29:58Z",
+        "datacontenttype": "application/json",
+        "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+        "data": {
+          "messageId": "AAMkAGI2-41",
+          "subject": "Invoice 1031"
+        },
+        "tgleaseepoch": 7,
+        "tgsequence": 41,
+        "tgkind": "fired",
+        "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+      }
+    },
+    {
+      "case": "TriggerCloudEvent case 2",
+      "value": {
+        "specversion": "1.0",
+        "id": "AAMkAGI2-41",
+        "source": "toolgate:trigger-instance:c7b2-01",
+        "type": "examples.mail.message.received.v1",
+        "subject": "ap@example.com",
+        "time": "2026-10-31T10:29:58Z",
+        "datacontenttype": "application/json",
+        "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+        "data": {
+          "messageId": "AAMkAGI2-41",
+          "subject": "Invoice 1031"
+        },
+        "tgleaseepoch": 7,
+        "tgsequence": 41,
+        "tgkind": "other",
+        "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+      }
+    },
+    {
+      "case": "TriggerCloudEvent case 3",
+      "value": {
+        "specversion": "1.0",
+        "id": "AAMkAGI2-41",
+        "source": "toolgate:trigger-instance:c7b2-01",
+        "type": "examples.mail.message.received.v1",
+        "subject": "ap@example.com",
+        "time": "2026-10-31T10:29:58Z",
+        "datacontenttype": "application/json",
+        "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+        "data": {
+          "messageId": "AAMkAGI2-41",
+          "subject": "Invoice 1031"
+        },
+        "tgleaseepoch": 7,
+        "tgkind": "fired",
+        "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+      }
+    }
+  ],
+  "TriggerSync": [
+    {
+      "case": "TriggerSync case 1",
+      "value": {
+        "observedGeneration": 1,
+        "pending": 0,
+        "events": [
+          {
+            "instanceId": "x"
+          }
+        ]
+      }
+    },
+    {
+      "case": "TriggerSync case 2",
+      "value": {
+        "observedGeneration": 1,
+        "pending": 0,
+        "extra": true
+      }
+    }
+  ],
+  "TriggerSyncAck": [
+    {
+      "case": "TriggerSyncAck case 1",
+      "value": {
+        "generation": 1,
+        "maxCheckInBytes": 1048576
+      }
+    },
+    {
+      "case": "TriggerSyncAck case 2",
+      "value": {
+        "generation": 1
+      }
+    }
+  ],
+  "TriggerDesiredDocument": [
+    {
+      "case": "TriggerDesiredDocument case 1",
+      "value": {
+        "formatVersion": 2,
+        "tenantId": "3f1c0000-0000-4000-8000-000000000001",
+        "executorId": "toolhost-a",
+        "executor": "SERVER",
+        "generation": 41,
+        "issuedAtUnixMs": 1793413600000,
+        "expiresAtUnixMs": 1793500000000,
+        "instances": [
+          {
+            "instanceId": "c7b2-01",
+            "triggerId": "examples.mail-idle/new-message",
+            "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "configRevision": 2,
+            "config": {
+              "user": "ap@example.com"
+            },
+            "bindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "desiredState": "Running"
+          }
+        ]
+      }
+    }
+  ],
+  "TriggerCheckpointReport": [
+    {
+      "case": "TriggerCheckpointReport case 1",
+      "value": {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "afterOutboxSeq": 41,
+        "level": "LOCAL",
+        "version": 12,
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 131073,
+        "inline": "AQID"
+      }
+    }
+  ],
+  "TriggerEmitAckFrame": [
+    {
+      "case": "TriggerEmitAckFrame case 1",
+      "value": {
+        "kind": "EMIT",
+        "emitSeq": 1,
+        "status": "LOCAL_DURABLE"
+      }
+    },
+    {
+      "case": "TriggerEmitAckFrame case 2",
+      "value": {
+        "kind": "EMIT_ACK",
+        "emitSeq": 0,
+        "status": "LOCAL_DURABLE"
+      }
+    }
+  ],
+  "TriggerLimits": [
+    {
+      "case": "TriggerLimits case 1",
+      "value": {
+        "maxEventsPerHour": 3601,
+        "maxEventBytes": 16384,
+        "maxCheckpointBytes": 16384,
+        "memoryMiB": 256,
+        "maxBrokerCallsPerMinute": 120,
+        "stopGraceMs": 10000
+      }
+    }
+  ],
+  "TriggerSchedule": [
+    {
+      "case": "TriggerSchedule case 1",
+      "value": {
+        "intervalMs": 4999
+      }
+    }
+  ],
+  "TriggerCheckpointUpload": [
+    {
+      "case": "TriggerCheckpointUpload case 1",
+      "value": {
+        "uploadId": "up-1",
+        "chunkBytes": 1024,
+        "expiresAtUnixMs": 1
+      }
+    }
   ]
 }

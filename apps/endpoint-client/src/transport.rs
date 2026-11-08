@@ -102,6 +102,21 @@ pub trait ControlPort: Send + Sync {
     fn desired(&self, _identity: DeviceIdentity) -> Call<'_, FleetSignedDocument> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
+    /// The signed desired trigger document of this device (ADR 058, plan 8.1).
+    fn trigger_desired(
+        &self,
+        _identity: DeviceIdentity,
+    ) -> Call<'_, olo_toolgate_contracts::v2::SignedTriggerDesiredDocument> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    /// The descriptor of a trigger this device runs, pinned by its digest.
+    fn trigger_descriptor(
+        &self,
+        _identity: DeviceIdentity,
+        _digest: String,
+    ) -> Call<'_, serde_json::Value> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn artifact_grant(
         &self,
         _identity: DeviceIdentity,
@@ -696,6 +711,49 @@ impl ControlPort for HttpsControl {
                 "FleetSignedDocument",
             )
             .await
+        })
+    }
+    fn trigger_desired(
+        &self,
+        identity: DeviceIdentity,
+    ) -> Call<'_, olo_toolgate_contracts::v2::SignedTriggerDesiredDocument> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(
+                &client,
+                "/api/control/v1/endpoint/triggers/desired",
+                None,
+                "SignedTriggerDesiredDocument",
+            )
+            .await
+        })
+    }
+    fn trigger_descriptor(
+        &self,
+        identity: DeviceIdentity,
+        digest: String,
+    ) -> Call<'_, serde_json::Value> {
+        Box::pin(async move {
+            if !digest.starts_with("sha256:")
+                || digest.len() != 71
+                || !digest[7..]
+                    .bytes()
+                    .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+            {
+                return Err(Failure::Validation);
+            }
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            let path = format!("/api/control/v1/endpoint/triggers/descriptors/{digest}");
+            let descriptor: olo_toolgate_contracts::v2::TriggerDescriptor = self
+                .request(&client, &path, None, "TriggerDescriptor")
+                .await?;
+            serde_json::to_value(descriptor).map_err(|_| Failure::Validation)
         })
     }
     fn artifact_grant(

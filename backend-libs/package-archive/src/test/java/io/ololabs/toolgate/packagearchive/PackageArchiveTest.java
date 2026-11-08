@@ -33,6 +33,31 @@ final class PackageArchiveTest {
         }
     }
 
+    /** ADR 058: until Control accepts trigger definitions, a package with trigger exports is refused, not half accepted. */
+    @Test
+    void refusesTriggerExportsUntilControlAcceptsThem() throws Exception {
+        byte[] manifest = "{\"schemaVersion\":2,\"id\":\"acme.watch\",\"version\":\"1.0.0\",\"tools\":[],\"triggers\":[]}\n".getBytes(StandardCharsets.UTF_8);
+        String checksums = Canonical.sha256(manifest).substring("sha256:".length()) + "  " + PackageArchive.MANIFEST + "\n";
+        var out = new java.io.ByteArrayOutputStream();
+        try (var zip = new java.util.zip.ZipOutputStream(out)) {
+            for (var e : new java.util.TreeMap<>(java.util.Map.of(PackageArchive.CHECKSUMS, checksums.getBytes(StandardCharsets.UTF_8), PackageArchive.MANIFEST, manifest)).entrySet()) {
+                var entry = new java.util.zip.ZipEntry(e.getKey());
+                var crc = new java.util.zip.CRC32();
+                crc.update(e.getValue());
+                entry.setMethod(java.util.zip.ZipEntry.STORED);
+                entry.setSize(e.getValue().length);
+                entry.setCompressedSize(e.getValue().length);
+                entry.setCrc(crc.getValue());
+                entry.setTime(315532800000L);
+                zip.putNextEntry(entry);
+                zip.write(e.getValue());
+                zip.closeEntry();
+            }
+        }
+        var refused = assertThrows(PackageRejected.class, () -> PackageArchive.validate(out.toByteArray()));
+        assertTrue(refused.getMessage().contains("trigger exports are not accepted"), refused.getMessage());
+    }
+
     @Test
     void refusesAnOversizePackageBeforeReadingIt() {
         assertEquals(413, assertThrows(PackageRejected.class, () -> PackageArchive.validate(new byte[PackageArchive.MAX_PACKAGE_BYTES + 1])).status());

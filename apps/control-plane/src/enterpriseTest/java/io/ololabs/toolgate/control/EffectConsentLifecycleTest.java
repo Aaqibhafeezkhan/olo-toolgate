@@ -146,7 +146,7 @@ class EffectConsentLifecycleTest {
     @Test void scopedAgentOwnerStillNeedsAnIndependentExactReviewer()throws Exception{
         rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.AGENT,new ControlAgent("agent","Agent",null,true,2L,"admin"));
         rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,
-            java.util.List.of("alice","admin","bob"),java.util.List.of("reviewer-role")));
+            java.util.List.of("alice","admin","bob"),java.util.List.of("reviewer-role"),null));
         rig.saveGraph();
         var document=(ObjectNode)EffectGrantTest.JSON.readTree(rig.graph.codec.json(fixture.base.request("agent-owned-consent")));
         var context=(ObjectNode)document.path("context");
@@ -165,7 +165,7 @@ class EffectConsentLifecycleTest {
             new EnterpriseManagementRule(java.util.List.of("operation.read"),EnterpriseGroupType.TOOL_GROUP,new GroupSelection(java.util.List.of("tools-a"),false),java.util.List.of(),rig.graph.conditions(),null),
             new EnterpriseManagementRule(java.util.List.of("operation.read"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(java.util.List.of("devices-a"),false),java.util.List.of(),rig.graph.conditions(),null));
         rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.ROLE,new ControlRole("preview-reader","Metadata reader",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
-        rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.TEAM,new ControlTeam("preview-readers","Metadata readers",true,1L,java.util.List.of("bob"),java.util.List.of("preview-reader")));
+        rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.TEAM,new ControlTeam("preview-readers","Metadata readers",true,1L,java.util.List.of("bob"),java.util.List.of("preview-reader"),null));
         rig.saveGraph();var i=submit("private-effect-preview");
         var reader=new DirectoryService.Actor(rig.gateway.tenant(),"e".repeat(64),true,false,"bob");
         assertEquals(200,rig.operations.get(reader,i.id()).status());

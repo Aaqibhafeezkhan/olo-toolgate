@@ -23,7 +23,7 @@ final class TestSupport {
             var actions=ManagementPermissionCatalog.ALL.stream().sorted().toList();
             var rules=Arrays.stream(EnterpriseGroupType.values()).map(kind->new EnterpriseManagementRule(actions,kind,all,List.of(ceiling),conditions,null)).toList();
             put(entries,codec,Ids.Kind.ROLE,new ControlRole("test-recovery-role","Reviewed recovery role",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,rules));
-            put(entries,codec,Ids.Kind.TEAM,new ControlTeam("test-recovery-team","Reviewed administrators",true,1L,List.of(user),List.of("test-recovery-role")));
+            put(entries,codec,Ids.Kind.TEAM,new ControlTeam("test-recovery-team","Reviewed administrators",true,1L,List.of(user),List.of("test-recovery-role"),null));
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         return new DirectoryService(store,codec,512,1048576).portalActor(tenant,"a".repeat(64),user);
     }

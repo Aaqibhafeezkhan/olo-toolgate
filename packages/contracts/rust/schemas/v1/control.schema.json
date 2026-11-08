@@ -119,6 +119,10 @@
           },
           "uniqueItems": true,
           "maxItems": 32
+        },
+        "dataClearance": {
+          "$ref": "control.schema.json#/$defs/ControlDataClearance",
+          "description": "Absent means INTERNAL."
         }
       },
       "required": [
@@ -1255,6 +1259,16 @@
       "required": [
         "requiredReviews"
       ]
+    },
+    "ControlDataClearance": {
+      "type": "string",
+      "enum": [
+        "PUBLIC",
+        "INTERNAL",
+        "CONFIDENTIAL",
+        "RESTRICTED"
+      ],
+      "description": "Highest data classification members may read in trigger events and deliveries (ADR 058, plan 12.2)."
     }
   }
 }

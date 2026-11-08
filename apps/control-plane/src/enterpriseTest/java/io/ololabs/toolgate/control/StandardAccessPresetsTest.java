@@ -66,14 +66,14 @@ class StandardAccessPresetsTest {
         var f=setup("Admin","Admin","Admin");
         var role=f.codec.model(f.entries.get(Kind.ROLE.id("standard-Admin-management")).document(),ControlRole.class);
         f.add(Kind.ROLE,new ControlRole("root-role","Super Admin",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,role.managementRules()));
-        f.add(Kind.TEAM,new ControlTeam("root-team","Root administrators",true,1L,List.of("bob"),List.of("root-role")));
+        f.add(Kind.TEAM,new ControlTeam("root-team","Root administrators",true,1L,List.of("bob"),List.of("root-role"),null));
         var store=new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(temp.resolve("ceilings.sqlite"))),f.codec);
         store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{tx.save(tx.load(),f.directory());return null;});
         var directory=new DirectoryService(store,f.codec,512,1048576);
         var actor=directory.portalActor(EnterpriseConformanceTest.TENANT,"a".repeat(64),"alice");
         var body=f.codec.json(new GroupMembership(EnterpriseMemberType.USER,"alice",List.of("root-team"),7L));
         assertEquals(403,assertThrows(Failure.class,()->directory.setMemberships(actor,Kind.USER,"alice",body,7,"allocate","request")).status());
-        var group=new ControlTeam("root-team","Root administrators",true,1L,List.of("bob","alice"),List.of("root-role"));
+        var group=new ControlTeam("root-team","Root administrators",true,1L,List.of("bob","alice"),List.of("root-role"),null);
         assertEquals(403,assertThrows(Failure.class,()->directory.mutate(actor,Kind.TEAM,"root-team","UPDATE",f.codec.json(group),1,"edit-team","request")).status());
     }
 }

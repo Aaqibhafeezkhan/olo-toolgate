@@ -262,6 +262,7 @@ export interface ControlAgentGroup {
   readonly revision: number;
   readonly agentIds: ReadonlyArray<string>;
   readonly roleIds: ReadonlyArray<string>;
+  readonly dataClearance?: ControlDataClearance;
 }
 /** Bounded canonical directory cursor page. */
 export interface ControlAgentGroupPage {
@@ -317,6 +318,7 @@ export interface ControlChange {
   readonly operation: ControlChangeKind;
 }
 export type ControlChangeKind = "CREATE" | "UPDATE" | "DELETE";
+export type ControlDataClearance = "PUBLIC" | "INTERNAL" | "CONFIDENTIAL" | "RESTRICTED";
 /** Delegated human operation requires grant and delegation through this same Team and capability through this same Agent Group. */
 export interface ControlDelegation {
   readonly id: string;
@@ -542,6 +544,7 @@ export interface ControlTeam {
   readonly revision: number;
   readonly userIds: ReadonlyArray<string>;
   readonly roleIds: ReadonlyArray<string>;
+  readonly dataClearance?: ControlDataClearance;
 }
 /** Cursor page; nextCursor is absent after the last item. */
 export interface ControlTeamPage {
@@ -701,6 +704,7 @@ export interface EndpointCheckIn {
   readonly report: ClientReport;
   readonly adoptionDigest?: string;
   readonly localTools?: ReadonlyArray<LocalToolInfo>;
+  readonly triggers?: V2.TriggerSync;
 }
 /** Endpoint identity foundation wire model. */
 export interface EndpointCheckInAck {
@@ -712,6 +716,7 @@ export interface EndpointCheckInAck {
   readonly adoption?: EndpointAdoption;
   readonly task?: RemoteToolTask;
   readonly serverName?: string;
+  readonly triggers?: V2.TriggerSyncAck;
 }
 export type EndpointConnectionAction = "ENROLL" | "CHECK_IN" | "WAIT";
 /** Server-authoritative response to a device presence ping; presence never grants tool access. */
@@ -1423,7 +1428,7 @@ export interface FleetDesiredSnapshot {
   readonly generation: number;
   readonly assignments: ReadonlyArray<FleetAssignment>;
 }
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. A package carries at least one tool or trigger. */
 export interface FleetPackageDocument {
   readonly formatVersion: number;
   readonly packageId: string;
@@ -1434,6 +1439,7 @@ export interface FleetPackageDocument {
   readonly runtimes: ReadonlyArray<ManagedRuntime>;
   readonly tools: ReadonlyArray<LocalToolRegistration>;
   readonly selfTests: ReadonlyArray<FleetSelfTest>;
+  readonly triggers?: ReadonlyArray<FleetTriggerRegistration>;
 }
 /** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
 export interface FleetPackageRelease {
@@ -1499,7 +1505,7 @@ export interface FleetSelfTest {
   readonly arguments: Record<string, unknown>;
   readonly expectedOutput: Record<string, unknown>;
 }
-/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
+/** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. trigger-desired is the desired trigger document (ADR 058), signed by the same organization key. */
 export interface FleetSignatureHeader {
   readonly alg: string;
   readonly typ: string;
@@ -1508,6 +1514,14 @@ export interface FleetSignatureHeader {
 /** Signed fleet lifecycle contract; organization deployment trust never grants runtime permission. */
 export interface FleetSignedDocument {
   readonly jws: string;
+}
+/** A trigger export of a released package (ADR 058): how a device runs it. The device fetches the full descriptor by digest and checks it against this signed digest and the signed desired document. */
+export interface FleetTriggerRegistration {
+  readonly triggerId: string;
+  readonly triggerDescriptorDigest: string;
+  readonly runtimeId: string;
+  readonly entryPoint: string;
+  readonly fileAccess: LocalFileAccess;
 }
 /** Explicit RSA public trust key; no private material or implicit domain sharing. */
 export interface FleetTrustKey {

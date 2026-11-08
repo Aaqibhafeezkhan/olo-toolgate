@@ -287,6 +287,7 @@ impl Device {
             },
             adoption_digest: None,
             local_tools: Some(tools),
+            triggers: None,
         };
         let ack: EndpointCheckInAck = self
             .control

@@ -204,6 +204,38 @@ fn device_broker(
     serde_json::to_vec(&response).ok()
 }
 
+/// The device files broker of a trigger (ADR 058): read-only (`FILES_LIST`, `FILES_READ`, `FILES_INFO`), as the signed
+/// registration grants, and a read only names a file the area lists. A trigger has no invocation arguments to bind
+/// paths to, so the area's own listing is the scope.
+pub(crate) fn trigger_broker(
+    area: Option<&Mutex<crate::files::Area>>,
+    access: &LocalFileAccess,
+    line: &[u8],
+) -> Option<Vec<u8>> {
+    let access = match access {
+        LocalFileAccess::None => None,
+        _ => Some(LocalFileAccess::Read),
+    };
+    let listed: BTreeMap<String, Value> = area
+        .and_then(|area| area.lock().ok().and_then(|area| area.list().ok()))
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .map(|(i, path)| (i.to_string(), Value::String(path)))
+        .collect();
+    device_broker(area, access.as_ref(), &listed, &AtomicUsize::new(0), line)
+}
+
+/// What the trigger runner needs from the current execution manager: the sandbox, runtimes, signed trigger
+/// registrations and the files area.
+#[derive(Clone)]
+pub struct TriggerContext {
+    pub engine: Arc<dyn engine::SandboxPort>,
+    pub runtimes: Vec<ManagedRuntime>,
+    pub triggers: Vec<olo_toolgate_contracts::FleetTriggerRegistration>,
+    pub files: Option<Arc<Mutex<crate::files::Area>>>,
+}
+
 /// Bytes a v2 ToolInput envelope may add to the arguments the registration bounds.
 const SDK_ENVELOPE_BYTES: u64 = 4096;
 /// A relayed call is started only with this much of its deadline left. Like a Tool Host run, the run itself is bounded
@@ -344,6 +376,9 @@ pub struct Settings {
     pub pull_timeout_seconds: u64,
     pub runtimes: Vec<ManagedRuntime>,
     pub tools: Vec<LocalToolRegistration>,
+    /// Trigger exports of released packages (ADR 058), from the signed release only, never local configuration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<olo_toolgate_contracts::FleetTriggerRegistration>,
     /// The device files area the broker serves to registrations that grant file access.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub files: Option<crate::files::Settings>,
@@ -351,9 +386,10 @@ pub struct Settings {
 impl Settings {
     /// Configuration is local administrator deployment trust, never an IPC upload.
     pub fn validate(&self) -> Result<()> {
-        if (self.runtimes.is_empty() && !self.tools.is_empty())
+        if (self.runtimes.is_empty() && !(self.tools.is_empty() && self.triggers.is_empty()))
             || self.runtimes.len() > 16
             || self.tools.len() > 32
+            || self.triggers.len() > 32
             || !self.state_directory.is_absolute()
             || !self.engine_path.is_absolute()
             || !(5..=180).contains(&self.pull_timeout_seconds)
@@ -394,6 +430,21 @@ impl Settings {
             adapters::invocation_arguments(kind, tool)?;
             closed_schema(&tool.input_schema)?;
             closed_schema(&tool.output_schema)?;
+        }
+        let mut triggers = BTreeSet::new();
+        for trigger in &self.triggers {
+            contracts.encode("FleetTriggerRegistration", trigger)?;
+            let runtime = self
+                .runtimes
+                .iter()
+                .find(|r| r.id == trigger.runtime_id)
+                .ok_or(Failure::Validation)?;
+            if !triggers.insert(trigger.trigger_id.as_str())
+                || tools.contains(trigger.trigger_id.as_str())
+            {
+                return Err(Failure::Validation);
+            }
+            adapters::trigger_arguments(&runtime.kind, &trigger.entry_point, 512)?;
         }
         Ok(())
     }
@@ -445,6 +496,14 @@ pub struct Manager {
 impl Manager {
     pub(crate) fn settings(&self) -> Settings {
         self.settings.clone()
+    }
+    pub fn trigger_context(&self) -> TriggerContext {
+        TriggerContext {
+            engine: self.engine.clone(),
+            runtimes: self.settings.runtimes.clone(),
+            triggers: self.settings.triggers.clone(),
+            files: self.files.clone(),
+        }
     }
     pub fn catalog(&self) -> Vec<LocalToolInfo> {
         self.settings

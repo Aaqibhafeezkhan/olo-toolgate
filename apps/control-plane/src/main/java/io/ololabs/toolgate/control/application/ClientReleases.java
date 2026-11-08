@@ -78,11 +78,12 @@ public final class ClientReleases {
         var content = store.transaction(actor.tenant(), false, tx -> {
             actor.requireAdmin(); new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "package.publish", clock.millis());
             if (tx.packages().version(digest) == null) throw new Failure(ErrorCode.NOT_FOUND, 404, "Package not found");
-            var deployment = tx.packages().deployment(PackageArchive.validate(tx.packages().content(digest), this::node).manifest().path("id").asText());
+            var deployment = tx.packages().deployment(PackageArchive.validate(tx.packages().content(digest), this::node, true).manifest().path("id").asText());
             var server = new HashSet<String>(); if (deployment != null) node(deployment).path("toolIds").forEach(t -> server.add(t.asText()));
             return Map.entry(tx.packages().content(digest), server);
         });
-        var verified = PackageArchive.validate(content.getKey(), this::node); var manifest = verified.manifest();
+        // A stored package passed upload; its trigger exports were accepted then (ADR 058).
+        var verified = PackageArchive.validate(content.getKey(), this::node, true); var manifest = verified.manifest();
         String packageId = manifest.path("id").asText(), version = manifest.path("version").asText();
         String language = manifest.path("sdk").path("language").asText();
         if (!Set.of("JAVA", "PYTHON").contains(language)) throw incompatible("Only Java and Python SDK packages have a client runtime");
@@ -103,7 +104,10 @@ public final class ClientReleases {
             var entry = JSON.objectNode().put("toolId", toolId).put("supported", reason == null); if (reason != null) entry.put("reason", reason);
             report.add(entry); if (reason == null) supported.add(tool);
         }
-        if (supported.isEmpty()) throw incompatible("No export of this package can run on a client device");
+        // Client trigger exports run from the same image and SDK entry point (ADR 058); server-only ones are not released.
+        var triggers = new ArrayList<JsonNode>();
+        for (var trigger : manifest.path("triggers")) if (clientTrigger(trigger, runtimeId)) triggers.add(trigger);
+        if (supported.isEmpty() && triggers.isEmpty()) throw incompatible("No export of this package can run on a client device");
 
         var image = push(packageId, version, jar, python);
         var runtime = JSON.objectNode().put("id", runtimeId).put("kind", python ? "PYTHON_SDK" : "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
@@ -148,6 +152,17 @@ public final class ClientReleases {
             tests.addObject().put("toolId", toolId).<ObjectNode>set("arguments", example[0]).set("expectedOutput", example[1]);
             records.add(new ObjectNode[]{controlTool, extractor});
         }
+        if (!triggers.isEmpty()) {
+            var registrations = document.putArray("triggers");
+            for (var trigger : triggers) {
+                var d = trigger.path("descriptor");
+                boolean reads = false;
+                for (var permission : d.path("permissions")) reads |= permission.asText().equals("DEVICE_FILES_READ");
+                registrations.addObject().put("triggerId", d.path("triggerId").asText())
+                    .put("triggerDescriptorDigest", trigger.path("triggerDescriptorDigest").asText()).put("runtimeId", runtimeId)
+                    .put("entryPoint", "/opt/tool/" + packageId + "/" + filename).put("fileAccess", reads ? "READ" : "NONE");
+            }
+        }
         // The profiles carry each extractor exactly as the directory stores it, so devices report matching tool digests.
         var stored = directory(actor, packageId, records, requestId);
         for (int i = 0; i < records.size(); i++) {
@@ -172,6 +187,14 @@ public final class ClientReleases {
         }
         codec.model(codec.json(result), io.ololabs.toolgate.contracts.v2.ClientRelease.class);
         return new Store.Reply(200, codec.json(result), 0);
+    }
+
+    /** A trigger export a device can run: declared for clients, on the SDK runtime and entry point of this release. */
+    private static boolean clientTrigger(JsonNode trigger, String runtimeId) {
+        boolean client = false;
+        for (var executor : trigger.path("descriptor").path("executors")) client |= executor.asText().equals("CLIENT");
+        return client && runtimeId.equals(trigger.path("runtimeId").asText())
+            && ("python".equals(runtimeId) ? "toolgate.runtime" : JAVA_SDK_MAIN).equals(trigger.path("entryPoint").asText());
     }
 
     /** Why a device cannot run this export, or null. Devices have no broker, routes, secrets, globals or claims. */

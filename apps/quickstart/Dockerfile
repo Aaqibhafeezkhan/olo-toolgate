@@ -7,6 +7,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
 COPY packages/contracts/rust packages/contracts/rust
 COPY packages/tenant-identity/rust packages/tenant-identity/rust
+COPY crates/trigger-supervisor crates/trigger-supervisor
 COPY apps/gateway apps/gateway
 COPY apps/endpoint-client apps/endpoint-client
 COPY apps/tool-host apps/tool-host

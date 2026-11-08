@@ -9962,6 +9962,721 @@ paths:
         '403':
           description: Dedicated service role for this audience and tenant required
       summary: Dedicated target jwks; requires toolgate-target-{target} machine role
+  /api/control/v1/triggers/definitions:
+    get:
+      operationId: listTriggerDefinitions
+      summary: listTriggerDefinitions
+      description: Trigger exports of this tenant's uploaded package versions, each with its security delta against the
+        version uploaded before (ADR 058, plan 10.2). Needs trigger.read. Off unless toolgate.triggers.control-core.enabled.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Definitions
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerDefinitionPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/assignments:
+    get:
+      operationId: listTriggerAssignments
+      summary: listTriggerAssignments
+      description: Assignments the actor may read (trigger.read on every target), with status (plan 9.1).
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: labelSelector
+        in: query
+        schema:
+          type: string
+          maxLength: 512
+      responses:
+        '200':
+          description: Assignments
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+    post:
+      operationId: createTriggerAssignment
+      summary: createTriggerAssignment
+      description: Creates a client assignment. Needs trigger.manage on every target device and Device Group. The config is
+        validated against the definition's signed configSchema; dryRun returns the would-be result and instance changes.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: dryRun
+        in: query
+        schema:
+          type: boolean
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentCreate
+      responses:
+        '201':
+          description: Created
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentResult
+        '200':
+          description: Dry run
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentResult
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '409':
+          description: Name, capacity or concurrent change conflict
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/assignments/{name}:
+    get:
+      operationId: getTriggerAssignment
+      summary: getTriggerAssignment
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 63
+      responses:
+        '200':
+          description: Assignment
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignment
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+    patch:
+      operationId: patchTriggerAssignment
+      summary: patchTriggerAssignment
+      description: JSON Merge Patch (RFC 7386) of labels and spec. A spec change is a new generation; a change of trigger,
+        packageVersion, config or globals is also a new config revision.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 63
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 20
+      - name: dryRun
+        in: query
+        schema:
+          type: boolean
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated or dry run
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentResult
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '409':
+          description: Name, capacity or concurrent change conflict
+        '412':
+          description: If-Match does not match the current ETag
+        '428':
+          description: If-Match is required
+        '503':
+          description: Triggers are off or a dependency is unavailable
+    delete:
+      operationId: deleteTriggerAssignment
+      summary: deleteTriggerAssignment
+      description: Removes the assignment everywhere; its instances are removed and their leases revoked.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 63
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 20
+      - name: dryRun
+        in: query
+        schema:
+          type: boolean
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Removed or dry run
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentResult
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '409':
+          description: Name, capacity or concurrent change conflict
+        '412':
+          description: If-Match does not match the current ETag
+        '428':
+          description: If-Match is required
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/instances:
+    get:
+      operationId: listTriggerInstances
+      summary: listTriggerInstances
+      description: Instances with their resolved desired state and status (plan 9.2).
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: assignment
+        in: query
+        schema:
+          type: string
+          maxLength: 63
+      - name: executorId
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Instances
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerInstancePage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/endpoint/triggers/desired:
+    get:
+      operationId: getTriggerDesiredDocument
+      summary: getTriggerDesiredDocument
+      description: Signed desired trigger state for the calling device (ADR 058, plan 8.1), a compact JWS by the organization
+        deployment key with typ toolgate-trigger-desired+jws.
+      security:
+      - deviceCertificate: []
+      responses:
+        '200':
+          description: Compact JWS over TriggerDesiredDocument
+          headers:
+            ETag:
+              description: Weak resource version, W/"<revision>"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/SignedTriggerDesiredDocument
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks trigger.read or trigger.manage on a target, or the device is inactive
+        '409':
+          description: Name, capacity or concurrent change conflict
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/events:
+    get:
+      operationId: listTriggerEvents
+      summary: listTriggerEvents
+      description: "Stored records of one instance in (leaseEpoch, outboxSeq) order, with dispositions (module 5)."
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: assignment
+        in: query
+        schema:
+          type: string
+          maxLength: 63
+      - name: instanceId
+        in: query
+        schema:
+          type: string
+          maxLength: 35
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: listTriggerEvents
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerEventPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/settings:
+    get:
+      operationId: getTriggerSettings
+      summary: getTriggerSettings
+      description: "Tenant trigger settings: event retention and fail-closed default classifications (plan 12.1, 12.3)."
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: getTriggerSettings
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSettings
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+    put:
+      operationId: updateTriggerSettings
+      summary: updateTriggerSettings
+      description: "Replaces the settings. Retention is at most the operator ceiling; defaults may be raised, never lowered. Audited."
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSettings
+      responses:
+        '200':
+          description: updateTriggerSettings
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSettings
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/deliveries:
+    get:
+      operationId: listTriggerDeliveries
+      summary: listTriggerDeliveries
+      description: "Deliveries of one consumer (a subscription uid or a test consumer), optionally of one state, including dead letters (plan 12)."
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: consumer
+        in: query
+        schema:
+          type: string
+          maxLength: 100
+      - name: state
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: listTriggerDeliveries
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerDeliveryPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/deliveries:redrive:
+    post:
+      operationId: redriveTriggerDelivery
+      summary: redriveTriggerDelivery
+      description: "Re-drives a dead-lettered or skipped delivery. Needs trigger.manage on its assignment's targets; audited."
+      security:
+      - adminAccessToken: []
+      responses:
+        '200':
+          description: redriveTriggerDelivery
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerDelivery
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/subscriptions:
+    post:
+      operationId: createTriggerSubscription
+      summary: createTriggerSubscription
+      description: "Creates a durable subscription owned by the caller. Needs trigger.subscribe on every source; the filter is compiled against the owner's readable view (plan 13.1)."
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSubscriptionCreate
+      responses:
+        '201':
+          description: createTriggerSubscription
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSubscription
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+    get:
+      operationId: listTriggerSubscriptions
+      summary: listTriggerSubscriptions
+      description: "The caller's subscriptions."
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: pageToken
+        in: query
+        schema:
+          type: string
+          maxLength: 256
+      - name: pageSize
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: listTriggerSubscriptions
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSubscriptionPage
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/subscriptions/{name}:
+    get:
+      operationId: getTriggerSubscription
+      summary: getTriggerSubscription
+      description: "One of the caller's subscriptions."
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 71
+      responses:
+        '200':
+          description: getTriggerSubscription
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerSubscription
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+    delete:
+      operationId: deleteTriggerSubscription
+      summary: deleteTriggerSubscription
+      description: "Deletes the subscription and its cursor; needs If-Match."
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 71
+      responses:
+        '204':
+          description: deleteTriggerSubscription
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/stream/tickets:
+    post:
+      operationId: createTriggerStreamTicket
+      summary: createTriggerStreamTicket
+      description: "A single-use ticket for wss://<tenant host>/api/control/v1/triggers/stream, valid for 30 s (plan 13.2; see asyncapi/triggers-v1.yaml). The body is a credential and is never logged."
+      security:
+      - adminAccessToken: []
+      responses:
+        '201':
+          description: createTriggerStreamTicket
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerStreamTicket
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/endpoint/triggers/descriptors/{digest}:
+    get:
+      operationId: getTriggerDescriptor
+      summary: getTriggerDescriptor
+      description: "The canonical descriptor of a trigger the calling device is assigned, by its sha256 digest (module 5)."
+      security:
+      - deviceCertificate: []
+      parameters:
+      - name: digest
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 71
+      responses:
+        '200':
+          description: getTriggerDescriptor
+        '400':
+          description: Invalid bounded input
+        '401':
+          description: Direct TLS and an authenticated actor or device certificate required
+        '403':
+          description: The actor lacks the trigger permission on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '503':
+          description: Triggers are off or a dependency is unavailable
   /api/control/v1/kill-events:
     get:
       operationId: getKillState

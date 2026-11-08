@@ -37,6 +37,11 @@ public final class EndpointService {
     /** Env-owned check-in policy; the 2 s Quickstart default applies until configured. */
     public EndpointService checkInPolicy(ClientCheckInPolicy value){checkInPolicy=java.util.Objects.requireNonNull(value);if(operations!=null)operations.checkInPolicy(value);return this;}
     public ClientCheckInPolicy checkInPolicy(){return checkInPolicy;}
+    private java.util.function.Function<Ids.TenantId,TriggerIngest> triggers;
+    /** Trigger Sync ingest (ADR 058, triggers module 5); without it a check-in's triggers block is refused, never ignored. */
+    public EndpointService triggers(java.util.function.Function<Ids.TenantId,TriggerIngest> value){triggers=java.util.Objects.requireNonNull(value);return this;}
+    /** The tenant's ingest when trigger ingest is on, else null. */
+    private TriggerIngest triggerIngest(){var ingest=triggers==null?null:triggers.apply(tenant);return ingest==null||!ingest.enabled()?null:ingest;}
     public EndpointService operations(EnterpriseOperations value){operations=java.util.Objects.requireNonNull(value).checkInPolicy(checkInPolicy);return this;}
     public McpService relay(){available();if(operations==null)throw Failure.unavailable();return new McpService(store,codec,this,operations,clock,tenant,server);}
     public EndpointService(Store store,Codec codec,DeviceIssuer issuer,Clock clock,boolean enabled,
@@ -53,7 +58,7 @@ public final class EndpointService {
         var scoped=new EndpointService(store,codec,tenantIssuer,clock,enabled&&profile!=null,id.value(),
             profile==null?"disabled":profile.serverId(),profile==null?"disabled":profile.organization(),
             profile==null?"https://disabled.invalid":profile.controlUrl(),profile==null?"https://disabled.invalid":profile.gatewayUrl());
-        scoped.failures=failures;scoped.checkInPolicy(checkInPolicy);if(operations!=null)scoped.operations(operations);return scoped;
+        scoped.failures=failures;scoped.checkInPolicy(checkInPolicy);if(operations!=null)scoped.operations(operations);scoped.triggers=triggers;return scoped;
     }
     /** Fixed HTTPS origins exclude redirects, userinfo, paths and fragments. */
     public static String origin(String value) {
@@ -350,7 +355,7 @@ public final class EndpointService {
         // not reinstall an expired certificate or fail the client's current clock-skew check.
         long serverTime=now-ack.serverTimeUnixMs()>300000?now:ack.serverTimeUnixMs();
         long next=checkInPolicy.nextIntervalMs();
-        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),forClient(ack.task(),taskContext),serverName);
+        var negotiated=new EndpointCheckInAck(ack.deviceId(),ack.sequence(),serverTime,next,identity,ack.adoption(),forClient(ack.task(),taskContext),serverName,ack.triggers());
         return new Store.Reply(reply.status(),codec.json(negotiated),reply.revision());
     }
     public Store.Reply checkIn(java.security.cert.X509Certificate peer,String body,String requestId,String systemName,String ipAddress) {
@@ -361,12 +366,21 @@ public final class EndpointService {
         if(systemName!=null&&(systemName.length()>255||!systemName.matches("[a-zA-Z0-9._-]+")))throw Failure.validation();
         if(ipAddress!=null&&(ipAddress.length()>45||!ipAddress.matches("[0-9a-fA-F:.]{2,45}")))throw Failure.validation();
         var check=codec.model(body,EndpointCheckIn.class);Ids.valid(requestId);var claims=peer(peer,clock.millis());var fingerprint=claims.fingerprint();
+        // With ingest on, every acknowledgement carries a triggers block (leases, generation), so a client learns it
+        // may send Trigger Sync; with it off, a check-in's triggers block is refused, never ignored.
+        var ingest=triggerIngest();
+        if(ingest==null&&check.triggers()!=null)throw Failure.validation();
+        var sync=check.triggers()!=null?check.triggers():new io.ololabs.toolgate.contracts.v2.TriggerSync(0L,null,null,null,0L);
         var digest=DirectoryService.digest(codec.json(check));
         return transaction((tx,now)->{var row=tx.endpointKey(fingerprint);if(row==null)throw forbidden();
             var device=codec.model(row.document(),EndpointDeviceRecord.class);binding(claims,device);active(tx,device);
             if(!device.deviceId().equals(check.report().deviceId()))throw forbidden();
             if(check.report().appliedRevision()!=0||!check.report().packages().isEmpty())FleetService.validateReport(tx,codec,check.report());
-            if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();return interval(new Store.Reply(200,row.acknowledgment(),device.revision()),serverName(tx),taskContext);}
+            if(check.sequence().equals(device.reportSequence())){if(!digest.equals(row.reportDigest()))throw Failure.conflict();
+                // The stored acknowledgment holds no lease tokens (only their digests are kept); a replay gets fresh ones.
+                var replay=new Store.Reply(200,row.acknowledgment(),device.revision());
+                if(ingest!=null){var stored=codec.model(row.acknowledgment(),EndpointCheckInAck.class);if(stored.triggers()!=null)replay=reply(withLeases(stored,ingest.leases(tx,device,requestId)),device.revision());}
+                return interval(replay,serverName(tx),taskContext);}
             if(check.sequence()!=device.reportSequence()+1)throw Failure.conflict();
             // Only the device's owner switches its power; the report that says so is sent at once.
             boolean off=DevicePlacement.poweredOff(check.report()),switched=off!=DevicePlacement.poweredOff(device.report());
@@ -377,12 +391,20 @@ public final class EndpointService {
             DeviceIdentity renewed=null;if(peer.getNotAfter().getTime()-now<43200000&&peer.getNotAfter().getTime()<connectionExpires/1000*1000)renewed=issuer.issue(row.csr(),device.deviceId(),tenant.value(),device.userId(),server,now,connectionExpires);
             var configuration=new EndpointAdoptions(codec).poll(tx,device,server,check.adoptionDigest(),check.localTools());
             var task=off?null:relay().poll(tx,device,now,requestId);
-            var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,checkInPolicy.nextIntervalMs(),renewed,configuration,task,null);
+            var triggerAck=ingest==null?null:ingest.sync(tx,device,sync,requestId);
+            var ack=new EndpointCheckInAck(device.deviceId(),check.sequence(),now,checkInPolicy.nextIntervalMs(),renewed,configuration,task,null,triggerAck);
             var updated=new EndpointDeviceRecord(device.deviceId(),tenant.value(),device.userId(),fingerprint,EndpointState.ACTIVE,device.revision()+1,now,check.sequence(),check.report(),device.connectionExpiresAtUnixMs(),device.connectionApproved(),device.approvalRevision(),systemName==null?device.systemName():systemName,ipAddress==null?device.ipAddress():ipAddress);
-            var response=reply(ack,updated.revision());tx.saveEndpoint(new Store.EndpointRecord(row.id(),row.fingerprint(),codec.json(updated),row.csr(),digest,response.body()));
+            var response=reply(ack,updated.revision());var kept=triggerAck==null?response.body():codec.json(withLeases(ack,null));
+            tx.saveEndpoint(new Store.EndpointRecord(row.id(),row.fingerprint(),codec.json(updated),row.csr(),digest,kept));
             tx.audit(fingerprint,renewed==null?"DEVICE_CHECK_IN":"DEVICE_RENEW","endpoint:"+row.id(),updated.revision(),requestId,digest);
             if(switched)tx.audit(fingerprint,off?"DEVICE_POWER_OFF":"DEVICE_POWER_ON","endpoint:"+row.id(),updated.revision(),requestId,digest);return interval(response,serverName(tx),taskContext);
         });
+    }
+    private static EndpointCheckInAck withLeases(EndpointCheckInAck ack,java.util.List<io.ololabs.toolgate.contracts.v2.TriggerLease> leases){
+        var t=ack.triggers();
+        var triggers=new io.ololabs.toolgate.contracts.v2.TriggerSyncAck(t.generation(),t.maxCheckInBytes(),t.checkInNow(),t.acked(),t.dispositions(),t.retryLater(),
+            leases==null||leases.isEmpty()?null:java.util.List.copyOf(leases),t.revoked(),t.rejected(),t.snapshotPages(),t.snapshotRequested());
+        return new EndpointCheckInAck(ack.deviceId(),ack.sequence(),ack.serverTimeUnixMs(),ack.nextIntervalMs(),ack.identity(),ack.adoption(),ack.task(),ack.serverName(),triggers);
     }
     public EndpointDeviceRecord authenticate(Store.Session tx,java.security.cert.X509Certificate peer,long now){
         available();var claims=peer(peer,now);var row=tx.endpointKey(claims.fingerprint());

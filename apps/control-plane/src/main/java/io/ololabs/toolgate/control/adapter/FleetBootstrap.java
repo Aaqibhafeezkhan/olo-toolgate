@@ -71,4 +71,6 @@ public class FleetBootstrap {
     public FleetService forTenant(io.ololabs.toolgate.control.domain.Ids.TenantId tenant){load();var profile=endpoints.profile(tenant);return new FleetService(store,codec,crypto,endpoints.forTenant(tenant),java.time.Clock.systemUTC(),enabled&&profile!=null,tenant.value(),profile==null?"disabled":profile.serverId());}
     @Produces @jakarta.enterprise.context.RequestScoped FleetService fleet(){return forTenant(request.tenant());}
     @Produces @ApplicationScoped ArtifactStore artifacts(){load();return artifacts;}
+    /** The organization signer of the fleet desired document also signs the desired trigger document (ADR 058), or null when fleet is off. */
+    TriggerCrypto triggerCrypto(){load();return enabled?(RsaFleetCrypto)crypto:null;}
 }

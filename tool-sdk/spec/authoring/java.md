@@ -83,9 +83,56 @@ public interface TcpConnector { Socket connect(String destinationId); javax.net.
 
 Generated, typed accessors (from the annotation processor) are added per tool: `OrderToolsVars.global(context).timeoutSeconds()`. Using an undeclared name in a `get*Value` call with a literal argument is a compile error emitted by the processor.
 
+## Triggers (POLL)
+
+A trigger observes a source and reports events ([ADR 058](../../../docs/adr/058-triggers.md), plan
+[section 5](../../../docs/architecture/device-triggers-plan.md)). This SDK version builds POLL triggers; PUSH mode
+(`PushTrigger`, the emitter and `SnapshotState`) is refused by the processor until it exists.
+
+```java
+@Retention(RUNTIME) @Target(METHOD) @interface ServerTrigger {
+    String name(); TriggerMode mode(); String description(); Class<?> config(); Class<?> event(); String eventType();
+    SourceReplay sourceReplay(); long intervalMs() default -1; long resyncIntervalMs() default -1; int maxEventsPerHour();
+    int maxEventBytes() default 16_384; int maxCheckpointBytes() default 16_384; int memoryMiB() default 256;
+    int maxBrokerCallsPerMinute() default 120; int stopGraceMs() default 10_000; OverflowPolicy overflow() default OverflowPolicy.BLOCK;
+    boolean lossTolerant() default false; TerminalRejectionPolicy onTerminalRejection() default TerminalRejectionPolicy.HALT;
+    int checkpointSchemaVersion() default 1; }
+@Retention(RUNTIME) @Target(METHOD) @interface ClientTrigger { /* same members */ RuntimeTier[] tiers() default RuntimeTier.OCI_SANDBOX; }
+@Repeatable(TriggerExamples.class) @Target(METHOD) @interface TriggerExample { String name(); String config(); String checkpoint() default "";
+    String files() default ""; String expectedEvents(); String expectedCheckpoint() default ""; }
+
+public PollResult<E> check(C config, PollContext ctx)        // the only POLL shape
+```
+
+Package `io.ololabs.toolgate.sdk.trigger`: `PollContext` (`triggerId()`, `instanceId()`, `leaseEpoch()`, `configRevision()`,
+`globals()`, `checkpoint()`, `startedAt()`, `files()` (read-only, `@ClientTrigger` with `@DeviceFileAccess`), `log()`,
+`stopping()`); `PollResult.of(events).checkpoint(Checkpoint)` and `PollResult.none()`; `TriggerEvent.of(data).id(...)
+.subject(...).time(...)`; `Checkpoint`, an immutable JSON object (`of(...)`, `getString`, `getLong`, `getMap`, ...).
+
+The processor refuses, as compile errors (plan 5.8): a trigger that is not `PollResult<E> check(C, PollContext)` on a
+public instance of a public class with a public no-argument constructor; config or event types that are not public
+records; `eventType` that is not reverse-DNS ending in `.vN` (or uses `io.ololabs.toolgate.`); `intervalMs` unset or
+below 5000, `resyncIntervalMs` on a POLL trigger; `maxEventsPerHour` outside 1..3600, `maxEventBytes` above 16384,
+`maxCheckpointBytes` above 16384; `DROP_*` overflow without `lossTolerant = true` and `SKIP_AND_RECORD`; `@DeviceFileAccess`
+on a server trigger or with `write = true`; `@Secret`, `@JwtClaim` or `@Global` on a trigger; `@Example` and the other
+tool annotations on a trigger; a trigger name that is not `[a-z][a-z0-9_-]{0,47}`, repeats, or equals a tool name
+(tools and triggers share one namespace); `mode = PUSH`. Route calls, TCP destinations and secrets for server triggers
+are not part of this version: the trigger descriptor lists them by id only and the lease-bound broker does not exist yet.
+
+For each trigger the processor writes `META-INF/toolgate/triggers/<name>.json`, the `TriggerDescriptor` as canonical
+bytes, and a `triggers` entry in `META-INF/toolgate/package.json` with its digest, handler, config and event classes and
+examples. A `@ServerTrigger` without capabilities runs on both executors (`executors: ["CLIENT", "SERVER"]`, plan 5.7).
+
 ## Testing
 
 Artifact `io.ololabs.toolgate:toolgate-sdk-testing`, package `io.ololabs.toolgate.testing`, as [testing.md](testing.md) defines it: `ToolHarness.builder()` with `global`, `secret`, `claim`, `destination`, `exchange(RecordedExchange...)` and `exchanges(resource)`; `call(tool, arguments)` returning `ToolResult`; `routeCalls()` returning `RouteCallRecord`s; `runExamples()` and `assertExamples()`. `RecordedExchange.on(routeId).variable(...).replyJson(status, body)` builds an exchange in code, and `RecordedExchange.load(stream)` reads the shared format.
+
+`ToolHarness.trigger(name)` returns a `TriggerHarness.Builder` (`config`, `checkpoint`, `global`, `deviceFiles`, `target`,
+`instance`); `start()` runs the real trigger runtime over the stdio frames against a fake supervisor. `firstPoll()`,
+`poll()` and `poll(n)` return each check's emitted events and committed checkpoint; `rejectNext(TriggerEmitStatus...)`
+scripts emit rejections and `failNextFilesCall(message)` fails a brokered files operation; `frames()`, `health()`,
+`checkpoints()`, `checkpointPositions()` and `stop()` show the rest. `TriggerHarness.runExamples(loader)` runs every
+`@TriggerExample`, as `toolgate check` does.
 
 ## Errors
 

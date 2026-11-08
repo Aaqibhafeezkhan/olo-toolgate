@@ -3815,7 +3815,7 @@ hosted CodeQL reevaluation now passes, and the artifact-resolution examples reru
 this new repair. S22 proceeds on codex/zero-trust-revocation-dispatch from that
 known parent, with all current-stage changes uncommitted.
 
-ADR 058 records the original S22 scope and its ordering/binding decisions. The
+ADR 059 records the original S22 scope and its ordering/binding decisions. The
 first increment folds reviewed kill storage into fresh initial schemas with
 tenant isolation, runtime-role grants, capacity accounting and immutable
 event/supersession/archive rows. Each committed event occupies a distinct epoch;

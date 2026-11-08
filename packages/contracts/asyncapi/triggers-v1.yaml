@@ -1,0 +1,76 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+asyncapi: 3.0.0
+info:
+  title: ToolGate trigger stream (toolgate.triggers.v1)
+  version: 1.0.0
+  description: |
+    Trigger events over WebSocket (ADR 058, plan 13.2; triggers module 12).
+
+    1. Authenticate as for any Control API call and `POST /api/control/v1/triggers/stream/tickets`. The ticket is a
+       credential: 256 random bits, stored only as its SHA-256, valid for 30 s, used once, and bound to the tenant, the
+       principal, the request `Origin` and the authorization epoch at issue.
+    2. Open the socket with subprotocols `toolgate.triggers.v1, ticket.<ticket>`. The server selects and echoes only
+       `toolgate.triggers.v1`. A refused ticket closes the socket with 1008.
+    3. `subscribe` attaches a durable subscription (from `resumeAfter`, else its acknowledged cursor); `watch` is an
+       ephemeral filter with no cursor; `credit` grants more events (window 100); `ack` advances the stored cursor;
+       `unsubscribe` detaches.
+
+    Delivery is at least once and ordered per source; clients dedupe by CloudEvent `id`. A cursor older than
+    retention gets an explicit `gap`. Events are the subscriber's readable view (coarse information flow): `data` and
+    `subject` only when the owner's clearance covers the event's label. A revoked grant sends `revoked` and closes
+    with 1008. Ping every 20 s; two missed pongs close the socket. A consumer without credit for 60 s is closed with
+    1013 and keeps its cursor. At most 5 sockets per principal and 64 KiB per message.
+servers:
+  control:
+    host: '{tenantHost}'
+    protocol: wss
+    description: The tenant's Control host; the tenant comes from the host, as for every Control call.
+    variables:
+      tenantHost:
+        description: Tenant host and port.
+channels:
+  stream:
+    address: /api/control/v1/triggers/stream
+    messages:
+      client:
+        $ref: '#/components/messages/client'
+      server:
+        $ref: '#/components/messages/server'
+    bindings:
+      ws:
+        headers:
+          type: object
+          properties:
+            Sec-WebSocket-Protocol:
+              type: string
+              description: 'toolgate.triggers.v1, ticket.<ticket>. Redacted from logs and traces.'
+operations:
+  send:
+    action: send
+    channel:
+      $ref: '#/channels/stream'
+    messages:
+      - $ref: '#/channels/stream/messages/client'
+  receive:
+    action: receive
+    channel:
+      $ref: '#/channels/stream'
+    messages:
+      - $ref: '#/channels/stream/messages/server'
+components:
+  messages:
+    client:
+      name: TriggerStreamClientMessage
+      contentType: application/json
+      payload:
+        schemaFormat: application/schema+json;version=draft-2020-12
+        schema:
+          $ref: '../schemas/v2/trigger.schema.json#/$defs/TriggerStreamClientMessage'
+    server:
+      name: TriggerStreamServerMessage
+      contentType: application/json
+      payload:
+        schemaFormat: application/schema+json;version=draft-2020-12
+        schema:
+          $ref: '../schemas/v2/trigger.schema.json#/$defs/TriggerStreamServerMessage'

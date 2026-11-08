@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them.
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups.
  *
  * @param packageId canonical packageId value
  * @param source canonical source value
@@ -15,6 +15,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param globals canonical globals value
  * @param tools canonical tools value
  * @param bindingIds canonical bindingIds value
+ * @param triggers canonical triggers value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ProfilePackage(
@@ -27,7 +28,8 @@ public record ProfilePackage(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceGroupIds", required = false) java.util.List<String> deviceGroupIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "globals", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> globals,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "tools", required = false) java.util.List<ProfileToolActivation> tools,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "bindingIds", required = false) java.util.List<String> bindingIds
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "bindingIds", required = false) java.util.List<String> bindingIds,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggers", required = false) java.util.List<ProfileTrigger> triggers
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -41,6 +43,7 @@ public record ProfilePackage(
      * @param globals canonical globals value
      * @param tools canonical tools value
      * @param bindingIds canonical bindingIds value
+     * @param triggers canonical triggers value
      */
     public ProfilePackage {
         java.util.Objects.requireNonNull(packageId, "packageId");
@@ -52,5 +55,6 @@ public record ProfilePackage(
         globals = globals == null ? null : java.util.Map.copyOf(globals);
         tools = tools == null ? null : java.util.List.copyOf(tools);
         bindingIds = bindingIds == null ? null : java.util.List.copyOf(bindingIds);
+        triggers = triggers == null ? null : java.util.List.copyOf(triggers);
     }
 }

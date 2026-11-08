@@ -51,6 +51,20 @@ pub trait SandboxPort: Send + Sync {
     fn present<'a>(&'a self, image: &'a str) -> crate::transport::Call<'a, bool>;
     fn pull<'a>(&'a self, image: &'a str, seconds: u64) -> crate::transport::Call<'a, ()>;
     fn dirty(&self) -> bool;
+    /// Creates a long-lived trigger container (ADR 058) with the same hardening as a tool run and returns its name and
+    /// the attached `start` command; stdin stays open for the trigger's frames.
+    fn trigger_container<'a>(
+        &'a self,
+        _image: &'a str,
+        _command: &'a [String],
+        _memory_mi_b: u64,
+    ) -> crate::transport::Call<'a, (String, tokio::process::Command)> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    /// Removes a container this client created.
+    fn remove_container<'a>(&'a self, _name: &'a str) -> crate::transport::Call<'a, ()> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     /// Runs the command over tool protocol v2: writes `input`, answers broker requests through `broker` while
     /// stdout streams, and returns everything the process wrote.
     fn run<'a>(
@@ -71,6 +85,40 @@ pub trait SandboxPort: Send + Sync {
     }
 }
 impl SandboxPort for DockerEngine {
+    fn trigger_container<'a>(
+        &'a self,
+        image: &'a str,
+        command: &'a [String],
+        memory_mi_b: u64,
+    ) -> crate::transport::Call<'a, (String, tokio::process::Command)> {
+        Box::pin(async move {
+            if self.dirty.load(Ordering::SeqCst) || command.is_empty() {
+                return Err(Failure::Unavailable);
+            }
+            let mut nonce = [0u8; 16];
+            ring::rand::SecureRandom::fill(&ring::rand::SystemRandom::new(), &mut nonce)
+                .map_err(|_| Failure::Unavailable)?;
+            let name = format!("toolgate-trigger-{}", &crate::digest(&nonce)[..24]);
+            let args = self.create_arguments(&name, image, command, memory_mi_b);
+            if let Err(failure) = self
+                .capture(&args, b"", CONTAINER_CREATE_TIMEOUT, 4096)
+                .await
+            {
+                let _ = self.remove(&name).await;
+                return Err(failure);
+            }
+            let start = self.command(&strings(&["start", "--attach", "--interactive", &name]));
+            Ok((name, start))
+        })
+    }
+    fn remove_container<'a>(&'a self, name: &'a str) -> crate::transport::Call<'a, ()> {
+        Box::pin(async move {
+            if !name.starts_with("toolgate-trigger-") {
+                return Err(Failure::Validation);
+            }
+            self.remove(name).await
+        })
+    }
     fn probe_version<'a>(
         &'a self,
         image: &'a str,
@@ -431,6 +479,66 @@ impl DockerEngine {
         .await
         .map(|_| ())
     }
+    /// The hardened `create` of every container this client runs: no network, read-only root, non-root user, no
+    /// capabilities, a seccomp profile, bounded memory, processes, files and tmpfs. No arbitrary flag crosses it.
+    fn create_arguments(
+        &self,
+        name: &str,
+        image: &str,
+        command: &[String],
+        memory_mi_b: u64,
+    ) -> Vec<String> {
+        let mut args = strings(&[
+            "create",
+            "--name",
+            name,
+            "--label",
+            &format!("io.ololabs.toolgate.owner={}", self.owner),
+            "--pull",
+            "never",
+            "--read-only",
+            "--network",
+            "none",
+            "--user",
+            "65532:65532",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges=true",
+            "--security-opt",
+            &format!("seccomp={}", self.profile.display()),
+            "--memory",
+            &format!("{memory_mi_b}m"),
+            "--memory-swap",
+            &format!("{memory_mi_b}m"),
+            "--pids-limit",
+            "64",
+            "--cpus",
+            "1",
+            "--ulimit",
+            "nofile=256:256",
+            "--stop-timeout",
+            "1",
+            "--log-driver",
+            "none",
+            "--workdir",
+            "/work",
+            "--tmpfs",
+            "/work:rw,noexec,nosuid,nodev,size=8388608,mode=0700,uid=65532,gid=65532",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=8388608,mode=0700,uid=65532,gid=65532",
+            "--env",
+            "LD_PRELOAD=",
+            "--env",
+            "LD_LIBRARY_PATH=",
+            "--interactive",
+            "--entrypoint",
+            &command[0],
+            image,
+        ]);
+        args.extend_from_slice(&command[1..]);
+        args
+    }
     /// Each launch uses a fresh bounded disposable filesystem, non-root identity
     /// and a process filter. No arbitrary Docker flags cross this boundary.
     pub async fn run(
@@ -473,55 +581,7 @@ impl DockerEngine {
             name: name.clone(),
             armed: true,
         };
-        let mut args = strings(&[
-            "create",
-            "--name",
-            &name,
-            "--label",
-            &format!("io.ololabs.toolgate.owner={}", self.owner),
-            "--pull",
-            "never",
-            "--read-only",
-            "--network",
-            "none",
-            "--user",
-            "65532:65532",
-            "--cap-drop",
-            "ALL",
-            "--security-opt",
-            "no-new-privileges=true",
-            "--security-opt",
-            &format!("seccomp={}", self.profile.display()),
-            "--memory",
-            &format!("{}m", limits.memory_mi_b),
-            "--memory-swap",
-            &format!("{}m", limits.memory_mi_b),
-            "--pids-limit",
-            "64",
-            "--cpus",
-            "1",
-            "--ulimit",
-            "nofile=256:256",
-            "--stop-timeout",
-            "1",
-            "--log-driver",
-            "none",
-            "--workdir",
-            "/work",
-            "--tmpfs",
-            "/work:rw,noexec,nosuid,nodev,size=8388608,mode=0700,uid=65532,gid=65532",
-            "--tmpfs",
-            "/tmp:rw,noexec,nosuid,nodev,size=8388608,mode=0700,uid=65532,gid=65532",
-            "--env",
-            "LD_PRELOAD=",
-            "--env",
-            "LD_LIBRARY_PATH=",
-            "--interactive",
-            "--entrypoint",
-            &command[0],
-            image,
-        ]);
-        args.extend_from_slice(&command[1..]);
+        let args = self.create_arguments(&name, image, command, limits.memory_mi_b);
         let result = async {
             self.capture(&args, b"", create_timeout, 4096).await?;
             self.converse(

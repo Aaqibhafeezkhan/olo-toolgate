@@ -11,7 +11,7 @@ import java.security.spec.RSAPublicKeySpec;
 import java.util.*;
 
 /** RFC7515 RS256, strict protected headers, canonical base64url and disjoint trust domains. */
-public final class RsaFleetCrypto implements FleetCrypto,KillCrypto {
+public final class RsaFleetCrypto implements FleetCrypto, KillCrypto, TriggerCrypto {
     private static final String RELEASE="toolgate-package-release+jws", DESIRED="toolgate-fleet-desired+jws", GRANT="toolgate-fleet-artifact+jws";
     private final Codec codec;
     private final RSAPrivateCrtKey signing;
@@ -40,10 +40,13 @@ public final class RsaFleetCrypto implements FleetCrypto,KillCrypto {
     private static String encode(byte[] bytes){return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);}
     private <T> Verified<T> verify(FleetSignedDocument signed,String type,Class<T> model,Map<String,RSAPublicKey> keys){
         codec.model(codec.json(signed),FleetSignedDocument.class);
-        var parts=signed.jws().split("\\.",-1);if(parts.length!=3||parts[0].length()>1024||parts[1].length()>87384)throw Failure.validation();
+        return verify(signed.jws(),type,model,keys,87384,65536);
+    }
+    private <T> Verified<T> verify(String jws,String type,Class<T> model,Map<String,RSAPublicKey> keys,int maxEncoded,int maxBytes){
+        var parts=jws.split("\\.",-1);if(parts.length!=3||parts[0].length()>1024||parts[1].length()>maxEncoded)throw Failure.validation();
         var header=codec.model(new String(decode(parts[0]),StandardCharsets.UTF_8),FleetSignatureHeader.class);
         var key=keys.get(header.kid());if(key==null||!type.equals(header.typ()))throw unauthorized();
-        byte[] bytes=decode(parts[1]),signature=decode(parts[2]);if(bytes.length>65536||signature.length!=key.getModulus().bitLength()/8)throw unauthorized();
+        byte[] bytes=decode(parts[1]),signature=decode(parts[2]);if(bytes.length>maxBytes||signature.length!=key.getModulus().bitLength()/8)throw unauthorized();
         try{var verifier=Signature.getInstance("SHA256withRSA");verifier.initVerify(key);verifier.update((parts[0]+"."+parts[1]).getBytes(StandardCharsets.US_ASCII));if(!verifier.verify(signature))throw unauthorized();}
         catch(GeneralSecurityException failure){throw unauthorized();}
         // Strict UTF-8 conversion does not permit replacement characters to alter signed semantics.
@@ -53,11 +56,23 @@ public final class RsaFleetCrypto implements FleetCrypto,KillCrypto {
         return new Verified<>(codec.model(document,model),bytes);
     }
     private static Failure unauthorized(){return new Failure(ErrorCode.FORBIDDEN,403,"Fleet signature rejected");}
-    private FleetSignedDocument sign(Object document,String type){
+    private String compact(Object document,String type){
         var header=codec.json(new FleetSignatureHeader("RS256",type,keyId));
         var message=encode(header.getBytes(StandardCharsets.UTF_8))+"."+encode(codec.json(document).getBytes(StandardCharsets.UTF_8));
-        try{var signature=Signature.getInstance("SHA256withRSA");signature.initSign(signing);signature.update(message.getBytes(StandardCharsets.US_ASCII));return new FleetSignedDocument(message+"."+encode(signature.sign()));}
+        try{var signature=Signature.getInstance("SHA256withRSA");signature.initSign(signing);signature.update(message.getBytes(StandardCharsets.US_ASCII));return message+"."+encode(signature.sign());}
         catch(GeneralSecurityException failure){throw Failure.unavailable();}
+    }
+    private FleetSignedDocument sign(Object document,String type){return new FleetSignedDocument(compact(document,type));}
+    /** A desired trigger document is at most 3 MiB of JSON (256 instances with 8 KiB configs), so its JWS fits TriggerDesiredJws. */
+    private static final int TRIGGER_DESIRED_BYTES=3*1024*1024;
+    public io.ololabs.toolgate.contracts.v2.SignedTriggerDesiredDocument desired(io.ololabs.toolgate.contracts.v2.TriggerDesiredDocument document){
+        var json=codec.json(document);codec.model(json,io.ololabs.toolgate.contracts.v2.TriggerDesiredDocument.class);
+        if(json.getBytes(StandardCharsets.UTF_8).length>TRIGGER_DESIRED_BYTES)throw Failure.validation();
+        return new io.ololabs.toolgate.contracts.v2.SignedTriggerDesiredDocument(compact(document,TriggerCrypto.TYPE));
+    }
+    public io.ololabs.toolgate.contracts.v2.TriggerDesiredDocument verify(io.ololabs.toolgate.contracts.v2.SignedTriggerDesiredDocument signed){
+        codec.model(codec.json(signed),io.ololabs.toolgate.contracts.v2.SignedTriggerDesiredDocument.class);
+        return verify(signed.document(),TriggerCrypto.TYPE,io.ololabs.toolgate.contracts.v2.TriggerDesiredDocument.class,organizations,4*1024*1024,TRIGGER_DESIRED_BYTES).model();
     }
     public Verified<FleetPackageDocument> release(FleetSignedDocument signed){var verified=verify(signed,RELEASE,FleetPackageDocument.class,releases);if(verified.bytes().length>32768)throw Failure.validation();return verified;}
     public FleetArtifactGrantClaims grant(FleetSignedDocument signed){return verify(signed,GRANT,FleetArtifactGrantClaims.class,organizations).model();}

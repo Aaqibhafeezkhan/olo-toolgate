@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Emergency kill switch
 
-S22 is in implementation under [ADR 058](../adr/058-scoped-revocation-and-dispatch.md).
+S22 is in implementation under [ADR 059](../adr/059-scoped-revocation-and-dispatch.md).
 The [live progress record](../security/zero-trust-execution-status.md) distinguishes
 executed checks from remaining joined execution, conformance and timing gates.
 This guide describes the current contracts; it does not accept S22 or phase 3.

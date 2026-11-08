@@ -79,11 +79,32 @@ public class ContractCodec implements Codec {
         java.util.Map.entry("permit.schema.json", "InvocationPermitClaims"), java.util.Map.entry("permit.schema.json", "PermitReservationRequest"),
         java.util.Map.entry("permit.schema.json", "PermitConsumption"), java.util.Map.entry("permit.schema.json", "PermitConsumed"), java.util.Map.entry("protocol.schema.json", "InvocationResultReport"), java.util.Map.entry("protocol.schema.json", "RunEventBatch"),
         java.util.Map.entry("protocol.schema.json", "ToolHostRegistration"), java.util.Map.entry("package.schema.json", "PackageDeploymentRequest"), java.util.Map.entry("package.schema.json", "ClientReleaseRequest"), java.util.Map.entry("package.schema.json", "ClientRelease"),
-        java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"));
+        java.util.Map.entry("protocol.schema.json", "Dispatch"), java.util.Map.entry("protocol.schema.json", "AdmissionResponse"), java.util.Map.entry("protocol.schema.json", "ResultMessage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignmentCreate"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignment"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignmentResult"),
+        java.util.Map.entry("trigger.schema.json", "TriggerAssignmentPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerInstancePage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDefinitionPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDesiredInstance"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDesiredDocument"),
+        java.util.Map.entry("trigger.schema.json", "SignedTriggerDesiredDocument"),
+        java.util.Map.entry("trigger.schema.json", "TriggerLease"),
+        java.util.Map.entry("trigger.schema.json", "TriggerRevocation"),
+        java.util.Map.entry("trigger.schema.json", "TriggerEventPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSettings"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDelivery"),
+        java.util.Map.entry("trigger.schema.json", "TriggerDeliveryPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSubscription"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSubscriptionCreate"),
+        java.util.Map.entry("trigger.schema.json", "TriggerSubscriptionPage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerStreamTicket"),
+        java.util.Map.entry("trigger.schema.json", "TriggerStreamClientMessage"),
+        java.util.Map.entry("trigger.schema.json", "TriggerStreamServerMessage"));
     private void adoptV2(ObjectNode definitions, java.util.List<String> crossVersion) throws java.io.IOException {
         var v2 = mapper.createObjectNode();
         for (var file : java.util.List.of("identifiers.schema.json", "common.schema.json", "settings.schema.json", "permit.schema.json", "protocol.schema.json",
-                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json", "effect-authorization.schema.json", "kill.schema.json")) {
+                "package.schema.json", "descriptor.schema.json", "invocation.schema.json", "catalog.schema.json", "service-profile.schema.json", "profile.schema.json", "discovery.schema.json", "mcp-proxy.schema.json", "insights.schema.json", "effect-authorization.schema.json", "kill.schema.json", "trigger.schema.json")) {
             try (var input = io.ololabs.toolgate.contracts.ContractSet.class.getResourceAsStream("/io/ololabs/toolgate/contracts/schemas/v2/" + file)) {
                 if (input == null) throw new IllegalStateException("Shared schema artifact is incomplete");
                 v2.set(file, mapper.readTree(input).path("$defs"));

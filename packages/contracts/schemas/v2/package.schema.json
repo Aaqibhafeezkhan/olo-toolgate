@@ -225,6 +225,42 @@
         "artifactIds"
       ]
     },
+    "TriggerDefinition": {
+      "type": "object",
+      "description": "Trigger export (ADR 058, plan 5.9): the signed trigger descriptor plus packaging members outside the digest. Trigger names share the package export namespace with tools.",
+      "additionalProperties": false,
+      "properties": {
+        "descriptor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDescriptor"
+        },
+        "triggerDescriptorDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "runtimeId": {
+          "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+        },
+        "entryPoint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "artifactIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/DeclarationId"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "descriptor",
+        "triggerDescriptorDigest",
+        "runtimeId",
+        "entryPoint",
+        "artifactIds"
+      ]
+    },
     "MappingKind": {
       "type": "string",
       "enum": [
@@ -402,6 +438,14 @@
           "type": "array",
           "items": {
             "$ref": "package.schema.json#/$defs/ToolDefinition"
+          },
+          "maxItems": 64
+        },
+        "triggers": {
+          "type": "array",
+          "description": "Trigger exports. descriptorSetDigest covers them with the tools.",
+          "items": {
+            "$ref": "package.schema.json#/$defs/TriggerDefinition"
           },
           "maxItems": 64
         },

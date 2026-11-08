@@ -10,6 +10,7 @@ base { archivesName.set("toolgate-sdk-processor") }
 dependencies {
     api(project(":sdk-java-api"))
     testImplementation(libs.junit.jupiter)
+    testImplementation(project(":contracts-java"))
     testRuntimeOnly(libs.junit.launcher)
 }
 

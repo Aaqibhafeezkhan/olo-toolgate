@@ -119,7 +119,7 @@ class SdkBuilderTest {
             var conditions = new EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null);
             var rule = new EnterpriseManagementRule(List.of("tool_builder.read", "tool_builder.build"), EnterpriseGroupType.TOOL_GROUP, new GroupSelection(List.of("default-tools"), false), List.of(), conditions, null);
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("sdk-author", "SDK author", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, List.of(rule)));
-            TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("sdk-authors", "SDK authors", true, 1L, List.of("editor"), List.of("sdk-author")));
+            TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("sdk-authors", "SDK authors", true, 1L, List.of("editor"), List.of("sdk-author"),null));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null;
         });
         return new DirectoryService(store, codec, 512, 1048576).portalActor(tenant, DirectoryService.digest("editor-session"), "editor");

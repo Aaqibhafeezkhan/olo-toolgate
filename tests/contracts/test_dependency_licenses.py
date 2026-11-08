@@ -43,6 +43,19 @@ class MavenLicenseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Maven license requires review'):
             self.declared_license('Unknown private license')
 
+    def test_re2j_go_license_maps_to_bsd_3_clause_only_with_upstream_url(self):
+        coordinate = ('com.google.re2j', 're2j', '1.8')
+        self.assertEqual(self.declared_license('Go License', *coordinate, url='https://golang.org/LICENSE'), 'BSD-3-Clause')
+        with self.assertRaisesRegex(ValueError, 'Go license URL requires review'):
+            self.declared_license('Go License', *coordinate, url='https://example.com/LICENSE')
+        with self.assertRaisesRegex(ValueError, 'Maven license requires review'):
+            self.declared_license('Go License', 'other', 're2j', '1.8', url='https://golang.org/LICENSE')
+
+    def test_explicit_bsd_3_clause_name_maps_but_bare_bsd_does_not(self):
+        self.assertEqual(self.declared_license('BSD 3-clause', group='org.threeten'), 'BSD-3-Clause')
+        with self.assertRaisesRegex(ValueError, 'Maven license requires review'):
+            self.declared_license('BSD', group='other')
+
     def test_explicit_cc0_metadata_still_uses_cc0(self):
         self.assertEqual(self.declared_license('Public domain', group='other',
                                             url='https://creativecommons.org/publicdomain/zero/1.0/'), 'CC0-1.0')

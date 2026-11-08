@@ -588,6 +588,9 @@
           "items": {
             "$ref": "local-tools.schema.json#/$defs/LocalToolInfo"
           }
+        },
+        "triggers": {
+          "$ref": "../v2/trigger.schema.json#/$defs/TriggerSync"
         }
       },
       "required": [
@@ -630,6 +633,9 @@
         },
         "serverName": {
           "$ref": "endpoint.schema.json#/$defs/GatewayName"
+        },
+        "triggers": {
+          "$ref": "../v2/trigger.schema.json#/$defs/TriggerSyncAck"
         }
       },
       "required": [
@@ -1086,7 +1092,7 @@
         },
         "collectSpans": {
           "type": "boolean",
-          "description": "DETAILED Insights: the device records and uploads its execution span (ADR 031 \u00a79)."
+          "description": "DETAILED Insights: the device records and uploads its execution span (ADR 031 §9)."
         }
       },
       "required": [

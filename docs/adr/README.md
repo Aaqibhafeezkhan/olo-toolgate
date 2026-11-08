@@ -105,4 +105,6 @@ Use `000-template.md`.
 
 - [ADR 057: Generalized target fencing](057-generalized-target-fencing.md)
 
-- [ADR 058: Scoped revocation and authenticated dispatch](058-scoped-revocation-and-dispatch.md)
+- [ADR 058: Triggers](058-triggers.md)
+
+- [ADR 059: Scoped revocation and authenticated dispatch](059-scoped-revocation-and-dispatch.md)

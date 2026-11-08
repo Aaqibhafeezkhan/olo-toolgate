@@ -33,8 +33,8 @@ public final class GroupGraph {
     }
     public static Directory.Entry withMembers(Directory.Entry entry,Codec codec,List<String> members) {
         Object value=switch(entry.id().kind()) {
-            case TEAM->{var g=codec.model(entry.document(),ControlTeam.class); yield new ControlTeam(g.id(),g.name(),g.enabled(),g.revision()+1,members,g.roleIds());}
-            case AGENT_GROUP->{var g=codec.model(entry.document(),ControlAgentGroup.class); yield new ControlAgentGroup(g.id(),g.name(),g.slug(),g.enabled(),g.revision()+1,members,g.roleIds());}
+            case TEAM->{var g=codec.model(entry.document(),ControlTeam.class); yield new ControlTeam(g.id(),g.name(),g.enabled(),g.revision()+1,members,g.roleIds(),g.dataClearance());}
+            case AGENT_GROUP->{var g=codec.model(entry.document(),ControlAgentGroup.class); yield new ControlAgentGroup(g.id(),g.name(),g.slug(),g.enabled(),g.revision()+1,members,g.roleIds(),g.dataClearance());}
             case TOOL_GROUP->{var g=codec.model(entry.document(),ControlToolGroup.class); yield new ControlToolGroup(g.id(),g.name(),g.enabled(),g.revision()+1,members);}
             case DEVICE_GROUP->{var g=codec.model(entry.document(),ControlDeviceGroup.class); yield new ControlDeviceGroup(g.id(),g.name(),g.enabled(),g.revision()+1,members);}
             default->throw Failure.validation();
@@ -45,8 +45,8 @@ public final class GroupGraph {
         for(var kind:DEFAULTS.keySet()) {
             var id=kind.id(DEFAULTS.get(kind)); if(entries.containsKey(id))continue;
             Object value=switch(kind) {
-                case TEAM->new ControlTeam(id.value(),"Default team",true,1L,List.of(),List.of());
-                case AGENT_GROUP->new ControlAgentGroup(id.value(),"Default agent group",null,true,1L,List.of(),List.of());
+                case TEAM->new ControlTeam(id.value(),"Default team",true,1L,List.of(),List.of(),null);
+                case AGENT_GROUP->new ControlAgentGroup(id.value(),"Default agent group",null,true,1L,List.of(),List.of(),null);
                 case TOOL_GROUP->new ControlToolGroup(id.value(),"Default tool group",true,1L,List.of());
                 case DEVICE_GROUP->new ControlDeviceGroup(id.value(),"Default device group",true,1L,List.of());
                 default->throw Failure.validation();

@@ -37,6 +37,16 @@ public final class PackageProvisioning {
         this.store = store; this.codec = codec; this.packages = packages; this.marketplace = marketplace; this.core = core; this.clients = clients; this.fleet = fleet; this.clock = clock;
     }
 
+    private java.util.function.Function<io.ololabs.toolgate.control.domain.Ids.TenantId,TriggerService> triggers;
+    /** Trigger assignments the profile declares (ADR 058) are applied through the tenant's trigger service. */
+    public PackageProvisioning triggers(java.util.function.Function<io.ololabs.toolgate.control.domain.Ids.TenantId,TriggerService> value) { triggers = value; return this; }
+
+    /** Whether a profile declares any client trigger assignment: that enables triggers for the deployment. */
+    public static boolean declaresTriggers(com.fasterxml.jackson.databind.JsonNode profile) {
+        for (var p : profile.path("packages")) if (p.path("triggers").isArray() && !p.path("triggers").isEmpty()) return true;
+        return false;
+    }
+
     /** Whether a profile names device groups: their membership changes after READY, so the profile keeps being reapplied. */
     public boolean followsDevices(String document) {
         return codec.model(document, DeploymentProfile.class).packages().stream().anyMatch(p -> p.deviceGroupIds() != null && !p.deviceGroupIds().isEmpty());
@@ -49,7 +59,7 @@ public final class PackageProvisioning {
 
     /** Structural and semantic checks of the complete profile, before any mutation. */
     private void validate(DeploymentProfile profile) {
-        var ids = new HashSet<String>();
+        var ids = new HashSet<String>(); var assignments = new HashSet<String>();
         for (var p : profile.packages()) {
             if (!ids.add(p.packageId())) throw refused("The profile names " + p.packageId() + " twice");
             if (p.source() == ProfilePackageSource.MARKETPLACE && p.packageDigest() == null) throw refused(p.packageId() + " needs an exact Marketplace package digest");
@@ -68,6 +78,11 @@ public final class PackageProvisioning {
                 if (!tools.add(t.toolId())) throw refused(t.toolId() + " is activated twice");
             }
             if (!tools.isEmpty() && hosts.isEmpty() && groups.isEmpty()) throw refused(p.packageId() + " activates exports without a Tool Host or device group");
+            for (var t : p.triggers() == null ? List.<io.ololabs.toolgate.contracts.v2.ProfileTrigger>of() : p.triggers()) {
+                if (!t.triggerId().startsWith(p.packageId() + "/")) throw refused(t.triggerId() + " is not an export of " + p.packageId());
+                if (!assignments.add(t.assignment())) throw refused("The profile declares trigger assignment " + t.assignment() + " twice");
+                if (groups.isEmpty()) throw refused(p.packageId() + " declares trigger assignments without a device group");
+            }
         }
     }
 
@@ -234,8 +249,37 @@ public final class PackageProvisioning {
             if (changed) save(tx, actor, directory, entries, "PROFILE_ACTIVATE", "package:" + p.packageId());
             return null;
         });
+        // 5. Trigger assignments of the package's client triggers for its device groups (ADR 058).
+        var declared = p.triggers() == null ? List.<io.ololabs.toolgate.contracts.v2.ProfileTrigger>of() : p.triggers();
+        if (!declared.isEmpty()) {
+            status.put("step", "ASSIGN");
+            if (triggers == null) throw refused("Trigger assignments need the trigger service");
+            var service = triggers.apply(actor.tenant());
+            var names = status.putArray("triggerAssignments");
+            for (var t : declared) { assign(actor, service, p, groups, t); names.add(t.assignment()); }
+        }
         if (waitingForDevice) { status.put("state", "PENDING").put("reason", bounded("Waiting for an active device in " + String.join(", ", groups))); return; }
         status.put("step", "DONE").put("state", "READY");
+    }
+
+    /** Creates the declared assignment, or brings an existing one to the declared spec with its ETag. */
+    private void assign(DirectoryService.Actor actor, TriggerService service, ProfilePackage p, java.util.Collection<String> groups, io.ololabs.toolgate.contracts.v2.ProfileTrigger t) {
+        var spec = JSON.objectNode().put("trigger", t.triggerId()).put("packageVersion", p.version());
+        var target = spec.putObject("target").put("executor", "CLIENT");
+        var groupIds = target.putArray("deviceGroups"); groups.forEach(groupIds::add);
+        spec.set("config", node(codec.json(t.config())));
+        spec.put("desiredState", t.desiredState() == null ? "Running" : t.desiredState().name());
+        Store.Reply current;
+        try { current = service.get(actor, t.assignment()); }
+        catch (Failure missing) {
+            if (missing.status() != 404) throw missing;
+            var body = JSON.objectNode().put("name", t.assignment()); body.set("spec", spec);
+            service.create(actor, codec.json(body), "profile-trigger-" + DirectoryService.digest(t.assignment() + "\n" + codec.json(spec)).substring(0, 32), false, "profile-trigger-" + t.assignment());
+            return;
+        }
+        var existing = node(current.body()).path("spec");
+        if (existing.equals(spec)) return;
+        service.patch(actor, t.assignment(), codec.json(JSON.objectNode().set("spec", spec)), "W/\"" + current.revision() + "\"", null, false, "profile-trigger-" + t.assignment());
     }
 
     /** Each binding the profile names allows exactly the imported profile packages that name it. */

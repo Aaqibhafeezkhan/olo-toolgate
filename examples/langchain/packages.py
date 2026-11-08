@@ -1,6 +1,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 """Real package build, Control client release and signed fleet rollout for the local example."""
+import hashlib
 import json
 from pathlib import Path
 import secrets
@@ -12,7 +13,10 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PACKAGE_ID = 'examples.hotfolder'
-TOOLS = {PACKAGE_ID+'/'+name for name in ('list', 'read_text', 'write_text')}
+# The hot-folder trigger is the trigger-only inbox-watch package; the profile releases and assigns it.
+TRIGGER_PACKAGE_ID = 'examples.inbox-watch'
+# move is granted for the hot-folder trigger agent (trigger_agent.py), which files each dropped file in processed/.
+TOOLS = {PACKAGE_ID+'/'+name for name in ('list', 'read_text', 'write_text', 'move')}
 BASE = 'eclipse-temurin@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c'
 
 
@@ -23,6 +27,7 @@ def prepare(compose, state, environment):
     subprocess.run(['docker', 'build', '--platform', 'linux/amd64', '-f', str(HERE/'package.Dockerfile'),
         '--build-arg', 'QUICKSTART_IMAGE='+image, '--output', 'type=local,dest='+str(state/'package'),
         str(ROOT)], check=True)
+    core_lock(state/'package', 'inbox-watch.tgpkg', TRIGGER_PACKAGE_ID, 'examples/java-tools/inbox-watch')
     subprocess.run(compose+['up', '-d', 'registry'], check=True, cwd=HERE)
     port = environment.get('TOOLGATE_REGISTRY_PORT', '18552')
     if not port.isdigit() or not 1024 <= int(port) <= 65535:
@@ -47,7 +52,6 @@ def prepare(compose, state, environment):
     request = urllib.request.Request(origin+'/v2/toolgate/java-base/manifests/approved',
         headers={'Accept': 'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'})
     with urllib.request.urlopen(request, timeout=10) as response:
-        import hashlib
         digest = 'sha256:'+hashlib.sha256(response.read()).hexdigest()
     settings = dict(TOOLGATE_CONTROL_CLIENT_IMAGES_ENABLED='true',
         TOOLGATE_CONTROL_CLIENT_IMAGES_REGISTRY_URL=origin,
@@ -55,6 +59,28 @@ def prepare(compose, state, environment):
         TOOLGATE_CONTROL_CLIENT_IMAGES_BASE='toolgate/java-base@'+digest,
         TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS='LINUX,WINDOWS')
     (state/'client-images.env').write_text(''.join(k+'='+v+'\n' for k,v in settings.items()), encoding='utf-8')
+
+
+def core_lock(directory, name='inbox-watch.tgpkg', package_id=None, project='examples/java-tools/inbox-watch'):
+    """A sealed core lock naming the built trigger package, for the hot-folder profile (compose.triggers.yaml).
+
+    Control resolves a PREBUILT_CORE profile entry only from such a lock, with the same fields and digests as
+    core-mcp/build.py writes: the artifact's SHA-256 and the package digest over its CHECKSUMS.sha256.
+    """
+    import zipfile
+    artifact = directory/name
+    with zipfile.ZipFile(artifact) as archive:
+        manifest = json.loads(archive.read('toolgate-package.json'))
+        checksums = archive.read('CHECKSUMS.sha256')
+    package_id = package_id or TRIGGER_PACKAGE_ID
+    if manifest.get('id') != package_id:
+        raise ValueError('The built package is not ' + package_id)
+    lock = dict(schemaVersion=1, sdkVersion=manifest['sdk']['version'], packages=[dict(
+        project=project, sdk='java-gradle', id=package_id, version=manifest['version'],
+        artifact=name, artifactSha256=hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        packageDigest='sha256:'+hashlib.sha256(checksums).hexdigest())])
+    (directory/'core-packages.lock.json').write_text(json.dumps(lock, indent=2, sort_keys=True)+'\n', encoding='utf-8')
+    return lock
 
 
 def release_request(config, path, body, content_type='application/json'):

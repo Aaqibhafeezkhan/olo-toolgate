@@ -3659,5 +3659,1404 @@
     "retainedEventCount": 2,
     "archivedEventCount": 0,
     "observedAtUnixMs": 1700000000000
+  },
+  "TriggerId": "examples.mail-idle/new-message",
+  "TriggerInstanceId": "c7b2-01",
+  "TriggerExecutorId": "toolhost-a",
+  "TriggerEventType": "examples.mail.message.received.v1",
+  "TriggerEventId": "AAMkAGI2-41",
+  "TriggerReason": "Started",
+  "TriggerMessage": "imap reconnecting",
+  "TriggerLeaseToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "TriggerTimestamp": "2026-10-31T10:02:11Z",
+  "TriggerSequence": 41,
+  "TriggerCheckpointBody": "AQID",
+  "TriggerKind": "SERVER_TRIGGER",
+  "TriggerMode": "PUSH",
+  "TriggerExecutor": "SERVER",
+  "TriggerSourceReplay": "STATE_SNAPSHOT",
+  "TriggerOverflow": "BLOCK",
+  "TriggerTerminalRejectionPolicy": "HALT",
+  "TriggerDesiredState": "Running",
+  "TriggerPhase": "Running",
+  "TriggerConditionType": "Ready",
+  "TriggerConditionStatus": "True",
+  "TriggerCheckpointLevel": "ACCEPTED",
+  "TriggerEmitStatus": "LOCAL_DURABLE",
+  "TriggerHealthStatus": "DEGRADED",
+  "TriggerEventKind": "state",
+  "TriggerDispositionKind": "REJECTED_TERMINAL",
+  "TriggerRejectionReason": "StaleLeaseEpoch",
+  "TriggerRevocationReason": "AssignmentStopped",
+  "TriggerProducerKind": "DEVICE",
+  "TriggerLifecycleAction": "Pause",
+  "TriggerFrameKind": "EMIT",
+  "TriggerLimits": {
+    "maxEventsPerHour": 600,
+    "maxEventBytes": 16384,
+    "maxCheckpointBytes": 16384,
+    "memoryMiB": 256,
+    "maxBrokerCallsPerMinute": 120,
+    "stopGraceMs": 10000
+  },
+  "TriggerSchedule": {
+    "resyncIntervalMs": 900000
+  },
+  "TriggerSnapshotCapacity": {
+    "capacity": 1024,
+    "maxKeyBytes": 32
+  },
+  "TriggerDescriptor": {
+    "kind": "SERVER_TRIGGER",
+    "triggerId": "examples.mail-idle/new-message",
+    "mode": "PUSH",
+    "executors": [
+      "SERVER"
+    ],
+    "eventType": "examples.mail.message.received.v1",
+    "configSchema": {
+      "type": "object"
+    },
+    "eventSchema": {
+      "type": "object"
+    },
+    "checkpointSchemaVersion": 1,
+    "sourceReplay": "STATE_SNAPSHOT",
+    "schedule": {
+      "resyncIntervalMs": 900000
+    },
+    "limits": {
+      "maxEventsPerHour": 600,
+      "maxEventBytes": 16384,
+      "maxCheckpointBytes": 16384,
+      "memoryMiB": 256,
+      "maxBrokerCallsPerMinute": 120,
+      "stopGraceMs": 10000
+    },
+    "overflow": "BLOCK",
+    "onTerminalRejection": "HALT",
+    "routes": [],
+    "tcpDestinations": [
+      "imap"
+    ],
+    "secrets": [
+      "imap-password"
+    ],
+    "permissions": [
+      "CREDENTIALS_IN_SANDBOX"
+    ],
+    "tiers": [
+      "OCI_SANDBOX"
+    ]
+  },
+  "TriggerDefinition": {
+    "descriptor": {
+      "kind": "SERVER_TRIGGER",
+      "triggerId": "examples.mail-idle/new-message",
+      "mode": "PUSH",
+      "executors": [
+        "SERVER"
+      ],
+      "eventType": "examples.mail.message.received.v1",
+      "configSchema": {
+        "type": "object"
+      },
+      "eventSchema": {
+        "type": "object"
+      },
+      "checkpointSchemaVersion": 1,
+      "sourceReplay": "STATE_SNAPSHOT",
+      "schedule": {
+        "resyncIntervalMs": 900000
+      },
+      "limits": {
+        "maxEventsPerHour": 600,
+        "maxEventBytes": 16384,
+        "maxCheckpointBytes": 16384,
+        "memoryMiB": 256,
+        "maxBrokerCallsPerMinute": 120,
+        "stopGraceMs": 10000
+      },
+      "overflow": "BLOCK",
+      "onTerminalRejection": "HALT",
+      "routes": [],
+      "tcpDestinations": [
+        "imap"
+      ],
+      "secrets": [
+        "imap-password"
+      ],
+      "permissions": [
+        "CREDENTIALS_IN_SANDBOX"
+      ],
+      "tiers": [
+        "OCI_SANDBOX"
+      ]
+    },
+    "triggerDescriptorDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "runtimeId": "jvm",
+    "entryPoint": "io.ololabs.toolgate.runtime.Main",
+    "artifactIds": [
+      "tool"
+    ]
+  },
+  "TriggerAssignmentName": "finance-inbox-pdf",
+  "TriggerLabel": {
+    "key": "team",
+    "value": "finance"
+  },
+  "TriggerTarget": {
+    "executor": "CLIENT",
+    "devices": [
+      "device-42"
+    ],
+    "deviceGroups": [
+      "finance-desktops"
+    ],
+    "excludeDevices": [
+      "device-7"
+    ]
+  },
+  "TriggerAssignmentSpec": {
+    "trigger": "examples.inbox-watch/new-file",
+    "packageVersion": "1.0.0",
+    "target": {
+      "executor": "CLIENT",
+      "devices": [
+        "device-42"
+      ],
+      "deviceGroups": [
+        "finance-desktops"
+      ],
+      "excludeDevices": [
+        "device-7"
+      ]
+    },
+    "config": {
+      "folder": "inbox"
+    },
+    "globals": {},
+    "desiredState": "Running"
+  },
+  "TriggerAssignmentMetadata": {
+    "name": "finance-inbox-pdf",
+    "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "generation": 3,
+    "configRevision": 2,
+    "resourceVersion": "W/\"5\"",
+    "labels": [
+      {
+        "key": "team",
+        "value": "finance"
+      }
+    ],
+    "createdAtUnixMs": 1793413600000,
+    "updatedAtUnixMs": 1793413660000
+  },
+  "TriggerInstanceCounts": {
+    "desired": 2,
+    "pending": 1,
+    "starting": 0,
+    "running": 1,
+    "paused": 0,
+    "stopped": 0,
+    "failed": 0,
+    "unsupported": 0,
+    "stale": 0
+  },
+  "TriggerAssignmentConditionType": "Available",
+  "TriggerAssignmentCondition": {
+    "type": "Available",
+    "status": "False",
+    "reason": "InstancesPending",
+    "lastTransitionTime": "2026-10-31T10:02:11Z"
+  },
+  "TriggerAssignmentStatus": {
+    "observedGeneration": 3,
+    "instances": {
+      "desired": 2,
+      "pending": 1,
+      "starting": 0,
+      "running": 1,
+      "paused": 0,
+      "stopped": 0,
+      "failed": 0,
+      "unsupported": 0,
+      "stale": 0
+    },
+    "conditions": [
+      {
+        "type": "Available",
+        "status": "False",
+        "reason": "InstancesPending",
+        "lastTransitionTime": "2026-10-31T10:02:11Z"
+      }
+    ]
+  },
+  "TriggerAssignment": {
+    "apiVersion": "toolgate.olo/v1",
+    "kind": "TriggerAssignment",
+    "metadata": {
+      "name": "finance-inbox-pdf",
+      "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      "generation": 3,
+      "configRevision": 2,
+      "resourceVersion": "W/\"5\"",
+      "labels": [
+        {
+          "key": "team",
+          "value": "finance"
+        }
+      ],
+      "createdAtUnixMs": 1793413600000,
+      "updatedAtUnixMs": 1793413660000
+    },
+    "spec": {
+      "trigger": "examples.inbox-watch/new-file",
+      "packageVersion": "1.0.0",
+      "target": {
+        "executor": "CLIENT",
+        "devices": [
+          "device-42"
+        ],
+        "deviceGroups": [
+          "finance-desktops"
+        ],
+        "excludeDevices": [
+          "device-7"
+        ]
+      },
+      "config": {
+        "folder": "inbox"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "status": {
+      "observedGeneration": 3,
+      "instances": {
+        "desired": 2,
+        "pending": 1,
+        "starting": 0,
+        "running": 1,
+        "paused": 0,
+        "stopped": 0,
+        "failed": 0,
+        "unsupported": 0,
+        "stale": 0
+      },
+      "conditions": [
+        {
+          "type": "Available",
+          "status": "False",
+          "reason": "InstancesPending",
+          "lastTransitionTime": "2026-10-31T10:02:11Z"
+        }
+      ]
+    }
+  },
+  "TriggerAssignmentCreate": {
+    "name": "finance-inbox-pdf",
+    "labels": [
+      {
+        "key": "team",
+        "value": "finance"
+      }
+    ],
+    "spec": {
+      "trigger": "examples.inbox-watch/new-file",
+      "packageVersion": "1.0.0",
+      "target": {
+        "executor": "CLIENT",
+        "devices": [
+          "device-42"
+        ],
+        "deviceGroups": [
+          "finance-desktops"
+        ],
+        "excludeDevices": [
+          "device-7"
+        ]
+      },
+      "config": {
+        "folder": "inbox"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    }
+  },
+  "TriggerPageToken": "after-finance",
+  "TriggerAssignmentPage": {
+    "items": [
+      {
+        "apiVersion": "toolgate.olo/v1",
+        "kind": "TriggerAssignment",
+        "metadata": {
+          "name": "finance-inbox-pdf",
+          "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "generation": 3,
+          "configRevision": 2,
+          "resourceVersion": "W/\"5\"",
+          "labels": [
+            {
+              "key": "team",
+              "value": "finance"
+            }
+          ],
+          "createdAtUnixMs": 1793413600000,
+          "updatedAtUnixMs": 1793413660000
+        },
+        "spec": {
+          "trigger": "examples.inbox-watch/new-file",
+          "packageVersion": "1.0.0",
+          "target": {
+            "executor": "CLIENT",
+            "devices": [
+              "device-42"
+            ],
+            "deviceGroups": [
+              "finance-desktops"
+            ],
+            "excludeDevices": [
+              "device-7"
+            ]
+          },
+          "config": {
+            "folder": "inbox"
+          },
+          "globals": {},
+          "desiredState": "Running"
+        },
+        "status": {
+          "observedGeneration": 3,
+          "instances": {
+            "desired": 2,
+            "pending": 1,
+            "starting": 0,
+            "running": 1,
+            "paused": 0,
+            "stopped": 0,
+            "failed": 0,
+            "unsupported": 0,
+            "stale": 0
+          },
+          "conditions": [
+            {
+              "type": "Available",
+              "status": "False",
+              "reason": "InstancesPending",
+              "lastTransitionTime": "2026-10-31T10:02:11Z"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "TriggerInstanceChangeKind": "Added",
+  "TriggerInstanceChange": {
+    "instanceId": "ti-0123456789abcdef0123456789abcdef",
+    "executorId": "device-42",
+    "change": "Added",
+    "newDesiredState": "Running"
+  },
+  "TriggerAssignmentResult": {
+    "assignment": {
+      "apiVersion": "toolgate.olo/v1",
+      "kind": "TriggerAssignment",
+      "metadata": {
+        "name": "finance-inbox-pdf",
+        "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        "generation": 3,
+        "configRevision": 2,
+        "resourceVersion": "W/\"5\"",
+        "labels": [
+          {
+            "key": "team",
+            "value": "finance"
+          }
+        ],
+        "createdAtUnixMs": 1793413600000,
+        "updatedAtUnixMs": 1793413660000
+      },
+      "spec": {
+        "trigger": "examples.inbox-watch/new-file",
+        "packageVersion": "1.0.0",
+        "target": {
+          "executor": "CLIENT",
+          "devices": [
+            "device-42"
+          ],
+          "deviceGroups": [
+            "finance-desktops"
+          ],
+          "excludeDevices": [
+            "device-7"
+          ]
+        },
+        "config": {
+          "folder": "inbox"
+        },
+        "globals": {},
+        "desiredState": "Running"
+      },
+      "status": {
+        "observedGeneration": 3,
+        "instances": {
+          "desired": 2,
+          "pending": 1,
+          "starting": 0,
+          "running": 1,
+          "paused": 0,
+          "stopped": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "stale": 0
+        },
+        "conditions": [
+          {
+            "type": "Available",
+            "status": "False",
+            "reason": "InstancesPending",
+            "lastTransitionTime": "2026-10-31T10:02:11Z"
+          }
+        ]
+      }
+    },
+    "dryRun": true,
+    "changes": [
+      {
+        "instanceId": "ti-0123456789abcdef0123456789abcdef",
+        "executorId": "device-42",
+        "change": "Added",
+        "newDesiredState": "Running"
+      }
+    ]
+  },
+  "TriggerDesiredStateSource": "Assignment",
+  "TriggerInstanceView": {
+    "instanceId": "ti-0123456789abcdef0123456789abcdef",
+    "assignment": "finance-inbox-pdf",
+    "triggerId": "examples.inbox-watch/new-file",
+    "executor": "CLIENT",
+    "executorId": "device-42",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "configRevision": 2,
+    "desiredState": "Running",
+    "desiredStateSource": "Assignment",
+    "phase": "Pending",
+    "conditions": [
+      {
+        "type": "Leased",
+        "status": "False",
+        "reason": "AwaitingCheckIn",
+        "lastTransitionTime": "2026-10-31T10:02:11Z"
+      }
+    ]
+  },
+  "TriggerInstancePage": {
+    "items": [
+      {
+        "instanceId": "ti-0123456789abcdef0123456789abcdef",
+        "assignment": "finance-inbox-pdf",
+        "triggerId": "examples.inbox-watch/new-file",
+        "executor": "CLIENT",
+        "executorId": "device-42",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "configRevision": 2,
+        "desiredState": "Running",
+        "desiredStateSource": "Assignment",
+        "phase": "Pending",
+        "conditions": [
+          {
+            "type": "Leased",
+            "status": "False",
+            "reason": "AwaitingCheckIn",
+            "lastTransitionTime": "2026-10-31T10:02:11Z"
+          }
+        ]
+      }
+    ]
+  },
+  "TriggerDefinitionRecord": {
+    "triggerId": "examples.mail-idle/new-message",
+    "packageId": "examples.mail-idle",
+    "packageVersion": "1.0.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "descriptor": {
+      "kind": "SERVER_TRIGGER",
+      "triggerId": "examples.mail-idle/new-message",
+      "mode": "PUSH",
+      "executors": [
+        "SERVER"
+      ],
+      "eventType": "examples.mail.message.received.v1",
+      "configSchema": {
+        "type": "object"
+      },
+      "eventSchema": {
+        "type": "object"
+      },
+      "checkpointSchemaVersion": 1,
+      "sourceReplay": "STATE_SNAPSHOT",
+      "schedule": {
+        "resyncIntervalMs": 900000
+      },
+      "limits": {
+        "maxEventsPerHour": 600,
+        "maxEventBytes": 16384,
+        "maxCheckpointBytes": 16384,
+        "memoryMiB": 256,
+        "maxBrokerCallsPerMinute": 120,
+        "stopGraceMs": 10000
+      },
+      "overflow": "BLOCK",
+      "onTerminalRejection": "HALT",
+      "routes": [],
+      "tcpDestinations": [
+        "imap"
+      ],
+      "secrets": [
+        "imap-password"
+      ],
+      "permissions": [
+        "CREDENTIALS_IN_SANDBOX"
+      ],
+      "tiers": [
+        "OCI_SANDBOX"
+      ]
+    },
+    "securityDelta": [
+      {
+        "kind": "KIND",
+        "toolId": "examples.mail-idle/new-message",
+        "widening": true,
+        "summary": "New PUSH trigger export"
+      }
+    ]
+  },
+  "TriggerDefinitionPage": {
+    "items": [
+      {
+        "triggerId": "examples.mail-idle/new-message",
+        "packageId": "examples.mail-idle",
+        "packageVersion": "1.0.0",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "descriptor": {
+          "kind": "SERVER_TRIGGER",
+          "triggerId": "examples.mail-idle/new-message",
+          "mode": "PUSH",
+          "executors": [
+            "SERVER"
+          ],
+          "eventType": "examples.mail.message.received.v1",
+          "configSchema": {
+            "type": "object"
+          },
+          "eventSchema": {
+            "type": "object"
+          },
+          "checkpointSchemaVersion": 1,
+          "sourceReplay": "STATE_SNAPSHOT",
+          "schedule": {
+            "resyncIntervalMs": 900000
+          },
+          "limits": {
+            "maxEventsPerHour": 600,
+            "maxEventBytes": 16384,
+            "maxCheckpointBytes": 16384,
+            "memoryMiB": 256,
+            "maxBrokerCallsPerMinute": 120,
+            "stopGraceMs": 10000
+          },
+          "overflow": "BLOCK",
+          "onTerminalRejection": "HALT",
+          "routes": [],
+          "tcpDestinations": [
+            "imap"
+          ],
+          "secrets": [
+            "imap-password"
+          ],
+          "permissions": [
+            "CREDENTIALS_IN_SANDBOX"
+          ],
+          "tiers": [
+            "OCI_SANDBOX"
+          ]
+        },
+        "securityDelta": [
+          {
+            "kind": "KIND",
+            "toolId": "examples.mail-idle/new-message",
+            "widening": true,
+            "summary": "New PUSH trigger export"
+          }
+        ]
+      }
+    ]
+  },
+  "TriggerCloudEvent": {
+    "specversion": "1.0",
+    "id": "AAMkAGI2-41",
+    "source": "toolgate:trigger-instance:c7b2-01",
+    "type": "examples.mail.message.received.v1",
+    "subject": "ap@example.com",
+    "time": "2026-10-31T10:29:58Z",
+    "datacontenttype": "application/json",
+    "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+    "data": {
+      "messageId": "AAMkAGI2-41",
+      "subject": "Invoice 1031"
+    },
+    "tgleaseepoch": 7,
+    "tgsequence": 41,
+    "tgkind": "fired",
+    "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+  },
+  "TriggerProducer": {
+    "kind": "DEVICE",
+    "executorId": "device-42",
+    "deviceGroups": [
+      "finance-desktops"
+    ],
+    "assignment": "finance-inbox-pdf",
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 4,
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "TriggerDesiredInstance": {
+    "instanceId": "c7b2-01",
+    "triggerId": "examples.mail-idle/new-message",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "configRevision": 2,
+    "config": {
+      "user": "ap@example.com"
+    },
+    "bindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "desiredState": "Running"
+  },
+  "TriggerDesiredDocument": {
+    "formatVersion": 1,
+    "tenantId": "3f1c0000-0000-4000-8000-000000000001",
+    "executorId": "toolhost-a",
+    "executor": "SERVER",
+    "generation": 41,
+    "issuedAtUnixMs": 1793413600000,
+    "expiresAtUnixMs": 1793500000000,
+    "instances": [
+      {
+        "instanceId": "c7b2-01",
+        "triggerId": "examples.mail-idle/new-message",
+        "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "configRevision": 2,
+        "config": {
+          "user": "ap@example.com"
+        },
+        "bindingDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "desiredState": "Running"
+      }
+    ]
+  },
+  "SignedTriggerDesiredDocument": {
+    "document": "eyJhbGciOiJFZERTQSJ9.eyJmb3JtYXRWZXJzaW9uIjoxfQ.c2ln"
+  },
+  "TriggerCondition": {
+    "type": "Ready",
+    "status": "True",
+    "reason": "Started",
+    "lastTransitionTime": "2026-10-31T10:02:11Z"
+  },
+  "TriggerCounters": {
+    "emitted": 17,
+    "rejected": 0,
+    "dropped": 0,
+    "restarts": 0,
+    "brokerCalls": 31
+  },
+  "TriggerOutboxStatus": {
+    "depth": 0,
+    "oldestAgeMs": 0
+  },
+  "TriggerInstanceReport": {
+    "instanceId": "c7b2-01",
+    "configRevision": 2,
+    "leaseEpoch": 7,
+    "phase": "Running",
+    "conditions": [
+      {
+        "type": "Ready",
+        "status": "True",
+        "reason": "Started",
+        "lastTransitionTime": "2026-10-31T10:02:11Z"
+      }
+    ],
+    "lastEventAt": "2026-10-31T10:30:10Z",
+    "counters": {
+      "emitted": 17,
+      "rejected": 0,
+      "dropped": 0,
+      "restarts": 0,
+      "brokerCalls": 31
+    },
+    "outbox": {
+      "depth": 0,
+      "oldestAgeMs": 0
+    }
+  },
+  "TriggerSnapshotPage": {
+    "snapshotGeneration": 3,
+    "snapshotDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "page": 1,
+    "pageCount": 1,
+    "pageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "instances": [
+      {
+        "instanceId": "c7b2-01",
+        "configRevision": 2,
+        "leaseEpoch": 7,
+        "phase": "Running",
+        "conditions": [
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "Started",
+            "lastTransitionTime": "2026-10-31T10:02:11Z"
+          }
+        ],
+        "lastEventAt": "2026-10-31T10:30:10Z",
+        "counters": {
+          "emitted": 17,
+          "rejected": 0,
+          "dropped": 0,
+          "restarts": 0,
+          "brokerCalls": 31
+        },
+        "outbox": {
+          "depth": 0,
+          "oldestAgeMs": 0
+        }
+      }
+    ]
+  },
+  "TriggerCheckpointReport": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "afterOutboxSeq": 41,
+    "level": "LOCAL",
+    "version": 12,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sizeBytes": 3,
+    "inline": "AQID"
+  },
+  "TriggerOutboxRecord": {
+    "instanceId": "c7b2-01",
+    "event": {
+      "specversion": "1.0",
+      "id": "AAMkAGI2-41",
+      "source": "toolgate:trigger-instance:c7b2-01",
+      "type": "examples.mail.message.received.v1",
+      "subject": "ap@example.com",
+      "time": "2026-10-31T10:29:58Z",
+      "datacontenttype": "application/json",
+      "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+      "data": {
+        "messageId": "AAMkAGI2-41",
+        "subject": "Invoice 1031"
+      },
+      "tgleaseepoch": 7,
+      "tgsequence": 41,
+      "tgkind": "fired",
+      "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+    }
+  },
+  "TriggerSync": {
+    "observedGeneration": 41,
+    "snapshot": {
+      "snapshotGeneration": 3,
+      "snapshotDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "page": 1,
+      "pageCount": 1,
+      "pageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "instances": [
+        {
+          "instanceId": "c7b2-01",
+          "configRevision": 2,
+          "leaseEpoch": 7,
+          "phase": "Running",
+          "conditions": [
+            {
+              "type": "Ready",
+              "status": "True",
+              "reason": "Started",
+              "lastTransitionTime": "2026-10-31T10:02:11Z"
+            }
+          ],
+          "lastEventAt": "2026-10-31T10:30:10Z",
+          "counters": {
+            "emitted": 17,
+            "rejected": 0,
+            "dropped": 0,
+            "restarts": 0,
+            "brokerCalls": 31
+          },
+          "outbox": {
+            "depth": 0,
+            "oldestAgeMs": 0
+          }
+        }
+      ]
+    },
+    "checkpoints": [
+      {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "afterOutboxSeq": 41,
+        "level": "LOCAL",
+        "version": 12,
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 3,
+        "inline": "AQID"
+      }
+    ],
+    "events": [
+      {
+        "instanceId": "c7b2-01",
+        "event": {
+          "specversion": "1.0",
+          "id": "AAMkAGI2-41",
+          "source": "toolgate:trigger-instance:c7b2-01",
+          "type": "examples.mail.message.received.v1",
+          "subject": "ap@example.com",
+          "time": "2026-10-31T10:29:58Z",
+          "datacontenttype": "application/json",
+          "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+          "data": {
+            "messageId": "AAMkAGI2-41",
+            "subject": "Invoice 1031"
+          },
+          "tgleaseepoch": 7,
+          "tgsequence": 41,
+          "tgkind": "fired",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+        }
+      }
+    ],
+    "pending": 0
+  },
+  "TriggerOutboxAck": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "outboxSeq": 41
+  },
+  "TriggerDisposition": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "outboxSeq": 39,
+    "id": "AAMk-39",
+    "disposition": "REJECTED_TERMINAL",
+    "reason": "SchemaInvalid"
+  },
+  "TriggerRetryLater": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "fromOutboxSeq": 42,
+    "retryAfterMs": 5000
+  },
+  "TriggerLease": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "leaseToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "expiresAtUnixMs": 1793413660000
+  },
+  "TriggerRevocation": {
+    "instanceId": "c7b2-02",
+    "reason": "AssignmentStopped"
+  },
+  "TriggerRejection": {
+    "instanceId": "c7b2-03",
+    "leaseEpoch": 6,
+    "reason": "StaleLeaseEpoch"
+  },
+  "TriggerSnapshotPageAck": {
+    "snapshotGeneration": 3,
+    "page": 1
+  },
+  "TriggerSyncAck": {
+    "generation": 42,
+    "maxCheckInBytes": 262144,
+    "checkInNow": false,
+    "acked": [
+      {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "outboxSeq": 41
+      }
+    ],
+    "leases": [
+      {
+        "instanceId": "c7b2-01",
+        "leaseEpoch": 7,
+        "leaseToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "expiresAtUnixMs": 1793413660000
+      }
+    ],
+    "snapshotPages": [
+      {
+        "snapshotGeneration": 3,
+        "page": 1
+      }
+    ]
+  },
+  "TriggerCheckpointUploadRequest": {
+    "version": 13,
+    "leaseEpoch": 7,
+    "afterOutboxSeq": 41,
+    "level": "ACCEPTED",
+    "sizeBytes": 38211,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "TriggerCheckpointUpload": {
+    "uploadId": "up-1",
+    "chunkBytes": 65536,
+    "expiresAtUnixMs": 1793417200000
+  },
+  "TriggerCheckpointMetadata": {
+    "instanceId": "c7b2-01",
+    "leaseEpoch": 7,
+    "afterOutboxSeq": 41,
+    "level": "ACCEPTED",
+    "version": 13,
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sizeBytes": 38211,
+    "chunkCount": 1
+  },
+  "TriggerStartFrame": {
+    "kind": "TRIGGER_START",
+    "triggerId": "examples.mail-idle/new-message",
+    "instanceId": "c7b2-01",
+    "configRevision": 2,
+    "leaseEpoch": 7,
+    "config": {
+      "user": "ap@example.com"
+    },
+    "globals": {
+      "imapHost": "imap.example.com"
+    },
+    "secretHandles": [
+      "h-1"
+    ],
+    "checkpoint": "AQID"
+  },
+  "TriggerEmitAckFrame": {
+    "kind": "EMIT_ACK",
+    "emitSeq": 1,
+    "status": "LOCAL_DURABLE",
+    "outboxSeq": 41
+  },
+  "TriggerAcceptedUpToFrame": {
+    "kind": "ACCEPTED_UPTO",
+    "emitSeq": 1
+  },
+  "TriggerCheckpointAckFrame": {
+    "kind": "CHECKPOINT_ACK",
+    "checkpointId": 1,
+    "level": "LOCAL"
+  },
+  "TriggerReconcileFrame": {
+    "kind": "RECONCILE"
+  },
+  "TriggerPauseFrame": {
+    "kind": "PAUSE"
+  },
+  "TriggerResumeFrame": {
+    "kind": "RESUME"
+  },
+  "TriggerStopFrame": {
+    "kind": "STOP",
+    "reason": "AssignmentStopped",
+    "graceMs": 10000
+  },
+  "TriggerReadyFrame": {
+    "kind": "READY"
+  },
+  "TriggerEmitFrame": {
+    "kind": "EMIT",
+    "emitSeq": 1,
+    "id": "AAMkAGI2-41",
+    "data": {
+      "messageId": "AAMkAGI2-41"
+    },
+    "position": "AQID"
+  },
+  "TriggerCheckpointFrame": {
+    "kind": "CHECKPOINT",
+    "checkpointId": 1,
+    "afterEmitSeq": 1,
+    "state": "AQID"
+  },
+  "TriggerHealthFrame": {
+    "kind": "HEALTH",
+    "status": "DEGRADED",
+    "reason": "imap reconnecting"
+  },
+  "TriggerHeartbeatFrame": {
+    "kind": "HEARTBEAT"
+  },
+  "TriggerExitFrame": {
+    "kind": "EXIT",
+    "code": 0
+  },
+  "TriggerDesiredJws": "eyJhbGciOiJFZERTQSJ9.eyJmb3JtYXRWZXJzaW9uIjoxfQ.c2ln",
+  "ProfileTrigger": {
+    "assignment": "hotfolder-inbox",
+    "triggerId": "examples.hotfolder/file-dropped",
+    "config": {
+      "folder": "inbox"
+    },
+    "desiredState": "Running"
+  },
+  "TriggerDispositionView": {
+    "disposition": "REJECTED_TERMINAL",
+    "reason": "SchemaInvalid"
+  },
+  "TriggerStoredEvent": {
+    "event": {
+      "specversion": "1.0",
+      "id": "AAMkAGI2-41",
+      "source": "toolgate:trigger-instance:c7b2-01",
+      "type": "examples.mail.message.received.v1",
+      "subject": "ap@example.com",
+      "time": "2026-10-31T10:29:58Z",
+      "datacontenttype": "application/json",
+      "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+      "data": {
+        "messageId": "AAMkAGI2-41",
+        "subject": "Invoice 1031"
+      },
+      "tgleaseepoch": 7,
+      "tgsequence": 41,
+      "tgkind": "fired",
+      "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+    },
+    "producer": {
+      "kind": "DEVICE",
+      "executorId": "device-42",
+      "deviceGroups": [
+        "finance-desktops"
+      ],
+      "assignment": "finance-inbox-pdf",
+      "instanceId": "c7b2-01",
+      "leaseEpoch": 4,
+      "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "receivedAtUnixMs": 1793442600000
+  },
+  "TriggerEventPage": {
+    "items": [
+      {
+        "event": {
+          "specversion": "1.0",
+          "id": "AAMkAGI2-41",
+          "source": "toolgate:trigger-instance:c7b2-01",
+          "type": "examples.mail.message.received.v1",
+          "subject": "ap@example.com",
+          "time": "2026-10-31T10:29:58Z",
+          "datacontenttype": "application/json",
+          "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+          "data": {
+            "messageId": "AAMkAGI2-41",
+            "subject": "Invoice 1031"
+          },
+          "tgleaseepoch": 7,
+          "tgsequence": 41,
+          "tgkind": "fired",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+        },
+        "producer": {
+          "kind": "DEVICE",
+          "executorId": "device-42",
+          "deviceGroups": [
+            "finance-desktops"
+          ],
+          "assignment": "finance-inbox-pdf",
+          "instanceId": "c7b2-01",
+          "leaseEpoch": 4,
+          "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "receivedAtUnixMs": 1793442600000
+      },
+      {
+        "event": {
+          "specversion": "1.0",
+          "id": "AAMkAGI2-41",
+          "source": "toolgate:trigger-instance:c7b2-01",
+          "type": "examples.mail.message.received.v1",
+          "subject": "ap@example.com",
+          "time": "2026-10-31T10:29:58Z",
+          "datacontenttype": "application/json",
+          "dataschema": "toolgate:package:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:trigger:new-message:event",
+          "data": {
+            "messageId": "AAMkAGI2-41",
+            "subject": "Invoice 1031"
+          },
+          "tgleaseepoch": 7,
+          "tgsequence": 41,
+          "tgkind": "fired",
+          "traceparent": "00-11111111111111111111111111111111-2222222222222222-01"
+        },
+        "producer": {
+          "kind": "DEVICE",
+          "executorId": "device-42",
+          "deviceGroups": [
+            "finance-desktops"
+          ],
+          "assignment": "finance-inbox-pdf",
+          "instanceId": "c7b2-01",
+          "leaseEpoch": 4,
+          "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "triggerDescriptorDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "receivedAtUnixMs": 1793442600000,
+        "disposition": {
+          "disposition": "REJECTED_TERMINAL",
+          "reason": "SchemaInvalid"
+        }
+      }
+    ],
+    "nextPageToken": "after-finance"
+  },
+  "TriggerClassification": "CONFIDENTIAL",
+  "TriggerDefaultClassifications": {
+    "sdkPackage": "INTERNAL",
+    "mcpProxy": "CONFIDENTIAL",
+    "external": "CONFIDENTIAL",
+    "unknown": "RESTRICTED"
+  },
+  "TriggerSettings": {
+    "eventRetentionDays": 7,
+    "defaultClassification": {
+      "sdkPackage": "INTERNAL",
+      "mcpProxy": "CONFIDENTIAL",
+      "external": "CONFIDENTIAL",
+      "unknown": "RESTRICTED"
+    }
+  },
+  "TriggerCursor": "0000000000000042",
+  "TriggerDeliveryState": "DeadLettered",
+  "TriggerConsumerKind": "SUBSCRIPTION",
+  "TriggerDeliveryConsumer": {
+    "kind": "TEST",
+    "name": "router-test"
+  },
+  "TriggerDelivery": {
+    "deliveryId": "sub-hotfolder/0000000000000042",
+    "consumer": {
+      "kind": "SUBSCRIPTION",
+      "name": "hotfolder-agent"
+    },
+    "cursor": "0000000000000042",
+    "eventSource": "toolgate:tenant:t1:trigger-instance:ti-1",
+    "eventId": "file:inbox/order-1042.txt:10",
+    "eventType": "examples.hotfolder.file-dropped.v1",
+    "assignment": "hotfolder-inbox",
+    "state": "RetryWait",
+    "attempts": 2,
+    "createdAtUnixMs": 1793442600000,
+    "updatedAtUnixMs": 1793442602000,
+    "nextAttemptAtUnixMs": 1793442606000,
+    "reason": "ConsumerUnavailable"
+  },
+  "TriggerDeliveryPage": {
+    "items": [
+      {
+        "deliveryId": "sub-hotfolder/0000000000000042",
+        "consumer": {
+          "kind": "SUBSCRIPTION",
+          "name": "hotfolder-agent"
+        },
+        "cursor": "0000000000000042",
+        "eventSource": "toolgate:tenant:t1:trigger-instance:ti-1",
+        "eventId": "file:inbox/order-1042.txt:10",
+        "eventType": "examples.hotfolder.file-dropped.v1",
+        "assignment": "hotfolder-inbox",
+        "state": "RetryWait",
+        "attempts": 2,
+        "createdAtUnixMs": 1793442600000,
+        "updatedAtUnixMs": 1793442602000,
+        "nextAttemptAtUnixMs": 1793442606000,
+        "reason": "ConsumerUnavailable"
+      }
+    ],
+    "nextPageToken": "after-finance"
+  },
+  "TriggerViewEvent": {
+    "specversion": "1.0",
+    "id": "file:inbox/order-1042.txt:10",
+    "source": "toolgate:tenant:t1:trigger-instance:ti-1",
+    "type": "examples.hotfolder.file-dropped.v1",
+    "subject": "inbox/order-1042.txt",
+    "time": "2026-10-31T10:29:58Z",
+    "data": {
+      "name": "order-1042.txt",
+      "path": "inbox/order-1042.txt",
+      "size": 10
+    },
+    "tgclassification": "INTERNAL",
+    "tgredacted": false
+  },
+  "TriggerSubscriptionSources": {
+    "assignments": [
+      "hotfolder-inbox"
+    ]
+  },
+  "TriggerSubscriptionSpec": {
+    "owner": "user:alice",
+    "sources": {
+      "assignments": [
+        "hotfolder-inbox"
+      ]
+    },
+    "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+    "includeState": false,
+    "expiresAtUnixMs": 1793529000000
+  },
+  "TriggerSubscriptionPhase": "Suspended",
+  "TriggerSubscriptionStatus": {
+    "phase": "Suspended",
+    "reason": "GrantRevoked",
+    "clearance": "INTERNAL"
+  },
+  "TriggerSubscription": {
+    "apiVersion": "toolgate.olo/v1",
+    "kind": "TriggerSubscription",
+    "metadata": {
+      "name": "finance-inbox-pdf",
+      "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+      "generation": 3,
+      "configRevision": 2,
+      "resourceVersion": "W/\"5\"",
+      "labels": [
+        {
+          "key": "team",
+          "value": "finance"
+        }
+      ],
+      "createdAtUnixMs": 1793413600000,
+      "updatedAtUnixMs": 1793413660000
+    },
+    "spec": {
+      "owner": "user:alice",
+      "sources": {
+        "assignments": [
+          "hotfolder-inbox"
+        ]
+      },
+      "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+      "includeState": false,
+      "expiresAtUnixMs": 1793529000000
+    },
+    "status": {
+      "phase": "Active",
+      "clearance": "INTERNAL",
+      "ackedCursor": "0000000000000042"
+    }
+  },
+  "TriggerSubscriptionCreate": {
+    "name": "hotfolder-agent",
+    "spec": {
+      "owner": "user:alice",
+      "sources": {
+        "assignments": [
+          "hotfolder-inbox"
+        ]
+      },
+      "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+      "includeState": false,
+      "expiresAtUnixMs": 1793529000000
+    }
+  },
+  "TriggerSubscriptionPage": {
+    "items": [
+      {
+        "apiVersion": "toolgate.olo/v1",
+        "kind": "TriggerSubscription",
+        "metadata": {
+          "name": "finance-inbox-pdf",
+          "uid": "ta-0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "generation": 3,
+          "configRevision": 2,
+          "resourceVersion": "W/\"5\"",
+          "labels": [
+            {
+              "key": "team",
+              "value": "finance"
+            }
+          ],
+          "createdAtUnixMs": 1793413600000,
+          "updatedAtUnixMs": 1793413660000
+        },
+        "spec": {
+          "owner": "user:alice",
+          "sources": {
+            "assignments": [
+              "hotfolder-inbox"
+            ]
+          },
+          "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+          "includeState": false,
+          "expiresAtUnixMs": 1793529000000
+        },
+        "status": {
+          "phase": "Active",
+          "clearance": "INTERNAL",
+          "ackedCursor": "0000000000000042"
+        }
+      }
+    ]
+  },
+  "TriggerStreamTicket": {
+    "ticket": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "expiresAtUnixMs": 1793442630000
+  },
+  "TriggerStreamClientType": "ack",
+  "TriggerStreamClientMessage": {
+    "type": "subscribe",
+    "subscription": "hotfolder-agent",
+    "resumeAfter": "0000000000000042"
+  },
+  "TriggerStreamServerType": "gap",
+  "TriggerStreamError": {
+    "status": 403,
+    "code": "FORBIDDEN",
+    "detail": "Not permitted"
+  },
+  "TriggerStreamServerMessage": {
+    "type": "event",
+    "subscription": "hotfolder-agent",
+    "cursor": "0000000000000042",
+    "event": {
+      "specversion": "1.0",
+      "id": "file:inbox/order-1042.txt:10",
+      "source": "toolgate:tenant:t1:trigger-instance:ti-1",
+      "type": "examples.hotfolder.file-dropped.v1",
+      "subject": "inbox/order-1042.txt",
+      "time": "2026-10-31T10:29:58Z",
+      "data": {
+        "name": "order-1042.txt",
+        "path": "inbox/order-1042.txt",
+        "size": 10
+      },
+      "tgclassification": "INTERNAL",
+      "tgredacted": false
+    }
   }
 }
