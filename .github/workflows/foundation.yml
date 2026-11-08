@@ -53,6 +53,8 @@ jobs:
     - name: Python, contract, PHP and Helm gates
       run: |
         python tools/check.py --ci-common --ci-part python
+    - name: Documentation structure and link checks
+      run: make docs
     - name: Verify LangChain lifecycle and package contracts before image builds
       run: |
         python -m unittest discover -s examples/langchain -p test_manage.py -v
