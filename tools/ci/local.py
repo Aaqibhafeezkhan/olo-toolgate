@@ -28,6 +28,7 @@ IMAGE = 'olo-toolgate-local-ci:runner'
 
 # Coverage policy, NOT a second list of commands. New jobs require a decision.
 POLICY = {
+    'ci.docs': 'replay',
     'quality-summary.reports': 'hosted-report',
     'zero-trust-scorecard.scorecard': 'hosted-diagnostics',
     'create-release-branch.prepare': 'publication',
