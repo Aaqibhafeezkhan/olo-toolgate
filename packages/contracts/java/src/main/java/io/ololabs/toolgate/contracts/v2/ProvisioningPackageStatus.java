@@ -17,6 +17,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param deviceGroupIds canonical deviceGroupIds value
  * @param deviceIds canonical deviceIds value
  * @param globalsDigest canonical globalsDigest value
+ * @param triggerAssignments canonical triggerAssignments value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ProvisioningPackageStatus(
@@ -31,7 +32,8 @@ public record ProvisioningPackageStatus(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "hostIds", required = false) java.util.List<String> hostIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceGroupIds", required = false) java.util.List<String> deviceGroupIds,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceIds", required = false) java.util.List<String> deviceIds,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "globalsDigest", required = false) String globalsDigest
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "globalsDigest", required = false) String globalsDigest,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggerAssignments", required = false) java.util.List<String> triggerAssignments
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -47,6 +49,7 @@ public record ProvisioningPackageStatus(
      * @param deviceGroupIds canonical deviceGroupIds value
      * @param deviceIds canonical deviceIds value
      * @param globalsDigest canonical globalsDigest value
+     * @param triggerAssignments canonical triggerAssignments value
      */
     public ProvisioningPackageStatus {
         java.util.Objects.requireNonNull(packageId, "packageId");
@@ -58,5 +61,6 @@ public record ProvisioningPackageStatus(
         hostIds = hostIds == null ? null : java.util.List.copyOf(hostIds);
         deviceGroupIds = deviceGroupIds == null ? null : java.util.List.copyOf(deviceGroupIds);
         deviceIds = deviceIds == null ? null : java.util.List.copyOf(deviceIds);
+        triggerAssignments = triggerAssignments == null ? null : java.util.List.copyOf(triggerAssignments);
     }
 }

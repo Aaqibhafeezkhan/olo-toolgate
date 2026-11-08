@@ -71,6 +71,13 @@ def maven_license(group, artifact, version, cache):
             if 'https://www.bouncycastle.org/licence.html' not in urls:
                 raise ValueError('Bouncy Castle license URL requires review: '+coordinate)
             result.append('MIT')
+        elif group == 'com.google.re2j' and name == 'Go License':
+            # RE2/J declares the Go project license, which is BSD-3-Clause.
+            # https://github.com/google/re2j/blob/master/LICENSE
+            urls = [node.text or '' for node in pom.findall('m:licenses/m:license/m:url', ns)]
+            if 'https://golang.org/LICENSE' not in urls:
+                raise ValueError('Go license URL requires review: '+coordinate)
+            result.append('BSD-3-Clause')
         elif 'apache' in lowered and '2' in lowered: result.append('Apache-2.0')
         elif ('eclipse public' in lowered or lowered.startswith('epl')) and '2' in lowered: result.append('EPL-2.0')
         elif 'eclipse public' in lowered and '1' in lowered: result.append('EPL-1.0')
@@ -88,6 +95,7 @@ def maven_license(group, artifact, version, cache):
             if not any('cc0' in url or 'creativecommons.org/publicdomain/zero/1.0' in url for url in urls):
                 raise ValueError('Public-domain declaration requires explicit CC0 evidence: '+coordinate)
             result.append('CC0-1.0')
+        elif lowered in ('bsd 3-clause', 'bsd-3-clause', 'bsd 3-clause license'): result.append('BSD-3-Clause')
         elif 'mit' in lowered: result.append('MIT')
         else: raise ValueError(f'Maven license requires review: {coordinate}: {name}')
     if not result:

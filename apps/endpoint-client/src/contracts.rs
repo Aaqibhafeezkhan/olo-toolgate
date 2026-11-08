@@ -44,6 +44,15 @@ impl Contracts {
                 {
                     definitions.push((name.clone(), uri.to_string()));
                 }
+            } else if uri.ends_with("/v2/trigger.schema.json") {
+                // Client triggers (ADR 058): the signed desired document and the descriptors it pins by digest.
+                for name in [
+                    "SignedTriggerDesiredDocument",
+                    "TriggerDesiredDocument",
+                    "TriggerDescriptor",
+                ] {
+                    definitions.push((name.to_string(), uri.to_string()));
+                }
             } else if uri.ends_with("/v2/protocol.schema.json") {
                 // Devices forward run-response frames like Tool Hosts; only these two v2 messages cross this boundary.
                 for name in ["RunEventBatch", "RunEventAck"] {

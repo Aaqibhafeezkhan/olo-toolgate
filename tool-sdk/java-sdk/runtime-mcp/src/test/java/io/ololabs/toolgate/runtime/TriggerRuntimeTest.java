@@ -118,7 +118,19 @@ class TriggerRuntimeTest {
             Thread reader = new Thread(() -> {
                 try (InputStream r = read) {
                     ByteArrayOutputStream line = new ByteArrayOutputStream();
-                    for (int b; (b = r.read()) != -1; ) {
+                    while (true) {
+                        int b;
+                        try {
+                            b = r.read();
+                        } catch (IOException e) {
+                            // PipedInputStream ties its liveness to the last thread that wrote: when the runtime's
+                            // stdin thread writes a final frame and ends before the runtime closes its output, a read
+                            // fails with "Write end dead". Once the runtime has returned the pipe is closed, and the
+                            // remaining bytes and the end of stream read normally.
+                            if (!runtimeEnded()) throw e;
+                            continue;
+                        }
+                        if (b == -1) break;
                         if (b != '\n') {
                             line.write(b);
                             continue;
@@ -136,6 +148,17 @@ class TriggerRuntimeTest {
             });
             reader.setDaemon(true);
             reader.start();
+        }
+
+        /** Waits for the runtime thread; true once it has returned (and so closed its output). */
+        private boolean runtimeEnded() {
+            try {
+                thread.join(20_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            return !thread.isAlive();
         }
 
         static Process start(String trigger, String config, String checkpoint) throws IOException {

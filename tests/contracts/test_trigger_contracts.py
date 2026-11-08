@@ -41,6 +41,7 @@ LONGEST = {
     'SemanticVersion': '1.0.0-' + 'a' * 122,
     'PackageId': '.'.join(['a' * 31] * 4),
     'ToolId': 'a' * 31 + '.' + 'a' * 31 + '.' + 'a' * 31 + '/' + 'a' * 32,
+    'deliveryId': 'a' * 100 + '/' + '0' * 16,
 }
 
 

@@ -2156,6 +2156,18 @@
         },
         "lastSeenAtUnixMs": {
           "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "counters": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCounters"
+        },
+        "outbox": {
+          "$ref": "trigger.schema.json#/$defs/TriggerOutboxStatus"
+        },
+        "lastEventAt": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "lastReconcileAt": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
         }
       },
       "required": [
@@ -2182,6 +2194,73 @@
           "type": "array",
           "items": {
             "$ref": "trigger.schema.json#/$defs/TriggerInstanceView"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "TriggerDispositionView": {
+      "type": "object",
+      "description": "Control's terminal disposition of a stored record: a loss record, or a Control-side rejection on re-validation (plan 6.6).",
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDispositionKind"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        }
+      },
+      "required": [
+        "disposition",
+        "reason"
+      ]
+    },
+    "TriggerStoredEvent": {
+      "type": "object",
+      "description": "One record Control stored for an instance (plan 6.4): the event as the executor sent it, the producer Control attached from the certificate, the lease and the signed package, and when Control received it.",
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCloudEvent"
+        },
+        "producer": {
+          "$ref": "trigger.schema.json#/$defs/TriggerProducer"
+        },
+        "receivedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "disposition": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDispositionView"
+        },
+        "classification": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification",
+          "description": "The coarse label Control computed for the event type at ingest (module 11)."
+        }
+      },
+      "required": [
+        "event",
+        "producer",
+        "receivedAtUnixMs"
+      ]
+    },
+    "TriggerEventPage": {
+      "type": "object",
+      "description": "One page of an instance's stored records, in (leaseEpoch, outboxSeq) order.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerStoredEvent"
           },
           "maxItems": 200
         },
@@ -2253,6 +2332,530 @@
       },
       "required": [
         "items"
+      ]
+    },
+    "TriggerClassification": {
+      "type": "string",
+      "enum": [
+        "PUBLIC",
+        "INTERNAL",
+        "CONFIDENTIAL",
+        "RESTRICTED"
+      ],
+      "description": "Ordered data classification (plan 12.2): PUBLIC < INTERNAL < CONFIDENTIAL < RESTRICTED."
+    },
+    "TriggerDefaultClassifications": {
+      "type": "object",
+      "description": "Tenant fail-closed defaults for unlabelled data, per integration kind (plan 12.3). A default may be raised, never lowered below the shipped value.",
+      "additionalProperties": false,
+      "properties": {
+        "sdkPackage": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification"
+        },
+        "mcpProxy": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification"
+        },
+        "external": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification"
+        },
+        "unknown": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification"
+        }
+      },
+      "required": [
+        "sdkPackage",
+        "mcpProxy",
+        "external",
+        "unknown"
+      ]
+    },
+    "TriggerSettings": {
+      "type": "object",
+      "description": "Tenant trigger settings (GET and PUT /api/control/v1/triggers/settings).",
+      "additionalProperties": false,
+      "properties": {
+        "eventRetentionDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Event retention in days; at most the operator ceiling. Default 7."
+        },
+        "defaultClassification": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDefaultClassifications"
+        }
+      },
+      "required": [
+        "eventRetentionDays",
+        "defaultClassification"
+      ]
+    },
+    "TriggerCursor": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 16,
+      "pattern": "^[0-9]{16}$",
+      "description": "Position in the tenant's routed event stream (plan 12.1)."
+    },
+    "TriggerDeliveryState": {
+      "type": "string",
+      "enum": [
+        "Pending",
+        "InFlight",
+        "Delivered",
+        "RetryWait",
+        "Held",
+        "Superseded",
+        "DeadLettered",
+        "Skipped"
+      ],
+      "description": "Delivery state machine (plan 12)."
+    },
+    "TriggerConsumerKind": {
+      "type": "string",
+      "enum": [
+        "SUBSCRIPTION",
+        "ACTION",
+        "TEST"
+      ],
+      "description": "What a delivery goes to. TEST is the in-process consumer of the router tests."
+    },
+    "TriggerDeliveryConsumer": {
+      "type": "object",
+      "description": "The consumer of a delivery.",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "trigger.schema.json#/$defs/TriggerConsumerKind"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ]
+    },
+    "TriggerDelivery": {
+      "type": "object",
+      "description": "One delivery of a routed event to one consumer.",
+      "additionalProperties": false,
+      "properties": {
+        "deliveryId": {
+          "type": "string",
+          "minLength": 18,
+          "maxLength": 120,
+          "pattern": "^[a-z0-9:-]{1,100}/[0-9]{16}$"
+        },
+        "consumer": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDeliveryConsumer"
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "eventSource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "eventId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventId"
+        },
+        "eventType": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventType"
+        },
+        "assignment": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "state": {
+          "$ref": "trigger.schema.json#/$defs/TriggerDeliveryState"
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "createdAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "updatedAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "nextAttemptAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        }
+      },
+      "required": [
+        "deliveryId",
+        "consumer",
+        "cursor",
+        "eventSource",
+        "eventId",
+        "eventType",
+        "assignment",
+        "state",
+        "attempts",
+        "createdAtUnixMs",
+        "updatedAtUnixMs"
+      ]
+    },
+    "TriggerDeliveryPage": {
+      "type": "object",
+      "description": "One page of deliveries.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerDelivery"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "TriggerViewEvent": {
+      "type": "object",
+      "description": "A routed event as one reader may see it (plan 12.2 rule 5): the envelope always; data and subject only when the reader's clearance covers the event's label.",
+      "additionalProperties": false,
+      "properties": {
+        "specversion": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "id": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventId"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "type": {
+          "$ref": "trigger.schema.json#/$defs/TriggerEventType"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "time": {
+          "$ref": "trigger.schema.json#/$defs/TriggerTimestamp"
+        },
+        "data": {
+          "type": "object",
+          "description": "Present only when readable.",
+          "x-toolgate-max-bytes": 16384
+        },
+        "tgclassification": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification"
+        },
+        "tgredacted": {
+          "type": "boolean",
+          "description": "True when data and subject were removed for this reader."
+        }
+      },
+      "required": [
+        "specversion",
+        "id",
+        "source",
+        "type",
+        "tgclassification",
+        "tgredacted"
+      ]
+    },
+    "TriggerSubscriptionSources": {
+      "type": "object",
+      "description": "Explicit sources of a subscription (plan 13.1); there is no wildcard. Control refuses a source listed twice.",
+      "additionalProperties": false,
+      "properties": {
+        "assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "assignments"
+      ]
+    },
+    "TriggerSubscriptionSpec": {
+      "type": "object",
+      "description": "A durable socket subscription (plan 13.1).",
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "description": "Set by Control from the caller; a client value is refused unless it is the caller."
+        },
+        "sources": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionSources"
+        },
+        "filter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "CEL over `event`, compiled against the owner's readable view."
+        },
+        "includeState": {
+          "type": "boolean"
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "sources",
+        "expiresAtUnixMs"
+      ]
+    },
+    "TriggerSubscriptionPhase": {
+      "type": "string",
+      "enum": [
+        "Active",
+        "Suspended",
+        "Expired"
+      ]
+    },
+    "TriggerSubscriptionStatus": {
+      "type": "object",
+      "description": "Subscription status.",
+      "additionalProperties": false,
+      "properties": {
+        "phase": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionPhase"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        },
+        "clearance": {
+          "$ref": "trigger.schema.json#/$defs/TriggerClassification"
+        },
+        "ackedCursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        }
+      },
+      "required": [
+        "phase",
+        "clearance"
+      ]
+    },
+    "TriggerSubscription": {
+      "type": "object",
+      "description": "Subscription resource.",
+      "additionalProperties": false,
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "toolgate.olo/v1"
+        },
+        "kind": {
+          "type": "string",
+          "const": "TriggerSubscription"
+        },
+        "metadata": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentMetadata"
+        },
+        "spec": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionSpec"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionStatus"
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "metadata",
+        "spec",
+        "status"
+      ]
+    },
+    "TriggerSubscriptionCreate": {
+      "type": "object",
+      "description": "Body of POST /api/control/v1/triggers/subscriptions.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "spec": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionSpec"
+        }
+      },
+      "required": [
+        "name",
+        "spec"
+      ]
+    },
+    "TriggerSubscriptionPage": {
+      "type": "object",
+      "description": "One page of subscriptions.",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "trigger.schema.json#/$defs/TriggerSubscription"
+          },
+          "maxItems": 200
+        },
+        "nextPageToken": {
+          "$ref": "trigger.schema.json#/$defs/TriggerPageToken"
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "TriggerStreamTicket": {
+      "type": "object",
+      "description": "A single-use WebSocket ticket (plan 13.2), valid for 30 s, sent as the subprotocol `ticket.` followed by the ticket value.",
+      "additionalProperties": false,
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "expiresAtUnixMs": {
+          "$ref": "identifiers.schema.json#/$defs/UnixMs"
+        }
+      },
+      "required": [
+        "ticket",
+        "expiresAtUnixMs"
+      ]
+    },
+    "TriggerStreamClientType": {
+      "type": "string",
+      "enum": [
+        "subscribe",
+        "watch",
+        "ack",
+        "credit",
+        "unsubscribe"
+      ]
+    },
+    "TriggerStreamClientMessage": {
+      "type": "object",
+      "description": "A client message on `toolgate.triggers.v1`. subscribe: subscription, optional resumeAfter. watch: sources, optional filter. ack: subscription, cursor. credit: n. unsubscribe: subscription.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "$ref": "trigger.schema.json#/$defs/TriggerStreamClientType"
+        },
+        "subscription": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "resumeAfter": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "sources": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionSources"
+        },
+        "filter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "TriggerStreamServerType": {
+      "type": "string",
+      "enum": [
+        "subscribed",
+        "event",
+        "gap",
+        "revoked",
+        "error"
+      ]
+    },
+    "TriggerStreamError": {
+      "type": "object",
+      "description": "An error on the stream, with the status and code an HTTP call would get.",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "status",
+        "code"
+      ]
+    },
+    "TriggerStreamServerMessage": {
+      "type": "object",
+      "description": "A server message on `toolgate.triggers.v1`. subscribed: subscription. event: subscription (absent for watch), cursor, event. gap: subscription, fromCursor, toCursor, reason RetentionExpired. revoked: subscription, reason. error: error.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "$ref": "trigger.schema.json#/$defs/TriggerStreamServerType"
+        },
+        "subscription": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentName"
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "event": {
+          "$ref": "trigger.schema.json#/$defs/TriggerViewEvent"
+        },
+        "fromCursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "toCursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "reason": {
+          "$ref": "trigger.schema.json#/$defs/TriggerReason"
+        },
+        "error": {
+          "$ref": "trigger.schema.json#/$defs/TriggerStreamError"
+        }
+      },
+      "required": [
+        "type"
       ]
     }
   }

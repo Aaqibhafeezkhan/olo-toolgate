@@ -17,6 +17,8 @@ public enum ProvisioningStep {
     ROLLOUT,
     /** Canonical ACTIVATE value. */
     ACTIVATE,
+    /** Canonical ASSIGN value. */
+    ASSIGN,
     /** Canonical DONE value. */
     DONE
 }

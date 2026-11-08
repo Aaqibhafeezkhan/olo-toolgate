@@ -2861,6 +2861,7 @@
       ],
       "rowSecurity": "forced",
       "runtimePrivileges": [
+        "DELETE",
         "INSERT",
         "SELECT",
         "UPDATE"

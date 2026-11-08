@@ -18,6 +18,7 @@ import jakarta.ws.rs.core.Response;
 @Path("/api/control/v1") @Produces("application/json") @Blocking @PermitAll
 public class TriggerResource {
     @Inject TriggerService service; @Inject RoutingContext routing; @Inject Correlation correlation; @Inject VerifiedActors actors;
+    @Inject TriggerRouter router; @Inject TriggerSubscriptions subscriptions; @Inject TriggerStream stream;
 
     private void tls() { if (!routing.request().isSSL()) throw new Failure(ErrorCode.UNAUTHORIZED, 401, "Direct TLS required"); }
     private java.security.cert.X509Certificate peer() {
@@ -74,6 +75,59 @@ public class TriggerResource {
         return response(service.instances(actor(), assignment, executorId, token, size));
     }
 
+    @GET @Path("triggers/events") @io.quarkus.security.Authenticated
+    public Response events(@QueryParam("assignment") String assignment, @QueryParam("instanceId") String instanceId,
+                           @QueryParam("pageToken") String token, @QueryParam("pageSize") Integer size) {
+        return response(service.events(actor(), assignment, instanceId, token, size));
+    }
+
+    // ---- module 10: settings and deliveries ----
+
+    @GET @Path("triggers/settings") @io.quarkus.security.Authenticated
+    public Response settings() { return response(router.settings(actor())); }
+
+    @PUT @Path("triggers/settings") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response updateSettings(String body) { return response(router.updateSettings(actor(), body, correlation.id())); }
+
+    @GET @Path("triggers/deliveries") @io.quarkus.security.Authenticated
+    public Response deliveries(@QueryParam("consumer") String consumer, @QueryParam("state") String state,
+                               @QueryParam("pageToken") String token, @QueryParam("pageSize") Integer size) {
+        return response(router.deliveries(actor(), consumer, state, token, size));
+    }
+
+    @POST @Path("triggers/deliveries:redrive") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response redrive(String body) {
+        String id;
+        try { id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body == null ? "" : body).path("deliveryId").asText(null); }
+        catch (Exception invalid) { throw Failure.validation(); }
+        return response(router.redrive(actor(), id, correlation.id()));
+    }
+
+    // ---- module 12: subscriptions and stream tickets ----
+
+    @POST @Path("triggers/subscriptions") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response createSubscription(@HeaderParam("Idempotency-Key") String key, String body) {
+        return response(subscriptions.create(actor(), body, key, correlation.id()));
+    }
+
+    @GET @Path("triggers/subscriptions") @io.quarkus.security.Authenticated
+    public Response subscriptions(@QueryParam("pageToken") String token, @QueryParam("pageSize") Integer size) { return response(subscriptions.list(actor(), token, size)); }
+
+    @GET @Path("triggers/subscriptions/{name}") @io.quarkus.security.Authenticated
+    public Response subscription(@PathParam("name") String name) { return response(subscriptions.get(actor(), name)); }
+
+    @DELETE @Path("triggers/subscriptions/{name}") @io.quarkus.security.Authenticated
+    public Response deleteSubscription(@PathParam("name") String name, @HeaderParam("If-Match") String ifMatch) {
+        return response(subscriptions.delete(actor(), name, ifMatch, correlation.id()));
+    }
+
+    /** A single-use socket ticket. The body is a credential: it is never logged (plan 13.2). */
+    @POST @Path("triggers/stream/tickets") @io.quarkus.security.Authenticated
+    public Response ticket(@HeaderParam("Origin") String origin) { return response(stream.ticket(actor(), origin)); }
+
     @GET @Path("endpoint/triggers/desired")
     public Response desired() { return response(service.desired(peer())); }
+
+    @GET @Path("endpoint/triggers/descriptors/{digest}")
+    public Response descriptor(@PathParam("digest") String digest) { return response(service.descriptor(peer(), digest)); }
 }

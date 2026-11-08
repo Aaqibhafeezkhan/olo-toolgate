@@ -23,7 +23,7 @@ class ConfigurationTransferTest {
         target.transaction(EnterpriseConformanceTest.TENANT,true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());GroupGraph.defaults(entries,codec);
             for(var user:List.of("owner","carol")){var e=codec.entry(Kind.USER,codec.json(new ControlUser(user,user,true,1L, null, null, null)));entries.put(e.id(),e);}GroupGraph.addDefault(entries,codec,Kind.USER,"owner");
             var role=codec.entry(Kind.ROLE,codec.json(new ControlRole("owner-role","Super Admin",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of())));entries.put(role.id(),role);
-            for(var team:List.of(new ControlTeam("owners","Owners",true,1L,List.of("owner"),List.of("owner-role")),new ControlTeam("ops","Operations",true,1L,List.of("carol"),List.of()))){var e=codec.entry(Kind.TEAM,codec.json(team));entries.put(e.id(),e);}
+            for(var team:List.of(new ControlTeam("owners","Owners",true,1L,List.of("owner"),List.of("owner-role"),null),new ControlTeam("ops","Operations",true,1L,List.of("carol"),List.of(),null))){var e=codec.entry(Kind.TEAM,codec.json(team));entries.put(e.id(),e);}
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         restore=new DirectoryService(target,codec,512,1048576);owner=restore.portalActor(EnterpriseConformanceTest.TENANT,"e".repeat(64),"owner");
     }

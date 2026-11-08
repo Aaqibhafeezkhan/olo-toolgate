@@ -24,7 +24,7 @@ public class PackageProvisioningBootstrap {
     @Inject TenantWork tenants;
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(PackageProvisioningBootstrap.class);
     @Inject Config config; @Inject PostgresStore store; @Inject ContractCodec codec; @Inject ServerPackages packages; @Inject Marketplace marketplace;
-    @Inject ClientReleases clients; @Inject FleetBootstrap fleet;
+    @Inject ClientReleases clients; @Inject FleetBootstrap fleet; @Inject TriggerBootstrap triggers;
     private ScheduledExecutorService executor;
 
     PackageProvisioning service() throws java.io.IOException {
@@ -32,7 +32,7 @@ public class PackageProvisioningBootstrap {
         var inventory = lock.isEmpty() ? java.util.List.<CorePackageInventory.Artifact>of() : CorePackageInventory.load(Path.of(lock.get()));
         PackageProvisioning.CoreArtifacts core = (id, version) -> inventory.stream().filter(a -> a.id().equals(id) && a.version().equals(version)).findFirst()
             .map(a -> new PackageProvisioning.Core(a.packageDigest(), () -> { try { return a.bytes(); } catch (java.io.IOException changed) { throw Failure.unavailable(); } })).orElse(null);
-        return new PackageProvisioning(store, codec, packages, marketplace, core, clients, fleet::forTenant, java.time.Clock.systemUTC());
+        return new PackageProvisioning(store, codec, packages, marketplace, core, clients, fleet::forTenant, java.time.Clock.systemUTC()).triggers(triggers::forTenant);
     }
 
     /** Reads recorded status only; it neither verifies artifacts nor contacts the Marketplace. */

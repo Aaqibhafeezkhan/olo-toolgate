@@ -1394,10 +1394,10 @@ WHEN NEW.proof='TARGET_DEDUPLICATION' AND EXISTS(
 BEGIN SELECT RAISE(ABORT,'witnessed target outcome fences recovery'); END;
 
 -- statement
--- BEGIN TRIGGERS (issue #274, ADR 058): the same tenant-scoped document table as PostgreSQL, never deleted.
-CREATE TABLE control_triggers(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,kind TEXT NOT NULL CHECK(kind IN('ASSIGNMENT','INSTANCE','DESIRED','LEASE')),record_id TEXT NOT NULL CHECK(length(record_id) BETWEEN 1 AND 256),revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=131072),PRIMARY KEY(tenant_id,kind,record_id));
+-- BEGIN TRIGGERS (issue #274, ADR 058): the same tenant-scoped document table as PostgreSQL. Only retention purges delete, and only event, delivery, cursor and ticket kinds.
+CREATE TABLE control_triggers(tenant_id TEXT REFERENCES control_tenants(tenant_id) NOT NULL,kind TEXT NOT NULL CHECK(kind IN('ASSIGNMENT','INSTANCE','DESIRED','LEASE','EVENT','KEY','EPOCH','CHECKPOINT','OUTBOX','ROUTER','LOG','DELIVERY','DUE','EXPIRY','SETTINGS','SUBSCRIPTION','CURSOR','TICKET')),record_id TEXT NOT NULL CHECK(length(record_id) BETWEEN 1 AND 256),revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 9007199254740991),document TEXT NOT NULL CHECK(length(CAST(document AS BLOB))<=131072),PRIMARY KEY(tenant_id,kind,record_id));
 -- statement
-CREATE TRIGGER control_triggers_delete BEFORE DELETE ON control_triggers BEGIN SELECT RAISE(ABORT,'local retention violation'); END;
+CREATE TRIGGER control_triggers_delete BEFORE DELETE ON control_triggers WHEN OLD.kind NOT IN('OUTBOX','LOG','EVENT','KEY','DELIVERY','DUE','EXPIRY','CURSOR','TICKET') BEGIN SELECT RAISE(ABORT,'local retention violation'); END;
 -- statement
 CREATE TRIGGER control_triggers_tenant_immutable BEFORE UPDATE OF tenant_id ON control_triggers WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 -- statement

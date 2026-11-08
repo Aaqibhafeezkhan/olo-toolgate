@@ -28,7 +28,7 @@ class TargetResendLifecycleTest {
             entries.put(Ids.Kind.ROLE.id("dedupe-reviewers"),codec.entry(Ids.Kind.ROLE,codec.json(new ControlRole(
                 "dedupe-reviewers","Guarantee reviewers",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()))));
             entries.put(Ids.Kind.TEAM.id("dedupe-reviewers"),codec.entry(Ids.Kind.TEAM,codec.json(new ControlTeam(
-                "dedupe-reviewers","Guarantee reviewers",true,1L,List.of("admin","alice"),List.of("dedupe-reviewers")))));
+                "dedupe-reviewers","Guarantee reviewers",true,1L,List.of("admin","alice"),List.of("dedupe-reviewers"),null))));
             entries.put(Ids.Kind.IDENTITY_BINDING.id("identity-admin"),codec.entry(Ids.Kind.IDENTITY_BINDING,codec.json(
                 new ControlIdentityBinding("identity-admin","Administrator identity",true,1L,"admin",
                     "https://identity.example","admin-subject",1L,EnterpriseConformanceTest.NOW-1000,
@@ -127,7 +127,7 @@ class TargetResendLifecycleTest {
     void revokeReviewer(){
         rig.graph.entries.put(Ids.Kind.TEAM.id("dedupe-reviewers"),rig.graph.codec.entry(Ids.Kind.TEAM,
             rig.graph.codec.json(new ControlTeam("dedupe-reviewers","Guarantee reviewers",true,2L,
-                List.of("admin"),List.of("dedupe-reviewers")))));
+                List.of("admin"),List.of("dedupe-reviewers"),null))));
         rig.saveGraph();
     }
     @Test void revokingTheIndependentReviewerPreventsPublicReplay()throws Exception{

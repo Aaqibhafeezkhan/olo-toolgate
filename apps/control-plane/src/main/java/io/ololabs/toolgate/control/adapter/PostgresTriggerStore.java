@@ -27,4 +27,9 @@ final class PostgresTriggerStore implements TriggerStore {
         if(expected==0){try(var s=statement("INSERT INTO control_triggers(tenant_id,kind,record_id,revision,document) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING",kind)){s.setString(3,row.id());s.setLong(4,row.revision());s.setString(5,row.document());if(s.executeUpdate()!=1)throw Failure.conflict();}}
         else{if(row.revision()!=expected+1)throw Failure.conflict();try(var s=connection.prepareStatement("UPDATE control_triggers SET revision=?,document=? WHERE tenant_id=? AND kind=? AND record_id=? AND revision=?")){s.setLong(1,row.revision());s.setString(2,row.document());s.setString(3,tenant);s.setString(4,kind.name());s.setString(5,row.id());s.setLong(6,expected);if(s.executeUpdate()!=1)throw Failure.conflict();}}
     }catch(SQLException failure){throw Failure.unavailable();}}
+    public boolean delete(Kind kind,String id,long expected){
+        if(!PURGEABLE.contains(kind))throw Failure.validation();
+        try(var s=statement("DELETE FROM control_triggers WHERE tenant_id=? AND kind=? AND record_id=? AND revision=?",kind)){s.setString(3,id);s.setLong(4,expected);return s.executeUpdate()==1;}
+        catch(SQLException failure){throw Failure.unavailable();}
+    }
 }

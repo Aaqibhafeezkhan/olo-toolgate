@@ -346,6 +346,7 @@ fn execution_and_releases_do_not_require_local_gateway_settings() {
         pull_timeout_seconds: 60,
         runtimes: vec![],
         tools: vec![],
+        triggers: vec![],
         files: None,
     });
     let fleet: serde_json::Value =

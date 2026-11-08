@@ -13,5 +13,6 @@ enum ProvisioningStep: string {
     case RELEASE = 'RELEASE';
     case ROLLOUT = 'ROLLOUT';
     case ACTIVATE = 'ACTIVATE';
+    case ASSIGN = 'ASSIGN';
     case DONE = 'DONE';
 }

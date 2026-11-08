@@ -28,7 +28,7 @@ class EffectGrantTest {
             base.rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.ROLE,new ControlRole(
                 "target-deployer","Target deployment review",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
             base.rig.graph.add(io.ololabs.toolgate.control.domain.Ids.Kind.TEAM,new ControlTeam(
-                "target-reviewers","Target reviewers",true,1L,List.of("admin"),List.of("target-deployer")));
+                "target-reviewers","Target reviewers",true,1L,List.of("admin"),List.of("target-deployer"),null));
             base.rig.saveGraph();
         }
 

@@ -96,6 +96,53 @@ the Linux composition. For example:
 docker compose exec linux-device cat /var/lib/olo-toolgate/hotfolder/langchain-smoke.txt
 ```
 
+## Hot-folder trigger (in progress, issue #274)
+
+A file dropped into the device's `inbox/` folder triggers a LangGraph flow
+([trigger_agent.py](trigger_agent.py)). The flow displays the file's content and
+then moves it to `processed/`. The feature is enabled by a deployment profile, not by a flag:
+[hotfolder-trigger.profile.json](hotfolder-trigger.profile.json) releases the
+trigger-only [`examples.inbox-watch`](../java-tools/inbox-watch/README.md) package to
+`ReadAndWriteDeviceGroup` and assigns its `new-file` client trigger there with
+`{"folder": "inbox", "extension": ".txt"}`. The HotFolder package stays tools-only, so the
+base setup above works without triggers. Any Control that applies the
+profile enables triggers and creates (or updates) the assignment, including on
+devices that join the group later.
+
+```sh
+python manage.py prepare        # also writes .state/package/core-packages.lock.json
+docker compose -f compose.yaml -f compose.triggers.yaml up -d --build --wait --wait-timeout 180 quickstart linux-device
+python manage.py setup --bootstrap-local --approve-linux-device --target linux
+pip install -r requirements.txt
+python trigger_agent.py --target linux
+docker compose exec linux-device sh -c 'echo "2 x widget" > /var/lib/olo-toolgate/hotfolder/inbox/order-1042.txt'
+```
+
+The device polls `inbox/` every minute and reports each new `.txt` file once
+(`examples.files.observed.v1`, a `STATE_SNAPSHOT` source). Control stores
+each event once, keyed by its source and id. The agent reads it, prints the
+content and moves the file with the package's `move` tool. A file that is already
+gone is skipped. An operation whose outcome the Gateway cannot confirm is
+reported and never retried.
+
+The agent subscribes to `hotfolder-inbox` and receives events over Control's `toolgate.triggers.v1` WebSocket
+(`--transport poll` pages the stored-events API instead). It acknowledges each event only after handling it, so a
+crash re-delivers rather than loses an event. `python trigger_e2e.py` runs the whole path after setup, and CI runs
+it in the LangChain job.
+
+Status (issue #274, draft PR #286):
+
+- **Delivered in that PR:**
+  - modules 5 and 10–12: the profile-driven assignment, the device trigger runner, check-in ingest, the event
+    router with retention, coarse labels and the subscription socket;
+  - unit tests: [test_trigger_agent.py](test_trigger_agent.py), `HotFolderTest`, `TriggerDeliveryTest`,
+    `TriggerIngestTest` and `ClientReleasesTest`.
+
+  The Compose run has not been executed locally.
+- **Native HotFolder finality** (see the note at the top): until it is qualified, the Gateway reports `read_text`
+  and `move` as `OUTCOME_UNKNOWN`. The agent then shows `read-unconfirmed` or `move-unconfirmed` and leaves the file
+  in `inbox/`.
+
 ## Windows device targeting
 
 Use an x64 Windows client enrolled and approved on this example's Gateway, with

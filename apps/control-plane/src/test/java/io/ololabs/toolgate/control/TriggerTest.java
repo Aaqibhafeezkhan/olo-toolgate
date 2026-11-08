@@ -379,7 +379,7 @@ final class TriggerTest {
             var ceiling = new EnterpriseScope(none, only, List.of(), false, List.of(), conditions);
             var rule = new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, only, List.of(ceiling), conditions, null);
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("trigger-operator", "Trigger operator", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, List.of(rule)));
-            TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("trigger-operators", "Trigger operators", true, 1L, List.of(user), List.of("trigger-operator")));
+            TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("trigger-operators", "Trigger operators", true, 1L, List.of(user), List.of("trigger-operator"),null));
             tx.save(before, new Directory(before.revision() + 1, entries));
             return null;
         });

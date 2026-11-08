@@ -12,6 +12,7 @@ package io.ololabs.toolgate.contracts;
  * @param revision canonical revision value
  * @param agentIds canonical agentIds value
  * @param roleIds canonical roleIds value
+ * @param dataClearance canonical dataClearance value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ControlAgentGroup(
@@ -21,7 +22,8 @@ public record ControlAgentGroup(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "enabled", required = true) Boolean enabled,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "revision", required = true) Long revision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentIds", required = true) java.util.List<String> agentIds,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "roleIds", required = true) java.util.List<String> roleIds
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "roleIds", required = true) java.util.List<String> roleIds,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "dataClearance", required = false) ControlDataClearance dataClearance
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +34,7 @@ public record ControlAgentGroup(
      * @param revision canonical revision value
      * @param agentIds canonical agentIds value
      * @param roleIds canonical roleIds value
+     * @param dataClearance canonical dataClearance value
      */
     public ControlAgentGroup {
         java.util.Objects.requireNonNull(id, "id");

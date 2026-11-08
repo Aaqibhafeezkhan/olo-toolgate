@@ -21,6 +21,9 @@ jsonschema.workspace = true
 sha2.workspace = true
 ring.workspace = true
 tokio.workspace = true
+# The same versions toolgate-cli uses for the canonical descriptor form.
+unicode-normalization = "0.1.25"
+ryu-js = "1.0.3"
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

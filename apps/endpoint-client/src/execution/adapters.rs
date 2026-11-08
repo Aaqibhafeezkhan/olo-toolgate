@@ -34,7 +34,17 @@ pub fn version_arguments(kind: &Kind) -> Result<Vec<String>> {
 
 /// The launch vector for a registration: fixed per runtime, never interpolated from input.
 pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result<Vec<String>> {
-    let entry = &tool.entry_point;
+    launch(kind, &tool.entry_point, tool.limits.memory_mi_b, false)
+}
+
+/// The launch vector of a trigger export (ADR 058): the same image, entry point and clean environment as a tool,
+/// with the SDK runtime in trigger mode. The trigger's instance comes from the TRIGGER_START frame, not from argv.
+pub fn trigger_arguments(kind: &Kind, entry: &str, memory_mi_b: u64) -> Result<Vec<String>> {
+    launch(kind, entry, memory_mi_b, true)
+}
+
+fn launch(kind: &Kind, entry: &str, memory_mi_b: u64, trigger: bool) -> Result<Vec<String>> {
+    let entry = &entry.to_owned();
     if !entry.starts_with("/opt/tool/")
         || entry.len() > 256
         || entry
@@ -51,7 +61,7 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
         // A Java SDK package artifact runs the SDK runtime's governed mode (ADR 026); the class is fixed, never the caller's.
         Kind::JavaSdk if entry.ends_with(".jar") => vec![
             executable(kind)?.into(),
-            format!("-Xmx{}m", tool.limits.memory_mi_b / 2),
+            format!("-Xmx{}m", memory_mi_b / 2),
             "-XX:ActiveProcessorCount=2".into(),
             "-XX:-UsePerfData".into(),
             "-XX:+UseSerialGC".into(),
@@ -77,6 +87,9 @@ pub fn invocation_arguments(kind: &Kind, tool: &LocalToolRegistration) -> Result
         "TOOLGATE_PROTOCOL=2".into(),
         "TOOLGATE_EXECUTION_TARGET=CLIENT".into(),
     ];
+    if trigger {
+        clean.push("TOOLGATE_EXECUTION_MODE=TRIGGER".into());
+    }
     clean.append(&mut args);
     Ok(clean)
 }

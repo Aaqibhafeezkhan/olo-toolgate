@@ -102,7 +102,7 @@ final class EndpointTest {
         s.store.transaction(s.admin.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());var role=codec.model(entries.get(Ids.Kind.ROLE.id("test-recovery-role")).document(),ControlRole.class);
             TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole(role.id(),role.name(),role.enabled(),role.revision()+1,UserRole.ADMINISTRATOR,role.roleType(),role.managementRules()));
             TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("test-owner-role","Installation owner",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()));
-            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("test-owner-team","Installation owners",true,1L,List.of("other"),List.of("test-owner-role")));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("test-owner-team","Installation owners",true,1L,List.of("other"),List.of("test-owner-role"),null));
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         var challenge=start(s,"queue-device");decide(s,challenge,EnrollmentChoice.APPROVE,"approve");var peer=certificate(poll(s,challenge).identity());
         var releaseFixture=new FleetTest();var crypto=releaseFixture.crypto();
@@ -485,7 +485,7 @@ final class EndpointTest {
             var conditions=new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null);
             var rule=new EnterpriseManagementRule(List.of("device.read","device.enroll","device.approve"),EnterpriseGroupType.DEVICE_GROUP,new GroupSelection(List.of("self-devices"),false),List.of(),conditions,"CURRENT");
             TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("self-role","Self role",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,List.of(rule)));
-            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("self-team","Self team",true,1L,List.of("self-user"),List.of("self-role")));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("self-team","Self team",true,1L,List.of("self-user"),List.of("self-role"),null));
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         var actor=s.directory.portalActor(s.admin.tenant(),"b".repeat(64),"self-user").consoleSession("c".repeat(64),START+900000,null);
         var generator=KeyPairGenerator.getInstance("EC");generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));var pair=generator.generateKeyPair();
@@ -514,7 +514,7 @@ final class EndpointTest {
             TestSupport.put(entries,codec,Ids.Kind.DEVICE_GROUP,new ControlDeviceGroup("visitor-devices","Visitor devices",true,1L,List.of()));
             for(var user:List.of("visitor-a","visitor-b"))TestSupport.put(entries,codec,Ids.Kind.USER,new ControlUser(user,user,true,1L, null, null, null));
             TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("visitor-role","Visitor",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
-            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("visitors","Visitors",true,1L,List.of("visitor-a","visitor-b"),List.of("visitor-role")));
+            TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("visitors","Visitors",true,1L,List.of("visitor-a","visitor-b"),List.of("visitor-role"),null));
             tx.save(before,new Directory(before.revision()+1,entries));return null;});
         var a=s.directory.portalActor(tenant,"c".repeat(64),"visitor-a");var b=s.directory.portalActor(tenant,"d".repeat(64),"visitor-b");
         var mine=start(s,"device-a");var theirs=start(s,"device-b");

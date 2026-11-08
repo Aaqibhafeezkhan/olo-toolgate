@@ -20,7 +20,7 @@ final class AttemptReviewTest {
     @BeforeEach void setup()throws Exception{
         rig=new EnterpriseOperationTest();rig.temp=Files.createDirectory(temp.resolve("review-"+UUID.randomUUID()));rig.setup();
         rig.graph.add(Kind.USER,new ControlUser("checker","Independent checker",true,1L, null, null, null));
-        rig.graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker","bob"),List.of("reviewer-role")));
+        rig.graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,2L,List.of("alice","admin","checker","bob"),List.of("reviewer-role"),null));
         rig.saveGraph();
         if(postgres){
             String base=System.getenv("CONTROL_TEST_URL"),password=System.getenv("CONTROL_TEST_PASSWORD");
@@ -153,7 +153,7 @@ final class AttemptReviewTest {
     }
     @Test void bothMakersAndCheckersNeedCurrentReviewPermission(){
         var f=fixture(true,false,"admin");var proposal=propose(f);
-        rig.graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,3L,List.of("alice","checker","bob"),List.of("reviewer-role")));rig.saveGraph();
+        rig.graph.add(Kind.TEAM,new ControlTeam("team-b","Reviewers",true,3L,List.of("alice","checker","bob"),List.of("reviewer-role"),null));rig.saveGraph();
         assertEquals(403,assertThrows(Failure.class,()->rig.operations.reconcile(checker(),proposal.id(),decision(proposal,true))).status());
         assertNull(rig.store.transaction(rig.gateway.tenant(),false,tx->tx.enterprise().attemptReview(f.invocation().id(),f.invocation().reservedNonce())));
     }
@@ -161,7 +161,7 @@ final class AttemptReviewTest {
         var f=fixture(true,false,"admin");
         rig.graph.add(Kind.AGENT,new ControlAgent("agent","Transferred",null,true,2L,"admin"));
         rig.graph.add(Kind.ROLE,new ControlRole("super-role","Super Admin",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()));
-        rig.graph.add(Kind.TEAM,new ControlTeam("super-team","Owners",true,1L,List.of("alice"),List.of("super-role")));rig.saveGraph();
+        rig.graph.add(Kind.TEAM,new ControlTeam("super-team","Owners",true,1L,List.of("alice"),List.of("super-role"),null));rig.saveGraph();
         var oldOwner=new DirectoryService.Actor(rig.gateway.tenant(),"b".repeat(64),true,false,"bob");
         var superOwner=new DirectoryService.Actor(rig.gateway.tenant(),"a".repeat(64),true,true,"alice");
         for(var actor:List.of(oldOwner,superOwner))

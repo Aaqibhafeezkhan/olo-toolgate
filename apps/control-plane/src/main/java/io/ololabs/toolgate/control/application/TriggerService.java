@@ -68,6 +68,7 @@ public final class TriggerService {
     static final int MAX_CONFIG_BYTES = 8192, MAX_BODY_BYTES = 65536, MAX_PAGE = 200, DEFAULT_PAGE = 50;
     /** A client lease lasts as long as the desired document, so a device keeps observing offline (plan 7). */
     static final long DESIRED_TTL_MS = 24L * 60 * 60 * 1000;
+    static final long STALE_MIN_MS = 5 * 60_000L;
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -92,7 +93,8 @@ public final class TriggerService {
 
     // ---- failures ----
 
-    private void available() { if (!enabled) throw Failure.unavailable(); }
+    void available() { if (!enabled) throw Failure.unavailable(); }
+    public boolean enabled() { return enabled; }
     static Failure notFound() { return new Failure(ErrorCode.NOT_FOUND, 404, "Trigger resource not found"); }
     static Failure invalid(String message) { return new Failure(ErrorCode.VALIDATION, 400, message); }
     static Failure stale() { return new Failure(ErrorCode.CONFLICT, 412, "The resource changed; read it again and retry with its ETag"); }
@@ -100,13 +102,13 @@ public final class TriggerService {
     static Failure conflict(String message) { return new Failure(ErrorCode.CONFLICT, 409, message); }
 
     /** Another tenant's actor sees exactly what an unknown name gives. */
-    private void tenantOf(DirectoryService.Actor actor) {
+    void tenantOf(DirectoryService.Actor actor) {
         available();
         actor.requireAdmin();
         if (!actor.tenant().equals(tenant)) throw notFound();
     }
 
-    private long now(Store.Session tx) {
+    long now(Store.Session tx) {
         long now = clock.millis();
         if (now < 0 || now > MAX - DESIRED_TTL_MS || tx.approvalClock(now) > now) throw Failure.unavailable();
         return now;
@@ -118,7 +120,7 @@ public final class TriggerService {
     record Definition(String triggerId, String packageId, String version, String packageDigest, String descriptorDigest, JsonNode descriptor, long uploadedAt) {}
 
     /** Every trigger export of this tenant's stored package versions, oldest upload first. */
-    private List<Definition> definitions(Store.Session tx) {
+    List<Definition> definitions(Store.Session tx) {
         var out = new ArrayList<Definition>();
         for (var version : tx.packages().versions(100)) {
             JsonNode document = read(version.document());
@@ -132,7 +134,7 @@ public final class TriggerService {
         return out;
     }
 
-    private Definition definition(Store.Session tx, String triggerId, String version) {
+    Definition definition(Store.Session tx, String triggerId, String version) {
         Definition found = null;
         for (var d : definitions(tx)) if (d.triggerId().equals(triggerId) && d.version().equals(version)) found = d;
         if (found == null) throw invalid("No uploaded package version " + version + " exports trigger " + triggerId);
@@ -246,7 +248,7 @@ public final class TriggerService {
         return new Stored(row, (ObjectNode) read(row.document()));
     }
 
-    private Stored existing(Store.Session tx, String name) {
+    Stored existing(Store.Session tx, String name) {
         var stored = stored(tx, name);
         if (stored == null || stored.removed()) throw notFound();
         return stored;
@@ -465,7 +467,7 @@ public final class TriggerService {
         return definition;
     }
 
-    private void requireTargets(Store.Session tx, DirectoryService.Actor actor, JsonNode target, String permission) {
+    void requireTargets(Store.Session tx, DirectoryService.Actor actor, JsonNode target, String permission) {
         var directory = tx.load();
         var access = new ManagementAccess(codec);
         long now = clock.millis();
@@ -506,7 +508,7 @@ public final class TriggerService {
     }
 
     /** Every active assignment of the tenant, with an override for the one being written. */
-    private List<Stored> assignments(Store.Session tx, Stored override) {
+    List<Stored> assignments(Store.Session tx, Stored override) {
         var out = new ArrayList<Stored>();
         String cursor = "";
         while (true) {
@@ -604,9 +606,14 @@ public final class TriggerService {
         if (!removed && "Removed".equals(phase)) phase = "Pending";
         view.put("phase", phase);
         view.set("conditions", row == null ? JSON.createArrayNode() : read(row.document()).path("view").path("conditions").deepCopy());
+        // What the executor last reported (module 5 ingest) survives a change of the assignment.
+        var old = row == null ? JSON.createObjectNode() : read(row.document());
+        for (String reported : List.of("counters", "outbox", "lastEventAt", "lastReconcileAt")) if (!removed && old.path("view").has(reported)) view.set(reported, old.path("view").get(reported).deepCopy());
         var document = JSON.createObjectNode();
         document.set("view", view);
         document.put("updatedAtUnixMs", now);
+        if (old.has("lastSeenAtUnixMs")) document.put("lastSeenAtUnixMs", old.path("lastSeenAtUnixMs").asLong());
+        if (!removed && old.path("haltedByControl").asBoolean()) document.put("haltedByControl", true);
         String text = codec.json(document);
         if (row != null && read(row.document()).path("view").equals(view)) return;
         tx.triggers().save(INSTANCE, new TriggerStore.Row(recordId, row == null ? 1 : row.revision() + 1, text), row == null ? 0 : row.revision());
@@ -660,6 +667,7 @@ public final class TriggerService {
                         if (lease != null && "ACTIVE".equals(read(lease.document()).path("state").asText())) item.put("leaseEpoch", read(lease.document()).path("leaseEpoch").asLong());
                         item.put("lastSeenAtUnixMs", read(row.document()).path("lastSeenAtUnixMs").asLong(0));
                         if (item.path("lastSeenAtUnixMs").asLong() == 0) item.remove("lastSeenAtUnixMs");
+                        stale(item, clock.millis());
                         items.add(item);
                     }
                     if (rows.size() < 101) break;
@@ -761,6 +769,10 @@ public final class TriggerService {
         lease.put("instanceId", instance.instanceId()).put("executorId", device.deviceId()).put("leaseEpoch", epoch)
                 .put("configRevision", instance.configRevision()).put("tokenDigest", DirectoryService.digest(token))
                 .put("expiresAtUnixMs", expiresAt).put("issuedAtUnixMs", now).put("state", "ACTIVE");
+        // An epoch that ends without a revocation drains its queued records for 7 days (plan 6.6.1): remember when.
+        var ended = previous == null || !previous.path("endedEpochs").isArray() ? JSON.createArrayNode() : (ArrayNode) previous.path("endedEpochs").deepCopy();
+        if (previous != null && previous.path("leaseEpoch").asLong() != epoch && "ACTIVE".equals(previous.path("state").asText())) ended(ended, previous.path("leaseEpoch").asLong(), now);
+        lease.set("endedEpochs", ended);
         tx.triggers().save(LEASE, new TriggerStore.Row(leaseId(device.deviceId(), instance.instanceId()), row == null ? 1 : row.revision() + 1, codec.json(lease)), row == null ? 0 : row.revision());
         if (previous == null || previous.path("leaseEpoch").asLong() != epoch) {
             tx.audit(device.keyFingerprint(), "TRIGGER_LEASE_ISSUE", "trigger-instance:" + instance.instanceId(), epoch, requestId,
@@ -776,7 +788,15 @@ public final class TriggerService {
         var lease = read(row.document());
         if (!"ACTIVE".equals(lease.path("state").asText())) return;
         var revoked = ((ObjectNode) lease.deepCopy()).put("state", "REVOKED").put("reason", reason.name()).put("reported", false);
+        ended(revoked.withArray("endedEpochs"), lease.path("leaseEpoch").asLong(), clock.millis());
         tx.triggers().save(LEASE, new TriggerStore.Row(row.id(), row.revision() + 1, codec.json(revoked)), row.revision());
+    }
+
+    /** Records when an epoch ended, keeping the 16 most recent. */
+    private static void ended(ArrayNode array, long epoch, long now) {
+        for (var item : array) if (item.path("leaseEpoch").asLong() == epoch) return;
+        array.addObject().put("leaseEpoch", epoch).put("endedAtUnixMs", now);
+        while (array.size() > 16) array.remove(0);
     }
 
     /** A client lease is device-bound (plan 7), so its record sits under the device. */
@@ -796,6 +816,95 @@ public final class TriggerService {
                 && lease.path("leaseEpoch").asLong() == leaseEpoch && lease.path("expiresAtUnixMs").asLong() > clock.millis()
                 && MessageDigest.isEqual(lease.path("tokenDigest").asText().getBytes(StandardCharsets.US_ASCII),
                         DirectoryService.digest(token).getBytes(StandardCharsets.US_ASCII));
+    }
+
+    // ---- module 5: what ingest and the device need ----
+
+    /** One instance a device resolves to now, with its assignment and the signed definition it runs. */
+    record Resolved(Stored stored, String recordId, TriggerDesiredInstance desired, Definition definition) {}
+
+    /** The device's resolved instances by instance id; materializes them as the desired document does. */
+    Map<String, Resolved> resolvedOn(Store.Session tx, EndpointDeviceRecord device, long now) {
+        var document = desiredDocument(tx, device, now);
+        var directory = tx.load();
+        var byId = new HashMap<String, Stored>();
+        for (var stored : assignments(tx, null)) if (devices(directory, stored).contains(device.deviceId())) byId.put(instanceId(stored.uid(), device.deviceId()), stored);
+        var definitions = definitions(tx);
+        var out = new LinkedHashMap<String, Resolved>();
+        for (var desired : document.instances()) {
+            var stored = byId.get(desired.instanceId());
+            Definition definition = null;
+            for (var d : definitions) if (d.triggerId().equals(desired.triggerId()) && d.packageDigest().equals(desired.packageDigest())) definition = d;
+            if (stored != null && definition != null) out.put(desired.instanceId(), new Resolved(stored, stored.uid() + "/" + device.deviceId(), desired, definition));
+        }
+        return out;
+    }
+
+    /** The desired generation of a device (zero before its first desired document). */
+    long generation(Store.Session tx, String device) {
+        var row = tx.triggers().get(DESIRED, device);
+        return row == null ? 0 : row.revision();
+    }
+
+    /**
+     * The signed descriptor of a trigger the calling device runs, by its digest (plan 5.9). The device checks the digest
+     * against its signed desired document and package release; anything it does not resolve to is not found.
+     */
+    public Store.Reply descriptor(java.security.cert.X509Certificate peer, String digest) {
+        available();
+        if (digest == null || !digest.matches("^sha256:[a-f0-9]{64}$")) throw notFound();
+        return store.transaction(tenant, true, tx -> {
+            long now = now(tx);
+            var device = endpoints.authenticate(tx, peer, now);
+            for (var resolved : resolvedOn(tx, device, now).values()) {
+                if (resolved.definition().descriptorDigest().equals(digest)) return new Store.Reply(200, codec.json(resolved.definition().descriptor()), 0);
+            }
+            throw notFound();
+        });
+    }
+
+    /** One page of an instance's stored records, in (leaseEpoch, outboxSeq) order. Readers need trigger.read on its targets. */
+    public Store.Reply events(DirectoryService.Actor actor, String assignment, String instanceId, String pageToken, Integer pageSize) {
+        tenantOf(actor);
+        if (instanceId == null || !instanceId.matches("^ti-[a-f0-9]{32}$")) throw notFound();
+        int size = pageSize(pageSize);
+        String after = after(pageToken);
+        return store.transaction(tenant, false, tx -> {
+            var stored = existing(tx, assignment);
+            requireTargets(tx, actor, stored.spec().path("target"), "trigger.read");
+            boolean found = false;
+            String cursor = "";
+            while (!found) {
+                var rows = tx.triggers().page(INSTANCE, stored.uid() + "/", cursor, 101);
+                for (var row : rows) {
+                    cursor = row.id();
+                    if (read(row.document()).path("view").path("instanceId").asText().equals(instanceId)) found = true;
+                }
+                if (rows.size() < 101) break;
+            }
+            if (!found) throw notFound();
+            var page = JSON.createObjectNode();
+            var items = page.putArray("items");
+            var rows = tx.triggers().page(TriggerStore.Kind.EVENT, instanceId + "/", after.isEmpty() ? "" : instanceId + "/" + after, size + 1);
+            for (var row : rows.subList(0, Math.min(size, rows.size()))) items.add(read(row.document()));
+            if (rows.size() > size) page.put("nextPageToken", token(rows.get(size - 1).id().substring(instanceId.length() + 1)));
+            return reply(200, page, 0, io.ololabs.toolgate.contracts.v2.TriggerEventPage.class);
+        });
+    }
+
+    /**
+     * Control derives {@code Stale=True} after 3 missed check-ins or 5 minutes, whichever is longer (plan 9.2), so a
+     * disconnected executor is never shown as running. It changes only what is shown, never the lease.
+     */
+    void stale(ObjectNode view, long now) {
+        if ("Removed".equals(view.path("phase").asText())) return;
+        long window = Math.max(STALE_MIN_MS, 3 * endpoints.checkInPolicy().nextIntervalMs());
+        long seen = view.path("lastSeenAtUnixMs").asLong(0);
+        boolean stale = seen == 0 ? !"Pending".equals(view.path("phase").asText()) : now - seen > window;
+        var conditions = view.withArray("conditions");
+        for (int i = conditions.size() - 1; i >= 0; i--) if ("Stale".equals(conditions.get(i).path("type").asText())) conditions.remove(i);
+        conditions.addObject().put("type", "Stale").put("status", stale ? "True" : "False").put("reason", stale ? "MissedCheckIns" : "CheckingIn")
+                .put("lastTransitionTime", Instant.ofEpochMilli(stale && seen > 0 ? seen + window : Math.max(seen, 0)).toString());
     }
 
     // ---- results, status and plumbing ----
@@ -874,7 +983,7 @@ public final class TriggerService {
         return true;
     }
 
-    private static int pageSize(Integer size) {
+    static int pageSize(Integer size) {
         if (size == null) return DEFAULT_PAGE;
         if (size < 1 || size > MAX_PAGE) throw invalid("pageSize is 1.." + MAX_PAGE);
         return size;
@@ -914,7 +1023,7 @@ public final class TriggerService {
         return out;
     }
 
-    private static JsonNode read(String text) {
+    static JsonNode read(String text) {
         try {
             return JSON.readTree(text);
         } catch (java.io.IOException e) {

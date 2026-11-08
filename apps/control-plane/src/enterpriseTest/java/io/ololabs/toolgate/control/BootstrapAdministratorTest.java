@@ -24,7 +24,7 @@ class BootstrapAdministratorTest {
         fixture=new EnterpriseAdministrationTest();fixture.temp=temp;fixture.seedReviewedRecovery();
         directory=fixture.directory;owner=fixture.administrator;codec=fixture.graph.codec;
         // A second live Super Admin means last-admin protection alone would permit removal.
-        directory.mutate(owner,Kind.TEAM,"recovery-team","UPDATE",codec.json(new ControlTeam("recovery-team","Owners",true,1L,List.of("admin","alice"),List.of("recovery-role"))),1,"assign-second","request");
+        directory.mutate(owner,Kind.TEAM,"recovery-team","UPDATE",codec.json(new ControlTeam("recovery-team","Owners",true,1L,List.of("admin","alice"),List.of("recovery-role"),null)),1,"assign-second","request");
         second=directory.portalActor(owner.tenant(),"b".repeat(64),"alice");
         fixture.store.transaction(owner.tenant(),true,tx->{tx.protectBootstrapAdmin("admin");return null;});
     }

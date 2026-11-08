@@ -196,7 +196,7 @@ final class McpServersTest {
                 new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, new GroupSelection(List.of("other"), false), List.of(), conditions, null));
             TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("limited", "Limited registrar", true, 1L, null, null, null)); GroupGraph.addDefault(entries, codec, Ids.Kind.USER, "limited");
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("limited-role", "Limited", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, rules));
-            TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("limited-team", "Limited", true, 1L, List.of("limited"), List.of("limited-role")));
+            TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("limited-team", "Limited", true, 1L, List.of("limited"), List.of("limited-role"),null));
             tx.save(before, new Directory(before.revision() + 1, entries)); return null;
         });
         var limited = new DirectoryService.Actor(a.tenant(), "b".repeat(64), true, false, "limited");

@@ -19,12 +19,13 @@ final readonly class ProvisioningPackageStatus implements \JsonSerializable {
         public ?array $hostIds = null,
         public ?array $deviceGroupIds = null,
         public ?array $deviceIds = null,
-        public ?string $globalsDigest = null
+        public ?string $globalsDigest = null,
+        public ?array $triggerAssignments = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['packageId', 'version', 'packageDigest', 'required', 'state', 'step', 'reason', 'toolIds', 'hostIds', 'deviceGroupIds', 'deviceIds', 'globalsDigest']) || array_diff(['packageId', 'version', 'required', 'state', 'step'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['packageId', 'version', 'packageDigest', 'required', 'state', 'step', 'reason', 'toolIds', 'hostIds', 'deviceGroupIds', 'deviceIds', 'globalsDigest', 'triggerAssignments']) || array_diff(['packageId', 'version', 'required', 'state', 'step'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -39,7 +40,8 @@ final readonly class ProvisioningPackageStatus implements \JsonSerializable {
             array_key_exists('hostIds', $data) ? array_map(static fn ($item) => $item, $data['hostIds']) : null,
             array_key_exists('deviceGroupIds', $data) ? array_map(static fn ($item) => $item, $data['deviceGroupIds']) : null,
             array_key_exists('deviceIds', $data) ? array_map(static fn ($item) => $item, $data['deviceIds']) : null,
-            array_key_exists('globalsDigest', $data) ? $data['globalsDigest'] : null
+            array_key_exists('globalsDigest', $data) ? $data['globalsDigest'] : null,
+            array_key_exists('triggerAssignments', $data) ? array_map(static fn ($item) => $item, $data['triggerAssignments']) : null
         );
     }
 
