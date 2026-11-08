@@ -26,7 +26,7 @@ class KillSwitchTest {
             for(var type:EnterpriseGroupType.values())rules.add(new EnterpriseManagementRule(List.of("kill.read","kill.create","kill.approve","kill.recover","package.read"),
                 type,new GroupSelection(List.of(),true),List.of(),graph.conditions(),null));
             graph.add(Ids.Kind.ROLE,new ControlRole("kill-operators","Kill operators",true,1L,UserRole.ADMINISTRATOR,EnterpriseRoleType.MANAGEMENT,rules));
-            graph.add(Ids.Kind.TEAM,new ControlTeam("kill-reviewers","Kill reviewers",true,1L,List.of("admin","checker-one","checker-two"),List.of("kill-operators")));
+            graph.add(Ids.Kind.TEAM,new ControlTeam("kill-reviewers","Kill reviewers",true,1L,List.of("admin","checker-one","checker-two"),List.of("kill-operators"),null));
             value.base.rig.saveGraph();
             value.base.rig.store.transaction(value.base.rig.gateway.tenant(),true,tx->{tx.packages().saveToolHost("device",registration(value.base.rig.graph.codec));return null;});
         };
