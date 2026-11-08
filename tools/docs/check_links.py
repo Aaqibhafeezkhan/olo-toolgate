@@ -18,6 +18,9 @@ HTML_ATTR = re.compile(r"""(?:href|src)\s*=\s*["']([^"']+)["']""", re.I)
 ATX_HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$")
 SETEXT_UNDERLINE = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
 EXPLICIT_ID = re.compile(r"""<[a-z][^>]*?(?<![\w-])(?:id|name)\s*=\s*["']([^"']+)["']""", re.I)
+# string.Template placeholders ($repo, ${tag}) are substituted when a template is
+# rendered, so a destination that starts with one is not a repository path.
+TEMPLATE_PLACEHOLDER = re.compile(r"\$(?:[A-Za-z_]\w*|\{[A-Za-z_]\w*\})")
 
 
 def clean_markdown(text):
@@ -231,6 +234,8 @@ def main():
             if not raw_url:
                 continue
             url = raw_url.strip().replace("&amp;", "&")
+            if TEMPLATE_PLACEHOLDER.match(url):
+                continue
             parsed = urlsplit(url)
             if parsed.scheme or parsed.netloc or url.startswith("//"):
                 continue
