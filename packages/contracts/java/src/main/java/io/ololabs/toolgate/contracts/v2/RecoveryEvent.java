@@ -11,6 +11,8 @@ package io.ololabs.toolgate.contracts.v2;
  * @param reviewers canonical reviewers value
  * @param issuedAtUnixMs canonical issuedAtUnixMs value
  * @param signature canonical signature value
+ * @param tenantId canonical tenantId value
+ * @param authorizationEpoch canonical authorizationEpoch value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record RecoveryEvent(
@@ -19,7 +21,9 @@ public record RecoveryEvent(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "supersedes", required = true) java.util.List<String> supersedes,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "reviewers", required = true) java.util.List<String> reviewers,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "issuedAtUnixMs", required = true) Long issuedAtUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "signature", required = true) String signature
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "signature", required = true) String signature,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "tenantId", required = true) String tenantId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationEpoch", required = true) Long authorizationEpoch
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +33,8 @@ public record RecoveryEvent(
      * @param reviewers canonical reviewers value
      * @param issuedAtUnixMs canonical issuedAtUnixMs value
      * @param signature canonical signature value
+     * @param tenantId canonical tenantId value
+     * @param authorizationEpoch canonical authorizationEpoch value
      */
     public RecoveryEvent {
         java.util.Objects.requireNonNull(eventId, "eventId");
@@ -40,5 +46,7 @@ public record RecoveryEvent(
         reviewers = reviewers == null ? null : java.util.List.copyOf(reviewers);
         java.util.Objects.requireNonNull(issuedAtUnixMs, "issuedAtUnixMs");
         java.util.Objects.requireNonNull(signature, "signature");
+        java.util.Objects.requireNonNull(tenantId, "tenantId");
+        java.util.Objects.requireNonNull(authorizationEpoch, "authorizationEpoch");
     }
 }

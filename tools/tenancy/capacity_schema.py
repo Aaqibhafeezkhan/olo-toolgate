@@ -8,6 +8,16 @@ ROOT=Path(__file__).resolve().parents[2]
 START='-- BEGIN TENANT CAPACITY\n'
 END='-- END TENANT CAPACITY\n'
 TRACKED={
+ 'control_kill_gateways':(['gateway_id'],None),
+ 'control_kill_breakglass_requests':(['request_id','request_digest','event_id','certificate_sha256'],None),
+ 'control_kill_proposals':(['document'],None),
+ 'control_kill_reviews':(['reviewer_id'],None),
+ 'control_kill_closures':(['event_id'],None),
+ 'control_invocation_kill_scopes':(['tool_id','package_digest','publisher_id','pool_id','image_digest'],None),
+ 'control_kill_events':(['document'],None),
+ 'control_kill_supersessions':(['kill_event_id','recovery_event_id'],None),
+ 'control_kill_archive':(['event_id'],None),
+ 'control_kill_acks':(['component_id'],None),
  'control_builder':(['document'],"{row}.kind='TEST' AND {state} IN ('QUEUED','RUNNING')"),
  'control_mcp_requests':(['record','task','result'],"{row}.state IN ('RECEIVED','WAITING_FOR_POLL','SUBMITTED')"),
  'control_enterprise_invocations':(['document'],"{row}.state IN ('PENDING','PENDING_APPROVAL','QUEUED','RESERVED','DISPATCHED','EXECUTING')"),
@@ -23,6 +33,7 @@ TRACKED={
  'control_invocation_results':(['payload'],None),
  'control_policy_bundles':(['document','policy'],None),
  'control_triggers':(['document'],None),
+ 'control_audit_anchors':(['document','signature'],None),
 }
 
 def expression(row,fields,queued,postgres):

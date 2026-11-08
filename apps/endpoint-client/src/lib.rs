@@ -15,12 +15,14 @@ pub mod identity;
 pub mod install;
 pub mod ipc;
 mod json;
+mod lease;
 
 pub mod authorization_profile;
 pub mod platform;
 pub mod power;
 mod rejection;
 mod remote;
+mod revocation;
 pub mod runtime;
 pub mod service;
 mod socket;

@@ -11,6 +11,7 @@ pub mod config;
 pub mod control;
 pub mod device;
 pub mod digest;
+pub mod dispatch_tls;
 mod effect_dispatch;
 pub mod egress;
 pub mod events;
@@ -22,6 +23,7 @@ pub mod mcp_scan;
 pub mod outbox;
 pub mod permit;
 mod request_binding;
+mod revocation;
 pub mod runner;
 pub mod sandbox;
 #[cfg(unix)]

@@ -111,7 +111,7 @@ class OutcomeMetadataTests(unittest.TestCase):
             return agent.rpc('tools/call',{'name':'examples.hotfolder/list','arguments':{}})
 
     def outcome(self):
-        return {'operationId':'inv-fixture','state':'OUTCOME_UNKNOWN','grade':'REPORTED',
+        return {'operationId':'inv-fixture','state':'OUTCOME_UNKNOWN','grade':'UNKNOWN',
                 'retryable':False,'unsettledAttemptCount':1}
 
     def test_unknown_is_not_success_even_when_tool_error_flag_is_missing(self):

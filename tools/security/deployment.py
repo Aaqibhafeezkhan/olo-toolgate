@@ -95,7 +95,8 @@ def main():
         parser.error("current-source/revision/binary/image evidence required")
     env = {"HOME": account.pw_dir, "XDG_RUNTIME_DIR": f"/run/user/{account.pw_uid}",
            "PATH": str(Path(args.cargo).parent) + ":" + os.environ.get("PATH", "/usr/bin:/bin")}
-    for key in ("CARGO_HOME", "RUSTUP_HOME"):
+    for key in ("CARGO_HOME", "RUSTUP_HOME", "CARGO_BUILD_JOBS", "CARGO_INCREMENTAL",
+                "CARGO_PROFILE_DEV_DEBUG", "CARGO_PROFILE_TEST_DEBUG"):
         if key in os.environ:
             env[key] = os.environ[key]
     as_user = ["/usr/sbin/runuser", "-u", account.pw_name, "--", "/usr/bin/env", "-i"] + [k + "=" + v for k, v in env.items()]

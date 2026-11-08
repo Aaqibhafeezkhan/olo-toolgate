@@ -11,8 +11,13 @@ use std::path::PathBuf;
 pub struct Config {
     /// This host's identity: a permit's `aud` must equal it.
     pub host_id: String,
-    /// Where the Gateway dispatches. Loopback only until the mTLS listener arrives with Gateway dispatch.
+    /// Inbound address; absent dispatchTls permits only explicit development HTTP or outbound-only mode.
     pub listen: SocketAddr,
+    #[serde(default)]
+    pub dispatch_tls: Option<crate::dispatch_tls::Config>,
+    /// Plaintext dispatch is an independent explicit development choice, never an egress-policy side effect.
+    #[serde(default)]
+    pub development_dispatch_http: bool,
     /// Control's effect-signing keys that may sign permits.
     pub permit_keys: Vec<PermitKey>,
     /// The permit `iss` this host accepts.
@@ -29,7 +34,7 @@ pub struct Config {
     /// Language runtimes by `runtimeId`; `jvm` needs `javaPath`.
     #[serde(default)]
     pub runtimes: Runtimes,
-    /// A rootless OCI-only worker pool. Omit only for the legacy HOST_NATIVE tier.
+    /// A rootless OCI-only worker pool. Omit only for the explicit unisolated HOST_NATIVE tier.
     #[serde(default)]
     pub sandbox: Option<crate::sandbox::Config>,
     #[serde(default)]
@@ -132,6 +137,8 @@ pub struct Limits {
     pub memory_bytes: u64,
     /// The longest admission window (`exp - iat`) a permit may have.
     pub max_permit_window_ms: u64,
+    /// Optional stricter bound since the last successful Control heartbeat.
+    pub control_loss_grace_ms: Option<u64>,
 }
 
 pub const CEILING: Limits = Limits {
@@ -141,6 +148,7 @@ pub const CEILING: Limits = Limits {
     sync_deadline_ms: 60_000,
     memory_bytes: 4 * 1024 * 1024 * 1024,
     max_permit_window_ms: 60_000,
+    control_loss_grace_ms: None,
 };
 
 impl Default for Limits {
@@ -187,11 +195,14 @@ impl Config {
         if self.host_id.is_empty() || self.permit_issuer.is_empty() || self.permit_keys.is_empty() {
             return Err("hostId, permitIssuer and permitKeys are required".into());
         }
-        if !self.listen.ip().is_loopback() {
+        if self.dispatch_tls.is_none() && !self.listen.ip().is_loopback() {
             return Err(format!(
-                "listen {} is not a loopback address; the mTLS listener for remote Gateways is not built yet",
+                "listen {} requires dispatchTls for remote Gateway traffic",
                 self.listen
             ));
+        }
+        if self.dispatch_tls.is_some() && self.development_dispatch_http {
+            return Err("dispatchTls and developmentDispatchHttp are mutually exclusive".into());
         }
         let l = &self.limits;
         let c = &CEILING;
@@ -202,6 +213,8 @@ impl Config {
             || l.sync_deadline_ms > c.sync_deadline_ms
             || l.memory_bytes > c.memory_bytes
             || l.max_permit_window_ms > c.max_permit_window_ms
+            || l.control_loss_grace_ms
+                .is_some_and(|ms| !(1_000..=120_000).contains(&ms))
         {
             return Err(
                 "a limit is above the platform ceiling (platform-requirements.md §13.5)".into(),

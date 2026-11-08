@@ -37,7 +37,7 @@ class NativeReviewTest(unittest.TestCase):
             if path.endswith("/history"):
                 reads[0]+=1
                 history=self.history()
-                if reads[0]>1:history["operation"].update(state="SUCCEEDED",finalized=True,grade="REVIEWER_CONFIRMED")
+                if reads[0]>1:history["operation"].update(state="SUCCEEDED",finalized=True,grade="HUMAN_RECONCILED")
                 return 200,history
             if path.endswith("/invocations/op"):
                 return 200,dict(state="SUCCEEDED",revision=3,resultDigest="a"*64,

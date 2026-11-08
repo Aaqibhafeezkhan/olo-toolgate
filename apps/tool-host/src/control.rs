@@ -154,6 +154,52 @@ impl Control {
         reqwest::Identity::from_pem(pem.as_deref().ok_or("executor mTLS identity required")?)
             .map_err(|_| "invalid executor identity".into())
     }
+    pub(crate) fn revocation_origin(&self) -> Result<String, ControlError> {
+        olo_toolgate_tenant_identity::origin(&self.url)
+            .map_err(|_| ControlError::Unavailable("HTTPS revocation origin required".into()))?;
+        Ok(self.url.clone())
+    }
+    pub(crate) async fn kill_keys(
+        &self,
+    ) -> Result<olo_toolgate_contracts::v2::KillTrustDocument, ControlError> {
+        self.revocation_origin()?;
+        let bytes = self
+            .get_bytes("/api/control/v1/tool-hosts/kills/keys", 131072)
+            .await?;
+        olo_toolgate_tenant_identity::revocation::decode_trust_document(&bytes)
+            .map_err(|_| ControlError::Unavailable("Invalid kill trust document".into()))
+    }
+    pub(crate) async fn kill_state(&self, after: Option<u64>) -> Result<Vec<u8>, ControlError> {
+        self.revocation_origin()?;
+        // Two seconds leaves recovery and transport time within the connected teardown budget.
+        let path = after
+            .map(|epoch| {
+                format!("/api/control/v1/tool-hosts/kills/poll?afterEpoch={epoch}&waitMs=2000")
+            })
+            .unwrap_or_else(|| "/api/control/v1/tool-hosts/kills".into());
+        self.get_bytes(&path, 2 * 1024 * 1024).await
+    }
+    pub(crate) async fn kill_ack(&self, epoch: u64) -> Result<(), ControlError> {
+        self.kill_acknowledge(epoch, olo_toolgate_contracts::v2::KillDeliveryPath::Poll)
+            .await
+    }
+    pub(crate) async fn kill_acknowledge(
+        &self,
+        epoch: u64,
+        delivery_path: olo_toolgate_contracts::v2::KillDeliveryPath,
+    ) -> Result<(), ControlError> {
+        let _: serde_json::Value = self
+            .post_json(
+                "/api/control/v1/tool-hosts/kills/acknowledgements",
+                &olo_toolgate_contracts::v2::KillAcknowledgement {
+                    authorization_epoch: epoch,
+                    delivery_path,
+                },
+                &[],
+            )
+            .await?;
+        Ok(())
+    }
     pub async fn effect_grant(
         &self,
         request: &olo_toolgate_contracts::v2::EffectGrantIssue,

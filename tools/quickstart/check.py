@@ -105,7 +105,7 @@ def toolgate_cli():
     return ROOT/'target/client-release'/target/'release/toolgate.exe'
 
 
-def starter_package():
+def starter_package(revocation=False):
     """The Java starter as a tool author builds it: `toolgate init`, then `toolgate pack`."""
     run(['./gradlew','-q','--configure-on-demand','publishJavaSdkLocally'])
     toolgate=toolgate_cli()
@@ -115,6 +115,23 @@ def starter_package():
         if out.parent!=build or not out.name.startswith('quickstart-starter-'):
             raise ValueError('Starter test directory must be owned by this workspace')
         run([str(toolgate),'init','orders','--dir',str(out),'--id','acme.orders','--publisher','Acme','--sdk-repo',str(ROOT/'build/sdk-repo')])
+        if revocation:
+            sources=list((out/'src/main/java').rglob('*.java'))
+            changed=0
+            for source in sources:
+                text=source.read_text()
+                marker='String name, ToolContext context) {'
+                if marker in text:
+                    annotation='@ServerTool(name = "greet",'
+                    if text.count(annotation)!=1:
+                        raise ValueError('Expected exactly one owned starter duration declaration')
+                    text=text.replace(annotation,annotation+' maxDurationMs = 60000,')
+                    text=text.replace(marker,marker+"""\n        if(name.startsWith("__s22_")) {
+            try { Thread.sleep(name.equals("__s22_short__")?6000:90000); }
+            catch(InterruptedException stopped) { Thread.currentThread().interrupt(); throw new IllegalStateException("Stopped"); }
+        }\n""")
+                    source.write_text(text);changed+=1
+            if changed!=1:raise ValueError('Expected exactly one owned starter wait fixture')
         run([str(toolgate),'pack'],cwd=out)
         return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
 
@@ -164,33 +181,66 @@ def review_owned_native_attempt(api,ok,tokens,invocation_id,reported,image_id):
     assert approved['state']=='APPLIED',approved
     refreshed=ok(api(prefix+'invocations/'+invocation_id+'/history',tokens['admin']))
     outcome=refreshed['operation']
-    assert outcome['state']=='SUCCEEDED' and outcome['finalized'] is True and outcome['grade']=='REVIEWER_CONFIRMED',outcome
+    assert outcome['state']=='SUCCEEDED' and outcome['finalized'] is True and outcome['grade']=='HUMAN_RECONCILED',outcome
     return dict(operationId=invocation_id,reviewId=proposed['id'],reviewers=reviewers,
                 evidenceDigest=digest,grade=outcome['grade'])
 
 
-def smoke(image, browser, database_options=None, gateway_image=None, hello_world_only=False):
+def smoke(image, browser, database_options=None, gateway_image=None, hello_world_only=False, revocation=False, revocation_grace_ms=None, native_revocation=False, native_only=False):
     """Fresh group-only installation through real JWT, TLS, device and reviewed HTTP APIs."""
-    package=None if hello_world_only else starter_package()
+    if native_only and not (revocation and native_revocation):raise ValueError("Native-only scope requires actual Native revocation")
+    package=None if hello_world_only or native_only else starter_package(revocation)
     name='toolgate-enterprise-test-'+secrets.token_hex(6)
     volume=name+'-data'; containers=[]; report={'image':image,'storage':'PostgreSQL' if database_options else 'SQLite','gates':[]}
     output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
-    (output/('hello-world-smoke.json' if hello_world_only else 'smoke-postgresql.json' if database_options else 'smoke.json')).unlink(missing_ok=True)
+    report_name=('revocation-smoke-postgresql.json' if database_options else 'revocation-smoke.json') if revocation else (
+        'hello-world-smoke.json' if hello_world_only else 'smoke-postgresql.json' if database_options else 'smoke.json')
+    if native_only:report_name='native-'+report_name
+    report['qualificationHarnessSha256']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    (output/report_name).unlink(missing_ok=True)
     if browser:(output/'browser-smoke.json').unlink(missing_ok=True)
     def mark(gate):
         report['gates'].append(gate);print('PASS '+gate,flush=True)
     def exec_text(*args):
         return run(['docker','exec',container,*args],capture_output=True,text=True).stdout.strip()
+    operator=None
+    native_fixture=None
+    container=None
     try:
         run(['docker','volume','create',volume],capture_output=True)
-        container=run(['docker','run','-d',*(database_options or []),'--name',name,'--read-only','--cap-drop=ALL',
+        if native_revocation:
+            sys.path.insert(0,str(ROOT/'tools/client'))
+            from native_revocation import NativeFixture
+            native_fixture=NativeFixture(run)
+            toolgate_cli()
+            native_fixture.prepare()
+        operator=None
+        operator_options=[]
+        fixture_options=[]
+        if revocation:
+            from operator_fixture import OperatorFixture
+            operator=OperatorFixture()
+            operator_options=operator.prepare(run,image,volume)
+            fixture=ROOT/'tools/quickstart/network_fixture.py'
+            report['networkFixtureSourceSha256']=hashlib.sha256(fixture.read_bytes()).hexdigest()
+            report['controlLossGraceMs']=revocation_grace_ms
+            fixture_options=['--mount','type=bind,src='+fixture.as_posix()+',dst=/opt/s22-network.py,readonly',
+                '--entrypoint','/opt/quickstart-python/bin/python',
+                '-e','TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL=https://localhost:18443']
+            if revocation_grace_ms is not None:
+                fixture_options+=['-e','TOOLGATE_S22_CONTROL_LOSS_GRACE_MS='+str(revocation_grace_ms)]
+        container=run(['docker','run','-d',*(database_options or []),*operator_options,*fixture_options,'--name',name,'--read-only','--cap-drop=ALL',
             '--security-opt=no-new-privileges','--memory=1536m','--cpus=2',
             '--tmpfs','/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532',
             '-e','TOOLGATE_ALLOW_LOOPBACK_MCP_HTTP=true',
-            '-p','127.0.0.1::8080','-p','127.0.0.1::8443',*(['-p','127.0.0.1::8084','-p','127.0.0.1::9094'] if gateway_image else []),'-v',volume+':/data',image],
+            '-p','127.0.0.1::8080','-p','127.0.0.1::8443',*(['-p','127.0.0.1::8084','-p','127.0.0.1::9094'] if gateway_image else []),'-v',volume+':/data',image,*(['/opt/s22-network.py'] if revocation else [])],
             capture_output=True,text=True).stdout.strip()
         containers.append(container)
         info=json.loads(run(['docker','inspect',container],capture_output=True,text=True).stdout)[0]
+        report['imageId']=info['Image']
+        labels=info['Config'].get('Labels') or {}
+        report['imageRevision']=labels.get('org.opencontainers.image.revision')
+        report['runtimeSourceSha256']=labels.get('io.olo.qualification.runtime-source-sha256')
         port=info['NetworkSettings']['Ports']['8080/tcp'][0]['HostPort']
         tls_port=info['NetworkSettings']['Ports']['8443/tcp'][0]['HostPort']
         started=time.monotonic();ready(container,port)
@@ -393,14 +443,36 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             reviewed('/api/control/v1/grants',dict(id='service-'+purpose.lower(),name='Reviewed service '+purpose,
                 enabled=True,revision=1,sourceType='AGENT_GROUP',sourceId='default-agents',purpose=purpose,scope=scope))
         service_token=exec_text('cat','/data/run/runtime-token')
-        def mcp(method,params=None,key=None,token=None):
+        def select_execution(binding_id):
+            code="""import sys,json,os,signal
+sys.path.insert(0,'/opt/quickstart')
+import supervisor as s
+from pathlib import Path
+for name in ('credentials.json','external-credentials.json'):
+ p=Path('/data/run')/name
+ if p.exists():
+  values=json.loads(p.read_text())
+  for value in values:
+   if value['context'].get('workloadBindingId')=='workload-local':value['context']['bindingId']=sys.argv[1]
+  s.atomic(p,json.dumps(values))
+for p in Path('/proc').glob('[0-9]*/cmdline'):
+ try:
+  if p.read_bytes().split(b'\\0')[0].endswith(b'/olo-toolgate-gateway'):os.kill(int(p.parent.name),signal.SIGHUP)
+ except (OSError,ProcessLookupError):pass
+"""
+            exec_text('/opt/quickstart-python/bin/python','-c',code,binding_id)
+            if gateway_image:run(['docker','kill','--signal','HUP',external],capture_output=True)
+        def mcp_wire(method,params=None,key=None,token=None):
             body={'jsonrpc':'2.0','id':key or secrets.token_hex(16),'method':method,'params':{
                 **(params or {}),'_meta':{'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientCapabilities':{'tools':{}}}}}
             headers={'Accept':'application/json, text/event-stream','MCP-Protocol-Version':'2026-07-28',
                 'MCP-Method':method,'X-Request-ID':body['id'],'Idempotency-Key':body['id']}
             if method=='tools/call':headers['MCP-Name']=params['name']
             status,raw,_=request(mcp_origin+'/mcp',token or service_token,body,'POST',headers)
-            response=json.loads(raw)
+            return status,json.loads(raw)
+        def mcp(method,params=None,key=None,token=None):
+            request_key=key or secrets.token_hex(16)
+            status,response=mcp_wire(method,params,request_key,token)
             result=response.get('result',{});meta=result.get('_meta',{})
             if (method=='tools/call' and status==200 and result.get('isError')
                     and meta.get('io.ololabs.toolgate/operationOutcome',{}).get('state')=='OUTCOME_UNKNOWN'
@@ -410,9 +482,16 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
                 if review is not None:
                     report.setdefault('nativeAttemptScopeReviews',[]).append(review)
                     # Read the same logical operation after real independent review.
-                    status,raw,_=request(mcp_origin+'/mcp',token or service_token,body,'POST',headers)
-                    response=json.loads(raw)
+                    status,response=mcp_wire(method,params,request_key,token)
             return status,response
+        if native_only:
+            from native_revocation import verify as verify_native
+            report['scope']='Native revocation only; Host qualification not executed'
+            verify_native(native_fixture,api,ok,tokens,mcp_wire,exec_text,container,tls_port,
+                          snapshot['tenantId'],reviewed,select_execution,scope,report)
+            mark('S22 actual Native T5/signed CHECK_IN/managed SDK worker/STOP_NEW/TERMINATE/Control partition')
+            (output/report_name).write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+            return
         listed_hello={t['name']:t for t in ok(mcp('tools/list'))['result']['tools']}
         assert set(listed_hello)==hello_tools
         assert len({json.dumps(tool['inputSchema'],sort_keys=True) for tool in listed_hello.values()})==1
@@ -478,25 +557,6 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         # deployed package needs its own reviewed execution boundary, rather than editing that profile-owned binding.
         reviewed('/api/control/v1/bindings',{**binding,'id':'binding-orders','name':'Reviewed starter execution',
             'revision':1,'actions':['invoke'],'allowedPackageDigests':[digest.removeprefix('sha256:')]})
-        def select_execution(binding_id):
-            code="""import sys,json,os,signal
-sys.path.insert(0,'/opt/quickstart')
-import supervisor as s
-from pathlib import Path
-for name in ('credentials.json','external-credentials.json'):
- p=Path('/data/run')/name
- if p.exists():
-  values=json.loads(p.read_text())
-  for value in values:
-   if value['context'].get('workloadBindingId')=='workload-local':value['context']['bindingId']=sys.argv[1]
-  s.atomic(p,json.dumps(values))
-for p in Path('/proc').glob('[0-9]*/cmdline'):
- try:
-  if p.read_bytes().split(b'\\0')[0].endswith(b'/olo-toolgate-gateway'):os.kill(int(p.parent.name),signal.SIGHUP)
- except (OSError,ProcessLookupError):pass
-"""
-            exec_text('/opt/quickstart-python/bin/python','-c',code,binding_id)
-            if gateway_image:run(['docker','kill','--signal','HUP',external],capture_output=True)
         select_execution('binding-orders')
         orders=dict(scope,actions=['invoke'],resources=[dict(kind='CUSTOM',locator='tool://acme.orders/greet',match='EXACT')])
         for purpose in ('CAPABILITY','SERVICE'):
@@ -532,6 +592,18 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
             time.sleep(1)
         assert moved['result']['structuredContent']=={'text':'Hi, Grace'},moved
         placed(1,1)
+        if revocation:
+            from revocation import verify
+            report['revocation']=verify(api,ok,tokens,mcp_wire,exec_text,run,container,report,operator,
+                info['NetworkSettings']['Ports']['9444/tcp'][0]['HostPort'],revocation_grace_ms,deploy)
+            if native_fixture:
+                from native_revocation import verify as verify_native
+                verify_native(native_fixture,api,ok,tokens,mcp_wire,exec_text,container,tls_port,
+                              snapshot['tenantId'],reviewed,select_execution,scope,report)
+                mark('S22 actual Native T5/signed CHECK_IN/managed SDK worker/STOP_NEW/TERMINATE/Control partition')
+            mark('S22 actual reviewed/operator kills/host teardown/receipt/Control partition/owned supervisor unit exit')
+            (output/report_name).write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+            return
         for grant_id in ('orders-service','orders-capability'):
             starter=ok(api('/api/control/v1/grants/'+grant_id,admin))
             reviewed('/api/control/v1/grants/'+grant_id,{**starter,'enabled':False},'PUT',starter['revision'])
@@ -707,12 +779,18 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
         print('Fresh enterprise runtime gates passed')
     except Exception:
         output=ROOT/'build/quickstart';output.mkdir(parents=True,exist_ok=True)
-        logs=subprocess.run(['docker','logs',container],capture_output=True,text=True)
+        logs=subprocess.run(['docker','logs',container],capture_output=True,text=True) if container else subprocess.CompletedProcess([],0,'','')
         (output/'runtime-failure.log').write_text(logs.stdout+logs.stderr,encoding='utf-8')
+        if revocation:
+            failure='revocation-failure-postgresql.json' if database_options else 'revocation-failure.json'
+            if native_only:failure='native-'+failure
+            (output/failure).write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
         for filename in ('installation-review.json','installation-trust.json'):
             subprocess.run(['docker','cp',container+':/data/'+filename,str(output/filename)],capture_output=True)
         raise
     finally:
+        if native_fixture:native_fixture.close()
+        if operator:operator.close()
         for container in reversed(containers):subprocess.run(['docker','rm','-f',container],capture_output=True)
         subprocess.run(['docker','volume','rm',volume],capture_output=True)
 
@@ -741,7 +819,15 @@ def build_images(image='olo-toolgate-quickstart:enterprise-validation',client_as
     run(['docker','build','-f','apps/quickstart/Dockerfile','--build-arg','CONTROL_IMAGE=olo-toolgate-control:enterprise-validation','--build-arg','VERSION='+version,'--build-arg','REVISION='+revision,*assets,'-t',image,'.'])
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--image',default='olo-toolgate-quickstart:enterprise-validation');parser.add_argument('--build',action='store_true');parser.add_argument('--build-only',action='store_true');parser.add_argument('--no-browser',action='store_true');parser.add_argument('--hello-world-only',action='store_true',help='Run the shared Java/Python Hello World Gateway gate and write hello-world-smoke.json');parser.add_argument('--postgresql',action='store_true');parser.add_argument('--gateway-image');parser.add_argument('--client-assets',type=Path);parser.add_argument('--prebuilt-ui',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--image',default='olo-toolgate-quickstart:enterprise-validation');parser.add_argument('--build',action='store_true');parser.add_argument('--build-only',action='store_true');parser.add_argument('--no-browser',action='store_true');parser.add_argument('--hello-world-only',action='store_true',help='Run the shared Java/Python Hello World Gateway gate and write hello-world-smoke.json');parser.add_argument('--postgresql',action='store_true');parser.add_argument('--gateway-image');parser.add_argument('--client-assets',type=Path);parser.add_argument('--prebuilt-ui',action='store_true');parser.add_argument('--revocation',action='store_true',help='Execute owned S22 runtime revocation observations');parser.add_argument('--revocation-grace-ms',type=int,help='Qualify a stricter supported Host Control-loss grace');parser.add_argument('--native-revocation',action='store_true',help='Join actual Linux Native owner, T5 and managed SDK engine to --revocation');parser.add_argument('--native-only',action='store_true',help='Focus Native qualification; does not execute or accept Host scenarios');args=parser.parse_args()
+    if args.native_only and not args.native_revocation:
+        parser.error('--native-only requires --native-revocation and --revocation')
+    if args.native_revocation and (not args.revocation or WINDOWS):
+        parser.error('--native-revocation requires --revocation on the owned Linux engine runner')
+    if args.revocation_grace_ms is not None and (not args.revocation or not 1000<=args.revocation_grace_ms<=120000):
+        parser.error('--revocation-grace-ms requires --revocation and 1000..120000')
+    if args.revocation and args.hello_world_only:
+        parser.error('--revocation and --hello-world-only are distinct qualification scopes')
     if args.build_only and not args.build:parser.error('--build-only requires --build')
     if args.build:build_images(args.image,args.client_assets,args.prebuilt_ui)
     if args.build_only:return
@@ -764,12 +850,12 @@ def main():
                     QUARKUS_FLYWAY_USERNAME='control_migrator',QUARKUS_FLYWAY_PASSWORD=db['CONTROL_TEST_PASSWORD'],
                     TOOLGATE_CONTROL_PLATFORM_USERNAME='control_provisioner',TOOLGATE_CONTROL_PLATFORM_PASSWORD_PATH='/run/tenant-database/password',
                     TOOLGATE_CONTROL_DEVELOPMENT_MODE='true').items())+'\n',encoding='utf-8');env.chmod(0o600)
-                smoke(args.image,not args.no_browser,['--network',network,'--env-file',str(env),'-v',custody+':/run/tenant-database:ro'],args.gateway_image,args.hello_world_only)
+                smoke(args.image,not args.no_browser,['--network',network,'--env-file',str(env),'-v',custody+':/run/tenant-database:ro'],args.gateway_image,args.hello_world_only,args.revocation,args.revocation_grace_ms,args.native_revocation,args.native_only)
             finally:
                 subprocess.run(['docker','volume','rm','-f',custody],capture_output=True)
                 subprocess.run(['docker','network','disconnect',network,db['container']],capture_output=True)
                 subprocess.run(['docker','network','rm',network],capture_output=True)
-    else:smoke(args.image,not args.no_browser,gateway_image=args.gateway_image,hello_world_only=args.hello_world_only)
+    else:smoke(args.image,not args.no_browser,gateway_image=args.gateway_image,hello_world_only=args.hello_world_only,revocation=args.revocation,revocation_grace_ms=args.revocation_grace_ms,native_revocation=args.native_revocation,native_only=args.native_only)
 
 
 if __name__=='__main__':main()

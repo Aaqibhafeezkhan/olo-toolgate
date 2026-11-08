@@ -20,7 +20,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tool_host::config::Config;
 
-const FENCE: &str = "fence-1";
+fn fence(id: &str) -> String {
+    format!("n-{id}")
+}
 const API_KEY: &str = "k-123";
 
 /// A stand-in runtime speaking tool protocol v2 over stdio: reads the ToolInput line, sends one broker request as
@@ -106,6 +108,9 @@ fn put(dir: &Path, kind: &str, value: &Value) -> String {
 
 #[derive(Default)]
 struct Seen {
+    package_publisher: String,
+    runtime_image_digest: String,
+    consume_patch: Option<Value>,
     revoke: bool,
     short_lease: bool,
     partition: bool,
@@ -143,7 +148,10 @@ async fn control(seen: Shared) -> u16 {
         if seen.revoke || seen.partition {
             return StatusCode::FORBIDDEN.into_response();
         }
-        assert_eq!(body["fencingToken"], FENCE);
+        assert_eq!(
+            body["fencingToken"],
+            fence(body["invocationId"].as_str().unwrap())
+        );
         let parts: Vec<_> = body["invocationPermit"]["jws"]
             .as_str()
             .unwrap()
@@ -201,9 +209,28 @@ async fn control(seen: Shared) -> u16 {
     }
     async fn consume(State(seen): State<Shared>, Json(body): Json<Value>) -> impl IntoResponse {
         seen.lock().unwrap().consumed.push(body.clone());
-        Json(
-            json!({"invocationId": body["invocationId"], "fencingToken": FENCE, "leaseExpiresAtUnixMs": 0}),
-        )
+        let payload = body["permit"]["jws"]
+            .as_str()
+            .unwrap()
+            .split('.')
+            .nth(1)
+            .unwrap();
+        let claims: Value =
+            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).unwrap()).unwrap();
+        let seen = seen.lock().unwrap();
+        let mut reply = json!({
+            "invocationId": body["invocationId"], "fencingToken": claims["nonce"],
+            "leaseExpiresAtUnixMs": (tool_host::now_ms()+10_000).min(claims["deadlineUnixMs"].as_u64().unwrap()),
+            "authorizationEpoch": claims["identity"]["authorizationEpoch"],
+            "killScope": {"packageId":"acme.orders", "packageDigest":claims["target"]["packageDigest"],
+                "publisher":seen.package_publisher, "toolId":claims["target"]["toolId"], "poolId":"", "imageDigest":seen.runtime_image_digest}
+        });
+        if let Some(patch) = &seen.consume_patch {
+            for (key, value) in patch.as_object().unwrap() {
+                reply[key] = value.clone();
+            }
+        }
+        Json(reply)
     }
     async fn report(State(seen): State<Shared>, Json(body): Json<Value>) -> impl IntoResponse {
         let mut seen = seen.lock().unwrap();
@@ -238,7 +265,7 @@ async fn control(seen: Shared) -> u16 {
         if headers
             .get("toolgate-fencing-token")
             .and_then(|v| v.to_str().ok())
-            != Some(FENCE)
+            .is_none_or(|token| !token.starts_with("n-inv-"))
             || body["name"] != "ApiKey"
         {
             return StatusCode::FORBIDDEN.into_response();
@@ -352,10 +379,15 @@ async fn rig() -> Option<Rig> {
 }
 
 async fn rig_for(python_sdk: bool) -> Option<Rig> {
-    rig_for_tier(python_sdk, None, false).await
+    rig_for_tier(python_sdk, None, false, None).await
 }
 
-async fn rig_for_tier(python_sdk: bool, image_digest: Option<&str>, oci: bool) -> Option<Rig> {
+async fn rig_for_tier(
+    python_sdk: bool,
+    image_digest: Option<&str>,
+    oci: bool,
+    control_loss_grace_ms: Option<u64>,
+) -> Option<Rig> {
     let python = ["/usr/bin/python3", "/usr/local/bin/python3", "/bin/python3"]
         .into_iter()
         .find(|p| Path::new(p).exists())?;
@@ -449,6 +481,11 @@ async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id"
     }
     let (package, report) = toolgate_cli::package::pack(&staging).unwrap();
     let packaged = toolgate_cli::package::verify(&package).unwrap().manifest;
+    seen.lock().unwrap().package_publisher = packaged["publisher"].as_str().unwrap().to_owned();
+    seen.lock().unwrap().runtime_image_digest = packaged["runtimes"][0]["baseImageDigest"]
+        .as_str()
+        .unwrap_or("")
+        .to_owned();
     let store = dir.join("store");
     std::fs::create_dir_all(store.join("packages")).unwrap();
     std::fs::write(
@@ -502,6 +539,9 @@ async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id"
     });
     if oci {
         config_value["sandbox"] = json!({"brokerImage":std::env::var("TOOLGATE_SANDBOX_BROKER_IMAGE").unwrap(),"podmanPath":"/usr/bin/podman","pythonImage":std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap(),"cgroupParent":std::env::var("TOOLGATE_SANDBOX_CGROUP_PARENT").unwrap(),"ioDevice":std::env::var("TOOLGATE_SANDBOX_IO_DEVICE").unwrap(),"ioBytesPerSecond":67108864,"scratchBytes":8388608});
+    }
+    if let Some(grace) = control_loss_grace_ms {
+        config_value["limits"]["controlLossGraceMs"] = json!(grace);
     }
     let config: Config = serde_json::from_value(config_value).unwrap();
     let host = tool_host::server::Host::new(config).unwrap();
@@ -631,7 +671,7 @@ async fn a_real_python_sdk_package_runs_through_admission_broker_and_control_rep
 #[tokio::test]
 async fn an_image_bound_runtime_is_refused_by_a_native_host_before_consumption() {
     let digest = format!("sha256:{}", "a".repeat(64));
-    let rig = rig_for_tier(false, Some(&digest), false)
+    let rig = rig_for_tier(false, Some(&digest), false, None)
         .await
         .expect("Python fixture required");
     let arguments = json!({"orderId":"123456"});
@@ -650,7 +690,7 @@ async fn an_image_bound_runtime_is_refused_by_a_native_host_before_consumption()
 async fn a_pinned_sdk_package_runs_in_oci_and_lease_revocation_tears_it_down() {
     let image = std::env::var("TOOLGATE_SANDBOX_IMAGE").expect("pinned image required");
     let digest = image.split_once('@').unwrap().1;
-    let rig = rig_for_tier(true, Some(digest), true)
+    let rig = rig_for_tier(true, Some(digest), true, None)
         .await
         .expect("Python SDK required");
     let arguments = json!({"orderId":"123456"});
@@ -719,7 +759,7 @@ async fn the_tool_input_continues_the_trace_and_carries_the_execution_context() 
     assert_ne!(&traceparent[36..52], &parent[36..52]);
     assert_eq!(
         out["executionContext"],
-        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE),
+        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, &fence(&id)),
             "attemptNumber": 1, "toolCallId": "toolu_01A9q", "sessionId": "sess-42", "tracestate": "vendor=opaque"})
     );
 }
@@ -761,7 +801,7 @@ async fn a_detailed_dispatch_sends_the_execution_and_egress_spans_to_control() {
     assert_eq!(execute["status"], "OK");
     assert_eq!(
         execute["executionId"],
-        tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE)
+        tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, &fence(&id))
     );
     let egress: Vec<_> = spans
         .iter()
@@ -791,7 +831,7 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     let lines = dispatch(&rig, &jws, &arguments).await;
     assert_eq!(
         lines[0],
-        json!({"kind": "ADMITTED", "invocationId": id, "fencingToken": FENCE})
+        json!({"kind": "ADMITTED", "invocationId": id, "fencingToken": fence(&id)})
     );
     assert_eq!(lines[1]["outcome"], "COMPLETED", "{lines:?}");
     let out = &lines[1]["result"]["structuredContent"];
@@ -822,7 +862,7 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
     assert_eq!(out["traceparent"], Value::Null);
     assert_eq!(
         out["executionContext"],
-        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, FENCE),
+        json!({"executionId": tool_host::trace::execution_id("10000000-0000-4000-8000-000000000001", &id, &fence(&id)),
             "attemptNumber": 1})
     );
     // Without CREDENTIALS_IN_SANDBOX the secret stays with the broker.
@@ -844,14 +884,14 @@ async fn an_admitted_invocation_runs_calls_through_the_broker_and_reports() {
         rig.target["packageDigest"]
     );
     assert_eq!(seen.reports[0]["outcome"], "COMPLETED");
-    assert_eq!(seen.reports[0]["fencingToken"], FENCE);
+    assert_eq!(seen.reports[0]["fencingToken"], fence(&id));
     // The SDK frames reached Control in order, bound to the fencing token, before the result report.
     let frames: Vec<&Value> = seen
         .events
         .iter()
         .flat_map(|b| b["events"].as_array().unwrap())
         .collect();
-    assert_eq!(seen.events[0]["fencingToken"], FENCE);
+    assert_eq!(seen.events[0]["fencingToken"], fence(&id));
     assert_eq!(seen.events[0]["attempt"], 1);
     assert_eq!(frames.len(), 2, "{:?}", seen.events);
     assert_eq!(frames[0]["kind"], "LOG");
@@ -918,6 +958,48 @@ async fn revocation_and_control_partition_stop_a_live_worker_before_its_delayed_
         assert!(rig.seen.lock().unwrap().upstream.is_empty());
         for sandbox in std::fs::read_dir(rig.dir.join("work/i")).unwrap() {
             assert!(!sandbox.unwrap().path().join("post-lease-effect").exists());
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_short_control_loss_grace_ends_authority_early_but_healthy_heartbeats_preserve_it() {
+    for partition in [false, true] {
+        let rig = rig_for_tier(false, None, false, Some(1_000))
+            .await
+            .expect("Python fixture required");
+        rig.seen.lock().unwrap().lease_ms = Some(10_000);
+        let arguments = json!({"orderId":"123456","since":7});
+        let (jws, _) = permit(&rig, &arguments, |_| {});
+        let seen = rig.seen.clone();
+        let change = async move {
+            tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                while seen.lock().unwrap().events.is_empty() {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .expect("Worker did not start");
+            if partition {
+                seen.lock().unwrap().partition = true;
+            }
+        };
+        let (lines, ()) = tokio::join!(dispatch(&rig, &jws, &arguments), change);
+        assert_eq!(
+            lines[1]["outcome"],
+            if partition {
+                "OUTCOME_UNKNOWN"
+            } else {
+                "COMPLETED"
+            }
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(2100)).await;
+        assert_eq!(rig.seen.lock().unwrap().upstream.is_empty(), partition);
+        for sandbox in std::fs::read_dir(rig.dir.join("work/i")).unwrap() {
+            assert_eq!(
+                sandbox.unwrap().path().join("post-lease-effect").exists(),
+                !partition
+            );
         }
     }
 }
@@ -1138,7 +1220,7 @@ async fn pull_mode_takes_calls_from_control_and_answers_through_it() {
         .find(|a| a["invocationId"] == id.as_str())
         .unwrap();
     assert_eq!(admitted["kind"], "ADMITTED");
-    assert_eq!(admitted["fencingToken"], FENCE);
+    assert_eq!(admitted["fencingToken"], fence(&id));
     assert_eq!(seen.results[0]["invocationId"], id);
     assert_eq!(seen.results[0]["outcome"], "COMPLETED");
     assert_eq!(seen.reports.len(), 1);
@@ -1149,7 +1231,7 @@ async fn pull_mode_takes_calls_from_control_and_answers_through_it() {
 #[ignore = "requires a delegated rootless OCI service; run tools/security/sandbox.py"]
 async fn isolated_pool_refuses_unsupported_profiles_before_consuming_authority() {
     let image = std::env::var("TOOLGATE_SANDBOX_IMAGE").unwrap();
-    let mut rig = rig_for_tier(true, Some(image.split_once('@').unwrap().1), true)
+    let mut rig = rig_for_tier(true, Some(image.split_once('@').unwrap().1), true, None)
         .await
         .unwrap();
     let store = rig.dir.join("store");
@@ -1199,4 +1281,37 @@ async fn isolated_pool_refuses_unsupported_profiles_before_consuming_authority()
         assert!(seen.consumed.is_empty(), "{mutation}");
         assert!(seen.upstream.is_empty(), "{mutation}");
     }
+}
+
+/// Accepted authority must match the exact nonce, current floor, deadline and verified package.
+#[tokio::test]
+async fn malformed_consumption_never_admits_or_runs_and_retains_uncertain_intent() {
+    let rig = rig!();
+    let arguments = json!({"orderId":"123456"});
+    for patch in [
+        json!({"fencingToken":"different-nonce"}),
+        json!({"authorizationEpoch":0}),
+        json!({"leaseExpiresAtUnixMs":0}),
+        json!({"leaseExpiresAtUnixMs":9_007_199_254_740_991u64}),
+        json!({"killScope":{"packageDigest":rig.target["packageDigest"],"toolId":"other/tool"}}),
+        json!({"killScope":{"packageDigest":rig.target["packageDigest"],"toolId":rig.target["toolId"],"publisher":"other"}}),
+        json!({"killScope":{"packageDigest":rig.target["packageDigest"],"toolId":rig.target["toolId"],"imageDigest":format!("sha256:{}", "a".repeat(64))}}),
+        // A scope-less response is an unsupported wire format, never a compatibility path.
+        json!({"killScope":null}),
+    ] {
+        rig.seen.lock().unwrap().consume_patch = Some(patch);
+        let (jws, _) = permit(&rig, &arguments, |_| {});
+        let lines = dispatch(&rig, &jws, &arguments).await;
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert_eq!(lines[0]["reason"], "STORE_UNAVAILABLE", "{lines:?}");
+    }
+    let seen = rig.seen.lock().unwrap();
+    assert_eq!(seen.consumed.len(), 8);
+    assert!(seen.upstream.is_empty() && seen.reports.is_empty() && seen.events.is_empty());
+    assert_eq!(
+        std::fs::read_dir(rig.dir.join("work/admission-spool"))
+            .unwrap()
+            .count(),
+        8
+    );
 }

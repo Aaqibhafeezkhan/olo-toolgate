@@ -12,6 +12,8 @@ package io.ololabs.toolgate.contracts.v2;
  * @param reason canonical reason value
  * @param issuedAtUnixMs canonical issuedAtUnixMs value
  * @param signature canonical signature value
+ * @param tenantId canonical tenantId value
+ * @param authorizationEpoch canonical authorizationEpoch value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record KillEvent(
@@ -21,7 +23,9 @@ public record KillEvent(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "mode", required = true) KillMode mode,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "reason", required = true) String reason,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "issuedAtUnixMs", required = true) Long issuedAtUnixMs,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "signature", required = true) String signature
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "signature", required = true) String signature,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "tenantId", required = true) String tenantId,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "authorizationEpoch", required = true) Long authorizationEpoch
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,6 +36,8 @@ public record KillEvent(
      * @param reason canonical reason value
      * @param issuedAtUnixMs canonical issuedAtUnixMs value
      * @param signature canonical signature value
+     * @param tenantId canonical tenantId value
+     * @param authorizationEpoch canonical authorizationEpoch value
      */
     public KillEvent {
         java.util.Objects.requireNonNull(eventId, "eventId");
@@ -41,5 +47,7 @@ public record KillEvent(
         java.util.Objects.requireNonNull(reason, "reason");
         java.util.Objects.requireNonNull(issuedAtUnixMs, "issuedAtUnixMs");
         java.util.Objects.requireNonNull(signature, "signature");
+        java.util.Objects.requireNonNull(tenantId, "tenantId");
+        java.util.Objects.requireNonNull(authorizationEpoch, "authorizationEpoch");
     }
 }

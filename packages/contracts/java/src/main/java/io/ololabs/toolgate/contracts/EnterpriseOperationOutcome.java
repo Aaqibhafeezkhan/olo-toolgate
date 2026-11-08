@@ -9,9 +9,12 @@ package io.ololabs.toolgate.contracts;
  * @param state canonical state value
  * @param revision canonical revision value
  * @param grade canonical grade value
+ * @param coverage canonical coverage value
  * @param journalComplete canonical journalComplete value
  * @param attemptCount canonical attemptCount value
  * @param effectCount canonical effectCount value
+ * @param fencedEffectCount canonical fencedEffectCount value
+ * @param unfencedEffectCount canonical unfencedEffectCount value
  * @param unresolvedEffectCount canonical unresolvedEffectCount value
  * @param unsettledAttemptCount canonical unsettledAttemptCount value
  * @param finalized canonical finalized value
@@ -25,9 +28,12 @@ public record EnterpriseOperationOutcome(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "state", required = true) EnterpriseOperationState state,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "revision", required = true) Long revision,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "grade", required = true) EnterpriseOutcomeGrade grade,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "coverage", required = true) EnterpriseExecutionCoverage coverage,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "journalComplete", required = true) Boolean journalComplete,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "attemptCount", required = true) Long attemptCount,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "effectCount", required = true) Long effectCount,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fencedEffectCount", required = true) Long fencedEffectCount,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "unfencedEffectCount", required = true) Long unfencedEffectCount,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "unresolvedEffectCount", required = true) Long unresolvedEffectCount,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "unsettledAttemptCount", required = true) Long unsettledAttemptCount,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "finalized", required = true) Boolean finalized,
@@ -41,9 +47,12 @@ public record EnterpriseOperationOutcome(
      * @param state canonical state value
      * @param revision canonical revision value
      * @param grade canonical grade value
+     * @param coverage canonical coverage value
      * @param journalComplete canonical journalComplete value
      * @param attemptCount canonical attemptCount value
      * @param effectCount canonical effectCount value
+     * @param fencedEffectCount canonical fencedEffectCount value
+     * @param unfencedEffectCount canonical unfencedEffectCount value
      * @param unresolvedEffectCount canonical unresolvedEffectCount value
      * @param unsettledAttemptCount canonical unsettledAttemptCount value
      * @param finalized canonical finalized value
@@ -56,9 +65,12 @@ public record EnterpriseOperationOutcome(
         java.util.Objects.requireNonNull(state, "state");
         java.util.Objects.requireNonNull(revision, "revision");
         java.util.Objects.requireNonNull(grade, "grade");
+        java.util.Objects.requireNonNull(coverage, "coverage");
         java.util.Objects.requireNonNull(journalComplete, "journalComplete");
         java.util.Objects.requireNonNull(attemptCount, "attemptCount");
         java.util.Objects.requireNonNull(effectCount, "effectCount");
+        java.util.Objects.requireNonNull(fencedEffectCount, "fencedEffectCount");
+        java.util.Objects.requireNonNull(unfencedEffectCount, "unfencedEffectCount");
         java.util.Objects.requireNonNull(unresolvedEffectCount, "unresolvedEffectCount");
         java.util.Objects.requireNonNull(unsettledAttemptCount, "unsettledAttemptCount");
         java.util.Objects.requireNonNull(finalized, "finalized");

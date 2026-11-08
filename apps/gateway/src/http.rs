@@ -101,7 +101,10 @@ impl AppState {
                 .transpose()?,
             admission: Semaphore::new(config.limits.max_concurrent_requests),
             rate: RateLimit::new(config.limits.requests_per_second),
-            tool_hosts: crate::toolhost::ToolHosts::new(&config.tool_hosts),
+            tool_hosts: crate::toolhost::ToolHosts::new(
+                &config.tool_hosts,
+                &config.control.tenant_id,
+            ),
             admissions: crate::insights::Admissions::new(&config.insights, &instance),
             spans: crate::insights::Spans::new(&config.insights),
             gateway,

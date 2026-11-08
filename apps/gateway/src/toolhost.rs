@@ -4,6 +4,7 @@
 //! device is a Tool Host named here, the Gateway gets a permit for it from Control and posts a
 //! `Dispatch`. The host answers NDJSON: one `AdmissionResponse` line, then after `ADMITTED` one
 //! `ResultMessage` line. The permit, not this Gateway, is what lets the host run the tool.
+pub use crate::toolhost_tls::Config as ToolHostTlsConfig;
 use crate::validation::{strict_json, Contracts};
 use olo_toolgate_contracts::v2::{
     AdmissionKind, AdmissionResponse, Dispatch, RefusalReason, ResultMessage,
@@ -23,6 +24,10 @@ pub struct ToolHostRoute {
     pub host_id: String,
     /// The host's dispatch origin, such as `http://127.0.0.1:8095`.
     pub url: String,
+    #[serde(default)]
+    pub development_loopback_http: bool,
+    #[serde(default)]
+    pub tls: Option<ToolHostTlsConfig>,
 }
 
 impl ToolHostRoute {
@@ -32,13 +37,18 @@ impl ToolHostRoute {
         let loopback = matches!(url.host_str(), Some("127.0.0.1" | "[::1]" | "localhost"));
         if self.host_id.is_empty()
             || self.host_id.len() > 128
-            || url.scheme() != "http"
-            || !loopback
+            || !((url.scheme() == "https" && self.tls.is_some() && !self.development_loopback_http)
+                || (url.scheme() == "http"
+                    && self.tls.is_none()
+                    && loopback
+                    && self.development_loopback_http))
             || url.path() != "/"
             || url.query().is_some()
             || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
         {
-            return Err("Tool Host routes need an id and a loopback http origin");
+            return Err("Tool Host routes require dedicated HTTPS mTLS or explicit development loopback HTTP");
         }
         Ok(())
     }
@@ -52,33 +62,127 @@ pub enum Dispatched {
 }
 
 pub struct ToolHosts {
-    routes: BTreeMap<String, String>,
-    client: Option<reqwest::Client>,
-    contracts: Option<Contracts>,
+    routes: BTreeMap<String, (String, Option<reqwest::Client>)>,
+    contracts: Option<std::sync::Arc<Contracts>>,
+    delivered: std::sync::Mutex<BTreeMap<String, String>>,
 }
 
 impl ToolHosts {
-    pub fn new(routes: &[ToolHostRoute]) -> Self {
+    pub fn new(routes: &[ToolHostRoute], tenant: &str) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let client = reqwest::Client::builder()
-            .no_proxy()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(2))
-            .build()
-            .ok();
         Self {
             routes: routes
                 .iter()
-                .map(|r| (r.host_id.clone(), r.url.trim_end_matches('/').to_string()))
+                .map(|route| {
+                    let client = route.validate().ok().and_then(|()| {
+                        if let Some(tls) = &route.tls {
+                            crate::toolhost_tls::client(tls, tenant).ok()
+                        } else {
+                            reqwest::Client::builder()
+                                .no_proxy()
+                                .redirect(reqwest::redirect::Policy::none())
+                                .retry(reqwest::retry::never())
+                                .connect_timeout(Duration::from_secs(2))
+                                .build()
+                                .ok()
+                        }
+                    });
+                    (
+                        route.host_id.clone(),
+                        (route.url.trim_end_matches('/').to_owned(), client),
+                    )
+                })
                 .collect(),
-            client,
-            contracts: Contracts::new().ok(),
+            contracts: Contracts::new().ok().map(std::sync::Arc::new),
+            delivered: std::sync::Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// One bounded independent delivery per dedicated mTLS route. Loopback
+    /// development dispatch is deliberately not a signed-state relay tier.
+    pub async fn push_revocations(&self, bytes: &[u8], epoch: u64) -> bool {
+        let Some(contracts) = &self.contracts else {
+            return false;
+        };
+        let fingerprint = format!("{epoch}:{}", crate::digest(bytes));
+        let mut delivered = true;
+        let mut deliveries = tokio::task::JoinSet::new();
+        for (host, (url, client)) in &self.routes {
+            if self
+                .delivered
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(host)
+                == Some(&fingerprint)
+            {
+                continue;
+            }
+            if !url.starts_with("https://") {
+                continue;
+            }
+            let Some(client) = client.as_ref() else {
+                delivered = false;
+                continue;
+            };
+            let url = format!("{url}/v1/kills");
+            let client = client.clone();
+            let body = bytes.to_vec();
+            let contracts = contracts.clone();
+            let host = host.clone();
+            deliveries.spawn(async move {
+                let delivery = async {
+                    let mut response = client
+                        .post(url)
+                        .header("Content-Type", "application/json")
+                        .body(body)
+                        .send()
+                        .await
+                        .ok()?;
+                    if response.status() != 200
+                        || response.content_length().is_some_and(|n| n > 131072)
+                    {
+                        return None;
+                    }
+                    let mut bytes = Vec::new();
+                    while let Some(chunk) = response.chunk().await.ok()? {
+                        if bytes.len() + chunk.len() > 131072 {
+                            return None;
+                        }
+                        bytes.extend_from_slice(&chunk);
+                    }
+                    let value = strict_json(&bytes).ok()?;
+                    if !contracts.valid("KillAcknowledgement", &value) {
+                        return None;
+                    }
+                    let ack: olo_toolgate_contracts::v2::KillAcknowledgement =
+                        serde_json::from_value(value).ok()?;
+                    (ack.authorization_epoch >= epoch
+                        && ack.delivery_path == olo_toolgate_contracts::v2::KillDeliveryPath::Push)
+                        .then_some(())
+                };
+                let accepted = tokio::time::timeout(Duration::from_secs(2), delivery)
+                    .await
+                    .is_ok_and(|result| result.is_some());
+                (host, accepted)
+            });
+        }
+        while let Some(result) = deliveries.join_next().await {
+            match result {
+                Ok((host, true)) => {
+                    self.delivered
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .insert(host, fingerprint.clone());
+                }
+                _ => delivered = false,
+            }
+        }
+        delivered
     }
 
     /// The dispatch origin of the Tool Host with this device id, when there is one.
     pub fn url(&self, device: &str) -> Option<&str> {
-        self.routes.get(device).map(String::as_str)
+        self.routes.get(device).map(|(url, _)| url.as_str())
     }
 
     /// Posts the dispatch for `invocation_id` and reads the host's two lines, giving up at
@@ -90,7 +194,13 @@ impl ToolHosts {
         invocation_id: &str,
         deadline: u64,
     ) -> Result<Dispatched, ErrorCode> {
-        let (Some(client), Some(contracts)) = (&self.client, &self.contracts) else {
+        // Identity is bound to this configured origin. A caller cannot send it to an arbitrary URL.
+        let client = self
+            .routes
+            .values()
+            .find(|(origin, _)| origin == url)
+            .and_then(|(_, client)| client.as_ref());
+        let (Some(client), Some(contracts)) = (client, &self.contracts) else {
             return Err(ErrorCode::DependencyUnavailable);
         };
         let remaining = deadline.saturating_sub(crate::unix_ms().unwrap_or(u64::MAX));

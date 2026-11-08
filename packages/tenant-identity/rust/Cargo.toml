@@ -22,3 +22,6 @@ sha2.workspace = true
 
 [dev-dependencies]
 rcgen.workspace = true
+
+rsa = { version = "0.9.10", features = ["sha2"] }
+rand = "0.8.5"

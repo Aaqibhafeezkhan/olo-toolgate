@@ -185,6 +185,51 @@ impl HttpRelay {
             last_success: AtomicU64::new(0),
         })
     }
+    /// Current fixed-origin signed authority, never execution permission.
+    pub async fn revocations(
+        &self,
+    ) -> Result<(olo_toolgate_contracts::v2::KillTrustDocument, Vec<u8>), ErrorCode> {
+        let trust = self
+            .exchange::<(), olo_toolgate_contracts::v2::KillTrustDocument>(
+                "/api/control/v1/gateways/kills/keys",
+                None,
+                "KillTrustDocument",
+                131072,
+            )
+            .await?;
+        let push = self
+            .exchange::<(), olo_toolgate_contracts::v2::KillPush>(
+                "/api/control/v1/gateways/kills",
+                None,
+                "KillPush",
+                2 * 1024 * 1024,
+            )
+            .await?;
+        if trust.tenant_id != self.config.tenant_id {
+            return Err(ErrorCode::TenantMismatch);
+        }
+        Ok((
+            trust,
+            serde_json::to_vec(&push).map_err(|_| ErrorCode::Validation)?,
+        ))
+    }
+    pub async fn acknowledge_revocations(&self, epoch: u64) -> Result<(), ErrorCode> {
+        let ack = olo_toolgate_contracts::v2::KillAcknowledgement {
+            authorization_epoch: epoch,
+            delivery_path: olo_toolgate_contracts::v2::KillDeliveryPath::Poll,
+        };
+        let response: olo_toolgate_contracts::v2::KillAcknowledgement = self
+            .post(
+                "/api/control/v1/gateways/kills/acknowledgements",
+                &ack,
+                "KillAcknowledgement",
+            )
+            .await?;
+        if response != ack {
+            return Err(ErrorCode::Validation);
+        }
+        Ok(())
+    }
     async fn token(&self) -> Result<String, ErrorCode> {
         let file = tokio::fs::File::open(&self.config.token_path)
             .await
@@ -296,6 +341,29 @@ impl HttpRelay {
         {
             return Err(ErrorCode::Validation);
         }
+        let catalog_epoch = if path == "/api/control/v1/mcp/catalog" {
+            if response
+                .headers()
+                .get_all("Toolgate-Authorization-Epoch")
+                .iter()
+                .count()
+                != 1
+            {
+                return Err(ErrorCode::Validation);
+            }
+            let text = response
+                .headers()
+                .get("Toolgate-Authorization-Epoch")
+                .and_then(|value| value.to_str().ok())
+                .ok_or(ErrorCode::Validation)?;
+            let epoch = text.parse::<u64>().map_err(|_| ErrorCode::Validation)?;
+            if epoch > 9_007_199_254_740_991 || epoch.to_string() != text {
+                return Err(ErrorCode::Validation);
+            }
+            Some(epoch)
+        } else {
+            None
+        };
         let mut bytes = vec![];
         while let Some(chunk) = response
             .chunk()
@@ -319,6 +387,20 @@ impl HttpRelay {
             crate::diagnostics::summary(&value),
         );
         let decoded = serde_json::from_value(value).map_err(|_| ErrorCode::Validation)?;
+        if let Some(epoch) = catalog_epoch {
+            // Acknowledge only after validating the current catalog.
+            let acknowledgement = olo_toolgate_contracts::v2::KillAcknowledgement {
+                authorization_epoch: epoch,
+                delivery_path: olo_toolgate_contracts::v2::KillDeliveryPath::Poll,
+            };
+            let _: Result<olo_toolgate_contracts::v2::KillAcknowledgement, ErrorCode> =
+                Box::pin(self.post(
+                    "/api/control/v1/gateways/kills/acknowledgements",
+                    &acknowledgement,
+                    "KillAcknowledgement",
+                ))
+                .await;
+        }
         self.last_success.store(
             crate::unix_ms().ok_or(ErrorCode::DependencyUnavailable)?,
             Ordering::Release,

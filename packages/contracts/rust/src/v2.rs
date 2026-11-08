@@ -73,6 +73,18 @@ pub enum AuthType {
     #[serde(rename = "CUSTOM")]
     Custom,
 }
+/// Exact JCS offline approval payload. Issued-to-expiry window is at most ten minutes; two or three distinct current operator keys must approve identical claims.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BreakGlassApprovalClaims {
+    pub tenant_id: String,
+    pub request_id: String,
+    pub scope: KillScope,
+    pub mode: KillMode,
+    pub reason: String,
+    pub issued_at_unix_ms: u64,
+    pub not_after_unix_ms: u64,
+}
 /// Break-glass kill: 2-of-3 operator signatures, adds kills only.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1471,6 +1483,46 @@ pub enum KeyNamespace {
     #[serde(rename = "TENANT")]
     Tenant,
 }
+/// Acknowledgement from a socket-authenticated component; identity is never caller supplied.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillAcknowledgement {
+    pub authorization_epoch: u64,
+    pub delivery_path: KillDeliveryPath,
+}
+/// Current registered consumer and its latest authenticated acknowledgement, if any.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillComponentDelivery {
+    pub kind: KillComponentKind,
+    pub component_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authorization_epoch: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at_unix_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery_path: Option<KillDeliveryPath>,
+}
+/// Canonical KillComponentKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KillComponentKind {
+    #[serde(rename = "TOOL_HOST")]
+    ToolHost,
+    #[serde(rename = "ENDPOINT")]
+    Endpoint,
+    #[serde(rename = "GATEWAY")]
+    Gateway,
+}
+/// Canonical KillDeliveryPath wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KillDeliveryPath {
+    #[serde(rename = "PUSH")]
+    Push,
+    #[serde(rename = "CHECK_IN")]
+    CheckIn,
+    #[serde(rename = "POLL")]
+    Poll,
+}
 /// Immutable kill event.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1482,6 +1534,8 @@ pub struct KillEvent {
     pub reason: String,
     pub issued_at_unix_ms: u64,
     pub signature: String,
+    pub tenant_id: String,
+    pub authorization_epoch: u64,
 }
 /// Effective and superseded events.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1490,6 +1544,21 @@ pub struct KillEventPage {
     pub kills: Vec<KillEvent>,
     pub recoveries: Vec<RecoveryEvent>,
     pub authorization_epoch: u64,
+}
+/// Immutable per-attempt Control facts returned only after online permit consumption. Absent facts are unknown and match scoped kills conservatively; empty pool/image means known not applicable.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillExecutionScope {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_id: Option<String>,
+    pub package_digest: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    pub tool_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pool_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_digest: Option<String>,
 }
 /// Canonical KillIssuer wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1506,6 +1575,65 @@ pub enum KillMode {
     StopNew,
     #[serde(rename = "TERMINATE")]
     Terminate,
+}
+/// Authoritative current kill state, registered delivery status and retained archive counts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillOverview {
+    pub state: KillPush,
+    pub components: Vec<KillComponentDelivery>,
+    pub retained_event_count: u64,
+    pub archived_event_count: u64,
+    pub observed_at_unix_ms: u64,
+}
+/// Immutable request and append-only reviews; no execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillProposal {
+    pub id: String,
+    pub requester_user_id: String,
+    pub kind: KillProposalKind,
+    pub state: KillProposalState,
+    pub revision: u64,
+    pub authorization_epoch: u64,
+    pub created_at_unix_ms: u64,
+    pub expires_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<KillScope>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<KillMode>,
+    pub reason: String,
+    pub supersedes: Vec<String>,
+    pub reviews: Vec<KillReview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
+}
+/// Review the exact retained proposal; reviewer identity is authenticated.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillProposalDecision {
+    pub expected_revision: u64,
+    pub approve: bool,
+}
+/// Canonical KillProposalKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KillProposalKind {
+    #[serde(rename = "KILL")]
+    Kill,
+    #[serde(rename = "RECOVERY")]
+    Recovery,
+}
+/// Canonical KillProposalState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KillProposalState {
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "APPLIED")]
+    Applied,
+    #[serde(rename = "REJECTED")]
+    Rejected,
+    #[serde(rename = "EXPIRED")]
+    Expired,
 }
 /// Push to Tool Hosts and clients for running work.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1524,6 +1652,14 @@ pub struct KillRequest {
     pub scope: KillScope,
     pub mode: KillMode,
     pub reason: String,
+}
+/// One authenticated independent review of retained kill or recovery intent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillReview {
+    pub reviewer_user_id: String,
+    pub approved: bool,
+    pub reviewed_at_unix_ms: u64,
 }
 /// Kill target. value is absent only for TENANT.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1550,6 +1686,23 @@ pub enum KillScopeKind {
     RuntimeImage,
     #[serde(rename = "TENANT")]
     Tenant,
+}
+/// Direct HTTPS key bootstrap; never accept it from a worker or relayed push.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillTrustDocument {
+    pub tenant_id: String,
+    pub authorization_epoch: u64,
+    pub keys: Vec<KillTrustKey>,
+}
+/// Organization fleet public key delivered only by the fixed certificate-authenticated Control origin.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillTrustKey {
+    pub kid: String,
+    pub n: String,
+    #[serde(deserialize_with = "const_kill_trust_key_e")]
+    pub e: String,
 }
 /// Lease renewal for a running ledger invocation (every lease/3). Also carries the latest progress and, while the tool waits for input, its input request (invocation-state-v2.md T6, T7).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2055,6 +2208,16 @@ pub struct NativeMcpEffectReview {
     pub reviewed_by: String,
     pub reviewed_at_unix_ms: u64,
 }
+/// Current native endpoint consumption: accepted invocation, live lease and frozen kill facts from one Control transaction. Not a Tool Host admission response.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativePermitConsumed {
+    pub invocation: crate::EnterpriseInvocation,
+    pub fencing_token: String,
+    pub lease_expires_at_unix_ms: u64,
+    pub authorization_epoch: u64,
+    pub kill_scope: KillExecutionScope,
+}
 /// Version requirements checked at enable.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2254,13 +2417,15 @@ pub enum Permission {
     #[serde(rename = "DEVICE_FILES_WRITE")]
     DeviceFilesWrite,
 }
-/// Successful consumption.
+/// Successful consumption with current authorization epoch and immutable per-attempt revocation scope.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PermitConsumed {
     pub invocation_id: String,
     pub fencing_token: String,
     pub lease_expires_at_unix_ms: u64,
+    pub authorization_epoch: u64,
+    pub kill_scope: KillExecutionScope,
 }
 /// Tool Host or device consumes the single-use nonce; returns the fencing token.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2523,6 +2688,8 @@ pub struct RecoveryEvent {
     pub reviewers: Vec<String>,
     pub issued_at_unix_ms: u64,
     pub signature: String,
+    pub tenant_id: String,
+    pub authorization_epoch: u64,
 }
 /// Bounded current-only preflight. Opaque cursors fence a changed tenant directory; observed facts never authorize a resend.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2751,6 +2918,8 @@ pub struct RouteEffectPolicy {
     pub target_dedupe_guarantee: Option<TargetDedupeGuarantee>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fenced_target: Option<FencedTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authoritative_response: Option<bool>,
 }
 /// Review stamp created by Control, never accepted from package or worker input.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4764,6 +4933,7 @@ const_field!(const_discovery_public_key_alg, String, "RS256");
 const_field!(const_discovery_public_key_e, String, "AQAB");
 const_field!(const_effect_consent_mapped_request_scheme, String, "https");
 const_field!(const_input_request_frame_kind, String, "INPUT_REQUEST");
+const_field!(const_kill_trust_key_e, String, "AQAB");
 const_field!(const_log_frame_kind, String, "LOG");
 const_field!(const_mcp_proxy_document_format_version, u64, 1);
 const_field!(const_mcp_scan_claims_iss, String, "control");

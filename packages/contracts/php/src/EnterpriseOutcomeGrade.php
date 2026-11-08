@@ -7,9 +7,10 @@ namespace OloLabs\ToolGate\Contracts;
 
 /** Canonical EnterpriseOutcomeGrade wire values. */
 enum EnterpriseOutcomeGrade: string {
-    case REPORTED = 'REPORTED';
-    case CONTROL_PROVEN = 'CONTROL_PROVEN';
     case TARGET_CONFIRMED = 'TARGET_CONFIRMED';
-    case REVIEWER_CONFIRMED = 'REVIEWER_CONFIRMED';
-    case TARGET_DEDUPLICATION_ASSUMED = 'TARGET_DEDUPLICATION_ASSUMED';
+    case BROKER_OBSERVED = 'BROKER_OBSERVED';
+    case HUMAN_RECONCILED = 'HUMAN_RECONCILED';
+    case CONTROL_PROVEN = 'CONTROL_PROVEN';
+    case EXECUTOR_REPORTED = 'EXECUTOR_REPORTED';
+    case UNKNOWN = 'UNKNOWN';
 }

@@ -28,6 +28,8 @@ rustls.workspace = true
 x509-parser.workspace = true
 
 [dev-dependencies]
+rcgen.workspace = true
+olo-toolgate-tool-host = { path = "../tool-host" }
 tower.workspace = true
 rsa = { version = "0.9.10", features = ["sha2"] }
 rand = "0.8.5"

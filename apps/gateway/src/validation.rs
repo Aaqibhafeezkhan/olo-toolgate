@@ -28,6 +28,9 @@ impl Contracts {
             .map_err(|_| "invalid embedded registry")?;
         for (name, file) in [
             ("AuthorizationRequest", "v1/runtime"),
+            ("KillAcknowledgement", "v2/kill"),
+            ("KillTrustDocument", "v2/kill"),
+            ("KillPush", "v2/kill"),
             ("BusinessKeyPolicy", "v1/tool"),
             ("RequestContext", "v2/common"),
             ("EnterpriseInvocationRequest", "v1/enterprise"),
@@ -128,4 +131,22 @@ pub fn strict_json(bytes: &[u8]) -> Result<Value, serde_json::Error> {
         }
     }
     serde_json::from_slice::<Strict>(bytes).map(|v| v.0)
+}
+
+#[cfg(test)]
+mod revocation_tests {
+    #[test]
+    fn current_signed_delivery_models_have_closed_offline_validators() {
+        let contracts = super::Contracts::new().unwrap();
+        let corpus: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/contracts/v2/valid.json"
+        ))
+        .unwrap();
+        for model in ["KillTrustDocument", "KillPush"] {
+            assert!(contracts.valid(model, &corpus[model]), "{model}");
+            let mut altered = corpus[model].clone();
+            altered["untrustedExtra"] = true.into();
+            assert!(!contracts.valid(model, &altered));
+        }
+    }
 }

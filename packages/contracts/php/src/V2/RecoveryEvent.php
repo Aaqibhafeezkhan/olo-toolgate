@@ -13,12 +13,14 @@ final readonly class RecoveryEvent implements \JsonSerializable {
         public array $supersedes,
         public array $reviewers,
         public int $issuedAtUnixMs,
-        public string $signature
+        public string $signature,
+        public string $tenantId,
+        public int $authorizationEpoch
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['eventId', 'issuer', 'supersedes', 'reviewers', 'issuedAtUnixMs', 'signature']) || array_diff(['eventId', 'issuer', 'supersedes', 'reviewers', 'issuedAtUnixMs', 'signature'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['eventId', 'issuer', 'supersedes', 'reviewers', 'issuedAtUnixMs', 'signature', 'tenantId', 'authorizationEpoch']) || array_diff(['eventId', 'issuer', 'supersedes', 'reviewers', 'issuedAtUnixMs', 'signature', 'tenantId', 'authorizationEpoch'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         if ($data['issuer'] !== 'control') {
@@ -30,7 +32,9 @@ final readonly class RecoveryEvent implements \JsonSerializable {
             array_map(static fn ($item) => $item, $data['supersedes']),
             array_map(static fn ($item) => $item, $data['reviewers']),
             $data['issuedAtUnixMs'],
-            $data['signature']
+            $data['signature'],
+            $data['tenantId'],
+            $data['authorizationEpoch']
         );
     }
 

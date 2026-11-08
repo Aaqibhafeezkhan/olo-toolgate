@@ -19,16 +19,17 @@ struct Policy {
     calls: Mutex<Vec<AuthorizationRequest>>,
 }
 impl AuthorizationPort for Policy {
+    // This fixture's explicit grant lifetime is the invoke deadline; no online Control is mocked here.
+    fn revoked(&self) -> Call<'_, ()> {
+        Box::pin(std::future::pending())
+    }
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
         self.calls.lock().unwrap().push(request);
         Box::pin(async { self.result })
     }
-    fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, Option<u64>> {
+    fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, u64> {
         self.calls.lock().unwrap().push(request);
-        Box::pin(async {
-            self.result
-                .map(|_| Some(olo_toolgate_client::now() + 60000))
-        })
+        Box::pin(async { self.result.map(|_| olo_toolgate_client::now() + 60000) })
     }
 }
 /// A temporary directory protected storage accepts: on macOS the temporary directory is under the /var symbolic link,

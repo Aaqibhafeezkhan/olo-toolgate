@@ -28,7 +28,7 @@ public final class DevicePlacement {
         return place(tx,context,now,id->{var saved=tx.endpointConfiguration(id);if(saved==null||saved.localTools()==null)return false;
             // A Tool Host still reporting a tool its deployment moved elsewhere no longer gets its calls.
             if(deployment!=null&&tx.packages().toolHost(id)!=null&&!ServerPackages.targets(tx.load(),codec,deployment,id))return false;
-            return codec.model(saved.localTools(),LocalToolCatalog.class).tools().stream().anyMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(toolDigest)&&t.packageDigest().equals(packageDigest));});
+            return codec.model(saved.localTools(),LocalToolCatalog.class).tools().stream().anyMatch(t->t.enabled()&&t.toolId().equals(request.toolId())&&t.action().equals(request.action())&&t.toolDigest().equals(toolDigest)&&t.packageDigest().equals(packageDigest));},request.toolId(),packageDigest);
     }
     /** The server package deployment running this package, when the tool is a server tool. */
     private com.fasterxml.jackson.databind.JsonNode deployment(Store.Session tx,String packageDigest){
@@ -39,13 +39,19 @@ public final class DevicePlacement {
     /** Every device a call for this context could be placed on, before load balancing. A catalog lists their tools. */
     public List<String> candidates(Store.Session tx,RequestContext context,long now){return candidates(tx,context,now,null);}
     private String place(Store.Session tx,RequestContext context,long now,java.util.function.Predicate<String> runs){
-        var candidates=candidates(tx,context,now,runs);
+        return place(tx,context,now,runs,null,null);
+    }
+    private String place(Store.Session tx,RequestContext context,long now,java.util.function.Predicate<String> runs,String tool,String digest){
+        var candidates=candidates(tx,context,now,runs,tool,digest);
         if(candidates.size()<2)return candidates.isEmpty()?null:candidates.getFirst();
         var queued=new HashMap<String,Integer>();for(var id:candidates)queued.put(id,tx.mcp().pending(id,QUEUE_PROBE).size());
         int least=Collections.min(queued.values());var lightest=candidates.stream().filter(id->queued.get(id)==least).toList();
         return lightest.get(Math.floorMod(DirectoryService.digest(context.requestId()).hashCode(),lightest.size()));
     }
     private List<String> candidates(Store.Session tx,RequestContext context,long now,java.util.function.Predicate<String> runs){
+        return candidates(tx,context,now,runs,null,null);
+    }
+    private List<String> candidates(Store.Session tx,RequestContext context,long now,java.util.function.Predicate<String> runs,String tool,String digest){
         var directory=tx.load();
         var bindingEntry=context.bindingId()==null?null:directory.entries().get(Kind.BINDING.id(context.bindingId()));
         if(bindingEntry==null||!bindingEntry.enabled())return List.of();
@@ -57,6 +63,7 @@ public final class DevicePlacement {
             var entry=directory.entries().get(Kind.DEVICE.id(id));if(entry==null||!entry.enabled()||!online(tx,id,now))continue;
             eligible.put(id,codec.model(entry.document(),ControlDevice.class));
         }
+        if(tool!=null)eligible.entrySet().removeIf(entry->KillEnforcement.killed(tx,codec,tool,digest,entry.getKey()));
         if(runs!=null){var running=new TreeMap<String,ControlDevice>();eligible.forEach((id,d)->{if(runs.test(id))running.put(id,d);});if(!running.isEmpty())eligible=running;}
         var own=context.userId()==null?List.<String>of():eligible.values().stream().filter(d->context.userId().equals(d.ownerUserId())).map(ControlDevice::id).toList();
         return own.isEmpty()?List.copyOf(eligible.keySet()):own;

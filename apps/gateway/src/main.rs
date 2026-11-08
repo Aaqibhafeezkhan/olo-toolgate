@@ -86,6 +86,56 @@ async fn run() -> Result<(), &'static str> {
     });
     let state = AppState::new(gateway, auth, config.clone())?;
     let state = Arc::new(state);
+    let mut revocation_receiver = shutdown.subscribe();
+    let revocation_authority = authority.clone();
+    let revocation_tenant = config.control.tenant_id.clone();
+    let revocation_hosts =
+        olo_toolgate_gateway::toolhost::ToolHosts::new(&config.tool_hosts, &revocation_tenant);
+    let mut revocation_worker = tokio::spawn(async move {
+        use olo_toolgate_tenant_identity::revocation::{State, Verifier};
+        let mut state: Option<State> = None;
+        let mut delivery_failed = false;
+        let mut acknowledged = None;
+        loop {
+            let delivery = async {
+                let (trust, bytes) = revocation_authority.revocations().await.ok()?;
+                let verifier = Verifier::new(&revocation_tenant, &trust.keys).ok()?;
+                let fetch = verifier.verify_full_fetch(&bytes).ok()?;
+                let mut next = state.clone().unwrap_or_else(|| State::empty(&verifier));
+                next.replace_trusted_full(&fetch).ok()?;
+                if next.epoch() < trust.authorization_epoch {
+                    return None;
+                }
+                let epoch = next.epoch();
+                state = Some(next);
+                // A failed receipt cannot delay negative delivery to hosts.
+                let delivered = revocation_hosts.push_revocations(&bytes, epoch).await;
+                if acknowledged != Some(epoch)
+                    && revocation_authority
+                        .acknowledge_revocations(epoch)
+                        .await
+                        .is_ok()
+                {
+                    acknowledged = Some(epoch);
+                }
+                delivered.then_some(())
+            };
+            let result = tokio::select! {
+                _ = revocation_receiver.changed() => break,
+                result = delivery => result,
+            };
+            if result.is_none() && !delivery_failed {
+                tracing::warn!(tenant=%revocation_tenant, "Signed revocation relay unavailable; retaining verified state and independent host supervision");
+            } else if result.is_some() && delivery_failed {
+                tracing::info!(tenant=%revocation_tenant, "Signed revocation relay recovered");
+            }
+            delivery_failed = result.is_none();
+            tokio::select! {
+                _ = revocation_receiver.changed() => break,
+                _ = tokio::time::sleep(Duration::from_millis(500)) => {},
+            }
+        }
+    });
     // Admission counters reach Control every 10 s; a slow or absent Control only delays them.
     let mut insights_receiver = shutdown.subscribe();
     let insights_state = state.clone();
@@ -174,6 +224,7 @@ async fn run() -> Result<(), &'static str> {
         _ = &mut runtime_task => { failed = true; },
         _ = &mut management_task => { failed = true; },
         _ = &mut health_worker => { failed = true; },
+        _ = &mut revocation_worker => { failed = true; },
     }
     #[cfg(unix)]
     reload_worker.abort();
@@ -188,6 +239,16 @@ async fn run() -> Result<(), &'static str> {
         .is_err()
     {
         health_worker.abort();
+    }
+    if !revocation_worker.is_finished()
+        && tokio::time::timeout(
+            Duration::from_millis(config.limits.shutdown_timeout_ms),
+            &mut revocation_worker,
+        )
+        .await
+        .is_err()
+    {
+        revocation_worker.abort();
     }
     tracing::info!(
         service = "gateway",

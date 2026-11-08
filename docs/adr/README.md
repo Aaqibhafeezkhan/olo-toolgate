@@ -106,3 +106,11 @@ Use `000-template.md`.
 - [ADR 057: Generalized target fencing](057-generalized-target-fencing.md)
 
 - [ADR 058: Triggers](058-triggers.md)
+
+- [ADR 059: Scoped revocation and authenticated dispatch](059-scoped-revocation-and-dispatch.md)
+
+- [ADR 060: Outcome grades and honest presentation](060-outcome-grades-and-honest-presentation.md)
+
+- [ADR 061: Tenant audit hash chains](061-tenant-audit-hash-chains.md)
+
+- [ADR 062: Signed external audit anchors](062-signed-audit-anchors.md)

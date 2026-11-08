@@ -38,7 +38,17 @@ class EnterpriseOperationTest {
     EnterpriseInvocation submit(String id){return graph.codec.model(operations.submit(gateway,graph.codec.json(request(id,"data/report.txt"))).body(),EnterpriseInvocation.class);}
     EnterpriseReservation reserve(EnterpriseInvocation i){return graph.codec.model(operations.reserve(gateway,graph.codec.json(new EnterpriseReservationRequest(i.id(),i.revision()))).body(),EnterpriseReservation.class);}
     String consumption(EnterpriseReservation r){var e=r.invocation().evaluation();return graph.codec.json(new EnterprisePermitConsumption(r.invocation().id(),r.permit(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest()));}
-    EnterpriseInvocation consume(EnterpriseReservation r){return graph.codec.model(operations.consume(EnterpriseConformanceTest.TENANT,"device",consumption(r)).body(),EnterpriseInvocation.class);}
+    EnterpriseInvocation consume(EnterpriseReservation r){
+        var accepted=graph.codec.model(operations.consume(EnterpriseConformanceTest.TENANT,"device",consumption(r)).body(),io.ololabs.toolgate.contracts.v2.NativePermitConsumed.class);
+        assertEquals(r.invocation().reservedNonce(),accepted.fencingToken());
+        assertEquals(accepted.invocation().reservedNonce(),accepted.fencingToken());
+        assertEquals("sha256:"+r.invocation().evaluation().packageDigest(),accepted.killScope().packageDigest());
+        assertEquals(r.invocation().evaluation().toolId(),accepted.killScope().toolId());
+        assertTrue(accepted.authorizationEpoch()>=r.invocation().authorizationEpoch());
+        assertTrue(accepted.leaseExpiresAtUnixMs()>clock.millis());
+        assertTrue(accepted.leaseExpiresAtUnixMs()<=r.invocation().expiresAtUnixMs());
+        return accepted.invocation();
+    }
     EnterpriseApproval approval(EnterpriseInvocation i){return store.transaction(EnterpriseConformanceTest.TENANT,false,tx->tx.enterprise().approval("operation-"+DirectoryService.digest(i.id()).substring(0,40)));}
     EnterpriseApproval approve(EnterpriseApproval a,String obligation){return graph.codec.model(operations.decide(reviewer,a.id(),graph.codec.json(new EnterpriseApprovalDecisionRequest(a.revision(),obligation,EnterpriseReviewDecision.APPROVE)),"review-"+obligation).body(),EnterpriseApproval.class);}
 
@@ -234,7 +244,7 @@ class EnterpriseOperationTest {
         assertEquals(RemoteToolState.DONE,response.record().state());
         assertEquals("Hello World",response.result().output().get("message").asText());
         assertEquals(EnterpriseOperationState.OUTCOME_UNKNOWN,response.operationOutcome().state());
-        assertEquals(EnterpriseOutcomeGrade.REPORTED,response.operationOutcome().grade());
+        assertEquals(EnterpriseOutcomeGrade.UNKNOWN,response.operationOutcome().grade());
         assertFalse(response.operationOutcome().retryable());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(alice,2L,"human-host")).status());
         assertEquals(403,assertThrows(Failure.class,()->runtime.result(reviewer,1L,"human-host")).status());

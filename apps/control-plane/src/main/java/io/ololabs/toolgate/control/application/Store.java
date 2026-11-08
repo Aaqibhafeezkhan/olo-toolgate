@@ -18,6 +18,7 @@ public interface Store {
         default void initializeIdentityKey(IdentityKey key){throw Failure.unavailable();}
         default RuntimeProfile runtimeProfile(){return null;}
         default void initializeRuntimeProfile(RuntimeProfile profile){throw Failure.unavailable();}
+        default KillStore kills(){throw Failure.unavailable();}
         default EffectStore effects(){throw Failure.unavailable();}
         default EffectConsentStore effectConsents(){throw Failure.unavailable();}
         default EnterpriseStore enterprise() { throw Failure.unavailable(); }
@@ -48,6 +49,14 @@ public interface Store {
         /** {@code evidence}: canonical {@code ControlAuditEvidence} JSON of an invocation event, or null (M4.4). */
         void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence);
         String auditPage(long after, int limit);
+        /** ADR 061: the tenant's committed chain head; {@link AuditChain.Head#EMPTY} before the first row. */
+        default AuditChain.Head auditHead() { throw Failure.unavailable(); }
+        /** ADR 061: stored chain rows after {@code afterIndex}, in chain order, bounded by {@code limit}. */
+        default java.util.List<AuditChain.Entry> auditChain(long afterIndex, int limit) { throw Failure.unavailable(); }
+        /** ADR 062: the tenant's highest recorded anchor, or null. The record is untrusted until verified. */
+        default AuditAnchoring.Recorded latestAuditAnchor() { throw Failure.unavailable(); }
+        /** ADR 062: insert-only record of an anchor already published to the external sink. */
+        default void recordAuditAnchor(AuditAnchoring.Recorded anchor) { throw Failure.unavailable(); }
         long bundleSequence();
         BundleRecord bundle(long sequence);
         void publishBundle(BundleRecord bundle);

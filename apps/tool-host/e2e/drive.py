@@ -20,7 +20,6 @@ import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST_BIN, PACKAGE, OUT = sys.argv[1], sys.argv[2], sys.argv[3]
-FENCE = "fence-e2e"
 seen = {"consume": [], "report": [], "upstream": []}
 
 
@@ -59,7 +58,14 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.removeprefix("/api/control/v1/access")
         if path == "/permits/consume":
             seen["consume"].append(body)
-            self.reply(200, {"invocationId": body["invocationId"], "fencingToken": FENCE, "leaseExpiresAtUnixMs": 0})
+            payload = body["permit"]["jws"].split(".")[1]
+            claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+            self.reply(200, {
+                "invocationId": body["invocationId"], "fencingToken": claims["nonce"],
+                "leaseExpiresAtUnixMs": min(int(time.time()*1000)+10_000, claims["deadlineUnixMs"]),
+                "authorizationEpoch": claims["identity"]["authorizationEpoch"],
+                "killScope": {"packageDigest":claims["target"]["packageDigest"], "toolId":claims["target"]["toolId"]}
+            })
         elif path == "/effects/report":
             seen["report"].append(body)
             self.reply(200, {})
@@ -125,6 +131,7 @@ def main():
         "storeDir": store, "workDir": os.path.join(work, "w"),
         "control": {"tenantId":"10000000-0000-4000-8000-000000000001","url": f"http://127.0.0.1:{control_port}", "developmentLoopbackHttp": True},
         "developmentLoopbackHttp": True,
+        "developmentDispatchHttp": True,
     }
     config_path = os.path.join(work, "host.json")
     json.dump(config, open(config_path, "w"))

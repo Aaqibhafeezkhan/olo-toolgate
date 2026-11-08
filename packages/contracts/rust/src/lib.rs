@@ -1746,6 +1746,14 @@ pub enum EnterpriseDecisionReason {
     #[serde(rename = "MANAGEMENT_DENIED")]
     ManagementDenied,
 }
+/// Canonical EnterpriseEffectFencing wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseEffectFencing {
+    #[serde(rename = "FENCED")]
+    Fenced,
+    #[serde(rename = "UNFENCED")]
+    Unfenced,
+}
 /// Canonical EnterpriseEffectGenerationState wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EnterpriseEffectGenerationState {
@@ -1777,6 +1785,8 @@ pub struct EnterpriseEffectHistory {
     pub request_digest: String,
     pub state: EnterpriseEffectGenerationState,
     pub grade: EnterpriseOutcomeGrade,
+    pub fencing: EnterpriseEffectFencing,
+    pub observations: Vec<EnterpriseEvidenceObservation>,
     pub evidence_count: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_digest: Option<String>,
@@ -1832,6 +1842,28 @@ pub struct EnterpriseEvaluation {
     pub amount_minor_units: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<String>,
+}
+/// Canonical EnterpriseEvidenceObservation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseEvidenceObservation {
+    #[serde(rename = "AUTHORIZATION_CONSUMED")]
+    AuthorizationConsumed,
+    #[serde(rename = "BROKER_RESPONSE")]
+    BrokerResponse,
+    #[serde(rename = "TARGET_OUTCOME")]
+    TargetOutcome,
+    #[serde(rename = "RECONCILER_LOOKUP")]
+    ReconcilerLookup,
+}
+/// Canonical EnterpriseExecutionCoverage wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EnterpriseExecutionCoverage {
+    #[serde(rename = "NO_AUTHORITY_CONSUMED")]
+    NoAuthorityConsumed,
+    #[serde(rename = "MEDIATED_ONLY")]
+    MediatedOnly,
+    #[serde(rename = "UNMEDIATED_POSSIBLE")]
+    UnmediatedPossible,
 }
 /// Canonical EnterpriseExtractorKind wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2001,6 +2033,15 @@ pub enum EnterpriseMemberType {
     #[serde(rename = "DEVICE")]
     Device,
 }
+/// Bounded tenant export of current derived operation outcomes with grade, coverage and fencing counts. Ordered by operation id; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnterpriseOperationEvidenceExportPage {
+    pub items: Vec<EnterpriseOperationOutcome>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next: Option<String>,
+    pub exported_at_unix_ms: u64,
+}
 /// Authorized operation snapshot and bounded generation history; a changed source revision invalidates the cursor rather than silently mixing snapshots.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2020,9 +2061,12 @@ pub struct EnterpriseOperationOutcome {
     pub state: EnterpriseOperationState,
     pub revision: u64,
     pub grade: EnterpriseOutcomeGrade,
+    pub coverage: EnterpriseExecutionCoverage,
     pub journal_complete: bool,
     pub attempt_count: u64,
     pub effect_count: u64,
+    pub fenced_effect_count: u64,
+    pub unfenced_effect_count: u64,
     pub unresolved_effect_count: u64,
     pub unsettled_attempt_count: u64,
     pub finalized: bool,
@@ -2062,16 +2106,18 @@ pub struct EnterpriseOperationalStatus {
 /// Canonical EnterpriseOutcomeGrade wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EnterpriseOutcomeGrade {
-    #[serde(rename = "REPORTED")]
-    Reported,
-    #[serde(rename = "CONTROL_PROVEN")]
-    ControlProven,
     #[serde(rename = "TARGET_CONFIRMED")]
     TargetConfirmed,
-    #[serde(rename = "REVIEWER_CONFIRMED")]
-    ReviewerConfirmed,
-    #[serde(rename = "TARGET_DEDUPLICATION_ASSUMED")]
-    TargetDeduplicationAssumed,
+    #[serde(rename = "BROKER_OBSERVED")]
+    BrokerObserved,
+    #[serde(rename = "HUMAN_RECONCILED")]
+    HumanReconciled,
+    #[serde(rename = "CONTROL_PROVEN")]
+    ControlProven,
+    #[serde(rename = "EXECUTOR_REPORTED")]
+    ExecutorReported,
+    #[serde(rename = "UNKNOWN")]
+    Unknown,
 }
 /// Short-lived audience-bound permit for one exact invocation and target.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

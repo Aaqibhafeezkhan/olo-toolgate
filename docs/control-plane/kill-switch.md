@@ -1,108 +1,193 @@
+<!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Emergency kill switch
 
-## Purpose
+S22 is in implementation under [ADR 059](../adr/059-scoped-revocation-and-dispatch.md).
+The [live progress record](../security/zero-trust-execution-status.md) distinguishes
+executed checks from remaining joined execution, conformance and timing gates.
+This guide describes the current contracts; it does not accept S22 or phase 3.
+ADR 017 and the preserved execution plan remain the requirements baseline.
 
-This is the reviewed specification of the emergency kill switch (platform-requirements.md §15) behind design gate D2. It covers storage, the authorization-epoch bump, signing, the push protocol, break-glass with 2-of-3 operator keys, recovery and retention.
+Current public contracts are [kill schemas](../../packages/contracts/schemas/v2/kill.schema.json),
+[tenant Control API](../../packages/contracts/openapi/control-v1.yaml) and the
+[separate operator API](../../packages/contracts/openapi/kill-operator-v1.yaml).
+All Control paths below have prefix /api/control/v1 except the operator listener.
 
-It is normative. A change after D2 passes needs an amendment to ADR 017. The event shapes are in `packages/contracts/schemas/v2/kill.schema.json`, the proposed endpoints are in `packages/contracts/openapi/proposed/control-v1.proposed.yaml`, and the storage is [PostgreSQL kill-switch fragment](schema-specifications/postgresql/kill-switch.sql) and [SQLite kill-switch fragment](schema-specifications/sqlite/kill-switch.sql).
+## Scope and execution ordering
 
-## 1. Model
+Every signed event binds its canonical tenant UUID, committed authorization
+epoch, issuer/counter, issue time and scope. Effective kills are kills without a
+committed supersession. TERMINATE wins over STOP_NEW when scopes overlap.
 
-- **Events, never edits.** The kill state of a tenant is a grow-only set of immutable signed `KillEvent` and `RecoveryEvent` records. Nothing is updated or deleted. Database triggers refuse it, and the runtime role has no `UPDATE` or `DELETE` grant on these tables.
-- **Effective kills:** every `KillEvent` that no `RecoveryEvent` supersedes. When several effective kills cover the same target, `TERMINATE` beats `STOP_NEW`.
-- **Merge rule** for every component (Control, Gateway, Tool Host, endpoint client): its state is the union of every valid event it has received from any path, except that a full fetch replaces it (§8). Order and replays don't matter. A replayed or reordered push can add a kill back, which fails closed, but it can never remove one. Only a recovery event the component has seen can do that.
-- **Issuers:** `control` for reviewed kills and every recovery, and `control-breakglass` for break-glass kills (§6). Each issuer has its own counter, and `eventId = "<issuer>:<counter>"` is never reused.
+| Scope | Value |
+|---|---|
+| PACKAGE | Package id |
+| PACKAGE_DIGEST | sha256 digest |
+| PUBLISHER | Verified package publisher id |
+| TOOL | Tool id |
+| POOL | Execution pool id |
+| RUNTIME_IMAGE | Runtime image digest |
+| TENANT | Absent |
 
-### 1.1 Scope matching
+Unknown scope facts match conservatively. Empty pool/image denotes known not
+applicable. Permit consumption freezes attempt scope; a later mutable host
+registration cannot change the facts used to supervise accepted work.
 
-| `scope.kind` | Matches an invocation or tool when | `value` |
+STOP_NEW refuses matching new work and cancels queued work. It preserves
+already consumed running work. TERMINATE additionally ends matching executing
+authority and asks healthy executors to tear down owned runtimes. Potentially
+sent effects retain OUTCOME_UNKNOWN; recovery cannot restart cancelled work or
+erase completed effects. Admission, secret/effect authority and heartbeat still
+require current policy, consent, fence and live lease. Only contiguous
+kill/recovery epochs can bridge an otherwise current invocation's older epoch;
+unrelated authority changes still revoke it.
+
+## Normal human workflow
+
+The console's Kill switch page shows signed current state, retained/archive
+counts and registered component acknowledgement epochs, paths and times.
+Refresh obtains current state; an acknowledgement is evidence of receipt, not
+proof that an arbitrary compromised host stopped.
+
+1. POST kill-events with KillRequest or kill-events/recoveries with
+   RecoveryRequest and an Idempotency-Key. This creates a retained proposal,
+   not an immediately applied event.
+2. GET kill-events/proposals or kill-events/proposals/{id} to inspect the exact
+   request, requester, expiry and current revision.
+3. Two distinct currently authorized humans, neither the requester, each POST
+   kill-events/proposals/{id}/decisions with revision, approve and their own
+   Idempotency-Key. Recovery reviewers additionally require kill.recover.
+4. A rejection closes the proposal. Two valid approvals apply it atomically.
+   Permissions, expiry and epoch are rechecked at application. A stale revision
+   requires a fresh inspection and confirmation.
+
+Read requires kill.read, creation kill.create, review kill.approve and recovery
+kill.recover. The console hides or disables unauthorized actions; Control
+independently enforces them. A Super Admin label does not bypass separation.
+Quickstart must provision distinct actual humans and permissions.
+
+Event signing, epoch bump, stored-work cancellation, review closure, audit and
+idempotent response commit together. An uncertain response must be resolved by
+reading the retained proposal/event, rather than issuing another logical change.
+
+## Signing and authenticated delivery
+
+Control uses its external fleet signing custody. RS256 protected headers contain
+only alg, typ and kid. Event signatures use toolgate-kill-event+jws; complete
+state signatures use toolgate-kill-push+jws. Attached payloads must equal the JCS
+bytes of the received document without signature. Tenant/type/key mismatches,
+duplicate JSON members, malformed encodings and counter/id forks are refused.
+Current public trust is bounded to four distinct strong RSA keys; offline
+operator keys are a separate domain.
+
+| Consumer | Direct authenticated path | Acknowledgement |
 |---|---|---|
-| `PACKAGE` | its package id equals `value` | `PackageId` |
-| `PACKAGE_DIGEST` | its package digest equals `value` | `sha256:` digest |
-| `PUBLISHER` | the enabled package version's manifest `publisher` equals `value` | publisher id |
-| `TOOL` | its `toolId` equals `value` | `ToolId` |
-| `POOL` | it runs, or would run, in that execution pool | pool id |
-| `RUNTIME_IMAGE` | its runtime digest equals `value` | `sha256:` digest |
-| `TENANT` | it is any tool | absent |
+| Tool Host | Device mTLS: GET tool-hosts/kills/keys and tool-hosts/kills; bounded tool-hosts/kills/poll | POST tool-hosts/kills/acknowledgements, POLL |
+| Native endpoint | Device mTLS: GET endpoints/kills/keys and endpoints/kills during check-in | POST endpoints/kills/acknowledgements, CHECK_IN |
+| Gateway | Verified relay identity: POST mcp/catalog, including canonical Toolgate-Authorization-Epoch response header | POST gateways/kills/acknowledgements, POLL |
+
+Host long-poll holds no database connection while waiting; production hosts use
+a five-second poll inside the transport deadline. A fixed-origin authenticated
+poll returns complete state and therefore follows the full-fetch replacement
+rule. Untrusted relays cannot introduce keys or replace state. Native delivery
+currently uses degraded check-in, not a qualified connected native SLO.
+Gateway catalogs hide matching killed tools before discovery and acknowledge
+only a validated current response. Failed acknowledgements do not grant new
+execution authority; every invocation still goes through online Control.
+
+Host and native journals persist the signed state and epoch floor before
+publishing to supervisors or acknowledging. Restart requires a live direct
+fetch; restored disk state alone is not readiness. Persistence failure ends
+authority until repair/restart. Unsupported journals are refused intact.
+Independent monotonic lease expiry continues during delivery failure; unavailable
+or hung renewals cannot extend a lease. TERMINATE wakes healthy runtime
+supervision independently of heartbeat. Native consumed authorization requires
+both a deadline and supervision support.
+
+Inbound Gateway dispatch uses separately configured mutual TLS with exact
+tenant-specific client and server leaf pins. Socket peer facts cannot come from
+headers. Without inbound TLS, production hosts are outbound-only. Plaintext
+loopback dispatch requires the explicit developmentDispatchHttp option.
+
+## Emergency operator listener
+
+POST /break-glass/kills exists only on the separate operator mTLS listener.
+It requires the configured tenant's client-only operator-CA certificate and
+two or three distinct signatures from exactly three externally configured RSA
+operator public keys. No administrative bearer identity substitutes for either.
+Approval claims bind tenantId, requestId, scope, mode, reason, issuedAtUnixMs and
+notAfterUnixMs; their window is at most ten minutes. The protected type is
+toolgate-breakglass-approval+jws. Tenant-wide immutable request tombstones
+prevent another peer from replaying the same request into another event.
+Emergency approvals can add kills only; all recovery uses the human workflow.
+
+Configure TOOLGATE_BREAKGLASS_PORT, HOST, TENANT_ID, CERTIFICATE_PATH,
+PRIVATE_KEY_PATH, CLIENT_CA_PATH and OPERATOR_KEYS_PATH through corresponding
+toolgate.control.breakglass settings. An absent port disables the listener.
+Enabling requires external fleet custody and a dedicated operator CA; device-CA
+reuse is refused. Use one tenant's operator authority per listener/deployment.
+Toolgate-Tenant-ID may assert this tenant, never select a different one.
+
+The listener bounds bodies to 128 KiB, authenticated concurrency to 32, its
+dedicated worker pool to 16 and TLS/request deadlines to five seconds. These
+bounds do not establish production overload or revocation timing guarantees.
+After a lost reply inspect retained state using the same logical request id.
+
+## Package suspension
+
+Package, exact-digest, publisher and tenant kills project matching uploaded
+versions as SUSPENDED in current package listings and repeat-import responses.
+The immutable uploaded lifecycle state is preserved. Recovery restores that state
+only after every matching effective kill is resolved; resolving one overlapping
+kill does not unsuspend a still-covered version. Tool/pool/runtime-specific
+restrictions continue to apply at catalog placement and execution boundaries.
+
+## Retention and fresh storage
+
+A superseded kill and its applied recovery leave the delivery set when every
+registered tenant component acknowledges at least the recovery epoch, or thirty
+days after recovery, whichever occurs first. Active kills never expire.
+Registered inventory includes Tool Hosts, other endpoint devices and Gateway
+relay identities observed through accepted catalogs. Missing/offline consumers
+hold back acknowledgement-based archive until the time bound.
+
+Maintenance runs on acknowledgements, management state/status reads and a
+background tenant sweep (first after sixty seconds, then hourly). Archive rows
+are insert-only; original signed events, counters, supersessions and audit remain.
+Archived pairs leave complete snapshots together. A component that missed an
+archived recovery converges on its next direct authenticated complete fetch.
+
+Only a direct authenticated complete fetch can replace retained client state,
+and only at or above its persisted epoch floor. Relayed signed events merge
+without deleting retained facts. Old snapshots cannot remove a newer kill.
+
+Fresh V1 initialization contains append-only events, supersessions, archive,
+proposal/review/closure records, emergency tombstones, Gateway registrations and
+immutable attempt scopes. A supersession must name a kill in its later recovery
+document. Acknowledgement identity is immutable; epoch and observation time
+cannot decrease. PostgreSQL runtime-role/RLS and SQLite triggers enforce these
+storage rules. Existing stores receive no migration, conversion or backfill;
+unsupported schemas and formats are refused without deletion.
+
+Committed events, review decisions, acknowledgements, archive actions and
+emergency attempts have audit records. Component receipt and healthy teardown
+are distinct evidence. Full joined delivery, partition/crash, aggregation,
+connectivity-class SLO and release scorecard gates remain required for S22.
 
 
-## 2. Storage
+## Signed Gateway relay
 
-| Table | Holds | Writes |
-|---|---|---|
-| `control_kill_events` | Every kill and recovery event: issuer, counter, kind, scope, mode, the epoch it created, and the signed document | Insert only |
-| `control_kill_supersessions` | One row per (recovery, kill it supersedes). A kill is effective while it has no row here. | Insert only. A trigger checks that the left side is a kill and the right side a recovery. |
-| `control_kill_archive` | Superseded kills and applied recoveries that have left the push set (§8) | Insert only, and only for superseded events |
-| `control_kill_acks` | Per component, the highest epoch it acknowledged and the path that delivered it | Upsert; the epoch never decreases |
+The dedicated toolgate-relay-gateway service principal may read
+GET /api/control/v1/gateways/kills/keys and GET /api/control/v1/gateways/kills
+through its configured authenticated Control origin. These calls register the
+verified tenant/principal, not a request-supplied component identity. The Gateway
+validates the current closed schemas and signatures before forwarding the signed
+envelope concurrently to its bounded set of configured HTTPS mTLS Host routes.
+A failed route does not block negative delivery to other Hosts. Delivery failures
+and recovery have bounded transition logs.
 
-**Counter allocation:** inside the tenant transaction, `max(issuer_counter) + 1` for the issuer. The tenant advisory lock serializes it, and `UNIQUE (tenant_id, issuer, issuer_counter)` is the backstop. Archived events stay in the table, so a counter is never reused.
-
-## 3. Committing an event and bumping the epoch
-
-A kill (`POST kill-events`), a break-glass kill (`POST break-glass/kills`) and a recovery (`POST kill-events/recoveries`) each commit in **one** Control tenant transaction:
-
-1. Authorize the caller (§5, §6, §7).
-2. Allocate the event id (§2) and build the event. `issuedAtUnixMs` comes from Control's monotonic approval clock (`control_approval_clocks`), so backward time fails closed.
-3. Sign it (§4).
-4. Insert the event, plus supersession rows for a recovery.
-5. **Bump the epoch.** Increment the tenant revision through the existing directory save. That raises `control_tenants.authorization_epoch` and writes a `control_authorization_outbox` row, exactly as a grant change does today (`PostgresStore.java`, directory save). The new epoch is stored on the event row.
-6. **Apply to stored work** (platform-requirements.md §15.5), for invocations the kill matches (§1.1):
-   - `PENDING_APPROVAL`, `QUEUED`, and `INPUT_REQUIRED` tasks → `CANCELLED`;
-   - `TERMINATE` only: `RESERVED`, `DISPATCHED` and `EXECUTING` → `CANCEL_REQUESTED`, and their fencing tokens become invalid ([invocation-state-v2.md](invocation-state-v2.md) §5).
-
-   The `control_invocation_active_package` and `control_invocation_active_tool` indexes serve this step.
-7. Write audit and the idempotent response.
-
-**Why this is enough for new work.** Every reserve, permit consumption, secret delivery, heartbeat and effect report already checks the tenant's current epoch, and re-evaluates against the kill set when it moved. So a committed kill stops all new work at once, and there is no Gateway kill list that could go stale (platform-requirements.md §15.3). Running work is reached by §5.
-
-## 4. Signing
-
-- **Key:** Control's fleet signing key domain, the key endpoint clients already pin for signed fleet documents (`RsaFleetCrypto`). No new key needs to be distributed to clients. Tool Hosts pin the same public key at registration (ADR 013).
-- **Types:** kill and recovery events use the protected header `{alg: RS256, typ: "toolgate-kill-event+jws", kid}`, and pushes use `typ: "toolgate-kill-push+jws"`. Verifiers accept only these `typ` values for kill semantics, so a fleet document signature can never be replayed as a kill, or the other way round.
-- **Payload:** the JCS bytes of the event or push without its `signature` member. The `signature` member is the compact JWS with that payload attached. A verifier decodes the payload and requires it to equal the JCS of the members it received; any difference is a rejection.
-- **Rotation:** `kid` names the key. Verifiers hold the current key and at most one previous key, as for fleet documents.
-
-## 5. Delivery to running work
-
-**Tool Hosts.** Control sends `KillPush {tenantId, authorizationEpoch, kills[], recoveries[], signature}` over the host's mTLS control stream, at high priority, whenever the epoch moves because of an event.
-- `kills` holds every effective kill. `recoveries` holds the recoveries not yet archived (§8).
-- The host verifies the push, merges it (§1), acts on it (platform-requirements.md §15.5), and replies `KILL_ACK {authorizationEpoch}`. Control upserts `control_kill_acks` with `delivery_path = PUSH`.
-- A host that connects, or sees an epoch it hasn't acknowledged on any Control response, fetches the full state with `GET kill-events` (`KillEventPage`) before admitting work, and acknowledges with `delivery_path = POLL`.
-
-**Endpoint clients.** Release-1 clients have no push parser (platform-requirements.md §17.2, Phase A). They are covered by Control's own checks: a client can't consume a permit, redeem a secret or report an effect once the epoch moved past a kill that covers it, so running client work stops at its next contact with Control. Phase B clients receive `KillPush` on the socket or with the next check-in, and acknowledge with `delivery_path = CHECK_IN`.
-
-**Gateways** need no push. They read the effective kills with each catalog revision, to hide killed tools, and every new call is refused by Control in any case. The ack row with `component_kind = GATEWAY` records the revision they serve, for operators.
-
-**Components that can't be reached** can't start new work, because every start needs Control. Work already running there continues until its own deadline, bounded by the 15-minute task ceiling. Pools that need stricter behaviour set `selfTerminateOnControlLoss`: a host that hasn't heard from Control within the window terminates its non-built-in sandboxes (platform-requirements.md §15.5).
-
-## 6. Break-glass
-
-Break-glass adds kills without the maker/checker review normal changes need. It is for when the review workflow, or the admin identity provider, is unavailable or too slow.
-
-- **Endpoint:** `POST break-glass/kills` on a separate listener that requires an **operator client certificate** (`operatorCertificate`). No administrative bearer token is needed.
-- **Operator keys:** exactly three RSA public keys configured externally (`toolgate.control.breakglass.operator-keys`, each with a key id). They are a separate trust domain, reused for nothing else. Control refuses to start if one equals any other configured key.
-- **Request:** `BreakGlassRequest {scope, mode, reason, operatorSignatures[2..3]}`. Each signature is a compact JWS with `{alg: RS256, typ: "toolgate-breakglass-approval+jws", kid}` over the JCS of `{tenantId, scope, mode, reason, requestId, notAfterUnixMs}`, where:
-  - `requestId` is the request's `Idempotency-Key`;
-  - `notAfterUnixMs` is at most 10 minutes after the earliest signature's issue time.
-- **Checks:** at least two **distinct** configured `kid`s; every signature covers the same payload; the payload matches the request; `notAfterUnixMs` has not passed; the `requestId` has never been used (Control's idempotency table, which never reuses a key).
-- **Effect:** one `KillEvent` with `issuer = control-breakglass`, committed as in §3. The audit records the operator key ids and the client certificate.
-- **Limits:** break-glass can only **add** kills. It can't issue recovery events: the schema allows only `control` as a recovery issuer, and the database refuses a `RECOVERY` row from any other issuer.
-
-## 7. Recovery
-
-- **Request:** `RecoveryRequest {supersedes[], reason}`, through the existing enterprise review workflow. It needs two distinct reviewers, and the requester can't be one of them. Their ids become `RecoveryEvent.reviewers`.
-- **Quickstart** provisions separate local management identities. Kill recovery must use explicitly configured reviewer authority; a fabricated `local-operator` identity is not evidence of a second reviewer.
-- **Checks:** every superseded id is an effective kill of this tenant. A break-glass kill is lifted the same way as any other.
-- **Effect:** the recovery event and one supersession row per kill, committed as in §3. The epoch bump makes every component re-evaluate. Cancelled work stays cancelled; recovery only allows new work.
-
-## 8. Retention and archive
-
-A superseded kill and its recovery are archived (`control_kill_archive`) when every component registered for the tenant has acknowledged an epoch at least as high as the recovery's, or 30 days after the recovery, whichever comes first. Archived events leave `KillPush` and `KillEventPage`. They stay in `control_kill_events` and in audit exports.
-
-A component that missed an archived recovery still holds the kill, which fails closed. It clears it on its next full fetch.
-
-**A full fetch replaces, it doesn't merge.** `GET kill-events` is the one exception to the merge rule in §1. The component fetches it directly from Control over mTLS, never through a relay. It accepts the page only if every event signature verifies and the page's `authorizationEpoch` is at least the highest epoch the component has seen. It then replaces its set with the page. An old page therefore can't remove a newer kill, and a component that missed an archived recovery converges.
-
-## 9. Audit
-
-Every event, push, acknowledgement, break-glass attempt (accepted or refused, with the reason) and recovery is audited. Audit also records which path delivered each event to each component and when (platform-requirements.md §15.6), from `control_kill_acks` and the push log.
+The Host's POST /v1/kills endpoint is enabled only on its dedicated pinned-Gateway
+mTLS listener. It verifies with previously fetched direct-Control keys and persists
+a merge before notifying pending/active executions and sending an independent
+PUSH receipt. A relay cannot install keys, perform full-history replacement or
+clear a termination attached to an older execution. Normal POLL and Native
+CHECK_IN receipts remain distinct from PUSH and from actual teardown evidence.

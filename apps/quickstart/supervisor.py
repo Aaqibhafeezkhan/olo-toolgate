@@ -38,6 +38,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import audit_chain
 from enterprise_bootstrap import Refused, execution_binding, prepare, workload_context
 
 DATA = Path('/data')
@@ -191,9 +192,10 @@ def identity_audit(operation, generation, request_id, user='admin'):
     path=DATA/'state/control.sqlite'
     if database_mode() == 'sqlite' and (not path.is_file() or path.is_symlink()): raise ValueError('Identity audit unavailable')
     with Database() as db:
-        db.execute('INSERT INTO control_audit(tenant_id,actor_id,operation,target,revision,request_id,request_digest) VALUES(?,?,?,?,?,?,?)',
-                   (TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),operation,'local-identity:'+user,generation,request_id,
-                    hashlib.sha256((operation+'\n'+str(generation)).encode()).hexdigest()))
+        # ADR 061: one serialized, chained append to Control's per-tenant audit chain.
+        db.execute('BEGIN IMMEDIATE')
+        audit_chain.append(db,TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),operation,'local-identity:'+user,generation,request_id,
+                           hashlib.sha256((operation+'\n'+str(generation)).encode()).hexdigest(),postgres=db.pg)
         db.commit()
 
 
@@ -633,10 +635,10 @@ def configure():
                         'connectionTimeoutMs':35000,'shutdownTimeoutMs':35000,'auditQueueCapacity':256},
               'control':{'tenantId':TENANT,'url':'http://127.0.0.1:8082','caCertificatePath':str(DATA/'keys/device-ca.crt'),'tokenPath':'/data/run/machine-token',
                          'developmentLoopbackHttp':True},
-              'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095'}]}
+              'toolHosts':[{'hostId':TOOL_HOST,'url':'http://127.0.0.1:8095','developmentLoopbackHttp':True}]}
     atomic(DATA/'run/gateway.json',json.dumps(config))
     # The Tool Host enrolls as a device like any client; an administrator approves it before it runs packages.
-    atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',
+    atomic(DATA/'run/tool-host.json',json.dumps(dict(hostId=TOOL_HOST,listen='127.0.0.1:8095',developmentDispatchHttp=True,
            permitKeys=[dict(kid='effect-local',publicKeyPath=str(DATA/'keys/permit-public.pem'))],permitIssuer='control',
            storeDir=str(DATA/'tool-host/store'),workDir=str(DATA/'tool-host/work'),
            control=dict(tenantId=TENANT,url=tool_host_control_url(DATA/'state/tool-host'),caCertificatePath=str(DATA/'keys/device-ca.crt')),
@@ -1049,12 +1051,18 @@ def main():
                     boot=now
         finally:
             ready_state.clear()
+            shutdown_deadline=time.monotonic()+3
+            # A failed composition is one managed PID namespace. Do not let a
+            # surviving child's graceful-shutdown window prolong orphaned work.
+            if not stop.is_set():
+                for child in children:
+                    if child.poll() is None: child.kill()
             if server: server.shutdown(); server.server_close()
             for bridge in bridges: bridge.shutdown();bridge.server_close()
             for child in reversed(children):
                 if child.poll() is None: child.terminate()
             for child in children:
-                try: child.wait(timeout=25)
+                try: child.wait(timeout=max(0,shutdown_deadline-time.monotonic()))
                 except subprocess.TimeoutExpired: child.kill(); child.wait()
 
 

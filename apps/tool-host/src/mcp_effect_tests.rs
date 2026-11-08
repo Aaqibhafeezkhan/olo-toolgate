@@ -420,6 +420,8 @@ async fn production_executor_refuses_missing_conflicting_and_consent_reviews_bef
             _ => Some(vec![review]),
         };
         let prepared = crate::store::Prepared {
+            package_id: "acme.orders".into(),
+            publisher: "Acme".into(),
             tool: serde_json::from_value(corpus["ToolDefinition"].clone()).unwrap(),
             runtime: serde_json::from_value(corpus["RuntimeDeclaration"].clone()).unwrap(),
             executable: directory.join("never-run"),

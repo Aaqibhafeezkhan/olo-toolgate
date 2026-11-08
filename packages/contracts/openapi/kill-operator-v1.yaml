@@ -1,0 +1,76 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+openapi: 3.1.0
+info:
+  title: OLO ToolGate emergency operator API
+  version: 1.0.0-dev.1
+  description: Separate operator-CA TLS listener, bound to one configured tenant.
+    Adds kills only. Not served by the administrative or device listeners.
+security:
+- operatorCertificate: []
+paths:
+  /break-glass/kills:
+    post:
+      operationId: createBreakGlassKill
+      security:
+      - operatorCertificate: []
+      description: 'Emergency path: 2-of-3 operator signatures, no maker/checker review,
+        adds kills only, always audited (platform-requirements.md §15.4).'
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+        description: One-use signed requestId; no retry allocates a second kill.
+      - in: header
+        name: Toolgate-Tenant-ID
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Optional assertion of the listener's configured tenant; cannot
+          choose another tenant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/kill.schema.json#/$defs/BreakGlassRequest
+      responses:
+        '201':
+          description: Event
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/kill.schema.json#/$defs/KillEvent
+        '400': &id001
+          $ref: '#/components/responses/Error'
+        '401': *id001
+        '403': *id001
+        '409': *id001
+        '503': *id001
+        '413':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    operatorCertificate:
+      type: mutualTLS
+      description: Separate operator CA and client-only EKU. Requires offline 2-of-3
+        signatures in addition to TLS.
+  responses:
+    Error:
+      description: Refused request. Transport/TLS rejection may close without an HTTP
+        response.
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              code:
+                type: string
+                minLength: 1
+            required:
+            - code

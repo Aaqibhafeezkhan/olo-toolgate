@@ -22,19 +22,24 @@ use std::{
 /// over the device's own mTLS identity (`remote.rs`). Local command-line or IPC calls are refused.
 pub struct RelayOnly;
 impl AuthorizationPort for RelayOnly {
+    fn revoked(&self) -> Call<'_, ()> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     fn authorize(&self, _request: AuthorizationRequest) -> Call<'_, ()> {
         Box::pin(async { Err(Failure::Unauthorized) })
     }
-    fn authorize_bound(&self, _request: AuthorizationRequest) -> Call<'_, Option<u64>> {
+    fn authorize_bound(&self, _request: AuthorizationRequest) -> Call<'_, u64> {
         Box::pin(async { Err(Failure::Unauthorized) })
     }
 }
 
 pub trait AuthorizationPort: Send + Sync {
+    /// Completes only when current execution authority ends; unsupported supervision must fail closed.
+    fn revoked(&self) -> Call<'_, ()>;
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()>;
     /// Managed execution needs the consumed permit's deadline. An adapter that
     /// cannot provide bounded authorization is unsupported, never implicitly ALLOW.
-    fn authorize_bound(&self, _request: AuthorizationRequest) -> Call<'_, Option<u64>> {
+    fn authorize_bound(&self, _request: AuthorizationRequest) -> Call<'_, u64> {
         Box::pin(async { Err(Failure::Unsupported) })
     }
     /// The trace context of the call just authorized (ADR 031). Only a relayed call carries one.
@@ -48,6 +53,30 @@ pub trait AuthorizationPort: Send + Sync {
     ) -> Call<'_, ()> {
         Box::pin(async { Ok(()) })
     }
+}
+
+/// Validate the current native T5 response before using its frozen scope or authority.
+pub(crate) fn accepted_native(
+    accepted: &olo_toolgate_contracts::v2::NativePermitConsumed,
+    expected: &EnterpriseInvocation,
+) -> Result<()> {
+    let next = &accepted.invocation;
+    let scope = &accepted.kill_scope;
+    if next.id != expected.id
+        || next.evaluation != expected.evaluation
+        || next.state != EnterpriseInvocationState::Executing
+        || next.revision != expected.revision + 1
+        || next.reserved_nonce.as_deref() != Some(accepted.fencing_token.as_str())
+        || expected.reserved_nonce.as_deref() != Some(accepted.fencing_token.as_str())
+        || accepted.authorization_epoch < expected.authorization_epoch
+        || accepted.lease_expires_at_unix_ms <= crate::now()
+        || accepted.lease_expires_at_unix_ms > next.expires_at_unix_ms
+        || scope.tool_id != expected.evaluation.tool_id
+        || scope.package_digest != format!("sha256:{}", expected.evaluation.package_digest)
+    {
+        return Err(Failure::Unauthorized);
+    }
+    Ok(())
 }
 
 /// Brokered device-file operations one invocation may make.
@@ -758,7 +787,7 @@ impl Manager {
                 arguments,
             })
             .await?;
-        let deadline = permit_deadline.unwrap_or(valid_until).min(valid_until);
+        let deadline = permit_deadline.min(valid_until);
         if crate::now().saturating_add(MIN_RUN_MS) >= deadline {
             return Err(Failure::Expired);
         }
@@ -777,13 +806,23 @@ impl Manager {
         let broker = move |line: &[u8]| {
             device_broker(files.as_deref(), access.as_ref(), &arguments, &calls, line)
         };
-        let data = tokio::time::timeout(
+        let execution = tokio::time::timeout(
             std::time::Duration::from_millis(deadline.saturating_sub(crate::now())),
             self.engine
                 .run(&runtime.image, &command, &input, &limits, &broker),
-        )
-        .await
-        .map_err(|_| Failure::Expired)??;
+        );
+        let result = tokio::select! {
+            biased;
+            ended=self.authorization.revoked()=>Err(ended.err().unwrap_or(Failure::Revoked)),
+            result=execution=>result.map_err(|_|Failure::Expired).and_then(|result|result),
+        };
+        let data = match result {
+            Ok(data) => data,
+            Err(failure) => {
+                self.engine.recover().await?;
+                return Err(failure);
+            }
+        };
         self.frames = run_frames(&data.stdout);
         let output = sdk_output(&data.stdout, &invocation.request_id)?;
         if output.request_id != invocation.request_id

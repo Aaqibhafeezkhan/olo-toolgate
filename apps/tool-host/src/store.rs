@@ -34,6 +34,9 @@ pub enum StoreError {
 /// Everything one invocation runs, all of it matched against the permit.
 #[derive(Debug, Clone)]
 pub struct Prepared {
+    /// Identity from the verified package manifest, never worker input.
+    pub package_id: String,
+    pub publisher: String,
     pub tool: ToolDefinition,
     pub runtime: RuntimeDeclaration,
     /// The tool's one self-contained executable in the unpacked package: for the JVM, a fat jar.
@@ -223,6 +226,14 @@ impl Store {
             None
         };
         Ok(Prepared {
+            package_id: manifest["id"]
+                .as_str()
+                .ok_or_else(|| not_present("package id missing"))?
+                .to_owned(),
+            publisher: manifest["publisher"]
+                .as_str()
+                .ok_or_else(|| not_present("publisher missing"))?
+                .to_owned(),
             tool,
             runtime,
             executable,

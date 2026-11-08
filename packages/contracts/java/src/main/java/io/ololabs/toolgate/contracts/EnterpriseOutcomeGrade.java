@@ -5,14 +5,16 @@ package io.ololabs.toolgate.contracts;
 
 /** Canonical EnterpriseOutcomeGrade wire values; unknown values must be rejected. */
 public enum EnterpriseOutcomeGrade {
-    /** Canonical REPORTED value. */
-    REPORTED,
-    /** Canonical CONTROL_PROVEN value. */
-    CONTROL_PROVEN,
     /** Canonical TARGET_CONFIRMED value. */
     TARGET_CONFIRMED,
-    /** Canonical REVIEWER_CONFIRMED value. */
-    REVIEWER_CONFIRMED,
-    /** Canonical TARGET_DEDUPLICATION_ASSUMED value. */
-    TARGET_DEDUPLICATION_ASSUMED
+    /** Canonical BROKER_OBSERVED value. */
+    BROKER_OBSERVED,
+    /** Canonical HUMAN_RECONCILED value. */
+    HUMAN_RECONCILED,
+    /** Canonical CONTROL_PROVEN value. */
+    CONTROL_PROVEN,
+    /** Canonical EXECUTOR_REPORTED value. */
+    EXECUTOR_REPORTED,
+    /** Canonical UNKNOWN value. */
+    UNKNOWN
 }

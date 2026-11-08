@@ -52,6 +52,7 @@ public final class EnterpriseOperations {
     private static EnterpriseEvaluation current(EnterpriseEvaluation e,Directory directory,long now){return new EnterpriseEvaluation(e.context(),e.toolId(),e.action(),e.argumentsDigest(),e.resources(),e.toolDigest(),e.packageDigest(),now,directory.revision(),true,e.amountMinorUnits(),e.operation());}
     private EnterpriseDecision decide(Ids.TenantId tenant,Store.Session tx,EnterpriseEvaluation e,long now,boolean existing){return decide(tenant,tx,e,now,existing,new java.util.TreeSet<>());}
     private EnterpriseDecision decide(Ids.TenantId tenant,Store.Session tx,EnterpriseEvaluation e,long now,boolean existing,java.util.Set<String> budgets){
+        if(!existing)KillEnforcement.requireNew(tx,codec,e);
         var usage=new java.util.HashMap<String,Long>();
         var d=new EnterpriseEvaluator(codec).evaluateWithQuotas(tenant,tx.load(),current(e,tx.load(),now),budget->{budgets.add(budget);return usage.computeIfAbsent(budget,id->tx.enterprise().budgetUsage(id,Math.max(0,now-60000),existing?e.context().requestId():null));});
         if(d.decision()==Decision.BLOCK)throw ManagementAccess.denied();return d;
@@ -99,11 +100,14 @@ public final class EnterpriseOperations {
         var executionLease=tx.enterprise().executionLease(i.id());
         // Metadata reads and positively proven recovery may inspect an ended execution lease.
         // This does not grant execution; deadlines, credentials, epoch and approvals still apply.
-        if(!metadataOrProvenRecovery&&i.state()==EnterpriseInvocationState.EXECUTING&&executionLease!=null&&Objects.equals(executionLease.fencingToken(),i.reservedNonce())
-                &&executionLease.expiresAt()<=now)throw ManagementAccess.denied();
+        if(!metadataOrProvenRecovery&&i.state()==EnterpriseInvocationState.EXECUTING
+                &&(executionLease==null||!Objects.equals(executionLease.fencingToken(),i.reservedNonce())
+                    ||!Objects.equals(executionLease.deviceId(),i.evaluation().context().deviceId())||executionLease.expiresAt()<=now))
+            throw ManagementAccess.denied();
         Long credentialDeadline=tx.enterprise().userCredentialDeadline(i.id());
         if(credentialDeadline!=null&&credentialDeadline<=now)throw ManagementAccess.denied();
-        if(i.expiresAtUnixMs()<=now||i.authorizationEpoch()!=tx.enterprise().authorizationEpoch())throw ManagementAccess.denied();
+        if(i.expiresAtUnixMs()<=now||!KillEnforcement.currentEpoch(tx,i.authorizationEpoch()))throw ManagementAccess.denied();
+        if(!metadataOrProvenRecovery)KillEnforcement.require(tx,codec,i);
         var decision=decide(tenant,tx,i.evaluation(),now,true);
         if(decision.decision()==Decision.ASK){var approval=tx.enterprise().approval(approvalId(i.id()));
             if(approval==null||approval.approvalType()!=EnterpriseApprovalType.OPERATION||approval.state()!=EnterpriseApprovalState.APPROVED||approval.expiresAtUnixMs()<=now
@@ -353,10 +357,15 @@ public final class EnterpriseOperations {
                 ||!claims.toolDigest().equals(request.toolDigest())||!claims.packageDigest().equals(request.packageDigest())||!e.toolDigest().equals(request.toolDigest())||!e.packageDigest().equals(request.packageDigest())
                 ||!claims.bindingId().equals(e.context().bindingId())||!request.argumentsDigest().equals(e.argumentsDigest())||!request.resources().equals(e.resources())
                 ||claims.issuedAtUnixMs()>now||claims.expiresAtUnixMs()<=now||claims.expiresAtUnixMs()-claims.issuedAtUnixMs()>10000
-                ||!java.util.Objects.equals(claims.authorizationEpoch(),i.authorizationEpoch())||claims.directoryRevision()!=tx.load().revision()||i.state()!=EnterpriseInvocationState.RESERVED||!claims.nonce().equals(i.reservedNonce())
+                ||!java.util.Objects.equals(claims.authorizationEpoch(),i.authorizationEpoch())||(claims.directoryRevision()!=tx.load().revision()&&!KillEnforcement.currentEpoch(tx,claims.authorizationEpoch()))||i.state()!=EnterpriseInvocationState.RESERVED||!claims.nonce().equals(i.reservedNonce())
                 ||lease==null||!lease.invocationId().equals(i.id())||!lease.evaluationDigest().equals(claims.evaluationDigest())||!java.util.Objects.equals(lease.authorizationEpoch(),i.authorizationEpoch())||!java.util.Objects.equals(lease.expiresAt(),claims.expiresAtUnixMs()))throw ManagementAccess.denied();
-            fresh(tenant,tx,i,now);executable(tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
-            tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest(),evidence(next));return reply(next,next.revision());});
+            fresh(tenant,tx,i,now);executable(tx,i,now);KillEnforcement.capture(tx,codec,i);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
+            tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest(),evidence(next));
+            long expiry=Math.min(now+30000,i.expiresAtUnixMs());
+            tx.enterprise().saveExecutionLease(new EnterpriseStore.ExecutionLease(i.id(),claims.nonce(),authenticatedDevice,expiry));
+            var scope=tx.kills().scope(claims.nonce()).subject();
+            var binding=new io.ololabs.toolgate.contracts.v2.KillExecutionScope(scope.packageId(),scope.packageDigest(),scope.publisher(),scope.toolId(),scope.poolId(),scope.imageDigest());
+            return reply(new io.ololabs.toolgate.contracts.v2.NativePermitConsumed(next,claims.nonce(),expiry,tx.enterprise().authorizationEpoch(),binding),next.revision());});
     }
     /** v2 consumption by a Tool Host (platform-requirements.md ÃÆ’Æ’â€Å¡ÃÆ’â€Å¡§11.3): the host's certificate names the device the permit is addressed to.
      *  The fencing token is the permit's nonce; reports and secret deliveries carry it back. */
@@ -368,11 +377,13 @@ public final class EnterpriseOperations {
                 ||claims.iat()>now||claims.exp()<=now||claims.exp()-claims.iat()>10000||!java.util.Objects.equals(claims.identity().authorizationEpoch(),i.authorizationEpoch())
                 ||i.state()!=EnterpriseInvocationState.RESERVED||!claims.nonce().equals(i.reservedNonce())
                 ||lease==null||lease.consumedAt()!=null||!lease.invocationId().equals(i.id())||!java.util.Objects.equals(lease.authorizationEpoch(),i.authorizationEpoch())||!java.util.Objects.equals(lease.expiresAt(),claims.exp()))throw ManagementAccess.denied();
-            fresh(tenant,tx,i,now);executable(tx,i,now);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
+            fresh(tenant,tx,i,now);executable(tx,i,now);KillEnforcement.capture(tx,codec,i);tx.enterprise().consumeNonce(claims.nonce(),now);var next=changed(i,EnterpriseInvocationState.EXECUTING,i.reservedNonce(),i.completedResources(),null);tx.enterprise().saveInvocation(next,now,i.revision());
             tx.audit(DirectoryService.digest(authenticatedDevice),"PERMIT_CONSUME","invocation:"+i.id(),next.revision(),e.context().requestId(),i.requestDigest(),evidence(next));
             long leaseExpiry=Math.min(now+30000,i.expiresAtUnixMs());
             tx.enterprise().saveExecutionLease(new EnterpriseStore.ExecutionLease(i.id(),claims.nonce(),authenticatedDevice,leaseExpiry));
-            return reply(new io.ololabs.toolgate.contracts.v2.PermitConsumed(i.id(),claims.nonce(),leaseExpiry),next.revision());});
+            var scope=tx.kills().scope(claims.nonce()).subject();
+            var binding=new io.ololabs.toolgate.contracts.v2.KillExecutionScope(scope.packageId(),scope.packageDigest(),scope.publisher(),scope.toolId(),scope.poolId(),scope.imageDigest());
+            return reply(new io.ololabs.toolgate.contracts.v2.PermitConsumed(i.id(),claims.nonce(),leaseExpiry,tx.enterprise().authorizationEpoch(),binding),next.revision());});
     }
     /** Renewal is never replay-cached: each request checks current authority in the tenant transaction. */
     public Store.Reply heartbeat(Ids.TenantId tenant,java.util.function.Function<Store.Session,String> certificate,String id,String document){
@@ -515,6 +526,19 @@ public final class EnterpriseOperations {
             for(int scan=0;scan<100;scan++){var page=tx.enterprise().approvals(cursor,100);if(page.isEmpty())break;for(var a:page){cursor=a.id();if(approvalVisible(tx,actor,a,now))result.add(a);if(result.size()==limit){remaining=true;break;}}if(remaining||page.size()<100)break;}
             return reply(new EnterpriseApprovalPage(result,remaining?cursor:null),tx.load().revision());});
     }
+    /** Committed kill handling; never treats cancellation as proof that no business effect occurred. */
+    void cancelForKill(Store.Session tx,EnterpriseInvocation invocation,long now,String actor,String event){
+        if(Set.of(EnterpriseInvocationState.SUCCEEDED,EnterpriseInvocationState.FAILED,EnterpriseInvocationState.PARTIAL,
+                EnterpriseInvocationState.OUTCOME_UNKNOWN,EnterpriseInvocationState.CANCELLED,EnterpriseInvocationState.EXPIRED).contains(invocation.state()))return;
+        tx.enterprise().cancelOperation(invocation.id());
+        var next=changed(invocation,invocation.state()==EnterpriseInvocationState.EXECUTING?
+            EnterpriseInvocationState.OUTCOME_UNKNOWN:EnterpriseInvocationState.CANCELLED,invocation.reservedNonce(),invocation.completedResources(),invocation.resultDigest());
+        tx.enterprise().saveInvocation(next,now,invocation.revision());
+        var lease=tx.enterprise().executionLease(invocation.id());
+        if(lease!=null)tx.enterprise().saveExecutionLease(new EnterpriseStore.ExecutionLease(lease.invocationId(),lease.fencingToken(),lease.deviceId(),Math.min(now,lease.expiresAt())));
+        tx.audit(actor,"KILL_INVOCATION",invocation.id(),next.revision(),event,invocation.requestDigest(),evidence(next));
+        new OperationFinalizer(codec).refresh(tx,invocation.id(),now);
+    }
     public Store.Reply cancelFromGateway(DirectoryService.Actor actor,String document){
         gateway(actor);var c=codec.model(document,io.ololabs.toolgate.contracts.v2.RequestContext.class);
         if(!actor.tenant().value().equals(c.tenantId()))throw ManagementAccess.denied();
@@ -543,6 +567,26 @@ public final class EnterpriseOperations {
         return new EnterpriseInvocation(i.id(),i.requestDigest(),i.evaluation(),i.state(),i.revision(),
                 i.authorizationEpoch(),i.reservedNonce(),i.expiresAtUnixMs(),i.completedResources(),
                 i.downstreamIdempotencyKey(),i.resultDigest(),i.diagnosticId(),i.reconciliation(),outcome);
+    }
+    /** ADR 060 attempt grade: never authority consumed or Control settlement proof beats an executor report. */
+    static EnterpriseOutcomeGrade attemptGrade(boolean reviewed,boolean consumed,boolean settled,String reported){
+        if(reviewed)return EnterpriseOutcomeGrade.HUMAN_RECONCILED;
+        if(!consumed)return EnterpriseOutcomeGrade.CONTROL_PROVEN;
+        if(Set.of("SUCCEEDED","FAILED").contains(reported))return EnterpriseOutcomeGrade.EXECUTOR_REPORTED;
+        return settled?EnterpriseOutcomeGrade.CONTROL_PROVEN:EnterpriseOutcomeGrade.UNKNOWN;
+    }
+    /** ADR 060 export: readable operations only, each re-derived now; presentation, never authority. */
+    public Store.Reply evidenceExport(DirectoryService.Actor actor,String after,int limit){
+        if(actor.userId()==null||limit<1||limit>100)throw Failure.validation();if(after!=null)Ids.valid(after);
+        return store.transaction(actor.tenant(),true,tx->{long time=now(tx);String cursor=after==null?"":after;
+            var values=new ArrayList<EnterpriseOperationOutcome>();boolean more=false;
+            for(int scan=0;scan<100;scan++){var rows=tx.enterprise().invocations(cursor,100);if(rows.isEmpty())break;
+                for(var i:rows){cursor=i.id();
+                    try{scope(tx,actor.userId(),i,"read",time);}catch(Failure denied){if(denied.status()!=403)throw denied;continue;}
+                    values.add(new OperationFinalizer(codec).refresh(tx,i.id(),time));
+                    if(values.size()==limit){more=true;break;}}
+                if(more||rows.size()<100)break;}
+            return reply(new EnterpriseOperationEvidenceExportPage(values,more?cursor:null,time),tx.load().revision());});
     }
     /** Authorized, bounded metadata. A cursor is pinned to one derived evidence revision. */
     public Store.Reply history(DirectoryService.Actor actor,String id,String cursor,int limit){
@@ -574,7 +618,7 @@ public final class EnterpriseOperations {
                 entries.add(new EnterpriseAttemptHistory(a.id(),(long)n+1,EnterpriseInvocationState.valueOf(reported),
                         a.consumedAt()!=null,a.issuedAt(),a.expiresAt(),a.evidenceCount(),scope,seal!=null,
                         seal==null?0L:(long)seal.effectCount(),seal==null?null:seal.digest(),settlement!=null||reviewed!=null,
-                        reviewed!=null?EnterpriseOutcomeGrade.REVIEWER_CONFIRMED:settlement==null||Set.of("SUCCEEDED","FAILED").contains(reported)?EnterpriseOutcomeGrade.REPORTED:EnterpriseOutcomeGrade.CONTROL_PROVEN));
+                        attemptGrade(reviewed!=null,a.consumedAt()!=null,settlement!=null,reported)));
             }
             int nextOffset=Math.addExact(offset,limit);
             var rows=tx.enterprise().effectHistory(i.id(),offset,Math.addExact(limit,1));

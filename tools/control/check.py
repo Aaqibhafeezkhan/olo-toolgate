@@ -67,7 +67,7 @@ CREATE DATABASE control OWNER control_migrator;"""
                'gatewayPort':info['NetworkSettings']['Ports']['8081/tcp'][0]['HostPort'],
                'gatewayManagementPort':info['NetworkSettings']['Ports']['9091/tcp'][0]['HostPort']}
     finally:
-        run(['docker', 'rm', '-f', container], capture_output=True)
+        run(['docker', 'rm', '-f', '-v', container], capture_output=True)
 
 
 def request(url, token=None, body=None, method='GET', headers=None, *, context=None):

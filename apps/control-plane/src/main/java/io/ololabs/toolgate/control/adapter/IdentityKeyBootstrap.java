@@ -23,15 +23,39 @@ public class IdentityKeyBootstrap {
         try{custody=new TenantIdentityCustody(codec,Path.of(root.get()),forbidden());return custody;}
         catch(Exception invalid){throw new IllegalStateException("Dedicated tenant identity custody required");}
     }
-    private List<java.math.BigInteger> forbidden()throws Exception{
+    /** Every configured custody modulus, including operator approval keys; key domains must not share one. */
+    List<java.math.BigInteger> forbidden()throws Exception{
+        var result=new ArrayList<>(nonOperatorModuli());
+        var path=config.getOptionalValue("toolgate.control.breakglass.operator-keys-path",String.class);
+        if(path.isPresent()){
+            var keys=codec.configuration(ProtectedCustody.text(Path.of(path.get()),16384),false);
+            if(!keys.isArray()||keys.size()!=3)throw new IllegalArgumentException();
+            for(var value:keys){var key=codec.model(codec.json(value),io.ololabs.toolgate.contracts.v2.KillTrustKey.class);
+                result.add(new java.math.BigInteger(1,Base64.getUrlDecoder().decode(key.n())));}
+        }
+        return List.copyOf(result);
+    }
+    List<java.math.BigInteger> nonOperatorModuli()throws Exception{
         var result=new ArrayList<java.math.BigInteger>();
         String location=config.getValue("mp.jwt.verify.publickey.location",String.class);
         collect(ProtectedCustody.text(location.startsWith("file:")?Path.of(java.net.URI.create(location)):Path.of(location),16384),result);
-        for(String setting:List.of("toolgate.control.bundle.private-key-path","toolgate.control.fleet.private-key-path","toolgate.control.package-release.private-key-path")){
+        for(String setting:List.of("toolgate.control.bundle.private-key-path","toolgate.control.fleet.private-key-path","toolgate.control.package-release.private-key-path","toolgate.control.effect.private-key-path","toolgate.control.audit-anchor.private-key-path")){
             var path=config.getOptionalValue(setting,String.class);if(path.isPresent())collect(ProtectedCustody.privateText(Path.of(path.get()),16384),result);
         }
         for(var path:config.getOptionalValue("quarkus.http.ssl.certificate.files",String.class).orElse("").split(","))if(!path.isBlank())collect(ProtectedCustody.text(Path.of(path.trim()),65536),result);
         var shared=config.getOptionalValue("toolgate.control.endpoint.ca-certificate-path",String.class);if(shared.isPresent())collect(ProtectedCustody.text(Path.of(shared.get()),16384),result);
+        for(String setting:List.of("toolgate.control.insights.operator.certificate-path","toolgate.control.insights.operator.client-ca-path",
+                "toolgate.control.breakglass.certificate-path","toolgate.control.breakglass.client-ca-path")){
+            var path=config.getOptionalValue(setting,String.class);if(path.isPresent())collect(ProtectedCustody.text(Path.of(path.get()),65536),result);
+        }
+        for(String setting:List.of("toolgate.control.fleet.release-keys-path","toolgate.control.fleet.organization-keys-path","toolgate.control.recovery.trust-path")){
+            var path=config.getOptionalValue(setting,String.class);if(path.isEmpty())continue;
+            var document=codec.configuration(ProtectedCustody.text(Path.of(path.get()),65536),false);
+            var keys=document.isArray()?document:document.path("keys");
+            if(!keys.isArray()||keys.size()>64)throw new IllegalArgumentException();
+            for(var key:keys){var n=key.path("n");if(!n.isTextual())throw new IllegalArgumentException();
+                result.add(new java.math.BigInteger(1,Base64.getUrlDecoder().decode(n.asText())));}
+        }
         return List.copyOf(result);
     }
     private static void collect(String pem,List<java.math.BigInteger> result)throws Exception{

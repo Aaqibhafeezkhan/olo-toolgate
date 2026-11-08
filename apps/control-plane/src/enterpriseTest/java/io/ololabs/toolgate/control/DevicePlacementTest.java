@@ -57,4 +57,29 @@ class DevicePlacementTest {
         assertTrue(store.<Boolean>transaction(EnterpriseConformanceTest.TENANT,false,tx->placement.member(tx,"binding-a","device")));
         assertFalse(store.<Boolean>transaction(EnterpriseConformanceTest.TENANT,false,tx->placement.member(tx,"binding-a","elsewhere")));
     }
+    @Test void killedPlacementsNeverReturnThroughTheMissingInventoryFallback(){
+        pool(Map.of("executor-1","bob","executor-2","bob"));
+        for(var id:List.of("executor-1","executor-2"))EnterpriseConformanceTest.online(store,graph.codec,id);
+        store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{
+            var registration=(com.fasterxml.jackson.databind.node.ObjectNode)graph.codec.value(KillSwitchTest.registration(graph.codec));
+            registration.put("hostId","executor-1").put("poolId","pool-a");
+            tx.packages().saveToolHost("executor-1",registration.toString());
+            var d=tx.load();tx.save(d,new io.ololabs.toolgate.control.domain.Directory(d.revision()+1,d.entries()));
+            long counter=tx.kills().nextCounter("control"),epoch=tx.enterprise().authorizationEpoch();
+            var event=new io.ololabs.toolgate.contracts.v2.KillEvent("control:"+counter,io.ololabs.toolgate.contracts.v2.KillIssuer.control,
+                new io.ololabs.toolgate.contracts.v2.KillScope(io.ololabs.toolgate.contracts.v2.KillScopeKind.POOL,"pool-a"),
+                io.ololabs.toolgate.contracts.v2.KillMode.STOP_NEW,"Placement policy",1000L,KillStorageTest.SIGNATURE,EnterpriseConformanceTest.TENANT.value(),epoch);
+            tx.kills().append(new KillStore.Event(event.eventId(),"control",counter,"KILL","POOL","pool-a","STOP_NEW",epoch,1000,graph.codec.json(event)));
+            return null;
+        });
+        var request=new AuthorizationRequest("acme.test/tool","read",Map.of("path",com.fasterxml.jackson.databind.node.TextNode.valueOf("data/a.txt")));
+        for(int n=0;n<10;n++)assertEquals("executor-2",store.transaction(EnterpriseConformanceTest.TENANT,false,
+            tx->placement.place(tx,context("kill-placement-"+UUID.randomUUID(),null),EnterpriseConformanceTest.NOW,request,"a".repeat(64),EnterpriseConformanceTest.DIGEST)));
+        store.transaction(EnterpriseConformanceTest.TENANT,true,tx->{
+            var fixtures=new KillStorageTest();tx.kills().append(fixtures.kill(tx,EnterpriseConformanceTest.TENANT,"control",io.ololabs.toolgate.contracts.v2.KillMode.TERMINATE));return null;
+        });
+        assertNull(store.transaction(EnterpriseConformanceTest.TENANT,false,
+            tx->placement.place(tx,context("all-killed",null),EnterpriseConformanceTest.NOW,request,"a".repeat(64),EnterpriseConformanceTest.DIGEST)));
+    }
+
 }

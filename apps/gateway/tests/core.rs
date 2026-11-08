@@ -420,8 +420,8 @@ impl RelayPort for Authority {
                     && self.permit.lock().unwrap().is_none();
             invocation.operation_outcome = Some(serde_json::from_value(json!({
                 "operationId":invocation.id,"state":if working {"RUNNING"} else {"OUTCOME_UNKNOWN"},
-                "revision":1,"grade":"REPORTED","journalComplete":true,
-                "attemptCount":1,"effectCount":0,"unresolvedEffectCount":0,"unsettledAttemptCount":1,
+                "revision":1,"grade":"UNKNOWN","coverage":"UNMEDIATED_POSSIBLE","journalComplete":true,
+                "attemptCount":1,"effectCount":0,"fencedEffectCount":0,"unfencedEffectCount":0,"unresolvedEffectCount":0,"unsettledAttemptCount":1,
                 "finalized":false,"retryable":false,"deduplicationAssumed":false,"updatedAtUnixMs":123
             })).unwrap());
             Ok(invocation)
@@ -989,7 +989,7 @@ async fn tool_host_calls_dispatch_with_a_permit_and_return_the_host_result() {
     tokio::spawn(async move { axum::serve(listener, host).await.unwrap() });
     let mut config = config();
     config.tool_hosts = serde_json::from_value(
-        json!([{"hostId":"placed-device","url":format!("http://127.0.0.1:{port}")}]),
+        json!([{"hostId":"placed-device","url":format!("http://127.0.0.1:{port}"),"developmentLoopbackHttp":true}]),
     )
     .unwrap();
     let (code, body) = call(
@@ -1053,7 +1053,7 @@ async fn worker_success_is_reported_separately_from_the_unknown_control_business
     assert_eq!(body["result"]["isError"], true);
     let operation = &body["result"]["_meta"]["io.ololabs.toolgate/operationOutcome"];
     assert_eq!(operation["state"], "OUTCOME_UNKNOWN");
-    assert_eq!(operation["grade"], "REPORTED");
+    assert_eq!(operation["grade"], "UNKNOWN");
     assert_eq!(operation["retryable"], false);
 }
 

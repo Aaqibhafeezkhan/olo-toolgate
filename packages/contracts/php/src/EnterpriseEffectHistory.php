@@ -15,13 +15,15 @@ final readonly class EnterpriseEffectHistory implements \JsonSerializable {
         public string $requestDigest,
         public EnterpriseEffectGenerationState $state,
         public EnterpriseOutcomeGrade $grade,
+        public EnterpriseEffectFencing $fencing,
+        public array $observations,
         public int $evidenceCount,
         public ?string $receiptDigest = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['effectId', 'generation', 'attemptId', 'routeId', 'requestDigest', 'state', 'grade', 'evidenceCount', 'receiptDigest']) || array_diff(['effectId', 'generation', 'attemptId', 'routeId', 'requestDigest', 'state', 'grade', 'evidenceCount'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['effectId', 'generation', 'attemptId', 'routeId', 'requestDigest', 'state', 'grade', 'fencing', 'observations', 'evidenceCount', 'receiptDigest']) || array_diff(['effectId', 'generation', 'attemptId', 'routeId', 'requestDigest', 'state', 'grade', 'fencing', 'observations', 'evidenceCount'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -32,6 +34,8 @@ final readonly class EnterpriseEffectHistory implements \JsonSerializable {
             $data['requestDigest'],
             EnterpriseEffectGenerationState::from($data['state']),
             EnterpriseOutcomeGrade::from($data['grade']),
+            EnterpriseEffectFencing::from($data['fencing']),
+            array_map(static fn ($item) => EnterpriseEvidenceObservation::from($item), $data['observations']),
             $data['evidenceCount'],
             array_key_exists('receiptDigest', $data) ? $data['receiptDigest'] : null
         );

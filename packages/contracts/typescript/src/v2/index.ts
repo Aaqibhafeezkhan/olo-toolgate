@@ -17,6 +17,16 @@ export interface AdmissionResponse {
 }
 export type ApiChange = "NONE" | "PATCH" | "MINOR" | "MAJOR";
 export type AuthType = "API_KEY" | "BASIC" | "OAUTH2_CLIENT_CREDENTIALS" | "TOKEN_EXCHANGE" | "CONNECTION" | "CUSTOM";
+/** Exact JCS offline approval payload. Issued-to-expiry window is at most ten minutes; two or three distinct current operator keys must approve identical claims. */
+export interface BreakGlassApprovalClaims {
+  readonly tenantId: string;
+  readonly requestId: string;
+  readonly scope: KillScope;
+  readonly mode: KillMode;
+  readonly reason: string;
+  readonly issuedAtUnixMs: number;
+  readonly notAfterUnixMs: number;
+}
 /** Break-glass kill: 2-of-3 operator signatures, adds kills only. */
 export interface BreakGlassRequest {
   readonly scope: KillScope;
@@ -793,6 +803,21 @@ export interface InvocationTask {
   readonly packageDigest: string;
 }
 export type KeyNamespace = "AGENT" | "DELEGATED_USER" | "TENANT";
+/** Acknowledgement from a socket-authenticated component; identity is never caller supplied. */
+export interface KillAcknowledgement {
+  readonly authorizationEpoch: number;
+  readonly deliveryPath: KillDeliveryPath;
+}
+/** Current registered consumer and its latest authenticated acknowledgement, if any. */
+export interface KillComponentDelivery {
+  readonly kind: KillComponentKind;
+  readonly componentId: string;
+  readonly authorizationEpoch?: number;
+  readonly acknowledgedAtUnixMs?: number;
+  readonly deliveryPath?: KillDeliveryPath;
+}
+export type KillComponentKind = "TOOL_HOST" | "ENDPOINT" | "GATEWAY";
+export type KillDeliveryPath = "PUSH" | "CHECK_IN" | "POLL";
 /** Immutable kill event. */
 export interface KillEvent {
   readonly eventId: string;
@@ -802,6 +827,8 @@ export interface KillEvent {
   readonly reason: string;
   readonly issuedAtUnixMs: number;
   readonly signature: string;
+  readonly tenantId: string;
+  readonly authorizationEpoch: number;
 }
 /** Effective and superseded events. */
 export interface KillEventPage {
@@ -809,8 +836,49 @@ export interface KillEventPage {
   readonly recoveries: ReadonlyArray<RecoveryEvent>;
   readonly authorizationEpoch: number;
 }
+/** Immutable per-attempt Control facts returned only after online permit consumption. Absent facts are unknown and match scoped kills conservatively; empty pool/image means known not applicable. */
+export interface KillExecutionScope {
+  readonly packageId?: string;
+  readonly packageDigest: string;
+  readonly publisher?: string;
+  readonly toolId: string;
+  readonly poolId?: string;
+  readonly imageDigest?: string;
+}
 export type KillIssuer = "control" | "control-breakglass";
 export type KillMode = "STOP_NEW" | "TERMINATE";
+/** Authoritative current kill state, registered delivery status and retained archive counts. */
+export interface KillOverview {
+  readonly state: KillPush;
+  readonly components: ReadonlyArray<KillComponentDelivery>;
+  readonly retainedEventCount: number;
+  readonly archivedEventCount: number;
+  readonly observedAtUnixMs: number;
+}
+/** Immutable request and append-only reviews; no execution authority. */
+export interface KillProposal {
+  readonly id: string;
+  readonly requesterUserId: string;
+  readonly kind: KillProposalKind;
+  readonly state: KillProposalState;
+  readonly revision: number;
+  readonly authorizationEpoch: number;
+  readonly createdAtUnixMs: number;
+  readonly expiresAtUnixMs: number;
+  readonly scope?: KillScope;
+  readonly mode?: KillMode;
+  readonly reason: string;
+  readonly supersedes: ReadonlyArray<string>;
+  readonly reviews: ReadonlyArray<KillReview>;
+  readonly eventId?: string;
+}
+/** Review the exact retained proposal; reviewer identity is authenticated. */
+export interface KillProposalDecision {
+  readonly expectedRevision: number;
+  readonly approve: boolean;
+}
+export type KillProposalKind = "KILL" | "RECOVERY";
+export type KillProposalState = "PENDING" | "APPLIED" | "REJECTED" | "EXPIRED";
 /** Push to Tool Hosts and clients for running work. */
 export interface KillPush {
   readonly tenantId: string;
@@ -825,12 +893,30 @@ export interface KillRequest {
   readonly mode: KillMode;
   readonly reason: string;
 }
+/** One authenticated independent review of retained kill or recovery intent. */
+export interface KillReview {
+  readonly reviewerUserId: string;
+  readonly approved: boolean;
+  readonly reviewedAtUnixMs: number;
+}
 /** Kill target. value is absent only for TENANT. */
 export interface KillScope {
   readonly kind: KillScopeKind;
   readonly value?: string;
 }
 export type KillScopeKind = "PACKAGE" | "PACKAGE_DIGEST" | "PUBLISHER" | "TOOL" | "POOL" | "RUNTIME_IMAGE" | "TENANT";
+/** Direct HTTPS key bootstrap; never accept it from a worker or relayed push. */
+export interface KillTrustDocument {
+  readonly tenantId: string;
+  readonly authorizationEpoch: number;
+  readonly keys: ReadonlyArray<KillTrustKey>;
+}
+/** Organization fleet public key delivered only by the fixed certificate-authenticated Control origin. */
+export interface KillTrustKey {
+  readonly kid: string;
+  readonly n: string;
+  readonly e: "AQAB";
+}
 /** Lease renewal for a running ledger invocation (every lease/3). Also carries the latest progress and, while the tool waits for input, its input request (invocation-state-v2.md T6, T7). */
 export interface LeaseHeartbeat {
   readonly invocationId: string;
@@ -1107,6 +1193,14 @@ export interface NativeMcpEffectReview {
   readonly reviewedBy: string;
   readonly reviewedAtUnixMs: number;
 }
+/** Current native endpoint consumption: accepted invocation, live lease and frozen kill facts from one Control transaction. Not a Tool Host admission response. */
+export interface NativePermitConsumed {
+  readonly invocation: V1.EnterpriseInvocation;
+  readonly fencingToken: string;
+  readonly leaseExpiresAtUnixMs: number;
+  readonly authorizationEpoch: number;
+  readonly killScope: KillExecutionScope;
+}
 /** Version requirements checked at enable. */
 export interface PackageCompatibility {
   readonly contractsVersion: string;
@@ -1210,11 +1304,13 @@ export interface PackagedArtifact {
   readonly runtimeId?: string;
 }
 export type Permission = "HTTP_ROUTE" | "TCP" | "CREDENTIALS_IN_SANDBOX" | "USER_SECRET" | "TOKEN_EXCHANGE" | "CONNECTION" | "DEVICE_FILES_READ" | "DEVICE_FILES_WRITE";
-/** Successful consumption. */
+/** Successful consumption with current authorization epoch and immutable per-attempt revocation scope. */
 export interface PermitConsumed {
   readonly invocationId: string;
   readonly fencingToken: string;
   readonly leaseExpiresAtUnixMs: number;
+  readonly authorizationEpoch: number;
+  readonly killScope: KillExecutionScope;
 }
 /** Tool Host or device consumes the single-use nonce; returns the fencing token. */
 export interface PermitConsumption {
@@ -1366,6 +1462,8 @@ export interface RecoveryEvent {
   readonly reviewers: ReadonlyArray<string>;
   readonly issuedAtUnixMs: number;
   readonly signature: string;
+  readonly tenantId: string;
+  readonly authorizationEpoch: number;
 }
 /** Bounded current-only preflight. Opaque cursors fence a changed tenant directory; observed facts never authorize a resend. */
 export interface RecoveryPreflightPage {
@@ -1463,6 +1561,7 @@ export interface RouteEffectPolicy {
   readonly intent: EffectIntentBlueprint;
   readonly targetDedupeGuarantee?: TargetDedupeGuarantee;
   readonly fencedTarget?: FencedTarget;
+  readonly authoritativeResponse?: boolean;
 }
 /** Review stamp created by Control, never accepted from package or worker input. */
 export interface RouteEffectReview {

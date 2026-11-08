@@ -103,8 +103,12 @@ impl Config {
             return Err("at most 64 Tool Hosts");
         }
         let mut hosts = std::collections::BTreeSet::new();
+        let mut host_origins = std::collections::BTreeSet::new();
         for route in &self.tool_hosts {
             route.validate()?;
+            if !host_origins.insert(route.url.trim_end_matches('/')) {
+                return Err("each Tool Host origin is listed once");
+            }
             if !hosts.insert(&route.host_id) {
                 return Err("each Tool Host id is listed once");
             }

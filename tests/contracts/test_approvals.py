@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Approval wire compatibility, explicit trust and published deployment contracts."""
+"""Current approval wire shapes, explicit trust and published deployment contracts."""
 import copy
 import base64
 import json
@@ -58,9 +58,12 @@ class ApprovalContractTests(unittest.TestCase):
             with self.assertRaises(ValidationError):Draft7Validator(schema).validate(bad)
     def test_versioned_api_reuses_shared_models(self):
         control=yaml.safe_load((ROOT/'packages/contracts/openapi/control-v1.yaml').read_text())
-        for path,model in [('invocations','EnterpriseInvocationRequest'),('permits/consume','EnterprisePermitConsumption')]:
+        for path,model in [('invocations','EnterpriseInvocationRequest'),('permits/consume','PermitConsumption'),('native-permits/consume','EnterprisePermitConsumption')]:
             operation=control['paths']['/api/control/v1/access/'+path]['post']
             self.assertTrue(operation['requestBody']['content']['application/json']['schema']['$ref'].endswith('/'+model))
+        for path,model in [('permits/consume','PermitConsumed'),('native-permits/consume','NativePermitConsumed')]:
+            schema=control['paths']['/api/control/v1/access/'+path]['post']['responses']['200']['content']['application/json']['schema']
+            self.assertEqual({'$ref':'../schemas/v2/'+('permit' if model=='PermitConsumed' else 'kill')+'.schema.json#/$defs/'+model},schema)
         gateway=yaml.safe_load((ROOT/'packages/contracts/openapi/gateway-v1.yaml').read_text())
         self.assertTrue(gateway['paths']['/access/invocations']['post']['responses']['200']['content']['application/json']['schema']['$ref'].endswith('/EnterpriseAuthorizationOutcome'))
         workflow=yaml.safe_load((ROOT/'.github/workflows/policy.yml').read_text())

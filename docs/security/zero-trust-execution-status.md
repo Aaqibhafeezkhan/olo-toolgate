@@ -7,7 +7,7 @@ does not establish a passing security claim.
 
 ## Overall task progress
 
-Updated: **2026-11-06**. Branch: `codex/zero-trust-target-fencing`.
+Updated: **2026-11-08**. Branch: `codex/zero-trust-outcome-grades` (stacked on `codex/zero-trust-revocation-dispatch`).
 Previous containment delivery: [`0813b71b`](https://github.com/olo-labs/olo-toolgate/commit/0813b71bbe2a0f9276a1b2e2260b25454a31d3d4).
 
 **Overall: partially implemented.** Scoped deliveries now include:
@@ -26,11 +26,11 @@ completion forecast. The midpoint of each original phase estimate supplies the f
 
 | Plan phase | Status | Delivered | Remaining before full phase completion |
 |---|---|---|---|
-| 0 — Boundary and harness | Partial | Weighted delivery baseline and one-commit stage workflow; source-bound actual stack gate; adopted A1–A9/C1–C8 threat model across security docs; diagnostic scorecard/CI harness inventories all 220 current security/integration cases (209 original plus 11 S10 component vectors) with explicit missing coverage; preserved revision-10 plan, claim inventory and executable OCI conformance gate with revision/source/image evidence. Hosted 1de646c1 foundation aggregation and scan gates pass; final image release is blocked by the APT vulnerability repair below. | Execute the full C1–C8 case/target matrix and integrate a strict release scorecard; obtain hosted CI/release evidence. Four delivery-stage checkmarks do not satisfy these full-phase exit criteria. Hosted b235b536 Control/Quickstart checks pass; the independent device base repeats the APT finding and blocks release, with device/secured-device correction tracked below. Main synchronization to 18d4ca7f passes local SDK/CLI/CI/Java/scan verification; native LangChain business outcome remains explicitly unqualified below. The current native LangChain refusal gate passes actual fresh composed verification and 14 in-image agent cases: unqualified OUTCOME_UNKNOWN, no write or retry. Hosted reevaluation and native business finality remain outstanding. S21 records actual current-source 13 OCI/118 native cases and five deployment observations, without accepting full original catalogs. S21 hosted head 9ff44fca passes foundation, Rust OCI/deployment, images/LangChain, scans, coverage and Sonar. CodeQL identifies two negative-test fixtures; the fixture-only repair below retains both refusal assertions and requires hosted reevaluation. |
+| 0 — Boundary and harness | Partial | Weighted delivery baseline and one-commit stage workflow; source-bound actual stack gate; adopted A1–A9/C1–C8 threat model across security docs; diagnostic scorecard/CI harness inventories all 220 current security/integration cases (209 original plus 11 S10 component vectors) with explicit missing coverage; preserved revision-10 plan, claim inventory and executable OCI conformance gate with revision/source/image evidence. Hosted 1de646c1 foundation aggregation and scan gates pass; final image release is blocked by the APT vulnerability repair below. | Execute the full C1–C8 case/target matrix and integrate a strict release scorecard; obtain hosted CI/release evidence. Four delivery-stage checkmarks do not satisfy these full-phase exit criteria. Hosted b235b536 Control/Quickstart checks pass; the independent device base repeats the APT finding and blocks release, with device/secured-device correction tracked below. Main synchronization to 18d4ca7f passes local SDK/CLI/CI/Java/scan verification; native LangChain business outcome remains explicitly unqualified below. The current native LangChain refusal gate passes actual fresh composed verification and 14 in-image agent cases: unqualified OUTCOME_UNKNOWN, no write or retry. Hosted reevaluation and native business finality remain outstanding. S21 records actual current-source 13 OCI/118 native cases and five deployment observations, without accepting full original catalogs. S21 hosted head 9ff44fca passes foundation, Rust OCI/deployment, images/LangChain, scans, coverage and Sonar. CodeQL identifies two negative-test fixtures; the fixture-only repair below retains both refusal assertions and requires hosted reevaluation. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
 | 1 — Operations, leases and evidence | Partial | Durable device/fence-bound leases; heartbeat/watchdog; admission spool; result outbox; immutable late executor evidence; current fresh SQLite/PostgreSQL schemas and tests; conservative business-key binding; current operation/attempt records and immutable snapshots, positive-proof reservation replacement and conservative operation summaries; reviewed required/argument keys, verified namespaces, bounded optional dedupe windows, immutable generation history and retention tombstones, tested on SQLite/PostgreSQL and Gateway/human paths; S09 whole-operation recovery with fresh current authority, retained attempts/leases/dispatches and late-receipt fencing. S10 complete all-attempt/effect derivation for the declared qualified OLO path, immutable manifests/settlement/finality, independent scope review, PARTIAL business keys, bounded current-authority history and Gateway/MCP/native/console presentation; qualified component vectors and affected regression/OCI/target gates pass. | Complete original distributed transitions/audit-spool/duplicate-execution suites remain required, including task/input, kill, host-spool lifecycle and crash/redispatch assertions. S10 is Done under the explicit bounded scope amendment; this does not accept the original full suites or phase. Live consent/equivalence/generalized target-guarantee sources retain their S19/S20 requirements. S09 delivers public proof-bound recovery, immutable predecessor archives, original deadlines, qualified released-generation replacement and SQLite/PostgreSQL/OCI evidence; it does not accept the entire phase. |
 | 2 — Containment | Partial; declared runtime/interface/deployment slices delivered | Hosted 58bdc367 diagnostic evidence identifies an invalid I/O-device selection (io.max ENODEV) before worker startup; actual-store/whole-device discovery passes local 13 OCI/112 native/component checks and five deployment observations without dropping the I/O gate; hosted 64f4991e passed Rust tests/Clippy but failed its OCI startup probe without granting readiness; bounded startup diagnostics pass local OCI/matrix qualification, while hosted startup remains unqualified. Hosted 3514034b passes worker/broker startup after the device correction but fails supervisor identity collection because the host cgroup root lacks resource-limit files; identity/resource collection is now separated and passes local current-source 13 OCI/114 native/component checks and five deployment observations below; hosted c1de7d5a passes supervisor identity collection but fails closed during probe teardown with engine uncertainty; attached-client cleanup ordering passes local 13 OCI/115 native/component cases and five deployment observations below; hosted 0c35e748 diagnostics expose create timeout before cleanup; fresh FUSE-store qualification passes all 13 actual OCI cases below; hosted confirmation remains required. Qualified worker/broker isolation and strict interface/egress matrix, plus exact managed-unit hard-kill readiness and retained engine-uncertainty journals. Final current-source matrix passes 101 native/component and 13 OCI cases; owned local deployment passes weak-mode/signal refusals and three real supervisor-crash/automatic-restart cycles with actual process/cgroup/namespace witnesses and measured bounds. Hosted 1de646c1 now passes the mandatory OCI/interface/deployment Rust job; final product-image scanning remains blocked independently below. | Full original optional-transport/generalized-kill, Kubernetes/production connectivity and release criteria remain unaccepted in their owning stages/S33. Four bounded delivery stages do not accept those original full-phase exit criteria. Other runtime/OS/VM tiers remain unqualified; local measurements are not production SLOs. Hosted b235b536 Control/Quickstart checks pass; the independent device base repeats the APT finding and blocks release, with device/secured-device correction tracked below. |
-| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. The owned actual Control/Gateway fixture now verifies committed memory/RAG outcome settlement against Control records.  S18 now delivers independently reconstructed reviewed generic HTTP/native MCP intents, immutable SQL intent records, fresh two-second unfenced grants and one-owner monotonic send transport. Native MCP approval stamps are Control-owned; legacy unbound writes are refused at issuance and historical consumption, current read permits also require prepared HTTP facts; older incomplete formats are refused. S19 delivers mandatory high-risk exact ASK review, immutable bounded resolved previews, independent scoped approval and private preview access, pending admission, atomic SQLite/PostgreSQL slot reservation, durable typed refusal audits and signed native consent references. Source-matched 48 focused enterprise and 14 native package cases pass without skips; complete repository gates and affected final checks, current-source OCI 13/matrix 106 and owned memory/RAG qualification pass. Hosted CI on 2e14d34d subsequently found restore-fixture and IPv4/IPv6 TLS-fixture failures; the complete post-delivery repair passes local verification below; hosted results must follow the new PR head. Application-signed frontend intents remain unsupported. S20 delivers current explicit generic/OLO keys and fresh schemas across S01–S20; independently reviewed pinned target keys, complete-history bounded resend, read-only two-phase lookup with immutable terminal witnesses and scoped readiness. Source/published Java, SQLite/PostgreSQL, TLS/credential rotation, UI, 13 OCI/111 native component cases and actual memory/RAG outcome qualification pass. Replay never renews authority or its original window; ambiguous resend requires every current independent guarantee/history/executor condition. | Kill/dispatch/SLO and complete phase-3 conformance (S22). Native MCP/actual-Control joined qualification, complete partition/crash catalogs, other runtime tiers and production SLOs remain outside this scoped delivery.  S21 delivers the two declared generic HTTP target classes under ADR 057: trusted accepted executor/request binding, target-specific first-consumption ordering and shared SQL ownership/recovery. Executed source-bound checks follow below; this does not accept the complete phase or arbitrary targets. S21 is delivered for reviewed generic HTTPS HTTP/1.1 non-streaming targets using SHARED_SQL or SQL_WITH_EXTERNAL_ACTION, with authenticated consumption and current-schema recovery; no backward support or migrations. |
-| 4 — Evidence presentation and tamper evidence | Not started | Raw executor evidence is retained by phase 1. | Outcome grades in presentation/exports, tenant audit chains, signed external anchors and offline verification. |
+| 3 — Effect authorization and recovery | Partial; ledger foundation | Durable immutable effect identities; authorization generations/owners; release/send/consume/ambiguity states; target-vs-broker evidence; timeout and terminal-invocation abandonment. Integrated with existing OLO write permits. Broker-owned prepared HTTP requests now have versioned fingerprints and explicit no-retry HTTP/1.1 transport. OLO service permits sign those digests and require target recomputation before consumption. Leased v2 issuance independently checks signed admission and pinned route/profile manifests. The actual memory/RAG listener integration supplies accepted HTTP facts using trusted profile configuration and refuses unbound downgrade. Bound OLO writes require a recorded process/handler owner and a single authenticated AUTHORIZED-to-SENDING transition before dispatch. A target-owned JDBC claim foundation now supports unique ownership, apply/recovery CAS and atomic business completion; the actual memory/RAG adapters now integrate it. Bound write claims now sign effect identity/generation; dedicated service APIs return consumption status and retain authenticated late target outcomes. The target SDK separates verified facts from online consumption, persists APPLYING before external actions, and atomically journals completion/outcome delivery with business SQL. The owned actual Control/Gateway fixture now verifies committed memory/RAG outcome settlement against Control records.  S18 now delivers independently reconstructed reviewed generic HTTP/native MCP intents, immutable SQL intent records, fresh two-second unfenced grants and one-owner monotonic send transport. Native MCP approval stamps are Control-owned; legacy unbound writes are refused at issuance and historical consumption, current read permits also require prepared HTTP facts; older incomplete formats are refused. S19 delivers mandatory high-risk exact ASK review, immutable bounded resolved previews, independent scoped approval and private preview access, pending admission, atomic SQLite/PostgreSQL slot reservation, durable typed refusal audits and signed native consent references. Source-matched 48 focused enterprise and 14 native package cases pass without skips; complete repository gates and affected final checks, current-source OCI 13/matrix 106 and owned memory/RAG qualification pass. Hosted CI on 2e14d34d subsequently found restore-fixture and IPv4/IPv6 TLS-fixture failures; the complete post-delivery repair passes local verification below; hosted results must follow the new PR head. Application-signed frontend intents remain unsupported. S20 delivers current explicit generic/OLO keys and fresh schemas across S01–S20; independently reviewed pinned target keys, complete-history bounded resend, read-only two-phase lookup with immutable terminal witnesses and scoped readiness. Source/published Java, SQLite/PostgreSQL, TLS/credential rotation, UI, 13 OCI/111 native component cases and actual memory/RAG outcome qualification pass. Replay never renews authority or its original window; ambiguous resend requires every current independent guarantee/history/executor condition. | Kill/dispatch/SLO and complete phase-3 conformance (S22). Native MCP/actual-Control joined qualification, complete partition/crash catalogs, other runtime tiers and production SLOs remain outside this scoped delivery.  S21 delivers the two declared generic HTTP target classes under ADR 057: trusted accepted executor/request binding, target-specific first-consumption ordering and shared SQL ownership/recovery. Executed source-bound checks follow below; this does not accept the complete phase or arbitrary targets. S21 is delivered for reviewed generic HTTPS HTTP/1.1 non-streaming targets using SHARED_SQL or SQL_WITH_EXTERNAL_ACTION, with authenticated consumption and current-schema recovery; no backward support or migrations. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
+| 4 — Evidence presentation and tamper evidence | Partial; S23 delivered, S24/S25 implemented out of order | S23 (ADR 060): console, export and analytics present weakest-source outcome grades, execution coverage and frozen fenced/unfenced classification; presentation only. S24 (ADR 061): per-tenant Control audit hash chains in the fresh SQLite/PostgreSQL schemas with serialized appends and executed integrity/tamper tests. S25 (ADR 062): chain heads signed with a dedicated AUDIT_ANCHOR key, published to a write-once local sink and verified against a pinned keyring with rotation/revocation. | Customer-bucket/transparency-log sinks and Helm wiring, offline `toolgate audit verify` (S26) and phase acceptance. |
 | 5 — Identity hardening | Not started | Existing device certificates remain the baseline. | Sender-constrained agent-run credentials, narrowing delegation and continuously verified executor posture. |
 | 6 — Policy differentiation | Not started | Existing approvals remain the baseline. | Broker OAuth/token exchange, trusted provenance, exact effect previews and stronger step-up approvals. |
 
@@ -44,17 +44,18 @@ items below retain their existing implementation status. S08 adds admission/wind
 | Acceptance item | Status | Evidence / outstanding work |
 |---|---|---|
 | Exact consent rejects recipient changes and additional effects | Partial; S19 mapped ASK path delivered | Immutable resolved generic HTTP/native MCP previews bind the original argument preimage, operation/run, pinned profile and mapped business request. Current independent scoped approval, expiry/revocation and atomic one-use route slots refuse changed requests and additional effects; requester/agent-owner self-review and metadata-only payload reads are refused. Final source-matched 48 enterprise and 14 native package cases, UI 249, CI 383, complete repository gates plus affected final checks, OCI 13/matrix 106 and the current owned stack pass. Dynamic/unmapped plans, generalized effect keys/resend, other runtime tiers and the complete original distributed catalog remain outstanding; the full vertical-slice guarantee is not accepted. S21 fenced FINANCIAL/DESTRUCTIVE routes retain mandatory exact consent; first consumption calls current authority validation, including consent expiry/revocation and current reviewer privileges. |
-| Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down both a real OCI SDK worker and its isolated broker; broker loss and worker private-channel forgery also terminate the pair, with zero Control contact on forgery; S13 raw socket witnesses additionally prove pending-call cancellation and diagnostic failure close the target socket. S14 additionally measures actual managed-unit supervisor-crash/automatic-restart cleanup, including a TERM-ignoring worker. S18 delivers generic HTTP current-authority/owner checks and expired/refused/lost-gate wire witnesses, including slow TLS; the actual Control and scripted-target witnesses are separate, not yet a joined stack qualification. Native MCP has separate actual TLS/owner/send-window witnesses; S18 also passes 13 current-source OCI cases and 106 native/component matrix witnesses. Joined native MCP stack qualification, generalized signed kill and production connectivity-class SLOs remain outstanding.  S21 generic target/peer/accepted-request and actual Control lifecycle/TLS tests, both-class PostgreSQL runtime roles, private broker mTLS/no-retry/send windows and complete stage verification pass. Full distributed/partition catalogs and production SLOs remain unaccepted. S21 first target consumption rechecks current authority, live lease, epoch, deployed profile and human review. Revocation committed first prevents consumption; replay after consumption is status only. Generalized kill/SLO acceptance remains S22. |
+| Revocation refuses subsequent sensitive effects and stops healthy workers | Partial | Lease revocation tears down both a real OCI SDK worker and its isolated broker; broker loss and worker private-channel forgery also terminate the pair, with zero Control contact on forgery; S13 raw socket witnesses additionally prove pending-call cancellation and diagnostic failure close the target socket. S14 additionally measures actual managed-unit supervisor-crash/automatic-restart cleanup, including a TERM-ignoring worker. S18 delivers generic HTTP current-authority/owner checks and expired/refused/lost-gate wire witnesses, including slow TLS; the actual Control and scripted-target witnesses are separate, not yet a joined stack qualification. Native MCP has separate actual TLS/owner/send-window witnesses; S18 also passes 13 current-source OCI cases and 106 native/component matrix witnesses. Joined native MCP stack qualification, generalized signed kill and production connectivity-class SLOs remain outstanding.  S21 generic target/peer/accepted-request and actual Control lifecycle/TLS tests, both-class PostgreSQL runtime roles, private broker mTLS/no-retry/send windows and complete stage verification pass. Full distributed/partition catalogs and production SLOs remain unaccepted. S21 first target consumption rechecks current authority, live lease, epoch, deployed profile and human review. Revocation committed first prevents consumption; replay after consumption is status only. Generalized kill/SLO acceptance remains S22. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
 | Crashes around dispatch/target commit preserve evidence and prevent unsafe retries | Partial | S20 explicit generic/OLO keys, consent exhaustion, same-generation replay, current-only initialization, independently reviewed history-aware resend, read-only terminal witnesses and scoped readiness pass the bounded stage gates. Fresh SQLite/PostgreSQL stores and current contracts refuse obsolete formats without conversion; target witness closure fences further sends.  Admission/result recovery, database reopen, immutable attempt snapshots and refusal of consumed-attempt replay are tested; S09 focused SQLite/PostgreSQL checks cover atomic rollback, competing public replay, fresh permits, original deadlines and stale receipt fencing; S08 adds two-Control-instance window races, immutable history/retention and refusal to rotate ambiguous work on SQLite/PostgreSQL; TLS tests verify HTTP/1.1-only dispatch and target refusal of changed transport facts before storage; owner races permit one SENDING winner and refused gates contact no target; actual target tests now exercise paused-owner abandonment, two JVMs, writer loss after business commit and lost outcome acknowledgement; complete Control/Gateway crash scenarios remain outstanding.  S21 generic target/peer/accepted-request and actual Control lifecycle/TLS tests, both-class PostgreSQL runtime roles, private broker mTLS/no-retry/send windows and complete stage verification pass. Full distributed/partition catalogs and production SLOs remain unaccepted. S21 shared SQLite/PostgreSQL claims cover both declared classes, real child-JVM halt boundaries and external receipt recovery. APPLYING is never abandoned as not-started, and uncertain provider state cannot reopen dispatch. |
-| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claims and actual memory/RAG JVM replicas now exercise one mutation, paused-owner fencing, writer loss and outcome redelivery; actual Control/Gateway normal-path settlement now passes; complete partition/crash qualification remains outstanding.  S21 generic target/peer/accepted-request and actual Control lifecycle/TLS tests, both-class PostgreSQL runtime roles, private broker mTLS/no-retry/send windows and complete stage verification pass. Full distributed/partition catalogs and production SLOs remain unaccepted. S21 both-class SQL ownership, competing replicas, paused owners, apply/recovery races, lost replies, closed provider failure and outbox delivery pass. Complete distributed partition catalogs remain outstanding. |
+| Partition, duplicates and concurrent target replicas exercise fencing/recovery | Partial | Host Control-partition and OCI recovery tests pass; actual knowledge component storage/TLS/vector qualification is now available; shared SQLite/PostgreSQL claims and actual memory/RAG JVM replicas now exercise one mutation, paused-owner fencing, writer loss and outcome redelivery; actual Control/Gateway normal-path settlement now passes; complete partition/crash qualification remains outstanding.  S21 generic target/peer/accepted-request and actual Control lifecycle/TLS tests, both-class PostgreSQL runtime roles, private broker mTLS/no-retry/send windows and complete stage verification pass. Full distributed/partition catalogs and production SLOs remain unaccepted. S21 both-class SQL ownership, competing replicas, paused owners, apply/recovery races, lost replies, closed provider failure and outbox delivery pass. Complete distributed partition catalogs remain outstanding. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
 | Operation finalization includes all attempts/effects and late evidence | Partial; bounded S10 delivered | Control derives the union of every bounded attempt/effect generation, closes immutable manifests and settles only with positive automatic/human scope evidence. Qualified late reports contribute without rewriting current dispatch; conflicts fence authority and final outcomes latch reconciliation. Current-authority caller/history, business-key projections and console presentation pass component regression checks; 143 renewed Control cases (including 17 policy cases and required PostgreSQL scenarios), six actual OCI tests and 32 current target cases pass. S10 is Done only under the recorded scope amendment. Full original distributed suites and later independent consent/equivalence/deduplication sources remain required for full acceptance.  S18 current native forwarding fixtures explicitly use 17 two-independent-reviewer scope attestations and retain REVIEWER_CONFIRMED alongside seven actual target-completed writes; unqualified native scope is never inferred from a successful reply. |
-| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | S14 final OCI/matrix/deployment reports match known parent ee61e550 and source e1b046f79e5e10ba5b9e5a483bb6c22315efe792af13087bbeeb412c3c37de7b, both image pins, broker binary and measured platform/service properties. They pass 13 OCI plus 101 native/component witnesses and five owned deployment observations. Stale image/source evidence is refused; securityAccepted=false, originalCatalogsAccepted=false and productionSloAccepted=false remain explicit. Full original catalogs and C1–C8 release/phase acceptance remain outstanding.  S18 final source checkpoint 49d1ef7f739bfca3474e4c0aeaab5d30581d1baeef93bc5a4920d688fefdda4b and parent e71bdcaa qualify 13 OCI/106 native matrix cases; runtime-source 1522be7317186f1c5032a4a2b2c3cfa097c8b892507f52a7bb71c8c6fd08e5f4 binds the actual owned stack. Full claim acceptance remains false. S20 source checkpoint 8cb2497bc03bb2e587ce25c70b7666c8925fb2b7842163f574b89d6364a9794c and known parent 8da2b98d qualify 13 OCI/111 native cases; runtime-source 2292274a0cb1515d215daff4267d3a52a418b5274eb6d086aa050707ea7e0620 binds the actual joined stack. Current-stage documentation follows that tested checkpoint; no commit self-SHA is asserted. Hosted run 41931966060 failed on 2e14d34d; those local checkpoint results do not imply a green hosted run. Post-delivery CI repair passes local checks separately; read the new PR head for hosted results. The 64f4991e hosted Python and CodeQL checks pass; its OCI readiness probe failed before a frame, and automatic Sonar retained two SQLite/Oracle findings. These are tracked in the follow-up below. Run 41981447408/job 127100102913 exposes worker OCI io.max ENODEV. Correct storage/device discovery passes current-source local qualification below; hosted reevaluation must follow the repair head. Hosted 3514034b reaches the supervisor identity comparison; the root-cgroup resource-file assumption is corrected below. Hosted c1de7d5a then fails closed during probe teardown; lifecycle/bootstrap repairs and their current-source evidence follow below; hosted 0c35e748 scans pass, while contextual OCI diagnostics now expose a cold create timeout. Hosted 1de646c1 foundation/check, Rust OCI/matrix/deployment, scans and Sonar pass; Quickstart image scanning and dependent verification fail on CVE-2026-109518. The image-base repair is tracked below. Hosted b235b536 Control/Quickstart checks pass; the independent device base repeats the APT finding and blocks release, with device/secured-device correction tracked below. Main synchronization to 18d4ca7f passes local SDK/CLI/CI/Java/scan verification; native LangChain business outcome remains explicitly unqualified below. The current native LangChain refusal gate passes actual fresh composed verification and 14 in-image agent cases: unqualified OUTCOME_UNKNOWN, no write or retry. Hosted reevaluation and native business finality remain outstanding. S21 reports bind parent e1c79b69 and source 12dded0b4397868db0f9988d2f3c19b6737d3d5a9184398c293de2c08c2868b8; 13 OCI/118 native cases and five deployment observations pass. Documentation follows the tested code checkpoint; hosted checks must follow the new PR head. S21 hosted head 9ff44fca passes foundation, Rust OCI/deployment, images/LangChain, scans, coverage and Sonar. CodeQL identifies two negative-test fixtures; the fixture-only repair below retains both refusal assertions and requires hosted reevaluation. |
+| Revision-bound evidence distinguishes fenced/unfenced guarantees | Partial | S23 now presents weakest-source outcome grades, execution coverage and frozen per-effect fencing in console, export and analytics (presentation only; no broker-response recording path yet). S14 final OCI/matrix/deployment reports match known parent ee61e550 and source e1b046f79e5e10ba5b9e5a483bb6c22315efe792af13087bbeeb412c3c37de7b, both image pins, broker binary and measured platform/service properties. They pass 13 OCI plus 101 native/component witnesses and five owned deployment observations. Stale image/source evidence is refused; securityAccepted=false, originalCatalogsAccepted=false and productionSloAccepted=false remain explicit. Full original catalogs and C1–C8 release/phase acceptance remain outstanding.  S18 final source checkpoint 49d1ef7f739bfca3474e4c0aeaab5d30581d1baeef93bc5a4920d688fefdda4b and parent e71bdcaa qualify 13 OCI/106 native matrix cases; runtime-source 1522be7317186f1c5032a4a2b2c3cfa097c8b892507f52a7bb71c8c6fd08e5f4 binds the actual owned stack. Full claim acceptance remains false. S20 source checkpoint 8cb2497bc03bb2e587ce25c70b7666c8925fb2b7842163f574b89d6364a9794c and known parent 8da2b98d qualify 13 OCI/111 native cases; runtime-source 2292274a0cb1515d215daff4267d3a52a418b5274eb6d086aa050707ea7e0620 binds the actual joined stack. Current-stage documentation follows that tested checkpoint; no commit self-SHA is asserted. Hosted run 41931966060 failed on 2e14d34d; those local checkpoint results do not imply a green hosted run. Post-delivery CI repair passes local checks separately; read the new PR head for hosted results. The 64f4991e hosted Python and CodeQL checks pass; its OCI readiness probe failed before a frame, and automatic Sonar retained two SQLite/Oracle findings. These are tracked in the follow-up below. Run 41981447408/job 127100102913 exposes worker OCI io.max ENODEV. Correct storage/device discovery passes current-source local qualification below; hosted reevaluation must follow the repair head. Hosted 3514034b reaches the supervisor identity comparison; the root-cgroup resource-file assumption is corrected below. Hosted c1de7d5a then fails closed during probe teardown; lifecycle/bootstrap repairs and their current-source evidence follow below; hosted 0c35e748 scans pass, while contextual OCI diagnostics now expose a cold create timeout. Hosted 1de646c1 foundation/check, Rust OCI/matrix/deployment, scans and Sonar pass; Quickstart image scanning and dependent verification fail on CVE-2026-109518. The image-base repair is tracked below. Hosted b235b536 Control/Quickstart checks pass; the independent device base repeats the APT finding and blocks release, with device/secured-device correction tracked below. Main synchronization to 18d4ca7f passes local SDK/CLI/CI/Java/scan verification; native LangChain business outcome remains explicitly unqualified below. The current native LangChain refusal gate passes actual fresh composed verification and 14 in-image agent cases: unqualified OUTCOME_UNKNOWN, no write or retry. Hosted reevaluation and native business finality remain outstanding. S21 reports bind parent e1c79b69 and source 12dded0b4397868db0f9988d2f3c19b6737d3d5a9184398c293de2c08c2868b8; 13 OCI/118 native cases and five deployment observations pass. Documentation follows the tested code checkpoint; hosted checks must follow the new PR head. S21 hosted head 9ff44fca passes foundation, Rust OCI/deployment, images/LangChain, scans, coverage and Sonar. CodeQL identifies two negative-test fixtures; the fixture-only repair below retains both refusal assertions and requires hosted reevaluation. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. |
 
-**Current implementation stage:** S21 delivered; next is S22, revocation, dispatch and phase-3 acceptance.
+**Current implementation stage:** S22 in progress, revocation, dispatch and phase-3 acceptance (no weight until the full stage passes; pending Linux evidence in draft PR #287). S23 and S24 are delivered out of stage order at the user's explicit request; S25 is implemented but partial (no external sink yet).
 **Previous repair:** hosted foundation/OCI and all image checks, including LangChain, pass on bbb7213e. PR #278 is merged; S21 delivery evidence for the new branch follows below.
 S03, the clarified S04 diagnostic harness, S09 proof-bound rebinding and the explicitly amended S10 finalization stage are complete. Continue in stage order;
 dependencies may be implemented inside a stage but cannot earn duplicate credit.
 S18 generalized grants, S19 exact mapped ASK consent, S20 qualified resend and S21 declared target fencing are delivered for their bounded scopes. Full distributed operation acceptance and production deployment evidence remain outstanding.
+**Out-of-order phase-4 work:** at the user's explicit request S23, S24 and S25 are being implemented in parallel while S22 (pending Linux evidence) and S23 (in progress) are undelivered. S24 and S25 implementation evidence is recorded below; no S24/S25 weight is claimed until in-order delivery and the combined S23–S25 verification have executed evidence.
 
 ### Standing fresh-build constraint reaffirmed — 2026-11-05
 
@@ -65,6 +66,18 @@ into fresh schemas; obsolete stores/formats are refused without conversion or
 deletion. Migration/compatibility requirements in preserved proposals are
 superseded by fresh initialization and refusal verification. This changes no
 stage weights or the 39.5-week denominator and earns no delivery credit.
+
+### S24 "migration" wording clarification — 2026-11-08
+
+The S24 baseline row says "integrity, migration and tamper tests". Under the
+standing fresh-build constraint above, "migration" is read as: the chain columns,
+guards and indexes are folded into the fresh initial SQLite and PostgreSQL schemas;
+no migration, backfill, rehash or compatibility path exists for pre-chain audit
+rows; and unsupported existing stores are refused without conversion or deletion
+(SQLite schema checksum, Flyway checksum validation, `UnsupportedDatabaseTest`).
+This is a scope clarification, not a scope reduction: the stage weight, the
+33-stage count and the 39.5-week denominator are unchanged and no credit follows
+from it.
 
 ### User-directed S01–S20 fresh-build scope amendment — 2026-11-03
 
@@ -105,9 +118,9 @@ A stage earns its entire weight only when its stated scope and executed validati
 are complete; Partial and Pending earn zero. Existing work is credited only for
 the bounded Done stages below, not for the complete parent phase.
 
-**Completed weight = 2 + 7 + 7 + 6.125 = 22.125.**
-**Completion = 100 × 22.125 / 39.5 = 56.0% (rounded).**
-Pending weight is 17.375, or 44.0% (rounded). Twenty-one of 33 delivery stages are Done;
+**Completed weight = 2 + 7 + 7 + 6.125 + 1.75 = 23.875.**
+**Completion = 100 × 23.875 / 39.5 = 60.4% (rounded).**
+Pending weight is 15.625, or 39.6% (rounded). Twenty-three of 33 delivery stages are Done (S23/S24 out of order; S22 and S25 are not);
 S10 credit uses the explicit scope amendment below, not full distributed-suite acceptance;
 stage count is not the percentage formula. No phase receives full acceptance
 until all its original exit criteria have executed evidence.
@@ -118,7 +131,7 @@ until all its original exit criteria have executed evidence.
 | 1 | 7 | 6 / 6 | 7 | 17.72% |
 | 2 | 7 | 4 / 4 | 7 | 17.72% |
 | 3 | 7 | 7 / 8 | 6.125 | 15.51% |
-| 4 | 3.5 | 0 / 4 | 0 | 0.00% |
+| 4 | 3.5 | 2 / 4 | 1.75 | 4.43% |
 | 5 | 6 | 0 / 3 | 0 | 0.00% |
 | 6 | 7 | 0 / 4 | 0 | 0.00% |
 
@@ -149,10 +162,10 @@ Future percentages use this formula and the evidence-backed stage statuses.
 | S19 | 3 | Exact consent effect slots | Done | Mandatory high-risk mapped ASK consent, immutable complete previews, independent scoped review/private payload access, admission gating, atomic bounded slots, signed native references and refusal audits. Full repository gates plus final source-matched 48 enterprise/14 native cases, four-language contracts/UI/CI, current OCI 13/matrix 106 and owned memory/RAG stack (32 component cases, 13 gates, 17 scope reviews, seven settled writes) pass. Application-signed frontend intents, generalized keys/resend and full phase acceptance remain outstanding. |
 | S20 | 3 | Per-effect keys, safe resend and reconciliation | Done | Fresh current-only generic/OLO keys and schemas; immutable independently reviewed target bindings, credential/window/history-aware resend, read-only two-phase target lookup and terminal-witness fencing, scoped paginated tenant/operator readiness, UI and operator guide. Both SQL dialects, TLS/custody/rotation, consent/races/late evidence and current contract rejection pass focused and complete affected regressions. Source/published Java checks, four-language contracts, 252 UI cases, standard remaining foundation gates, 13 current-source OCI and 111 native/component cases, 32 memory/RAG component cases and 13 actual joined-stack gates pass. Known parent/source/image evidence and explicit skips/retries are recorded below. No full phase acceptance. Hosted failures on 2e14d34d have a separately tested CI repair below; hosted requalification is tracked per PR head. |
 | S21 | 3 | Generalized target fencing SDK/adapters | Done | Reviewed generic HTTP target identity/classes, accepted executor mTLS/request binding, target-specific online consumption/status/outcomes and private broker permit delivery. SQLite/PostgreSQL shared ownership, paused-owner/apply/recovery races, real JVM crashes, retained positive/closed-failure receipts and durable outcome delivery pass. Full repository and affected final Java/CI checks, 13 OCI/118 native cases and five deployment observations pass; source-bound evidence and limitations follow below. |
-| S22 | 3 | Revocation, dispatch and phase-3 acceptance | Partial | Push/long-poll kill, inbound mTLS dispatch, connectivity-class SLOs, kill-* and full-stack partition/crash cases; phase-3 exit matrix including operation aggregation from S10. |
-| S23 | 4 | Outcome grades and honest presentation | Pending | Console, exports and analytics distinguish fenced/unfenced/unknown evidence. |
-| S24 | 4 | Tenant audit hash chains | Pending | Ordered tenant chains with integrity, migration and tamper tests. |
-| S25 | 4 | Signed external anchors | Pending | Signed chain heads, external anchoring and key lifecycle tests. |
+| S22 | 3 | Revocation, dispatch and phase-3 acceptance | In progress; no weight | Push/long-poll kill, inbound mTLS dispatch, connectivity-class SLOs, kill-* and full-stack partition/crash cases; phase-3 exit matrix including operation aggregation from S10. |
+| S23 | 4 | Outcome grades and honest presentation | Done | Console, exports and analytics distinguish fenced/unfenced/unknown evidence. ADR 060 weakest-source operation grades, execution coverage, per-effect frozen fencing and observation sources, bounded evidence export and Control-derived analytics; SQLite/PostgreSQL, UI, contract and full Java/Rust gates executed (see S23 section). Presentation only; delivered while S22 remains pending. |
+| S24 | 4 | Tenant audit hash chains | Done | Ordered tenant chains with integrity, migration and tamper tests. "Migration" is clarified below as fresh-schema initialization plus refusal of unsupported stores (no stage weight change). Executed SQLite/PostgreSQL evidence in the S24 section and the combined S23–S25 verification; delivered out of order while S22 remains pending. |
+| S25 | 4 | Signed external anchors | Partial; no weight | Signed chain heads, external anchoring and key lifecycle tests. Dedicated anchor key domain, pluggable write-once sink (local append-only directory shipped; customer object-lock bucket and transparency log specified) and executed SQLite/PostgreSQL evidence are recorded in the S25 section; credit waits for in-order delivery after S22/S23 and the combined S23–S25 verification. |
 | S26 | 4 | Offline audit verification | Pending | toolgate audit verify; independent tamper/truncation/anchor verification and phase acceptance. |
 | S27 | 5 | Sender-constrained run identity | Pending | Short-lived agent-run credentials bound to proof of possession; stolen credential replay refused. |
 | S28 | 5 | Narrowing delegation | Pending | Verified delegation chains; scope amplification and replay refused; delegation conformance. |
@@ -237,13 +250,13 @@ carry this requirement into future work.
 | C1, no ambient target authority | Available for qualified Python OCI pools | Workers have no network socket authority, route, resolver, host mounts or ambient supervisor environment. Native pools do not establish this claim. S19 full effect previews are restricted to the requester and eligible scoped reviewers; operation metadata-read rights alone do not expose their payloads. The source-matched access case passes. S20 broker-only reachable API-key references do not require worker Secret handles; current admission and custody/rotation tests pass. S21 refuses worker-supplied permit headers; only the private broker injects the sensitive signed target permit after immutable request binding. |
 | C2, verified sender-constrained run identity | Partial | Device certificate admission exists; sender-constrained agent runs remain planned. S21 binds accepted executor mTLS public-key SHA-256 into generic target grants; this is not S27 agent-run sender constraint acceptance. |
 | C3a, current admission authorization | Implemented existing boundary | Signed-permit admission and current Control checks; Tool Host `bad_permits_are_refused_before_anything_runs`. |
-| C3b, current per-effect authorization | Partial; declared effect paths delivered | Existing fenced OLO paths independently bind admission, prepared HTTP facts, owners and current authority; actual target claims/outcomes agree with Control in the owned stack. S18 extends current per-effect grants to reviewed generic HTTP and trusted native MCP tools/call: Control reconstructs complete admitted business intent, records immutable intents and owner generations, and rechecks at SENDING. One-use Unix transports enforce a monotonic send window of at most two seconds, preserve TLS/leaf pins and refuse retries, stale owners/profiles and expired/lost gates. Native MCP requires explicit Control-stamped review; unbound OLO writes, including historical claims, are refused. Current-source OCI 13/matrix 106, actual SQLite/PostgreSQL, native TLS JSON/SSE and owned-stack witnesses pass. The native forwarding fixtures require explicit two-independent-reviewer attempt-scope witness and retain REVIEWER_CONFIRMED; they do not establish native containment. S19 exact previews, independent consent/policy reviews, private payload access, durable atomic slots, audit and historical-admission guards are delivered. Final source-matched Control/native checks, full repository gates plus affected final checks, four-language contracts/UI/CI, OCI/matrix and current owned-stack qualification pass. S20 current explicit generic/OLO keys, fresh stores, reviewed pinned target bindings and guarded resend/reconciliation pass the bounded delivery gates. Current scope/authority/credential/history checks and post-I/O lookup rechecks are exercised on both dialects and real TLS; 13 OCI/111 native and current joined-stack evidence pass. This extends the delivered slice without accepting the complete C3 claim. Joined native MCP full-stack/partition/kill catalogs, other tiers and complete claim acceptance remain outstanding. The CI repair makes history pagination arithmetic checked while retaining current public bounds; it adds no execution authority.  S21 delivers the two declared generic HTTP target classes under ADR 057: trusted accepted executor/request binding, target-specific first-consumption ordering and shared SQL ownership/recovery. Executed source-bound checks follow below; this does not accept the complete phase or arbitrary targets. S21 delivers accepted executor/request/target binding, dedicated target-role APIs and current first-consumption checks. Signed declarations alone are not business finality; no complete C3b acceptance. S21 hosted head 9ff44fca passes foundation, Rust OCI/deployment, images/LangChain, scans, coverage and Sonar. CodeQL identifies two negative-test fixtures; the fixture-only repair below retains both refusal assertions and requires hosted reevaluation. |
+| C3b, current per-effect authorization | Partial; declared effect paths delivered | Existing fenced OLO paths independently bind admission, prepared HTTP facts, owners and current authority; actual target claims/outcomes agree with Control in the owned stack. S18 extends current per-effect grants to reviewed generic HTTP and trusted native MCP tools/call: Control reconstructs complete admitted business intent, records immutable intents and owner generations, and rechecks at SENDING. One-use Unix transports enforce a monotonic send window of at most two seconds, preserve TLS/leaf pins and refuse retries, stale owners/profiles and expired/lost gates. Native MCP requires explicit Control-stamped review; unbound OLO writes, including historical claims, are refused. Current-source OCI 13/matrix 106, actual SQLite/PostgreSQL, native TLS JSON/SSE and owned-stack witnesses pass. The native forwarding fixtures require explicit two-independent-reviewer attempt-scope witness and retain REVIEWER_CONFIRMED; they do not establish native containment. S19 exact previews, independent consent/policy reviews, private payload access, durable atomic slots, audit and historical-admission guards are delivered. Final source-matched Control/native checks, full repository gates plus affected final checks, four-language contracts/UI/CI, OCI/matrix and current owned-stack qualification pass. S20 current explicit generic/OLO keys, fresh stores, reviewed pinned target bindings and guarded resend/reconciliation pass the bounded delivery gates. Current scope/authority/credential/history checks and post-I/O lookup rechecks are exercised on both dialects and real TLS; 13 OCI/111 native and current joined-stack evidence pass. This extends the delivered slice without accepting the complete C3 claim. Joined native MCP full-stack/partition/kill catalogs, other tiers and complete claim acceptance remain outstanding. The CI repair makes history pagination arithmetic checked while retaining current public bounds; it adds no execution authority.  S21 delivers the two declared generic HTTP target classes under ADR 057: trusted accepted executor/request binding, target-specific first-consumption ordering and shared SQL ownership/recovery. Executed source-bound checks follow below; this does not accept the complete phase or arbitrary targets. S21 delivers accepted executor/request/target binding, dedicated target-role APIs and current first-consumption checks. Signed declarations alone are not business finality; no complete C3b acceptance. S21 hosted head 9ff44fca passes foundation, Rust OCI/deployment, images/LangChain, scans, coverage and Sonar. CodeQL identifies two negative-test fixtures; the fixture-only repair below retains both refusal assertions and requires hosted reevaluation. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
 | C3c, bounded unmediated execution | Partial | Native direct-worker supervision and OCI teardown on cancellation/deadline are tested. Enforced service cgroups contain worker processes; measured deployment revocation SLOs remain required. |
 | C4, bound admission intent | Implemented existing boundary | Tool Host admission binds signature, audience, arguments and content digests; dispatch integration tests. |
 | C5, contained execution | Available for qualified Linux x86_64 Python OCI pools | Final S14 reports pass 13 actual OCI and 101 native/component witnesses. Readiness checks the actual delegated service, exact cgroup and control-group SIGKILL; uncertain engine completion fences the pool and retains its journal/identity reservation. Five owned deployment observations verify weak-unit refusal and three actual supervisor-crash/automatic-restart cycles with disjoint PIDs/UIDs/namespaces and cleanup without replay. Local observed kill/recovery maxima are 34.797/2697.509 ms at 25 ms polling, not production SLOs. Supervisor/broker/engine/kernel remain trusted. Native/other tiers and full original catalogs/security acceptance remain unqualified. Hosted OCI startup on 64f4991e failed closed before probe evidence; that runner is not qualified by the passing local checkpoint. The follow-up retains bounded startup errors and the same readiness criteria; local current-code OCI 13/matrix 112 pass, without qualifying the failing hosted runner. The current gate fix resolves the rootless store filesystem partition to its whole block device and keeps the same mandatory I/O limits; explicit invalid devices and unknown mappings are refused. Current-source local qualification passes 13 OCI/112 native/component checks and five owned deployment observations below; hosted 3514034b reaches the supervisor comparison but fails on host-root resource files; identity-only supervisor collection passes local qualification below without relaxing worker/broker limits; hosted c1de7d5a passes identity comparison but fences the pool on probe-cleanup engine uncertainty; attached-client lifecycle qualification passes 13 actual OCI/115 native/component cases and five deployment observations below; hosted 0c35e748 exposes create timeout before cleanup; fresh FUSE-store qualification passes all 13 OCI cases below; hosted confirmation remains required. Hosted 1de646c1 passes OCI/matrix/deployment; product image release remains withheld for the separate APT base-package vulnerability below. Hosted b235b536 Control/Quickstart checks pass; the independent device base repeats the APT finding and blocks release, with device/secured-device correction tracked below. Main synchronization to 18d4ca7f passes local SDK/CLI/CI/Java/scan verification; native LangChain business outcome remains explicitly unqualified below. |
-| C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence, independent immutable attempt snapshots, immutable recovery archives and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. S10 derived-outcome/scope-review records and audit share writer transactions; rollback and replay checks pass. Eleven source-bound component vectors passed without promoting original distributed suites. S19 delivered consent/slot/refusal records use tenant-scoped immutable storage; authenticated typed refusal audits survive rolled-back authority transactions without retaining raw request values. Source-matched rollback/audit cases pass. Hash chains and external anchors remain required. The CI repair gives immutable service request values body-content equality and redacted diagnostics; defensive-copy/content/credential-redaction regressions pass. |
-| C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required.  S14 adds source-bound local managed-unit crash/restart measurements; it does not accept production connectivity-class revocation SLOs or an A4 bound. S21 proves revocation-before-first-consumption refusal for generic fenced targets, retaining status/evidence after expiry. Generalized kill delivery and production connectivity SLOs remain S22. |
-| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; unqualified or potentially sent consumed work remains fenced. S09 implements immutable proof-bound whole-operation recovery, with default-off admission-time device/pool/image qualification and all predecessor generations released; full-stage verification passes. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, and actual memory/RAG transactions now adopt them with restricted SQL state/binding guards and durable outcome delivery. Reviewed required/argument keys, verified namespaces, proof-bound windows and retention tombstones are implemented and tested across Control, Gateway and human admission. S10 all-attempt derivation, immutable finality, automatic/human scope settlement, late evidence, current-context caller history and console/business-key projections pass the amended stage gates. S19 exact mapped ASK consent slots are delivered. S20 delivered explicit generic/OLO effect keys have no default aliases and cannot bypass distinct-effect consent limits. Lost-reply observations retain the same nonce/generation/deadline and one SENDING winner. Independently reviewed immutable target bindings preserve derived keys across signer rotation; bounded complete-history resend rechecks current authority, credentials and original deadlines. Read-only lookup appends hashed terminal witnesses, preserves ambiguous history and fences future sends. Complete affected SQLite/PostgreSQL, actual TLS/custody/rotation, source/published Java, OCI/matrix and joined memory/RAG outcomes pass; target assumptions remain visible in the outcome grade. Full original distributed conformance remains required, alongside other route classes and independently approved generalized target deduplication/equivalence sources. The current restore fixture now records explicit EXECUTION nonce/operation/attempt bindings rather than omitting the journal; immutable production guards remain enforced. Fresh SQLite namespace identities now require text and byte-empty TENANT identity; binary, Unicode and embedded-NUL boundary cases are exercised. No existing-store conversion is supported. The current native LangChain refusal gate passes actual fresh composed verification and 14 in-image agent cases: unqualified OUTCOME_UNKNOWN, no write or retry. Hosted reevaluation and native business finality remain outstanding. S21 shared ownership, apply/recovery CAS and immutable target outcomes pass SQLite/PostgreSQL and actual JVM crash qualification. Only independently verified positive or closed-failure receipts may settle uncertain external actions; no new owner or business resend is granted. |
+| C6, honest tamper-evident record | Partial | Durable admission, immutable executor evidence, independent immutable attempt snapshots, immutable recovery archives and host result retry; standalone SDK SQLite restart/late-completion recovery uses immediate writer transactions. S10 derived-outcome/scope-review records and audit share writer transactions; rollback and replay checks pass. Eleven source-bound component vectors passed without promoting original distributed suites. S19 delivered consent/slot/refusal records use tenant-scoped immutable storage; authenticated typed refusal audits survive rolled-back authority transactions without retaining raw request values. Source-matched rollback/audit cases pass. S24 (ADR 061, unweighted) adds per-tenant Control audit hash chains with serialized appends; edits, recomputed-digest edits, reordering, cross-tenant splicing and middle deletion are detected on both dialects, and tail truncation is detected against a retained head. S25 (ADR 062, unweighted) signs heads with a dedicated anchor key and publishes them to a write-once sink; a consistent rewrite before the last anchor is detected as a head mismatch and Control refuses to anchor a broken chain. The unanchored suffix, false appends by A6 while in control, non-local sinks and offline verification (S26) remain open. The CI repair gives immutable service request values body-content equality and redacted diagnostics; defensive-copy/content/credential-redaction regressions pass. |
+| C7, revocation | Partial | Renewable leases and current authority checks; full target and compromised-host distinctions remain required.  S14 adds source-bound local managed-unit crash/restart measurements; it does not accept production connectivity-class revocation SLOs or an A4 bound. S21 proves revocation-before-first-consumption refusal for generic fenced targets, retaining status/evidence after expiry. Generalized kill delivery and production connectivity SLOs remain S22. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
+| C8, operation/effect integrity | Partial | Single-use admission and durable explicit operation keys exist; keyed unknown outcomes cannot reopen via legacy resend. Independent permit attempts and positive-proof reservation replacement are journaled; unqualified or potentially sent consumed work remains fenced. S09 implements immutable proof-bound whole-operation recovery, with default-off admission-time device/pool/image qualification and all predecessor generations released; full-stage verification passes. Effect generations now separate authorization from consumption/outcome on the OLO write path. The HTTP/1.1 broker now binds OLO service fingerprints through signed claims, immutable effect identity and target checks. Pinned OLO request/route validation is independent at Control. A process/handler-owned single-send gate prevents replaying a bound generation's dispatch authority. The SQL target claim foundation tests unique ownership and atomic business completion. Claim-token consumption/status and late target outcomes are exposed at Control, and actual memory/RAG transactions now adopt them with restricted SQL state/binding guards and durable outcome delivery. Reviewed required/argument keys, verified namespaces, proof-bound windows and retention tombstones are implemented and tested across Control, Gateway and human admission. S10 all-attempt derivation, immutable finality, automatic/human scope settlement, late evidence, current-context caller history and console/business-key projections pass the amended stage gates. S19 exact mapped ASK consent slots are delivered. S20 delivered explicit generic/OLO effect keys have no default aliases and cannot bypass distinct-effect consent limits. Lost-reply observations retain the same nonce/generation/deadline and one SENDING winner. Independently reviewed immutable target bindings preserve derived keys across signer rotation; bounded complete-history resend rechecks current authority, credentials and original deadlines. Read-only lookup appends hashed terminal witnesses, preserves ambiguous history and fences future sends. Complete affected SQLite/PostgreSQL, actual TLS/custody/rotation, source/published Java, OCI/matrix and joined memory/RAG outcomes pass; target assumptions remain visible in the outcome grade. Full original distributed conformance remains required, alongside other route classes and independently approved generalized target deduplication/equivalence sources. The current restore fixture now records explicit EXECUTION nonce/operation/attempt bindings rather than omitting the journal; immutable production guards remain enforced. Fresh SQLite namespace identities now require text and byte-empty TENANT identity; binary, Unicode and embedded-NUL boundary cases are exercised. No existing-store conversion is supported. The current native LangChain refusal gate passes actual fresh composed verification and 14 in-image agent cases: unqualified OUTCOME_UNKNOWN, no write or retry. Hosted reevaluation and native business finality remain outstanding. S21 shared ownership, apply/recovery CAS and immutable target outcomes pass SQLite/PostgreSQL and actual JVM crash qualification. Only independently verified positive or closed-failure receipts may settle uncertain external actions; no new owner or business resend is granted. S22 remains uncommitted: scoped authority and independent normal review pass owned SQLite/PostgreSQL checks; signed outbound delivery and durable host merge/supervision are implemented with focused tests. Atomic online acceptance now carries pinned scope/current epoch. Local 2-of-3 operator verification, immutable request storage and actual separate TLS listener checks also pass. Actual Gateway/Host TLS transport tests pass with tenant-bound client/server leaf pins. Native signed-state/check-in delivery and independent lease/termination supervision now pass focused component checks; unsupported native journals are refused intact. Adoption metadata no longer cancels running jobs on every epoch change: the signed STOP_NEW regression and complete native selection pass (81 tests, one explicit real-engine prerequisite ignore). An eight-case HOST_NATIVE checkpoint passed: STOP_NEW, connected termination, degraded delivery, Host-only and Control-process partitions, coalesced recovery, automatic mTLS PUSH, and managed-unit death/current-schema restart to UNKNOWN without resumption. The later duplicate-delivery/receipt repair requires a current-source rerun; Native endpoint execution remains unaccepted after its fixture budget refusal. The pending-admission registry now retains TERMINATE across coalesced recovery and pruning (focused shared/Host/Native revocation tests pass); automatic Gateway mTLS relay passes focused Java/Rust transport checks, with actual PUSH timing still pending. Selective-link checkpoints passed degraded and Host-only partition cases; a coalesced-recovery timing overrun was found and the two-second poll repair is awaiting rerun. A joined admitted-dispatch timeout exposed an admission-permit versus execution-deadline bug; its fresh SQLite/PostgreSQL consumed/unconsumed/fence regression now passes. Gateway signed-reader validator registration is repaired; complete joined delivery remains pending. Native endpoint joining, degraded/Host-only partitions, complete catalogs and the phase exit matrix remain outstanding; no partial-stage weight. Current S22 also implements registered receipt/archive status, scoped catalog filtering and explicit independent-review console flows. Full UI 262 and actual catalog-network two-case checks pass. The post-storage-recovery full Java gate now passes: 290 ordinary tests (five explicit skips) and 444 enterprise tests (no skips), with no failures; fresh-schema retention/catalog guards and queued cancellation are included. Joined execution, original catalogs and measured connectivity SLOs remain outstanding. |
 
 The adopted [A1–A9 matrix and C1–C8 definitions](zero-trust-boundaries.md)
 now apply across the security documentation. S03 corrects claim scope, especially
@@ -3805,3 +3818,959 @@ Known tested parent: 9ff44fca3cc80949654020b5117be9dcc830bc69. Changed fixture
 SHA-256 (sorted paths, NUL, full bytes): b9d0dbbe67009da90cf8bf3211919b7f66daf26a27efc106af179575866fc81f.
 No stage weight changes: 56.0% complete / 44.0% pending, 21/33 stages, 0/7 full
 phases accepted. S22 remains the next complete implementation stage.
+
+#### S22 scoped revocation and authenticated dispatch — in progress, 2026-11-06
+
+Main advanced to bb3b078d0988769fe677e03ae478854fcd196ec9 after PR #279 merged.
+The complete S21 fixture repair is separately delivered in PR #280, commit
+f373782687dfdd171dbbfcf9342bf48f1666783f. Its earlier tests and commit hooks pass;
+hosted CodeQL reevaluation now passes, and the artifact-resolution examples rerun passes. The old PR's head is not evidence for
+this new repair. S22 proceeds on codex/zero-trust-revocation-dispatch from that
+known parent, with all current-stage changes uncommitted.
+
+ADR 059 records the original S22 scope and its ordering/binding decisions. The
+first increment folds reviewed kill storage into fresh initial schemas with
+tenant isolation, runtime-role grants, capacity accounting and immutable
+event/supersession/archive rows. Each committed event occupies a distinct epoch;
+issuer counters and acknowledgements are shared and serialized across replicas.
+The unshipped event contracts omitted signed tenant/epoch identity. Current
+contracts now require both, and old event shapes are refused without conversion.
+Fleet custody signs canonical domain-separated event/push bytes; malformed,
+cross-key/type, changed-payload and oversized signatures are refused.
+
+Executed initial validation:
+- Focused fresh SQLite schema vectors pass; that Python invocation retains one
+  explicit PostgreSQL prerequisite skip.
+- The actual owned PostgreSQL Java run passes both shared-store tests, covering
+  SQLite and PostgreSQL runtime-role isolation, concurrent issuer allocation,
+  append-only recovery/archive state, epoch continuity and monotonic acks, with
+  zero skips.
+- Both fleet-domain crypto tests pass with zero skips. Current Control compiles.
+  Initial storage-test attempts exposed the codec's unshipped-model registry and
+  test-source-set/assertion issues; these were corrected and the actual focused
+  suite rerun successfully. Logs remain under build/security/stages/s22/.
+
+These are foundation checks, not delivered revocation. Next implement scoped
+STOP_NEW/TERMINATE admission and live-effect ordering, retained execution-scope
+binding, reviewed recovery/operator break-glass, authenticated delivery/acks,
+long-poll/heartbeat/watchdog behavior and inbound mTLS dispatch. Complete joined
+kill/partition/crash/aggregation catalogs, connectivity-class timing and thorough
+stage checks remain mandatory before the single S22 implementation commit/push.
+No intermediate S22 commit or extra stage weight is claimed.
+
+Fresh current schemas only; no migrations, compatibility formats or legacy
+runtime support. Weighted delivery remains **56.0% complete / 44.0% pending,
+21/33 stages delivered, 0/7 full phases accepted**.
+
+S22 working increment — scoped authority and reviewed delivery:
+- Immutable per-attempt package/tool/publisher/pool/image scope now feeds live
+  admission/effect checks. STOP_NEW preserves running effects; matching
+  TERMINATE refuses consumption. A contiguous kill-only epoch bridge keeps
+  unrelated work live while ordinary policy/credential changes still invalidate
+  authority. Both SQL guards independently enforce the same ordering.
+- The completed scoped-authority run passes 21 enterprise tests (including
+  PostgreSQL authority and target-class matrices) and five ordinary crypto/policy
+  cases with zero skips. Reviewed application subsequently passes seven service
+  cases, including the PostgreSQL review/cancellation matrix, with zero skips.
+- Retained requests, two distinct current human reviews and one-use closures now
+  commit normal kill/recovery events and stored cancellation atomically. A
+  corrected empty keyset cursor ensures stored work is actually cancelled;
+  recovery never restarts those attempts. No self-review exception is added.
+- Human review APIs and separate direct-certificate host snapshot/long-poll/ack
+  endpoints are in the working tree. Poll waits hold no database transaction and
+  use a bounded virtual-thread handler. Current OpenAPI replaces the unshipped
+  kill/recovery routes; operator break-glass remains proposed. Delivery tests now pass nine enterprise cases including the PostgreSQL matrix, plus two resource-refusal tests, with zero skips; no complete listener/SLO or stage acceptance is asserted.
+- PR #280 CodeQL now passes. Its initial examples job failed resolving an external
+  Sonar scanner artifact; the same artifact subsequently returned HTTP 200.
+  Rerunning only that job passed without changing code, gates or thresholds.
+  Remaining hosted checks must be read from that repair PR's head.
+
+All S22 implementation remains uncommitted. Continue with actual delivery
+qualification, operator approval/listener, host merge/watchdog and inbound mTLS,
+archive/status presentation, then the complete joined conformance and stage
+checks. The fixed weighted baseline remains 56.0% / 44.0%; no partial-stage credit.
+
+
+S22 working increment — pinned online scope and host revocation supervision:
+- Current PermitConsumed requires an accepted authorization epoch and immutable
+  killScope. Its per-attempt package/tool/publisher/pool/image values come from
+  the Control journal at T5. Unknown facts remain absent and match scoped kills
+  conservatively; empty pool/image means known not applicable. There is no
+  scope-less compatibility response.
+- The host now requires the exact signed nonce, accepted epoch floor, live
+  deadline-clipped lease and consistency with its verified package/runtime.
+  Admission uncertainty is durably spooled before online consumption, including
+  lost or malformed acceptance replies; those attempts never launch a worker.
+- Signed host kill state is fetched only from the fixed authenticated HTTPS
+  Control origin. The private current journal retains tenant, origin, public
+  keys, verified events and the monotonic floor. A fresh authenticated fetch is
+  required for readiness after restart. Atomic persistence precedes acknowledgement
+  and notification. Persistence failure prevents further admission and ends
+  healthy supervision until repair/restart; unsupported stores are preserved.
+- Outbound poll updates wake matching TERMINATE supervisors, using the frozen
+  accepted scope. STOP_NEW does not terminate already accepted running work.
+  Heartbeat and monotonic lease expiry remain independent paths. This working
+  supervisor is wired into production HTTPS host readiness/admission/execution;
+  explicit local development HTTP fixtures remain outside delivery qualification.
+- Executed checks: shared tenant-identity crate 12 unit tests pass (one separate
+  runtime-evidence integration test is explicitly ignored); owned Control run
+  passes 30 enterprise and five crypto/policy tests with zero skips; dispatch
+  passes 14 cases with two explicit OCI-harness ignores; four host supervisor
+  tests pass with zero skips, including actual independently pinned server/client
+  TLS, missing/wrong client refusal, durable-before-ack ordering, scoped
+  notifications, partition/rollback refusal and current-journal fault handling.
+  The TLS fixture exercises the host transport, not the actual Control enrollment
+  listener or a declared production connectivity SLO.
+- A stronger real v2-consumption regression exposed the codec's missing
+  PermitConsumed validator; that registry entry is now added. The focused
+  producer/recovery matrix now passes 25 enterprise cases with no skips, including immutable placement after registration changes; the two resource-refusal tests also pass. The complete host/shared-crate run passes 148 tests with 15 explicit environment/harness ignores. Strict Rust lint passed before the final key-refresh regression; the final stage run remains pending. Do not infer
+  complete acceptance from the earlier component results.
+
+Known parent remains f373782687dfdd171dbbfcf9342bf48f1666783f; all S22 changes
+remain in the working tree on codex/zero-trust-revocation-dispatch. No stage commit
+or push is made before the complete stage exit criteria pass. Next: complete the
+producer/persistence regressions, qualify actual joined delivery/execution,
+operator 2-of-3 listener, authenticated inbound dispatch and complete original
+phase-3 catalogs/timing/status presentation. Weighted progress remains unchanged.
+
+
+S22 working increment — emergency approvals and separate listener, 2026-11-07:
+- Current BreakGlassApprovalClaims binds tenant, scope, mode, exact reason,
+  one-use requestId, issuedAtUnixMs and a maximum ten-minute expiry. Exactly
+  three strong, distinct external RSA public keys are configured; two or three
+  distinct operators must sign identical canonical claims in the dedicated
+  approval domain. There is no bearer or maker/checker bypass.
+- Fresh SQLite/PostgreSQL schemas retain the tenant-wide immutable emergency
+  request tombstone with its committed event, accepted peer certificate digest
+  and deadline. Event/epoch/cancellation/tombstone/audit share the transaction.
+  Replaying through another peer cannot allocate another event; normal two-human
+  review remains required to recover emergency kills.
+- The dedicated operator-CA TLS listener is fixed to one configured tenant and
+  exposes only POST /break-glass/kills. It has a separate bounded authenticated
+  queue/worker pool, strict client-only certificate purpose, protected external
+  custody, body limits and request/handshake deadlines. Headers cannot supply the
+  accepted certificate or choose another tenant. Configured key-domain reuse
+  fails closed, including tenant identity publication/binding.
+- Executed evidence: two cryptographic approval tests pass; the complete review
+  run passes 11 enterprise cases including its actual PostgreSQL runtime-role
+  matrix, with no skips. A focused actual listener test now passes with accepted,
+  missing, foreign and wrong-purpose TLS peers, foreign tenant assertion,
+  duplicate request header, oversized body, absent recovery route, real signed
+  event commit and replay refusal. Its initial custody-path failure was corrected
+  by placing test keys under an owned directory, preserving production checks.
+  The final full listener/review rerun after audit/header/startup hardening remains
+  outstanding.
+- Current contract bindings, structural corpus and UI operation generation
+  checks pass (1,243 generated files); source headers, license and obvious-secret
+  checks pass. Fresh SQLite specification tests pass; that small Python run
+  explicitly skips PostgreSQL, independently exercised by the owned Java matrix.
+  None of these results accepts full S22 or production timing/load behavior.
+
+Operator transport acceptance is local; actual Control-to-host execution joining,
+endpoint delivery, inbound Gateway mTLS dispatch, archive/status presentation and
+all original kill/partition/crash/aggregation/timing gates remain required. All
+implementation remains uncommitted on codex/zero-trust-revocation-dispatch.
+Weighted completion remains 56.0% complete / 44.0% pending; partial S22 earns zero.
+
+
+S22 working increment — authenticated inbound dispatch and native scope cutover:
+- The actual Gateway TLS client and Tool Host listener now require dedicated
+  authority and exact accepted leaf pins. Client purpose and canonical tenant
+  OU are checked independently of headers. Server chain/hostname and exact
+  leaf validation complete before transmitting a dispatch body. No remote
+  plaintext, arbitrary-origin credential dispatch or redirect fallback exists.
+- Production hosts without inbound TLS are outbound-only. Current explicit
+  developmentDispatchHttp controls local plaintext dispatch independently of
+  broker egress policy; Quickstart's local fixture opts in, while its remote host
+  remains outbound-only. Inbound custody/socket validation precedes pull work.
+- The two actual Gateway/Host TLS tests pass with zero skips, covering missing,
+  unpinned, wrong-purpose and foreign tenant identities; wrong server pins,
+  same-CA/hostname replacement, arbitrary URL refusal and explicit local-only
+  development routing. Complete Gateway/Host/shared-verifier component runs
+  subsequently pass 220 tests, with 15 explicit deployment/runtime/OCI harness
+  ignores. Strict affected Rust lint passes with warnings denied. The focused
+  Python bootstrap/current-schema/contract run passes 21 cases with one explicit
+  PostgreSQL prerequisite skip, covered separately by owned Java runtime-role tests.
+- The hardened full operator/review run passes 12 enterprise and two ordinary
+  approval cases, with zero skips, including actual separately bound TLS.
+  The final body-refusal handler audits bounded errors without emitting unhandled
+  router exceptions.
+- Native endpoint consumption is now being cut over to its own strict current
+  native-permits/consume route and NativePermitConsumed response, carrying its
+  frozen attempt scope, accepted epoch and live lease in the same transaction.
+  The Tool Host permits/consume route no longer probes a field and falls back to
+  a different executor's request shape. Old response shapes are not accepted.
+  Native consumption application tests subsequently pass the 109-case enterprise selection. Further native delivery/supervision implementation and its evidence are recorded below; full stage acceptance remains outstanding.
+
+All S22 source remains uncommitted on codex/zero-trust-revocation-dispatch from
+known parent f373782687dfdd171dbbfcf9342bf48f1666783f. Next complete native signed
+delivery/supervision, retained inventory/ack/archive/status presentation, joined
+actual Control/host execution and full original phase-3 conformance and timing.
+The unchanged weighted baseline remains 56.0% complete / 44.0% pending.
+
+
+S22 working increment — native signed state and independent supervision:
+- Native current T5 returns the exact fence, live lease, accepted epoch and
+  immutable kill scope. Both native and Tool Host current paths create leases;
+  an executing invocation with a missing, foreign or expired lease now refuses
+  sensitive authority. Historical metadata/positive recovery does not renew it.
+  Native managed authorization must supply a deadline and a supervision port;
+  there is no absent-deadline or unsupported-supervisor ALLOW fallback.
+- Native relayed and local Gateway execution subscribe to signed TERMINATE
+  updates and an independent monotonic heartbeat/lease watchdog. STOP_NEW
+  preserves consumed running work. Failed/hung renewals never extend the
+  original lease; ended authority triggers owned runtime cleanup before return.
+- Native check-in cycles fetch complete signed state and public keys directly
+  through the fixed-origin accepted device HTTPS transport. The private current
+  journal persists the tenant-bound epoch/event floor before publishing or
+  acknowledging CHECK_IN delivery. Restarts require a fresh authenticated
+  snapshot for execution readiness. Persistence faults end authority until
+  repair/restart. The fresh native journal format is 4; format 3 and corrupt
+  nested revocation records are refused intact, without key replacement or
+  conversion. This is the degraded check-in path, not a qualified connected
+  native long-poll SLO.
+- Executed native component evidence: 80 tests pass, with one explicitly ignored
+  real-engine harness case. This includes 51 library cases, signed-state
+  floor/restart/fault checks, lease expiry/cancellation/hung renewal checks and
+  current journal refusal. Strict native Rust lint passes with warnings denied.
+  The earlier native consumption Control run passes 109 enterprise cases and
+  five crypto/policy cases without skips. New native delivery role/ack tests and
+  strict lease assertions are now in the owned SQLite/PostgreSQL rerun.
+- The enlarged PostgreSQL review matrix exposed a test-path nesting defect:
+  each case appended another temporary subdirectory and eventually exceeded
+  SQLite's path budget during setup. Cases now restore the suite directory.
+  Production storage checks were preserved; the affected matrix is rerunning.
+- The broader contract run found a gate still expecting the native request on
+  the Tool Host consumption URI. Its assertions now require both distinct
+  current request/response schemas; neither is a union or compatibility fallback.
+  This is a current-contract update, not a removed behavior check.
+
+Phase/vertical-slice and C3b/C7/C8 remain partial. The single S22 commit/push still
+requires retained inventory/ack/archive/status, catalog filtering and reviewed
+console flows, actual joined Control/executor qualification, full original
+phase-3 catalogs, measured connectivity-class SLOs and final applicable gates.
+Weighted completion remains 56.0% complete / 44.0% pending.
+
+
+S22 recovery checkpoint and retained status increment — 2026-11-07:
+- Current registered inventory includes Tool Hosts, other native endpoints and
+  verified Gateway actors observed through accepted catalogs. The status endpoint
+  joins immutable identities with monotonic epoch/path/time acknowledgements.
+  Superseded kill/recovery pairs archive after every registered component
+  acknowledges the recovery epoch or thirty days; active kills never expire.
+  Reads, acknowledgements and background maintenance apply the same rule.
+- Catalog and placement filter scoped kills before discovery or load balancing.
+  Gateway requires one canonical authorization epoch header and validates the
+  complete current catalog before acknowledging with its own relay identity.
+  The actual HTTP tests pass both cases, including missing/duplicate/ambiguous
+  epochs, unknown fields and an unavailable acknowledgement service.
+- The management console presents receipt separately from teardown evidence,
+  exact kill/recovery proposals, current independent reviewer separation,
+  explicit revision confirmation and stable retry keys. The complete UI suite
+  passes 262 tests with its unchanged coverage gate. Generated current bindings,
+  structural corpus and UI operation checks pass (1,251 generated files).
+- Fresh SQL now binds a supersession to the explicit later recovery document
+  and rejects acknowledgement identity rewrites and backward epoch/time.
+  Direct adapter-independent SQL refusal tests and catalog/recovery tests were
+  added. Their last completed run exposed fixture/tool-identity and cleanup
+  races; the corrected selection requires a complete rerun.
+- Host direct fixed-origin long-poll returns complete authenticated snapshots
+  and uses the full-fetch replacement rule so archived recoveries converge.
+  Relayed messages cannot introduce keys or use full replacement. Additional
+  actual archive/poll/restart convergence evidence remains required.
+- Host C: exhaustion interrupted the enlarged Java, broad Python and Rust lint
+  runs. The broad Python run had three unresolved failures before interruption;
+  no interrupted run is counted as passing. WSL is repaired and compacted, and
+  all 3,543 tracked/untracked source files match the verified rescue archive.
+  The source checkpoint before this restart is SHA-256
+  17cf6be35042b092965af1d3ef50c921eecd2ef86cbae2efcf3ac00ba4ec70b6,
+  known parent f373782687dfdd171dbbfcf9342bf48f1666783f.
+- Owned PostgreSQL fixture cleanup now removes its anonymous container volumes
+  with the owned container. Repeated old test volumes contributed 109 GB to the
+  storage incident. This changes fixture resource cleanup, not production
+  retention, migration or authorization behavior.
+
+Next: focused retention/catalog reruns and fixes, actual joined execution and
+kill/partition/crash/aggregation qualification, measured connectivity-class
+observations and complete applicable repository gates. All S22 changes remain
+uncommitted on codex/zero-trust-revocation-dispatch. No partial-stage acceptance:
+56.0% complete / 44.0% pending, 21/33 stages delivered, 0/7 full phases accepted.
+
+S22 focused additions after recovery:
+- SQL specification fixtures now name the explicit superseded kill in their
+  recovery document and separately refuse an unlisted kill; the strengthened
+  production guard is unchanged. The three earlier broad-suite failures were
+  caused by the structural fixture's empty recovery document.
+- Actual fixed-origin host mTLS delivery now additionally tests convergence
+  after an archived recovery, durable floor preservation, restart readiness
+  and refusal of an older correctly signed snapshot.
+- Package listings and repeat-import responses project matching package-level
+  kills as SUSPENDED without rewriting immutable upload history. Overlapping
+  kills must all recover before the original lifecycle state returns.
+  SQLite/PostgreSQL application tests are added; executed results are pending.
+
+S22 ownership-gate repair:
+- The complete post-recovery focused selection passes 36 Java tests with zero
+  failures/skips and 302 affected Rust tests with 16 explicitly ignored
+  deployment/runtime cases. The Rust count includes actual mTLS catalog/dispatch
+  and host archive/restart convergence; it does not accept skipped OCI gates.
+- Repository preflight found the new kill tables missing from schema ownership.
+  All ten current tables are now inventoried with their actual tenant types,
+  primary/foreign keys, forced PostgreSQL RLS and runtime privileges. Composite
+  child tables also have a direct tenant FK in fresh initialization.
+- The removed-default-tenant gate now explicitly checks the separate operator
+  listener's one fixed tenant configuration and refusal of a different asserted
+  tenant. The generic runtime-request fallback prohibition remains enforced.
+  All four ownership tests pass; actual database gates are rerunning after the
+  added foreign keys. No migration or runtime compatibility fallback was added.
+
+S22 joined runtime runner is being completed:
+- An explicit Quickstart --revocation selection builds an owned delayed
+  read-only Java starter and observes actual Control/Gateway/Tool Host work:
+  STOP_NEW, connected TERMINATE, current receipt, lifecycle recovery and
+  Control-process partition/lease expiry. It uses real human reviews and
+  records conservative timings and accepted leases. It is not yet executed.
+- Its observation ids deliberately do not accept the complete authored kill
+  catalog: native endpoint, OCI, degraded-channel and supervisor-unit evidence
+  remain independently required, and normal reviewed recovery is not labelled
+  as an operator break-glass test. No stage or phase acceptance is claimed.
+
+S22 stricter healthy-host Control-loss policy:
+- Tool Host limits.controlLossGraceMs optionally clips supervision to a
+  monotonic 1–120 second window since a successful heartbeat. Renewal attempts
+  are scheduled within that window; hung/unavailable renewals cannot extend it
+  or the original lease. The default remains the accepted lease.
+- Actual delayed-worker tests exercise both early partition teardown before a
+  delayed effect and healthy repeated renewal across the shorter grace. These
+  additions require their focused run; no new connectivity SLO is accepted yet.
+
+S22 unknown-fact hardening:
+- A missing verified package manifest no longer supplies package identity by
+  guessing from a tool id prefix. The retained package fact stays unknown and
+  scoped package kills therefore fail closed. A real effect-consumption case
+  covers this refusal; its affected Java rerun remains required.
+- The configured short Control-loss grace delayed-worker test passes with
+  zero skips: partition stops the worker before its delayed effect, while
+  healthy repeated heartbeats preserve running work across the shorter window.
+
+S22 full-suite follow-up:
+- The broader secret-delivery fixture expected a hand-written nonce/fence
+  replacement without the current archived recovery proof. Native T5 now has
+  a live lease, so the immutable execution-identity SQL guard correctly refuses
+  that replacement. The fixture now proves the forged replacement rolls back,
+  its nonce cannot deliver a secret, and the original fence stays current.
+  Legitimate recovery remains covered by its separate whole-attempt tests;
+  stale-fence and provider-before-decryption refusals are preserved.
+- The existing fixed-origin artifact test failed its first valid HTTPS request
+  during the broad parallel build. Its transport deadlines and malformed-body
+  checks remain unchanged pending an isolated rerun and diagnosis.
+
+S22 queued-work and delivery diagnostics:
+- Added actual SQLite/PostgreSQL cases that cancel queued and reserved attempts
+  under STOP_NEW, preserve consumed running work, refuse old signed consumption
+  both before and after recovery, and allow only a fresh invocation afterward.
+  These new cases are pending their focused run.
+- Host delivery reports a bounded redacted warning on the first consecutive
+  rejected/unavailable channel result and a recovery message when polling
+  succeeds again. Failures retain the persisted floor and never renew leases.
+- The isolated artifact HTTPS test passes with unchanged production deadlines.
+  Ownership metadata now records each actual PostgreSQL tenant type, including
+  the four varchar journal tables. The forged-fence vault fixture now expects
+  the required recovery-proof guard to reject and roll back the replacement.
+
+### S22 joined operator qualification preparation
+
+The owned Quickstart revocation runner now provisions a fresh canonical tenant
+identity and a separately published operator mTLS listener before installation.
+Three external approval private keys remain solely in its temporary host custody;
+Control receives only their public keyring, operator CA and its own listener
+certificate/private key. The runner exercises one-signature and foreign-tenant
+refusal, missing/wrong-purpose peer refusal, 2-of-3 acceptance and one-use replay
+refusal after a stopped Control process recovers. Normal two-human recovery must
+leave the expired worker stopped. These are pending joined runtime observations,
+not delivered S22 acceptance. No database conversion or existing-state rewrite
+is introduced. Current full-run KillAuthorityTest (9) and KillSwitchTest (16)
+reports have no failures or skips; the full repository run is still in progress.
+The phase/vertical-slice/security-claim tables retain their partial status and
+56.0% delivered baseline until the complete S22 exit evidence is available.
+
+The subsequent complete Java gate finished successfully (javaCheck build,
+13m40s): 290 ordinary tests with five explicit skips and 444 enterprise tests
+without skips; no failures/errors. The captured report is
+build/security/stages/s22/full-java-current.json. Publication verification and
+the remaining repository gates are running separately. The ephemeral operator
+fixture's actual RSA signatures, tenant-bound claims and public-only approval
+keyring passed a local cryptographic check; this is not the pending joined
+operator runtime acceptance.
+
+The current scan gate passed: workflow lint, npm audit, both Python dependency
+audits, 876 resolved dependency-license entries, working-source/staged secret
+checks and the source scan (zero blocking targets; preserved historical SDK
+snapshot findings remain nonblocking). The Quickstart harness selection passed
+34 tests after the new runtime runner wiring. Joined timing now measures new-work
+refusal from before final approval, conservatively including commit/reply
+latency. Its final supervisor-death case requires the owned composition PID
+namespace to exit within five seconds and explicitly does not infer a success
+receipt or claim restart/UNKNOWN qualification. These new runtime observations
+remain unexecuted; the source-labelled image is still building and will be
+refreshed after the fixture edits before qualification.
+
+Owned sandbox/deployment qualification now forwards only the explicit Cargo
+job, incremental and debug-profile settings in addition to its existing
+toolchain paths. This lets the post-cleanup drills reuse the current bounded
+build profile instead of rebuilding large debug caches; authority, image,
+delegation and test prerequisites are unchanged. These harness edits require
+refreshed source-bound broker/runtime evidence before final stage acceptance.
+
+The complete published-contract Control build subsequently passed (28m32s,
+46 tasks rerun). Its ordinary/enterprise XML results are captured separately in
+build/security/stages/s22/published-java-current.json. The expected missing
+published-artifact refusal and remaining full repository checks follow; this
+does not mark the overall repository gate or S22 complete.
+
+Native S22 review found an adoption-metadata cancellation path that bypassed
+scoped kill semantics: any authorization-epoch change cancelled a running remote
+job, including STOP_NEW. A focused regression reproduced that exact failure with
+a signed tenant STOP_NEW, advancing adoption metadata and a running-job
+fixture. The implementation now leaves termination to verified kill scope and the
+independent current-authority/live-lease watchdog; explicit device revocation and
+transport-failure cancellation remain enforced. Focused and full native reruns
+are pending at this checkpoint, so no additional completion weight is claimed.
+
+The native regression is now green. The complete native-client selection passed
+81 tests with one explicit real-engine prerequisite ignore and zero failures.
+It includes the new signed STOP_NEW/adoption regression, existing explicit
+device-revocation cancellation, monotonic lease failure/expiry tests and
+unsupported-journal refusal. The new regression is a service/job component
+fixture; it does not claim a joined native T5/worker kill observation.
+
+The first current OCI qualification refused admission rather than accepting an
+inconsistent fixture: its consume reply supplied an empty image scope for the
+verified pinned OCI runtime. The fixture now derives that scope from the verified
+package runtime. The production exact-image binding remains unchanged. A full
+affected OCI rerun and updated source-bound preparation are pending.
+
+The owned composed operator bootstrap passed with the current source-labelled
+image: fresh tenant initialization, dedicated TLS startup, missing/wrong-purpose
+peer refusal, one-signature/foreign-tenant refusal, external 2-of-3 acceptance and
+accepted-request replay refusal. Its report explicitly excludes executing-worker
+or delivery-SLO acceptance (build/security/stages/s22/operator-bootstrap.json).
+
+The repository run passed source/published Java, the missing-artifact refusal,
+Rust workspace tests and strict Clippy, then failed the actual SDK end-to-end
+gate with locally installed Maven 3.8.7. Inspection confirmed the SDK plugin
+requires Maven 3.9.0+ and is built/tested against 3.9.11. The local recovery
+toolchain is being corrected to 3.9.11; the temporary compiler-template change
+was removed. No old-Maven support or source/target fallback is added. The actual
+Gradle/Maven starter gate must pass before this check is accepted. The
+revocation CLI also refuses a simultaneous
+Hello-World-only scope so a narrower run cannot be presented as revocation
+acceptance.
+
+OCI's exact-image dispatch case passed after correcting the fixture. The full
+run still failed two existing lifecycle/timing observations (approved-route wait
+and paired teardown during concurrent workers) while release compilation was
+active. Original limits remain unchanged; an isolated rerun is required before
+deciding whether a runtime defect remains. No OCI pass is claimed for that run.
+
+The SDK Gradle/Maven end-to-end gate passed unchanged with Maven 3.9.11, including
+matching descriptor digests and standalone jar execution. The first joined kill
+run passed actual enrollment, review, catalog and tool-call setup, then stopped
+at its observation query: it had filtered an optional invocation projection
+rather than the immutable T5 scope. The observation now joins the current lease
+fence to control_invocation_kill_scopes and the exact remote device/tool. No
+production admission/lease requirement is weakened; joined kill acceptance
+remains pending the rerun.
+
+The joined STOP_NEW run observed the original worker reaching SUCCEEDED, then
+the convenience MCP helper tried a second call after independent native-scope
+review; that new call was correctly refused by the hidden catalog. Revocation
+observations now use the raw original MCP exchange and assert the durable
+execution state separately. The HOST_NATIVE business outcome may remain
+OUTCOME_UNKNOWN; the fixture does not upgrade it or request a post-kill replay.
+Production catalog, current-authority and outcome guards remain unchanged.
+
+The joined runner subsequently passed STOP_NEW continuation/new-work refusal,
+connected TERMINATE teardown, Control-loss lease bounds and the post-recovery
+operator quorum/replay/receipt assertions, then failed its supervisor-unit
+teardown limit. Quickstart was waiting through graceful child shutdown after an
+unexpected Host death. Unexpected composition failure now kills surviving
+children before closing listeners; intentional SIGTERM/SIGINT shutdown retains
+its graceful path. The joined case also restarts the same current-schema store
+and requires the automatic lease watchdog to retain OUTCOME_UNKNOWN without
+resuming the old worker. These changes await focused and joined verification.
+Partial observations are now retained as non-passing diagnostics on failure.
+
+Planned composition shutdown keeps graceful termination within one shared
+three-second budget, rather than a separate 25-second wait per child. This
+prevents orphaned native workers outliving a dead Host during an intentional
+unit stop; unexpected failures still kill surviving direct children immediately.
+The five-second managed-unit acceptance limit remains unchanged.
+
+### S22 owned joined checkpoint — four cases passed
+
+The current source-labelled composition passed all four initial revocation
+observations (build/quickstart/revocation-smoke.json). STOP_NEW kept the original
+execution SUCCEEDED while its business grade remained OUTCOME_UNKNOWN; new work
+was refused within 0.234s from before final approval. Connected TERMINATE refused
+new work within 0.235s and removed the worker within 0.341s. During Control-process
+partition, teardown took 28.782s against a 28.813s remaining lease and a 298.537s
+remaining operation deadline. The recovered separate operator listener enforced
+peer purpose, external quorum, tenant binding and one-use replay, with actual
+Host/Gateway acknowledgements. Supervisor death exited the owned PID namespace
+within 1.337s; same-schema restart reached UNKNOWN within 21.213s without
+resuming the old worker. These are owned HOST_NATIVE measurements, not an A4
+bound, native-endpoint qualification or complete stage/phase acceptance.
+
+Runtime source/image identity is in the report; the known parent remains
+f373782687dfdd171dbbfcf9342bf48f1666783f. The weighted baseline stays 56.0%
+delivered / 44.0% pending. Next: degraded delivery, Host-only partitions and
+configured short grace, complete conformance/exit mapping and remaining
+applicable repository, OCI, deployment and memory/RAG checks.
+
+
+### S22 pending-admission cancellation and Gateway relay increment
+
+Code review identified two incomplete delivery paths before accepting S22.
+The shared Host/Native execution registry now registers pending admissions before
+T5, captures the pre-request signed floor, and binds the exact validated consume
+reply once. A later matching TERMINATE remains attached to that execution even
+when a single signed snapshot also contains its recovery, or a subsequent direct
+full fetch prunes archived history. Recovery permits fresh admissions; it cannot
+clear an older execution's negative authority. Delayed consume replies are checked
+against the captured floor rather than incorrectly treating a newer STOP_NEW
+snapshot as revoking already consumed work. Weak registry entries are pruned when
+pending/active handles are dropped; no persisted format or conversion is added.
+
+Focused revocation selection executed after this change: 11 shared-verifier tests,
+three Native revocation unit tests, one current-journal refusal test, four Host
+supervision tests and one delayed-worker revocation integration test passed.
+One OCI-specific revocation case retains its explicit real-engine prerequisite
+ignore in this selection; the earlier separately executed OCI suite is not a
+claim about these new source changes. Gateway compilation passed. Logs:
+build/security/stages/s22/sticky-termination.log. Known source parent remains
+f373782687dfdd171dbbfcf9342bf48f1666783f; these changes are uncommitted.
+
+The automatic Gateway signed-state reader/relay and dedicated mTLS Host receiver
+are now implemented and are entering focused validation. Gateway role endpoints
+derive tenant/principal from authenticated service identity, register that reader,
+and return current Control-signed state. Hosts accept relay data using their
+existing direct-Control keys, merge without granting full-fetch pruning authority,
+persist before notifying cancellation, and send their own authenticated PUSH
+receipt. Development plaintext dispatch is not a relay tier. Joined mTLS relay,
+degraded/link-only partition, coalesced recovery and Native execution qualification
+remain outstanding. The overall phase and first vertical-slice acceptance entries
+remain partial, including C3b/C7/C8. No new stage weight: 56.0% delivered,
+44.0% pending; S22 has not been committed or declared delivered.
+
+
+### S22 selective-link and mTLS qualification checkpoint
+
+The dedicated Gateway sender and Host receiver compile and pass strict Clippy
+for the four affected Rust packages and all targets. Focused actual transport
+qualification passes both Gateway/Host mTLS tests, including foreign-tenant,
+unpinned-client and wrong-server-pin refusal and the accepted PUSH route.
+Five Host revocation unit tests pass, including altered signed envelope refusal,
+durable merge-before-notification and the rule that a relay cannot prune history.
+The SQLite/PostgreSQL focused Java selection passes after adding Gateway
+fixed-tenant service reader registration and signed-state checks
+(gateway-revocation-java.log, 2m57s). Contract generation still emits 1251 bindings.
+The 34 Quickstart CI harness tests pass before the later Native option addition;
+that later CLI change still needs its focused rerun.
+
+The expanded owned HOST_NATIVE run against image runtime source
+60e4a0ddf4130a67a53329564f2ac6f717a37cdfef2773695afd164246c6e3f1
+observed STOP_NEW success/refusal, connected TERMINATE (0.655 s worker teardown),
+degraded signed-GET loss with real heartbeat cancellation (7.290 s), and
+Host-only partition while Control remained healthy (27.792 s teardown against
+27.959 s remaining lease). These are checkpoint observations, not current full
+stage evidence. The combined kill/recovery scenario terminated the old worker
+but measured 5.089 s after the conservative restore timestamp; that exceeds the
+strict five-second bound and is not accepted as timing evidence. The Host poll
+wait is now two seconds instead of five, with an explicit elapsed assertion;
+the new image and complete joined rerun are pending.
+
+The automatic PUSH warm-up initially required business-success presentation.
+The actual read-only worker returned the expected greeting with honest
+OUTCOME_UNKNOWN business status. The fixture now recognizes that exact worker
+response without upgrading business finality or replaying a business operation.
+No authority or signed-state production guard was relaxed. Earlier fixture
+startup errors (local Host identity and discarded supervisor environment) were
+corrected while retaining production startup checks.
+
+The Native qualification now includes a real current Python SDK package,
+immutable nonce-owned image and compiled ClientService-owner fixture. Its package,
+image and test-binary preflight passed (Python 3.12.15 discovered from the pinned
+base image, not inferred from a remembered version). Actual Native enrollment,
+T5, CHECK_IN receipt and worker revocation are not yet accepted. This fixture
+does not claim an OS daemon-death or A4 containment guarantee. All four connectivity
+classes, complete original catalogs/phase-3 aggregation, full affected gates,
+status consolidation and the single stage commit/push remain outstanding.
+Weighted baseline stays 56.0% delivered / 44.0% pending; S22 earns no partial weight.
+
+
+### S22 admitted-dispatch deadline repair
+
+The current joined run exposed an execution/transport deadline error rather than
+a compatibility failure: Control expired an ADMITTED pull-mode dispatch using
+its ten-second admission permit even though the worker had consumed authority
+and completed successfully. Status now uses the signed execution deadline,
+clipped to the original operation expiry, after admission. A CLAIMED dispatch
+may receive late admission telemetry beyond permit expiry only for its exact
+already-consumed EXECUTING fence. This metadata never consumes a permit, renews
+a lease, restarts work or changes operation finality. Unconsumed claims still
+expire on the admission permit, wrong fences are refused, and the execution
+deadline still expires the status.
+
+Executed focused Java verification passes: 12 ServerPackages tests and 26
+RecoveryAdmissionIntegration tests, zero skips/failures/errors. The latter runs
+the new consumed/unconsumed/wrong-fence/deadline scenario on both fresh SQLite
+and the isolated PostgreSQL runtime role. Log:
+build/security/stages/s22/admission-expiry-java-retry.log (2m30s).
+
+The Gateway reader also lacked registrations for its two closed delivery models.
+KillTrustDocument and KillPush now have offline validators; a focused valid-corpus
+and extra-member refusal regression passes. Gateway push replies reuse the
+already compiled validator set instead of compiling schemas per delivery.
+Actual mTLS transport tests and all-target Gateway Clippy pass after these
+repairs. Relay failure/recovery transitions are now visible in bounded logs;
+negative facts and independent Host supervision remain in force.
+
+A new source-labelled composition is being built for complete Host/Native
+qualification. These focused repairs are not full stage acceptance. The
+authoritative phase/first-slice/C3b/C7/C8 entries remain partial and the baseline
+remains 56.0% delivered / 44.0% pending. No intermediate commit or push was made.
+
+
+### S22 current-contract catalog clarification
+
+The authored kill/partitioned-host and kill/breakglass-control-down vectors used
+the obsolete selfTerminateOnControlLoss name and expected disconnected execution
+to continue until its operation deadline without that option. The revision-10
+plan's phase 1 instead requires live leases alongside expiry, and current S22
+always clips accepted leases to at most thirty seconds. The vectors now require
+the stronger minimum of the accepted live lease and execution/runtime deadline,
+plus any stricter current Control-loss grace. No legacy configuration alias,
+behavior path, schema conversion or case/target removal was added. This is an
+explicit current-contract clarification; stage scope/weight and the 39.5-week
+denominator are unchanged.
+
+The new eight-case HOST_NATIVE checkpoint passes, including automatic mTLS PUSH,
+coalesced recovery, both partition types and managed-unit death/restart. Native
+startup correctly refused the fixture's unsupported 60000 ms local runtime limit;
+the fixture now uses the current 10000 ms limit and must demonstrate signed
+termination within five seconds, before that runtime deadline. Its partition
+observation is explicitly bounded by the earlier runtime deadline or accepted
+lease and does not independently prove a thirty-second native lease expiry.
+The shared lease component vectors remain separate evidence.
+
+Repeated unchanged Gateway pushes and receipts are now suppressed only after a
+successful recorded receipt; failed, stale and unrecorded receipts are retried.
+Real mTLS transport tests exercise retry, unchanged-state suppression and stale
+ack refusal. The Host retains negative state on a receipt failure and returns
+unavailable so its sender retries. A new full joined checkpoint remains required
+after these changes. No stage weight or completed-phase claim is awarded.
+
+
+### S22 Windows workstation verification pass — 2026-11-08
+
+Source is the pushed working checkpoint 0147a387ab7d635200862e265f617e3c2e61650a
+on codex/zero-trust-revocation-dispatch, plus the three working-tree repairs
+below. That checkpoint is an intermediate push, not the S22 stage commit. This
+host is Windows with Docker Desktop. It has no runuser/systemd/cgroup OCI
+runtime and no Linux Native owner, so OCI, deployment and Native qualification
+were not run here. Logs are under build/security/stages/s22/ (*-windows*.log).
+
+Executed results:
+- Rust (rust:1.94-bookworm container): fmt check, workspace tests (352 passed,
+  0 failed, 17 explicit environment/harness ignores) and strict all-target
+  Clippy with warnings denied all pass.
+- UI and contracts: contract check/build/tests pass; admin UI typecheck,
+  262 tests and the production build pass. The UI operation drift gate failed
+  because the S22 Gateway signed-state reader routes (getGatewayKillKeys,
+  getGatewayKillState) were in current OpenAPI but not in the generated
+  bindings. The bindings were regenerated; there is no other UI change.
+- Python: preflight, release notes, quality and tests/ci (413 tests, 10 skips)
+  pass on Windows. tests/contracts passes except two symlink cases (Windows
+  privilege) and one scorecard log-parsing case. A Linux container passes
+  those three but cannot run two git-dependent scorecard cases, which pass on
+  Windows. Every contract case therefore passes in at least one environment.
+  Quickstart (43 tests) passes only on Linux, because its supervisor uses
+  fcntl; that requirement predates S22.
+- Java (owned PostgreSQL): javaCheck build plus enterpriseTest ran 446
+  enterprise tests with 4 failures. Two were the same test-path nesting defect
+  previously repaired in the review matrix: the KillAuthorityTest and
+  TargetClaimsTest PostgreSQL matrices nested a new case directory per
+  scenario, exhausting the SQLite path budget (SQLITE_CANTOPEN on Windows).
+  Both helpers now restore the suite directory after each case; production
+  storage checks are unchanged. The rerun passes KillAuthorityTest (9),
+  TargetClaimsTest (11) and EnterpriseOperationTest (87) with zero skips. A
+  third failure, a 409-vs-503 PostgreSQL business-key case under full-suite
+  load, did not reproduce in isolation. The fourth,
+  KillSwitchTest's operator TLS fixture, calls POSIX file permissions and
+  cannot run on Windows; it previously passed on Linux and was not rerun here.
+  The complete Java gate has not been rerun after the fixture repair.
+- Joined Quickstart HOST_NATIVE --revocation (image at 0147a387): both runs
+  pass all eight pre-existing installation/identity/Gateway/revocation gates
+  and fail the first S22 STOP_NEW observation. Run 1: Control tenant database
+  admission returned 429 on the Gateway catalog lookup during the kill commit,
+  and Gateway reported a retryable 503 rather than a kill refusal. This fails
+  closed, but a 503 is not accepted as kill-attributable refusal. Run 2:
+  correct refusal in 1.107 s against the unchanged one-second bound. Discovery
+  p50 on this host is 271 ms. Neither run is accepted as timing evidence, and no
+  bound or assertion was relaxed. Diagnostics: quickstart-run{1,2}-*.
+
+Open finding for review: Quickstart's SQLite pool has four connections while
+tenant database admission defaults to eight concurrent transactions. Host
+long-poll rechecks open a short transaction every 100 ms. On slower hosts,
+contention around a kill commit can reject unrelated catalog reads with 429.
+No capacity or polling behavior was changed in this pass.
+
+S22 remains in progress with no partial weight. Phase/vertical-slice and
+C3b/C7/C8 entries are unchanged and partial. Remaining: full Java gate rerun,
+Linux joined Host/Native runs on the final source, OCI isolated rerun,
+connectivity-class timing, complete phase-3 exit mapping, deployment and
+memory/RAG checks, then the single stage commit. Weighted baseline remains
+56.0% delivered / 44.0% pending, 21/33 stages, 0/7 full phases accepted.
+
+
+### S22 relayed native lease-deadline repair — 2026-11-08
+
+Hosted `images / langchain` failed deterministically from S22 source onward
+(57a5d6b8, 25c6ec54, aceb6891, debc723b) with `MCP error -32000: FORBIDDEN`
+on the first relayed `examples.hotfolder/list` call. Diagnostics showed Control
+accepted native permit consumption and AUTHORIZE; the device itself reported
+`runtime_execution ... rejected` 18 ms later. Cause: the relayed path supervised
+the server-issued execution lease against the relayed task's delivery window
+(about 18 s), while Control issues `min(now+30 s, invocation expiry)`. The lease
+therefore failed the local validity check before any heartbeat, supervision
+returned, and the run was reported Revoked. The local HTTPS path already used
+the consumed invocation's expiry, the bound `accepted_native` enforces.
+
+`lease::supervise` now derives its deadline from the consumed invocation, so the
+relayed and local paths cannot diverge. The relayed task window still bounds the
+run itself through `invoke_inner`'s `permit_deadline.min(valid_until)`; no lease,
+permit or run is extended. A new unit regression shows a lease inside the
+invocation expiry stays supervised and renews, and a lease beyond it ends at once
+without a heartbeat. KillSwitchTest also passes the new ControlTeam clearance
+argument after the S23–S25 merge (separate commit debc723b).
+
+Executed in Docker rust:1.94-bookworm: `cargo fmt --check`, all-target Clippy with
+`-D warnings`, and `cargo test -p olo-toolgate-client` (lib 56 passed; four lease
+tests pass including the regression; joined native owner test remains ignored by
+design). The composed LangChain run was not re-executed locally; hosted
+`images / langchain` reevaluation is required. S22 remains in progress with no
+weight; phase, vertical-slice and claim entries are unchanged.
+
+
+### S23 outcome grades and honest presentation — delivered, 2026-11-08
+
+Started at the user's explicit request while S22 remains undelivered (draft PR
+#287, pending Linux qualification). Stacked branch `codex/zero-trust-outcome-grades`
+from S22 checkpoint 57a5d6b8. ADR 060 records the decisions. Phase 4 is
+presentation only: derived operation state, effect resolution, settlement guards
+and recovery are unchanged.
+
+Delivered scope:
+- `EnterpriseOutcomeGrade` is now TARGET_CONFIRMED, BROKER_OBSERVED,
+  HUMAN_RECONCILED, CONTROL_PROVEN, EXECUTOR_REPORTED and UNKNOWN; the old
+  REPORTED/REVIEWER_CONFIRMED/TARGET_DEDUPLICATION_ASSUMED values are removed
+  without aliases. Deduplication reliance stays on the separate flag.
+- Operation grades use the weakest source the outcome depends on. Unfinished
+  outcomes are UNKNOWN. Two overclaims are removed: one witnessed generation no
+  longer grades the whole operation TARGET_CONFIRMED, and FAILED after consumed
+  authority is EXECUTOR_REPORTED, not CONTROL_PROVEN.
+- Outcomes carry execution coverage (NO_AUTHORITY_CONSUMED, MEDIATED_ONLY,
+  UNMEDIATED_POSSIBLE) and fenced/unfenced effect counts. Effect history carries
+  fencing and observation sources; consumption is never outcome evidence.
+- The fenced target class and an optional reviewed `authoritativeResponse`
+  declaration are frozen in the immutable effect intent at first authorization
+  (fresh SQLite/PostgreSQL columns; storage refuses unknown classes and rewrites).
+- New `GET /api/control/v1/access/operations/evidence` export of readable
+  operations, re-derived on export. Tenant analytics adds a Control-derived
+  grade/coverage/fencing summary, shown apart from Gateway-recorded call states
+  and even when Insights collection is disabled. The console explains each grade
+  and coverage value, shows per-effect fencing/observations, offers a complete
+  paginated JSON export and lets route reviewers declare authoritative responses.
+
+Limitation: no production path records broker responses yet (`EffectStore.observe`
+has no caller), so BROKER_OBSERVED is defined and tested but absent from
+production records. Treating authoritative broker responses as resolving effects
+is deferred because it changes settlement semantics.
+
+Executed validation (Windows workstation; logs under build/security/stages/s23/):
+- Contract and UI binding generation checks pass (1,259 generated files); the
+  Java and PHP round-trips cover 302 models (PHP via `php:8.2-cli`).
+- Java: new `OutcomeGradingTest` (5) and `TenantAnalyticsEvidenceTest` (2) pass.
+  The affected enterprise selection passes 165 tests with zero skips, including
+  the new fenced history/export/frozen-intent case on SQLite and in the
+  PostgreSQL runtime-role matrix (`TargetClaimsTest` 12). The complete Java gate
+  with `--continue` runs 297 ordinary tests (8 skips) and 447 enterprise tests.
+  Its only failure is the Windows-only `KillSwitchTest` operator TLS fixture
+  (POSIX permissions), recorded in the S22 Windows pass; it was not run on Linux
+  for this source.
+- Rust (Docker `rust:1.94-bookworm`): fmt, workspace tests (352 passed, 17
+  explicit ignores, 0 failed) and strict all-target Clippy pass.
+- UI: typecheck, 265 tests (new evidence/export/review/history assertions) and
+  the production build pass; TypeScript contract tests pass.
+- Python: `tests/contracts` passes except the known Windows symlink and
+  scorecard log cases; the updated intent-storage vectors pass (5).
+  Agent-mimic and native-review CI cases pass (16).
+
+Not run here: the joined Quickstart image runs and Linux-only suites. No phase is
+accepted. Weighted baseline: 23.0 / 39.5 = 58.2% delivered, 41.8% pending,
+22/33 stages Done (S22 still in progress), 0/7 full phases accepted.
+
+### S24 tenant audit hash chains — implemented out of order (2026-11-08)
+
+Started at the user's explicit request, in parallel with S23, while S22 (pending
+Linux-only qualification) and S23 (in progress) are undelivered. Source: parent
+57a5d6b8 (S22 working head on codex/zero-trust-revocation-dispatch) plus the S24
+changes in the same commit as this section. No weight is claimed; the weighted
+baseline stays 56.0% delivered / 44.0% pending, 21/33 stages, 0/7 full phases.
+
+Delivered scope ([ADR 061](../adr/061-tenant-audit-hash-chains.md)):
+- Every `control_audit` row stores `chain_index`, `previous_digest` and
+  `row_digest`: one contiguous chain per tenant, folded into the fresh SQLite and
+  PostgreSQL schemas (no migration/backfill; unsupported stores are refused).
+- Domain-separated (`toolgate/control-audit-chain/v1`), length-prefixed SHA-256 over
+  tenant, index, predecessor and every stored field, with explicit millisecond
+  `occurred_at`. PostgreSQL `actor_id`/`request_digest` are `varchar(64)` so short
+  internal actors are hashed exactly as stored.
+- Appends serialize per tenant across replicas: PostgreSQL tenant audit-chain
+  advisory lock in the writer and in a `BEFORE INSERT` link guard; SQLite IMMEDIATE
+  writer plus a link-guard trigger. Unique `(tenant_id, chain_index)`; update/delete
+  triggers on both dialects (new on PostgreSQL) keep rows immutable.
+- `Store.Session.auditHead()/auditChain()` and the pure `AuditChain.verify`
+  report malformed, foreign-tenant, missing/reordered, broken-link, edited,
+  truncated and head-mismatch defects.
+- Python writer `apps/quickstart/audit_chain.py` (packaged in the Quickstart image)
+  is used by Quickstart identity audit and by SQLite/PostgreSQL offline restore
+  quarantine records; fixed vectors match Java.
+
+Executed validation on this Windows host (Docker owned PostgreSQL 17 from
+`tools/control/check.py`):
+- `AuditChainTest` (4): canonical/cross-language vectors; pure verifier defects;
+  SQLite and PostgreSQL matrices with 8 concurrent appenders on two store
+  instances (replicas) and two tenants producing one contiguous chain each;
+  runtime-role fork/update/delete refused; owner edit, recomputed-digest edit,
+  reordering, cross-tenant splice and middle deletion detected; tail truncation
+  invisible to the chain alone and detected against a retained head. Pass.
+- Focused regressions `SqliteTest` (8), `PostgresTest` (1),
+  `TenantIdentityKeysTest` (6, raw restore audit now chained),
+  `UnsupportedDatabaseTest` (2). Pass.
+- Full control-plane `test`: 294 tests, 0 failures, 8 environment skips.
+  `enterpriseTest`: 446 tests, 1 failure — the known Windows-only
+  `KillSwitchTest` operator TLS fixture (POSIX file permissions), not rerun on
+  Linux here. Remaining `check` tasks pass.
+- Python: `tests/quickstart/test_audit_chain.py` (2) on Windows; the full
+  Quickstart suite (45 tests, including supervisor identity audit) passes in a
+  Linux `python:3.12-bookworm` container; `tests/quickstart/test_enterprise_restore.py`
+  (10) passes on Windows; a scratch psycopg check against the owned PostgreSQL
+  confirmed the Python writer's PostgreSQL path and trigger refusal.
+  `tests/ci` 413 pass (10 skips). `tests/contracts` 176 with only the three known
+  Windows failures (two symlink cases, one scorecard parsing case).
+
+Not run here: Linux Java gate (including `KillSwitchTest`), the image-based
+PostgreSQL fleet restore check (`tools/enterprise/restore_check.py`, needs the
+enterprise production images), OCI/deployment gates (unaffected by this change),
+and the combined S23–S25 verification, which the parent session runs after merge.
+No OpenAPI or contract change was made, so no binding regeneration was required.
+
+Limits: the chain alone cannot detect a consistent rewrite of a suffix or tail
+truncation without an independently retained head; S25 anchors and S26 offline
+verification remain required. C6 stays Partial.
+
+### S25 signed external anchors — implemented out of order (2026-11-08)
+
+Started at the user's explicit request, in parallel with S23 and directly after
+the S24 commit fa23d640 on this branch, while S22 (pending Linux-only
+qualification) and S23 (in progress) are undelivered. Source: fa23d640 plus the
+S25 changes in the same commit as this section. No weight is claimed; the
+weighted baseline stays 56.0% delivered / 44.0% pending, 21/33 stages, 0/7 full
+phases.
+
+Delivered scope ([ADR 062](../adr/062-signed-audit-anchors.md)):
+- Dedicated `AUDIT_ANCHOR` key domain: RSA 3072/4096 (e=65537) signatures over
+  the `toolgate/audit-anchor/v1` domain prefix and an exact sorted-key claims
+  document (tenant, chain index, head digest, issue time, key id, purpose).
+  Startup fails closed when the configured key is not the pinned keyring's single
+  ACTIVE key or shares a modulus with any other Control custody, including the
+  fleet, permit/effect, bundle, package-release, identity, TLS/CA, recovery trust
+  and 2-of-3 operator approval keys.
+- Pinned external keyring with ACTIVE/RETIRED/REVOKED states and validity
+  windows: retired keys verify only anchors issued before retirement, revoked and
+  unknown keys are refused; after revocation Control re-verifies from genesis.
+- Pluggable write-once `AuditAnchorSink`; the shipped local sink publishes by
+  atomic hard-link creation, syncs, makes objects read-only and refuses different
+  content for an existing name. Customer object-lock bucket and transparency-log
+  sinks are specified in the interface/ADR, not implemented.
+- `AuditAnchoring` verifies the segment since the last verified anchor, refuses to
+  sign a broken chain, signs, publishes and only then records the anchor in the new
+  immutable tenant table `control_audit_anchors` (fresh schemas, forced RLS,
+  runtime SELECT/INSERT, capacity-tracked). Crash-retry and concurrent replicas
+  converge on the deterministic sink object. `AuditAnchorScheduler` runs it per
+  active tenant when `toolgate.control.audit-anchor.enabled=true` (default off).
+
+Executed validation on this Windows host (Docker owned PostgreSQL 17):
+- `AuditAnchorTest` (4): signature/claims, wrong-domain (no prefix, fleet prefix,
+  v2 prefix), wrong-tenant, impostor and unknown-key refusals, rotation windows,
+  revocation, keyring hygiene; local sink write-once/idempotent/conflict/read-only/
+  name confinement; SQLite and PostgreSQL matrices covering periodic anchoring,
+  crash-retry convergence, independent sink+keyring verification, a consistent
+  A6 suffix rewrite detected as HEAD_MISMATCH by every anchor, refusal to anchor
+  the broken chain, revoked-key re-anchoring with the new key, rewritten database
+  anchor records refused (BAD_SIGNATURE) and runtime-role immutability. Pass.
+- `AuditAnchorSchedulerTest` (1): dedicated-custody rule and weak-key refusal. Pass.
+- Full control-plane `check`: `test` 299 tests, 0 failures, 8 environment skips;
+  `enterpriseTest` 446 tests, 1 failure — the same known Windows-only
+  `KillSwitchTest` operator TLS fixture (POSIX permissions). Other check tasks pass.
+- Python: `tests/ci` 413 pass (10 skips), including schema ownership and the
+  capacity generator check; Quickstart suite 45 pass in a Linux
+  `python:3.12-bookworm` container; `test_enterprise_restore.py` 10 pass on Windows.
+
+Not run here: Linux Java gate, the image-based PostgreSQL fleet restore check,
+production deployment of a real external sink, and the combined S23–S25
+verification run by the parent session after merge. The scheduler's Quarkus
+startup path (configuration wiring) is covered by unit checks of its parts, not
+by a booted Control with anchoring enabled. Helm chart wiring is not provided.
+
+Limits: the local sink is only as independent as its mount; A6 can still append
+false rows while in control and rewrite the unanchored suffix since the last
+anchor; A6 holding the anchor private key can sign false heads. Offline
+`toolgate audit verify` (S26) remains outstanding. C6 stays Partial.
+
+
+### S23–S25 combined verification — 2026-11-08
+
+S24 (fa23d640) and S25 (7c1d9b84) were built in parallel from S22 head 57a5d6b8
+and cherry-picked unchanged in code onto S23 (aa2b7df7) as 5baad346 and 7ce88a9b.
+Only the ADR index and this document conflicted, resolved by keeping all three
+stages' text. The combined tree on `codex/zero-trust-outcome-grades` was then
+verified on this Windows host (logs under build/security/stages/s23-s25/):
+- Java `--continue projects javaCheck build` with owned PostgreSQL 17: 306
+  ordinary tests (8 environment skips) and 447 enterprise tests. The only failure
+  in the whole build is the known Windows-only `KillSwitchTest` operator TLS
+  fixture (POSIX permissions). The S23 grading/analytics tests,
+  `TargetClaimsTest` (12, with its PostgreSQL matrix), `AuditChainTest` (4),
+  `AuditAnchorTest` (4), `AuditAnchorSchedulerTest` (1) and
+  `TenantIdentityKeysTest` (6) pass with zero skips.
+- Rust (Docker `rust:1.94-bookworm`): fmt, workspace tests (352 passed, 17
+  explicit ignores, 0 failed) and strict all-target Clippy pass.
+- UI typecheck and 265 tests pass. Preflight, contract/UI binding generation
+  (1,259 files) and the structural corpus checks pass.
+- Python: `tests/ci` 413 (10 skips) pass. Quickstart 45 pass in a Linux
+  container. `tests/contracts` passes except the two Windows symlink cases and
+  one scorecard log case; the Linux container passes those and lacks `.git` for
+  two others, so each case passes in at least one environment.
+
+Weighting decision: S24's scope and executed evidence are complete, so it earns
+its stage weight like S23 (stage order is not a weighting criterion). S25 stays
+Partial with no weight: its baseline requires external anchoring, but only the
+local write-once sink is implemented; customer-bucket/transparency-log sinks,
+a booted scheduler path and Helm wiring remain. S22 remains in progress in draft
+PR #287. Weighted baseline: 23.875 / 39.5 = 60.4% delivered, 39.6% pending,
+23/33 stages Done, 0/7 full phases accepted.
+
+Not run here: the Linux Java gate (including `KillSwitchTest`), joined Quickstart
+image runs, the image-based PostgreSQL fleet restore check and OCI/deployment gates.

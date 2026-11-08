@@ -43,7 +43,18 @@ class SchemaOwnershipTests(unittest.TestCase):
                     self.assertNotIn('.defaultId()', path.read_text(), str(path))
                 self.assertNotIn('toolgate.control.endpoint.tenant-id', path.read_text(), str(path))
                 self.assertNotIn('toolgate.default-tenant-id', path.read_text(), str(path))
-                self.assertNotRegex(path.read_text(), r'["\']tenant-id["\']', str(path))
+                setting_source=path.read_text()
+                if path.stem == 'KillOperatorListener':
+                    # Dedicated operator ingress is fixed to one configured tenant;
+                    # request services still cannot use a configured tenant fallback.
+                    fixed='new Ids.TenantId(setting("tenant-id"))'
+                    self.assertEqual(setting_source.count(fixed),1)
+                    self.assertIn('"toolgate.control.breakglass."+name',setting_source)
+                    self.assertIn('owner!=null&&!owner.equals(tenant.value())',setting_source)
+                    self.assertIn('kills.breakGlass(tenant,',setting_source)
+                    self.assertNotIn('request.tenant()',setting_source)
+                    setting_source=setting_source.replace(fixed,'FIXED_OPERATOR_TENANT')
+                self.assertNotRegex(setting_source, r'["\']tenant-id["\']', str(path))
                 self.assertNotIn('toolgate.config.import-overwrite', path.read_text(), str(path))
         for path in [ROOT/'apps/quickstart/supervisor.py', *ROOT.glob('deploy/helm/olo-toolgate/templates/*.yaml')]:
             self.assertNotIn('TOOLGATE_CONTROL_ENDPOINT_TENANT_ID', path.read_text(), str(path))

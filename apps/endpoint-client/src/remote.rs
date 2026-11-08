@@ -15,12 +15,36 @@ struct Authorization {
     identity: DeviceIdentity,
     task: RemoteToolTask,
     consumed: tokio::sync::Mutex<bool>,
+    authority: std::sync::Mutex<Option<olo_toolgate_contracts::v2::NativePermitConsumed>>,
+    kill_execution: std::sync::Mutex<Option<olo_toolgate_tenant_identity::revocation::Execution>>,
+    revocations: Arc<crate::revocation::Shared>,
     /// The fencing token permit consumption returned; run events are bound to it.
     fencing: std::sync::Mutex<Option<String>>,
     /// This device's span of the call, minted once: the tool's trace parent and the Insights execution span.
     child: Option<String>,
 }
 impl AuthorizationPort for Authorization {
+    fn revoked(&self) -> Call<'_, ()> {
+        Box::pin(async {
+            let accepted = self
+                .authority
+                .lock()
+                .map_err(|_| Failure::Unavailable)?
+                .clone()
+                .ok_or(Failure::Unauthorized)?;
+            let execution = self
+                .kill_execution
+                .lock()
+                .map_err(|_| Failure::Unavailable)?
+                .clone()
+                .ok_or(Failure::Unauthorized)?;
+            tokio::select! {
+                _=crate::lease::supervise(self.control.as_ref(),self.identity.clone(),accepted)=>{},
+                _=self.revocations.terminated(&execution)=>{},
+            }
+            Err(Failure::Revoked)
+        })
+    }
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()> {
         Box::pin(async move { self.authorize_bound(request).await.map(|_| ()) })
     }
@@ -34,7 +58,7 @@ impl AuthorizationPort for Authorization {
             fencing.as_deref(),
         )
     }
-    fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, Option<u64>> {
+    fn authorize_bound(&self, request: AuthorizationRequest) -> Call<'_, u64> {
         Box::pin(async move {
             if request != self.task.request {
                 return Err(Failure::Unauthorized);
@@ -42,7 +66,17 @@ impl AuthorizationPort for Authorization {
             let mut consumed = self.consumed.lock().await;
             if !*consumed {
                 let e = &self.task.invocation.evaluation;
-                let invocation = self
+                let execution = self.revocations.register(
+                    olo_toolgate_tenant_identity::revocation::Subject {
+                        package_id: None,
+                        package_digest: Some(e.package_digest.clone()),
+                        publisher: None,
+                        tool_id: Some(e.tool_id.clone()),
+                        pool_id: None,
+                        image_digest: None,
+                    },
+                )?;
+                let accepted = self
                     .control
                     .consume_effect(
                         self.identity.clone(),
@@ -56,12 +90,19 @@ impl AuthorizationPort for Authorization {
                         },
                     )
                     .await?;
-                if invocation.id != self.task.invocation.id
-                    || invocation.evaluation != self.task.invocation.evaluation
-                    || invocation.state != EnterpriseInvocationState::Executing
-                {
-                    return Err(Failure::Unauthorized);
-                }
+                execution::accepted_native(&accepted, &self.task.invocation)?;
+                execution
+                    .accept(
+                        accepted.authorization_epoch,
+                        crate::revocation::subject(&accepted.kill_scope),
+                    )
+                    .map_err(|_| Failure::Unauthorized)?;
+                *self
+                    .kill_execution
+                    .lock()
+                    .map_err(|_| Failure::Unavailable)? = Some(execution);
+                *self.authority.lock().map_err(|_| Failure::Unavailable)? = Some(accepted.clone());
+                let invocation = accepted.invocation;
                 *consumed = true;
                 if let Ok(mut fencing) = self.fencing.lock() {
                     *fencing = invocation.reserved_nonce.clone();
@@ -83,7 +124,7 @@ impl AuthorizationPort for Authorization {
             {
                 return Err(Failure::Unauthorized);
             }
-            Ok(Some(ack.expires_at_unix_ms))
+            Ok(ack.expires_at_unix_ms)
         })
     }
 }
@@ -229,6 +270,7 @@ impl Job {
         identity: DeviceIdentity,
         task: RemoteToolTask,
         activity: Arc<crate::activity::Activity>,
+        revocations: Arc<crate::revocation::Shared>,
     ) -> Self {
         let (cancel, receiver) = tokio::sync::watch::channel(false);
         let auth = Arc::new(Authorization {
@@ -236,6 +278,9 @@ impl Job {
             identity,
             task: task.clone(),
             consumed: tokio::sync::Mutex::new(false),
+            authority: std::sync::Mutex::new(None),
+            kill_execution: std::sync::Mutex::new(None),
+            revocations,
             fencing: std::sync::Mutex::new(None),
             child: crate::trace::child_traceparent(task.traceparent.as_deref()),
         });

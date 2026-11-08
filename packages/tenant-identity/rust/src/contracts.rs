@@ -20,7 +20,7 @@ impl Contracts {
         for (uri, bytes) in olo_toolgate_contracts::CANONICAL_SCHEMAS {
             let value: serde_json::Value =
                 serde_json::from_str(bytes).map_err(|_| Failure::Validation)?;
-            if uri.ends_with("/v2/discovery.schema.json") {
+            if uri.ends_with("/v2/discovery.schema.json") || uri.ends_with("/v2/kill.schema.json") {
                 for name in value["$defs"]
                     .as_object()
                     .ok_or(Failure::Validation)?
@@ -46,7 +46,12 @@ impl Contracts {
         Ok(Self { validators })
     }
     pub fn decode<T: DeserializeOwned>(&self, name: &str, bytes: &[u8]) -> Result<T> {
-        if bytes.len() > 131072 {
+        let limit = if name == "KillPush" {
+            2 * 1024 * 1024
+        } else {
+            131072
+        };
+        if bytes.len() > limit {
             return Err(Failure::Validation);
         }
         let value = crate::json::strict_json(bytes).map_err(|_| Failure::Validation)?;
