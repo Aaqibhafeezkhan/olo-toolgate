@@ -209,7 +209,7 @@ class OpenRouterTests(unittest.TestCase):
 
 class NativeOutcomeBoundaryTests(unittest.TestCase):
     def outcome(self):
-        return dict(operationId='inv-fixture',state='OUTCOME_UNKNOWN',grade='REPORTED',
+        return dict(operationId='inv-fixture',state='OUTCOME_UNKNOWN',grade='UNKNOWN',
             retryable=False,finalized=False,journalComplete=True,deduplicationAssumed=False,
             attemptCount=1,effectCount=0,unresolvedEffectCount=0,unsettledAttemptCount=1)
 
@@ -230,7 +230,7 @@ class NativeOutcomeBoundaryTests(unittest.TestCase):
         self.assertEqual([c[0] for c in gateway.calls],['tools/list','tools/call'])
         self.assertEqual(gateway.calls[-1][1],{'name':'examples.hotfolder/list','arguments':{}})
         self.assertEqual(set(gateway.files),{'support-tickets.json'})
-        self.assertIn('OUTCOME_UNKNOWN/REPORTED',output.getvalue())
+        self.assertIn('OUTCOME_UNKNOWN/UNKNOWN',output.getvalue())
 
     def test_success_or_generic_failure_cannot_pass_the_unqualified_boundary(self):
         for gateway in (Gateway(),self.gateway(generic=True)):
@@ -238,7 +238,7 @@ class NativeOutcomeBoundaryTests(unittest.TestCase):
                 agent.verify_native_boundary(gateway)
 
     def test_wrong_grade_counts_flags_or_missing_error_flag_cannot_pass(self):
-        for change in ({'grade':'TARGET_CONFIRMED'},{'retryable':True},{'finalized':True},
+        for change in ({'grade':'TARGET_CONFIRMED'},{'grade':'REPORTED'},{'grade':'EXECUTOR_REPORTED'},{'retryable':True},{'finalized':True},
                        {'effectCount':1},{'attemptCount':True},{'unsettledAttemptCount':0},
                        {'journalComplete':False},{'deduplicationAssumed':True}):
             outcome=self.outcome();outcome.update(change)
