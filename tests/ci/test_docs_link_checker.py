@@ -74,6 +74,15 @@ class MarkdownLinkCheckerTests(unittest.TestCase):
         self.write("guide/README.md", "Installation\n============\n")
         self.assertEqual(self.run_checker(), 0)
 
+    def test_template_placeholder_destinations_are_not_repository_paths(self):
+        self.write("tools/release/page-template.md",
+                   "[guide]($repo/blob/$tag/docs/README.md)\n[log](${repo}/CHANGELOG.md)\n")
+        self.assertEqual(self.run_checker(), 0)
+
+    def test_dollar_without_placeholder_name_is_still_checked(self):
+        self.write("docs/index.md", "[price]($5-plan.md)\n")
+        self.assertEqual(self.run_checker(), 1)
+
     def test_balanced_parentheses_in_inline_link_destinations_are_preserved(self):
         targets = list(CHECKER.inline_link_targets("[guide](guide(v2).md)"))
         self.assertEqual(targets[0][0], "guide(v2).md")
