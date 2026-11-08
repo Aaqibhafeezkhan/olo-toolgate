@@ -2,6 +2,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 """Validate repository-relative Markdown links without making network requests."""
+import os
 from pathlib import Path
 import re
 import sys
@@ -16,7 +17,7 @@ LINK_START = re.compile(r"! ?\[[^\]]*\]\(".replace("! ?", "!?"))
 HTML_ATTR = re.compile(r"""(?:href|src)\s*=\s*["']([^"']+)["']""", re.I)
 ATX_HEADING = re.compile(r"^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$")
 SETEXT_UNDERLINE = re.compile(r"^ {0,3}(=+|-+)[ \t]*$")
-EXPLICIT_ID = re.compile(r"""<(?:a|[^>]+)\s+[^>]*id=["']([^"']+)["']""", re.I)
+EXPLICIT_ID = re.compile(r"""<[a-z][^>]*?(?<![\w-])(?:id|name)\s*=\s*["']([^"']+)["']""", re.I)
 
 
 def clean_markdown(text):
@@ -65,12 +66,14 @@ def mask_inline_code(text):
 
 
 def slug(text):
+    """Convert a rendered Markdown heading into its GitHub-style fragment."""
     text = re.sub(r"<[^>]+>", "", text).strip().lower()
     text = re.sub(r"[^\w\- ]", "", text)
     return text.replace(" ", "-")
 
 
 def heading_ids(path):
+    """Collect generated heading slugs and explicit HTML fragment identifiers."""
     try:
         text = clean_markdown(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError):
@@ -174,19 +177,44 @@ def reference_link_targets(text):
             yield definitions[label], match.start()
 
 
+ALWAYS_EXCLUDED_DIRS = {
+    ".git", "node_modules", "vendor", "__pycache__", ".venv", "venv", "env",
+    ".gradle", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+}
+GENERATED_DIRS = {
+    ".dev", ".toolgate", ".data", "data", "runtime", "artifacts", "quarantine",
+    "hotfolder", "HotFolder", "logs", "tmp", "temp", "coverage", "reports",
+    "benchmark-results", "dist", ".vite", ".next", ".nuxt", "build", "target",
+    "out", "htmlcov", "pip-wheel-metadata",
+}
+SOURCE_PACKAGE_DIRS = {"runtime", "hotfolder", "HotFolder", "logs"}
+
+
 def markdown_files():
-    roots = [ROOT / "docs"]
-    roots.extend(ROOT / name for name in ("README.md", "CONTRIBUTING.md", "ARCHITECTURE.md", "SECURITY.md"))
-    files = set()
-    for item in roots:
-        if item.is_file() and item.suffix.lower() == ".md":
-            files.add(item)
-        elif item.is_dir():
-            files.update(path for path in item.rglob("*.md") if ".git" not in path.parts)
+    """Find repository Markdown files while pruning generated and vendored trees."""
+    files = []
+    for current, directories, filenames in os.walk(ROOT):
+        relative_parts = Path(current).relative_to(ROOT).parts
+        inside_examples = "examples" in relative_parts
+        inside_source = "src" in relative_parts
+        directories[:] = sorted(
+            name for name in directories
+            if name not in ALWAYS_EXCLUDED_DIRS
+            and not (
+                name in GENERATED_DIRS
+                and not inside_examples
+                and not (inside_source and name in SOURCE_PACKAGE_DIRS)
+            )
+        )
+        files.extend(
+            Path(current) / filename
+            for filename in filenames
+            if filename.lower().endswith(".md")
+        )
     return sorted(files)
 
-
 def main():
+    """Validate every discovered Markdown link and report actionable failures."""
     files, errors = markdown_files(), []
     for source in files:
         try:
@@ -212,8 +240,16 @@ def main():
                            source.parent / target)
             target_path = target_path.resolve()
             if target_path.is_dir():
-                target_path = next((target_path / name for name in ("README.md", "index.md")
-                                    if (target_path / name).is_file()), target_path / "README.md")
+                if not fragment:
+                    continue
+                index_file = next(
+                    (target_path / name for name in ("README.md", "index.md")
+                     if (target_path / name).is_file()),
+                    None,
+                )
+                if index_file is None:
+                    continue
+                target_path = index_file
             if not target_path.is_file():
                 line = text.count("\n", 0, offset) + 1
                 errors.append(f"{source.relative_to(ROOT)}:{line}: broken link target '{url}'")

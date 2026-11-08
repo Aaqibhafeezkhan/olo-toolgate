@@ -23,5 +23,6 @@ for f in $required; do
   fi
 done
 
+python3 -m unittest discover -s tests/ci -p 'test_docs_link_checker.py' -v
 python3 tools/docs/check_links.py
 printf '%s\n' 'Documentation structure and link checks passed.'
