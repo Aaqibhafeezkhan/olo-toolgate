@@ -34,17 +34,34 @@ def device(command):
     return subprocess.run(COMPOSE + ['exec', '-T', 'linux-device', 'sh', '-c', command], check=True, capture_output=True, text=True, cwd=HERE).stdout
 
 
+PROFILE = 'hotfolder-trigger'
+
+
+def provisioning(config):
+    """The profile's state and each package's step, state and bounded reason, as Control recorded them."""
+    try:
+        status = config.api('/api/control/v1/packages/provisioning/' + PROFILE)
+    except ValueError as refused:
+        return str(refused)
+    packages = '; '.join(f"{p.get('packageId')} step={p.get('step')} state={p.get('state')} reason={p.get('reason', '-')}"
+                         for p in status.get('packages', []))
+    return f"profile {PROFILE} generation={status.get('generation')} state={status.get('state')}: {packages or 'no packages'}"
+
+
 def running(config, timeout=300):
     deadline = time.monotonic() + timeout
+    last = 'no instance reported yet'
     while time.monotonic() < deadline:
         try:
             items = config.api('/api/control/v1/triggers/instances?assignment=' + ta.ASSIGNMENT)['items']
             if any(item.get('phase') == 'Running' for item in items):
                 return items
-        except ValueError:
-            pass
+            last = 'instance phases: ' + (', '.join(str(item.get('phase')) for item in items) or 'none')
+        except ValueError as refused:
+            last = str(refused)
         time.sleep(5)
-    raise ValueError('The profile assignment hotfolder-inbox has no Running instance; inspect the device report and Control logs')
+    raise ValueError('The profile assignment hotfolder-inbox has no Running instance (last: ' + last + '; '
+                     + provisioning(config) + '); inspect the device report and Control logs')
 
 
 def main():
