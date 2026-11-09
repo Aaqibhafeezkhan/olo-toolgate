@@ -64,10 +64,30 @@ def running(config, timeout=300):
                      + provisioning(config) + '); inspect the device report and Control logs')
 
 
+def delivery(config, instances):
+    """What the device last reported for the Running instance and which events Control stored for it, bounded."""
+    instance = next((item for item in instances if item.get('phase') == 'Running'), {})
+    report = {key: instance.get(key) for key in ('instanceId', 'phase', 'conditions', 'counters', 'outbox', 'lastEventAt', 'lastReconcileAt')}
+    try:
+        current = config.api('/api/control/v1/triggers/instances?assignment=' + ta.ASSIGNMENT)['items']
+        instance = next((item for item in current if item.get('instanceId') == instance.get('instanceId')), instance)
+        report.update({key: instance.get(key) for key in report})
+        events = config.api('/api/control/v1/triggers/events?assignment=' + ta.ASSIGNMENT + '&instanceId=' + str(instance.get('instanceId')))['items']
+        report['events'] = [{key: event.get(key) for key in ('subject', 'type', 'time', 'tgclassification')} for event in events[:5]]
+        report['eventCount'] = len(events)
+    except (ValueError, KeyError) as refused:
+        report['refused'] = str(refused)
+    try:
+        report['subscription'] = config.api('/api/control/v1/triggers/subscriptions/' + ta.SUBSCRIPTION).get('status')
+    except ValueError as refused:
+        report['subscription'] = str(refused)
+    return json.dumps(report, sort_keys=True)[:4000]
+
+
 def main():
     manage.load_environment()
     config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
-    running(config)
+    instances = running(config)
     print('Instance Running on the device', flush=True)
     directory = manage.STATE / 'agents'
     descriptor = json.loads((directory / 'linux.json').read_text(encoding='utf-8'))
@@ -104,7 +124,7 @@ def main():
             outcomes.append(graph.invoke({'event': event}).get('outcome'))
     source.close()
     if not outcomes:
-        raise ValueError('The dropped file produced no event over the socket within 240 s')
+        raise ValueError('The dropped file produced no event over the socket within 240 s; Control holds: ' + delivery(config, instances))
     print('Event delivered over toolgate.triggers.v1; agent outcome: ' + outcomes[0], flush=True)
     listing = device(f'ls {FOLDER}/inbox {FOLDER}/processed')
     if outcomes[0] == 'processed':
