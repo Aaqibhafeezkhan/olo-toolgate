@@ -110,7 +110,8 @@ def main():
 
     name = 'e2e-' + secrets.token_hex(4) + '.txt'
     text = 'hot folder end to end ' + name
-    device(f"printf '%s' '{text}' > {FOLDER}/inbox/{name}")
+    # The files area accepts only owner-only files of the service user; one other entry fails the whole listing.
+    device(f"umask 077 && printf '%s' '{text}' > {FOLDER}/inbox/{name}")
     print('Dropped inbox/' + name, flush=True)
     shown, outcomes = [], []
     graph = ta.build_graph(ta.gateway_call(gateway, (mimic.UnconfirmedOperation,)), lambda path, content: shown.append((path, content)))

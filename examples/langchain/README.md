@@ -115,8 +115,12 @@ docker compose -f compose.yaml -f compose.triggers.yaml up -d --build --wait --w
 python manage.py setup --bootstrap-local --approve-linux-device --target linux
 pip install -r requirements.txt
 python trigger_agent.py --target linux
-docker compose exec linux-device sh -c 'echo "2 x widget" > /var/lib/olo-toolgate/hotfolder/inbox/order-1042.txt'
+docker compose exec linux-device sh -c 'umask 077 && echo "2 x widget" > /var/lib/olo-toolgate/hotfolder/inbox/order-1042.txt'
 ```
+
+Files in the HotFolder must be owner-only (`umask 077`, mode 0600) and owned by the
+device service user. The device refuses any other entry, and one such file fails every
+listing of the folder, so the trigger reports `Degraded` and emits nothing.
 
 The device polls `inbox/` every minute and reports each new `.txt` file once
 (`examples.files.observed.v1`, a `STATE_SNAPSHOT` source). Control stores
