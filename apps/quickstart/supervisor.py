@@ -389,6 +389,14 @@ def dependencies_ready():
         return False
 
 
+# Control resources that accept a management session only over direct TLS (their actor() calls tls()).
+DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/', '/api/control/v1/triggers/')
+
+
+def direct_tls(path):
+    return path.startswith(DIRECT_TLS_PREFIXES)
+
+
 def origin_target(value):
     """Only origin-form targets may reach the fixed loopback upstream."""
     if not isinstance(value, str) or not value.startswith('/') or value.startswith('//') or any(ord(c)<32 or ord(c)==127 for c in value) or '\\' in value:

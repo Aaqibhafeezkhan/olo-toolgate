@@ -56,7 +56,7 @@ def running(config, timeout=300):
             items = config.api('/api/control/v1/triggers/instances?assignment=' + ta.ASSIGNMENT)['items']
             if any(item.get('phase') == 'Running' for item in items):
                 return items
-            last = 'instance phases: ' + (', '.join(str(item.get('phase')) for item in items) or 'none')
+            last = json.dumps([{key: item.get(key) for key in ('phase', 'conditions')} for item in items])[:2000]
         except ValueError as refused:
             last = str(refused)
         time.sleep(5)

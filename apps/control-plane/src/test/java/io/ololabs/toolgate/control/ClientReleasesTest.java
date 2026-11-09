@@ -139,7 +139,10 @@ final class ClientReleasesTest {
     static byte[] sdkPackage(boolean python) throws Exception { return sdkPackage(python,false); }
     static byte[] sdkPackage(boolean python,boolean requiredKey) throws Exception { return sdkPackage(python,requiredKey,false); }
     /** With {@code trigger}, the package also exports the client POLL trigger {@code acme.greet/new-file} (ADR 058). */
-    static byte[] sdkPackage(boolean python,boolean requiredKey,boolean trigger) throws Exception {
+    static byte[] sdkPackage(boolean python,boolean requiredKey,boolean trigger) throws Exception { return sdkPackage(python,requiredKey,trigger,"acme.greet"); }
+    /** The same package under another id, so that two packages can be released to one device. */
+    static byte[] sdkPackage(boolean python,boolean requiredKey,boolean trigger,String id) throws Exception {
+        String mcp = id.substring(id.indexOf('.') + 1);
         var jar = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(jar)) {
             zip.putNextEntry(new ZipEntry(python ? "_toolgate_index/package.json" : "META-INF/toolgate/package.json"));
@@ -153,16 +156,16 @@ final class ClientReleasesTest {
         String schema = "{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"text\":{\"type\":\"string\",\"default\":\"World\",\"maxLength\":128}},\"required\":[]}";
         String output = "{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}";
         var files = new TreeMap<String, byte[]>(); var manifest = (ObjectNode) JSON.readTree("""
-            {"schemaVersion":2,"kind":"SDK","id":"acme.greet","version":"1.0.0","publisher":"Acme","sdk":{"language":"JAVA","version":"0.1.0","protocol":{"min":2,"max":2},"descriptorGeneration":1},
+            {"schemaVersion":2,"kind":"SDK","id":"@ID@","version":"1.0.0","publisher":"Acme","sdk":{"language":"JAVA","version":"0.1.0","protocol":{"min":2,"max":2},"descriptorGeneration":1},
              "compatibility":{"contractsVersion":"@CONTRACTS@"},"runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],"credentialReferences":[],"connections":[],"composition":[],
-             "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION));
+             "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION).replace("@ID@", id));
         if (python) {
             ((ObjectNode) manifest.get("sdk")).put("language", "PYTHON");
             ((ObjectNode) manifest.get("runtimes").get(0)).put("runtimeId", "python").put("language", "python").put("version", "3.10");
         }
         var tools = manifest.putArray("tools"); com.fasterxml.jackson.databind.node.ArrayNode set = JSON.createArrayNode();
         for (var spec : List.of(new String[]{"client_greet", "CLIENT"}, new String[]{"fetch", "SERVER"}, new String[]{"server_greet", "SERVER"})) {
-            var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"acme.greet/" + spec[0] + "\",\"mcpName\":\"greet." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
+            var d = (ObjectNode) JSON.readTree("{\"descriptorGeneration\":1,\"toolId\":\"" + id + "/" + spec[0] + "\",\"mcpName\":\"" + mcp + "." + spec[0] + "\",\"kind\":\"" + spec[1] + "\",\"title\":\"Greet\",\"description\":\"Greets.\","
                 + "\"inputSchema\":" + schema + ",\"outputSchema\":" + output + ",\"errors\":[],\"effect\":{\"safety\":\"READ_ONLY\",\"destructive\":false,\"openWorld\":false},\"businessKey\":{\"required\":false},"
                 + "\"execution\":{\"async\":false,\"maxDurationMs\":30000},\"routes\":[],\"destinations\":[],\"httpAuth\":[],\"tcp\":[],\"variables\":{\"globals\":[],\"secrets\":[],\"claims\":[]},\"permissions\":[],\"toolsets\":[]}");
             d.withObject("/businessKey").put("namespace","AGENT");
@@ -177,15 +180,15 @@ final class ClientReleasesTest {
             }
             byte[] canonical = Canonical.bytes(d); String digest = Canonical.sha256(canonical);
             var tool = tools.addObject(); tool.set("descriptor", d); tool.put("toolDescriptorDigest", digest).put("runtimeId", python ? "python" : "jvm").put("entryPoint", python ? "toolgate.runtime" : ClientReleases.JAVA_SDK_MAIN); tool.putArray("artifactIds").add("app");
-            set.addObject().put("toolId", "acme.greet/" + spec[0]).put("toolDescriptorDigest", digest);
+            set.addObject().put("toolId", id + "/" + spec[0]).put("toolDescriptorDigest", digest);
             files.put("tools/" + spec[0] + ".json", canonical);
         }
         if (trigger) {
-            var d = (ObjectNode) JSON.readTree(io.ololabs.toolgate.packagearchive.TriggerPackages.clientDescriptor("acme.greet", "new-file"));
+            var d = (ObjectNode) JSON.readTree(io.ololabs.toolgate.packagearchive.TriggerPackages.clientDescriptor(id, "new-file"));
             byte[] canonical = Canonical.bytes(d); String digest = Canonical.sha256(canonical);
             var entry = manifest.putArray("triggers").addObject(); entry.set("descriptor", d);
             entry.put("triggerDescriptorDigest", digest).put("runtimeId", "jvm").put("entryPoint", ClientReleases.JAVA_SDK_MAIN).putArray("artifactIds").add("app");
-            set.addObject().put("triggerId", "acme.greet/new-file").put("triggerDescriptorDigest", digest);
+            set.addObject().put("triggerId", id + "/new-file").put("triggerDescriptorDigest", digest);
             files.put("triggers/new-file.json", canonical);
             // descriptorSetDigest sorts tool and trigger entries by id.
             var sorted = new TreeMap<String, com.fasterxml.jackson.databind.JsonNode>();
@@ -398,6 +401,24 @@ final class ClientReleasesTest {
         assertEquals(400, assertThrows(Failure.class, () -> provisioning.apply(rig.admin, profile.replace("\"deviceGroupIds\":[\"lab\"],", "").replace(",\"tools\":[{\"toolId\":\"acme.greet/client_greet\",\"toolGroupId\":\"lab-tools\"}]", ""))).status());
     }
 
+    /** Runtime ids are scoped to their release: two Java SDK packages roll out to one device (issue #274 hot-folder trigger). */
+    @Test void twoJavaPackagesShareADeviceBecauseEachReleaseOwnsItsRuntime() throws Exception {
+        var rig = rig(true, "robot:secret");
+        join(rig, "lab-1");
+        byte[] other = sdkPackage(false, false, true, "acme.watch");
+        String otherDigest = JSON.readTree(new ServerPackages(rig.store, rig.codec, null, java.time.Clock.systemUTC()).acceptTriggers(true).upload(rig.admin, other, "upload-other").body()).get("packageDigest").asText();
+        rig.releases.release(rig.admin, "{\"packageDigest\":\"" + rig.digest + "\"}", "release-greet");
+        rig.releases.release(rig.admin, "{\"packageDigest\":\"" + otherDigest + "\"}", "release-watch");
+        for (var id : List.of("acme.greet", "acme.watch"))
+            rig.fleet.rollout(rig.admin, "{\"id\":\"lab-" + id.replace('.', '-') + "\",\"packageId\":\"" + id + "\",\"version\":\"1.0.0\",\"desiredPresence\":true,\"percentage\":100,\"deviceIds\":[\"lab-1\"]}", "roll-" + id.replace('.', '-'), "roll-" + id.replace('.', '-'));
+        assertEquals(List.of("lab-1"), rig.fleet.targets(rig.admin, "acme.greet", "1.0.0", List.of("lab")).assigned());
+        assertEquals(List.of("lab-1"), rig.fleet.targets(rig.admin, "acme.watch", "1.0.0", List.of("lab")).assigned());
+        var greet = rig.fleet.document(rig.admin, "acme.greet", "1.0.0"); var watch = rig.fleet.document(rig.admin, "acme.watch", "1.0.0");
+        assertEquals("acme.greet/jvm", greet.runtimes().getFirst().id());
+        assertEquals("acme.watch/jvm", watch.runtimes().getFirst().id());
+        assertTrue(greet.tools().stream().allMatch(t -> t.runtimeId().equals("acme.greet/jvm")));
+        assertEquals("acme.watch/jvm", watch.triggers().getFirst().runtimeId());
+    }
     @Test void deviceRuntimeIdsAreScopedToTheirPackageSoPackagesShareADevice() {
         // Every Java SDK package declares runtime "jvm"; a device rejects duplicate runtime ids across its packages.
         assertEquals("examples.hotfolder/jvm", ClientReleases.deviceRuntimeId("examples.hotfolder", ClientReleases.RUNTIME_ID));

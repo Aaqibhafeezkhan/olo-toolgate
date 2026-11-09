@@ -64,8 +64,13 @@ public class TriggerStreamSocket {
         return protocol ? ticket : null;
     }
 
+    /**
+     * The pump thread sends on {@code connection}, outside any socket callback. The injected {@link #connection} is a
+     * session-scoped client proxy that is unusable there (ContextNotActiveException), so the instance kept for the pump
+     * is the one Quarkus passes to this callback.
+     */
     @OnOpen
-    public void open() {
+    public void open(WebSocketConnection connection) {
         var handshake = connection.handshakeRequest();
         try {
             if (!"https".equalsIgnoreCase(handshake.scheme()) && !"wss".equalsIgnoreCase(handshake.scheme())) throw Failure.validation();
@@ -92,7 +97,7 @@ public class TriggerStreamSocket {
         if (open == null) return;
         synchronized (open.session()) {
             try { for (String reply : open.session().receive(text)) connection.sendTextAndAwait(reply); }
-            catch (RuntimeException failed) { LOG.info("trigger_stream message failed"); }
+            catch (RuntimeException failed) { LOG.infof("trigger_stream message failed: %s", where(failed)); }
         }
     }
 
@@ -108,6 +113,13 @@ public class TriggerStreamSocket {
         if (open != null) { var count = SOCKETS.get(open.principal()); if (count != null) count.decrementAndGet(); }
     }
 
+    /** The failure's class and the frame that threw it; never its message, which may quote event data. */
+    static String where(Throwable failure) {
+        var frames = failure.getStackTrace();
+        var own = java.util.Arrays.stream(frames).filter(f -> f.getClassName().startsWith("io.ololabs.") && !f.getClassName().contains("_ClientProxy")).findFirst();
+        return failure.getClass().getName() + (frames.length == 0 ? "" : " at " + frames[0]) + own.map(f -> " from " + f).orElse("");
+    }
+
     static void pumpAll() {
         for (var open : List.copyOf(OPEN.values())) {
             try {
@@ -119,7 +131,7 @@ public class TriggerStreamSocket {
                     for (String message : open.session().pump()) open.connection().sendTextAndAwait(message);
                     if (open.session().closeCode() != null) open.connection().closeAndAwait(new CloseReason(open.session().closeCode(), open.session().closeReason()));
                 }
-            } catch (RuntimeException failed) { LOG.info("trigger_stream pump failed"); }
+            } catch (RuntimeException failed) { LOG.infof("trigger_stream pump failed: %s", where(failed)); }
         }
     }
 }

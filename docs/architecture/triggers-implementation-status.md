@@ -7,18 +7,25 @@ This is the live progress document for issue #274 (server and client triggers). 
 
 ## Overall progress
 
-Updated: **2026-11-09**.
+Updated: **2026-11-10**.
 
-**Overall: 27% complete; 73% pending.** 4 of 18 modules merged to `main`: module 1 (olo-labs/olo-toolgate#281,
-merge `16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`;
-reviewed as #282, #283 and #284). Modules 5, 10, 11 and 12 are implemented on `feature/triggers-m05-client-ingest` (draft PR
-olo-labs/olo-toolgate#286, plan 24.6 as amended). None of them is Done yet: the hot-folder run on Quickstart
-failed in CI; the local connection fix and validation are recorded below. Passing CI acceptance remains outstanding.
-They earn 20% together only on that PR's merge (27% → 47%).
+**Overall: 27% complete; 73% pending.** 4 of 18 modules earned: module 1 (olo-labs/olo-toolgate#281, merge
+`16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`; reviewed as
+#282, #283 and #284). Modules 5, 10, 11 and 12 were merged to `main` through olo-labs/olo-toolgate#286 (merge
+`3886999b`) before their *Done when* evidence existed: the hot-folder run had never passed, on CI or locally. They stay
+at 0% until that evidence is recorded (*How progress is counted*). The fix PR from `fix/triggers-desired-404` (see
+*Hot-folder trigger end to end: defects fixed after #286*) makes the run pass locally; hosted CI also passed on PR #293 head `41cab59d` (run `42519241945`).
+The owned M12 scenarios and hosted validation of the merge result are outstanding.
+
+Merge verification on 2026-11-10 used PR head `41cab59d` and main `ad77dbfc`.
+The resolution retained main's runtime ID format and passed 14 focused Control
+tests, 2 Quickstart TLS routing tests, 10 LangChain trigger tests, and the
+documentation and source checks. The Compose acceptance run was not repeated
+on the merge result.
 
 | Slice / gate | Needs modules | Status |
 |---|---|---|
-| Slice 1 — client POLL trigger end to end (35%) | 1–5 | 🔵 Local Linux device-to-agent socket run passes with the CI fixes below; CI acceptance remains outstanding |
+| Slice 1 — client POLL trigger end to end (35%) | 1–5 | 🔵 Merged (#286). After five fixes (*Hot-folder trigger end to end*), the hot-folder trigger runs on a Linux device in Docker and its event reaches the LangGraph agent (local run, 2026-11-09). Hosted CI passes on `41cab59d`; merge result and owned scenarios outstanding |
 | Slice 2 — server trigger with failover (56%) | 1–8 | ⏳ Pending |
 | Slice 3 — schedule and device trigger → authorized MCP (85%) | 1–14 | ⏳ Pending |
 | Slice 4 — composite MCP from an agent and an action (92%) | 1–15 | ⏳ Pending |
@@ -74,14 +81,14 @@ evidence. No module weight or baseline denominator changes; earned progress stay
 | 2 | Java SDK, POLL | B | 6% | ✅ Merged (via #285) | 6% | #282, #285 |
 | 3 | Supervisor crate | C | 8% | ✅ Merged (via #285) | 8% | #283, #285 |
 | 4 | Control core for client triggers | D | 8% | ✅ Merged (via #285) | 8% | #284, #285 |
-| 5 | ★ Client integration and ingest | E | 8% | 🔵 In draft PR #286 (implemented; Slice 1 run outstanding) | 0% | #286 |
+| 5 | ★ Client integration and ingest | E | 8% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
 | 6 | Lifecycle, rollout and raw page | D | 6% | ⏳ Pending | 0% | — |
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
 | 8 | ★ Server triggers on the Tool Host | E | 8% | ⏳ Pending | 0% | — |
 | 9 | Python SDK parity | B | 4% | ⏳ Pending | 0% | — |
-| 10 | Event router and retention | D | 4% | 🔵 In draft PR #286 (implemented and tested in Control; end-to-end run outstanding) | 0% | #286 |
-| 11 | Information flow, coarse mode | D | 3% | 🔵 In draft PR #286 (implemented and tested in Control; end-to-end run outstanding) | 0% | #286 |
-| 12 | Subscriptions and WebSocket | D | 5% | 🔵 In draft PR #286 (implemented and tested in Control; end-to-end run outstanding) | 0% | #286 |
+| 10 | Event router and retention | D | 4% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
+| 11 | Information flow, coarse mode | D | 3% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
+| 12 | Subscriptions and WebSocket | D | 5% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
 | 13 | Schedules (Quartz) | D | 5% | ⏳ Pending | 0% | — |
 | 14 | ★ Actions | F | 8% | ⏳ Pending | 0% | — |
 | 15 | ★ Composite MCP | F | 7% | ⏳ Pending | 0% | — |
@@ -542,6 +549,39 @@ is recorded above); M12 scenarios 16 and 31 over a live socket; two Control repl
 **Known limit, outside this issue:** native HotFolder finality is not qualified (#230; `examples/langchain/README.md`).
 Until it is, the Gateway reports `read_text` and `move` as `OUTCOME_UNKNOWN`, and the agent shows `read-unconfirmed`
 or `move-unconfirmed` and leaves the file in `inbox/`. The trigger path up to the agent is not affected by this.
+
+### Hot-folder trigger end to end: defects fixed after #286 (branch `fix/triggers-desired-404`)
+
+The hosted `images / langchain` job never passed `trigger_e2e.py` (last on `main`'s commit: run 42493656507, "no Running
+instance"). Reproduced locally, the path had five independent defects, each hidden behind the one before it:
+
+| # | Symptom | Cause | Fix |
+|---|---|---|---|
+| 1 | The device's `GET /endpoint/triggers/desired` answered 404 on every attempt | JAX-RS picks the root resource class with the longest literal `@Path` first. The device routes were declared in `TriggerResource` (`/api/control/v1`) and were shadowed by `EndpointResource` (`/api/control/v1/endpoint`) | Fixed on `main` by olo-labs/olo-toolgate#292 (merge `e49d3e94`), found independently: the device routes move to `EndpointTriggerResource` (`/api/control/v1/endpoint/triggers`), guarded by `ResourcePathShadowingTest`. This branch reached the same fix and adopted #292's version when merging `main` |
+| 2 | Every `/api/control/v1/triggers/*` admin call through Quickstart answered 401; `trigger_e2e.running()` swallowed it as "not Running yet" | `TriggerResource` accepts a management session only over direct TLS, as `fleet/` and `endpoint/` do. The Quickstart supervisor forwarded only `endpoint/`, `builder/` and `fleet/` to Control's TLS port | The supervisor forwards `triggers/` too (`direct_tls`). `tests/quickstart/test_direct_tls_routes.py` scans Control for every TLS-only management resource and requires its routes to be forwarded over TLS; without the fix it lists all 17 trigger routes. `trigger_e2e.running()` now reports its last observation on timeout |
+| 3 | Profile `hotfolder-trigger` stayed `FAILED` at `ROLLOUT` ("Revision or configuration conflict"); no assignment was created | Every Java SDK client release declared runtime id `jvm`. `FleetService.assign` and the device both refuse two assigned packages with the same runtime id, so `examples.inbox-watch` could not join `examples.hotfolder` on one device (no two Java packages could) | A release's runtime id is scoped to its package: `<packageId>/jvm` or `<packageId>/python` after integrating main (a digest for ids over 128 characters). Manifest matching still uses the SDK id. `ClientReleasesTest.twoJavaPackagesShareADeviceBecauseEachReleaseOwnsItsRuntime` reproduces the conflict without the fix |
+| 4 | Instance `Running` but `Degraded`: "CheckFailed: PlatformError: the device refused the file operation"; nothing emitted | `trigger_e2e.py` dropped its file with `printf >` under umask 022 (mode 0644). The files area is owner-only custody and fails its whole inventory closed on a group- or world-readable entry (`docs/client/hotfolder.md`) | Test harness only: the file is dropped with `umask 077`, as custody requires. No product change |
+| 5 | Event stored and routed, never delivered: `trigger_stream pump failed` | `TriggerStreamSocket`'s pump thread sent on the injected `WebSocketConnection`, a session-scoped CDI client proxy, outside any socket callback (`ContextNotActiveException`) | The pump keeps the connection instance Quarkus passes to `@OnOpen`. Pump and message failures now log the exception class and the throwing frame, never the message, which may quote event data |
+
+**Checks run** (Windows workstation, 2026-11-09; Docker Desktop):
+
+| Check | Result |
+|---|---|
+| Local LangChain trigger run mirroring the CI job (`manage.py prepare`; base `up`; `setup --bootstrap-local --approve-linux-device --target linux`; triggers overlay `up --build`; `trigger_e2e.py`). Images: the CI-built Quickstart and device images of run 42493656507 (`main`'s commit) with this branch's Control (`quarkusBuild`) and `supervisor.py` overlaid; build version stamped with `tools/release/config.py` to match those images | Pass on a fresh stack (2026-11-08 19:40–19:46 UTC, exit 0): instance `Running`; the dropped owner-only file `inbox/e2e-181db6c6.txt` produced an INTERNAL, unredacted event delivered over `toolgate.triggers.v1` to the LangGraph agent, which called `examples.hotfolder/read_text`; outcome `read-unconfirmed` (the #230 limit below), the trigger-path pass `trigger_e2e.py` defines. The file stayed in `inbox/`; no `trigger_stream` failure in the Control log |
+| The same run before the fixes, step by step: device `desired` 404, then admin API 401, then `ROLLOUT` conflict, then `FILES_LIST` refused, then pump `ContextNotActiveException` | Each failure observed, then fixed in turn |
+| `ResourceRoutingTest` (2; before adopting #292's equivalent `ResourcePathShadowingTest`), `ClientReleasesTest` (11) | Pass; each new test fails on the unfixed code as described above |
+| `tests/quickstart/test_direct_tls_routes.py` (2), in the Quickstart image as CI runs it | Pass; fails without the supervisor fix |
+| `tools/control/check.py` (PostgreSQL 17): `:contracts-java:test`, `:package-archive:test`, `:control-plane:test` | Pass; `control-plane:test` 330 tests, 8 skipped |
+| `tools/control/check.py`: `:control-plane:enterpriseTest` | 447 tests, 1 failure: `KillSwitchTest.separateOperatorMtlsListenerCommitsOnlyAcceptedOfflineQuorum`, `UnsupportedOperationException` from `Files.setPosixFilePermissions` in `KillOperatorTlsFixture` (POSIX permissions on Windows); code this PR does not touch, not rerun on unmodified `main` |
+| `tests/quickstart` in the Quickstart image (47), `tests/ci` (422, 10 skipped), `examples/langchain` `test_trigger_agent.py`, `test_manage.py`, `test_packages.py` (10, 35, 5), `tools/quality.py`, `tools/ci/preflight.py` | Pass |
+
+**Not run:** hosted CI of the merge result; M12 scenarios 9, 13, 33, 38 and 39; two
+Control replicas; an automated real-socket test of `TriggerStreamSocket` (defect 5 sat in exactly that gap). The local
+run used CI images with a locally built Control overlaid, not an image built end to end from this branch.
+
+**Still outstanding for the use case "display the file and move it to `processed/`":** native HotFolder finality (#230).
+The Gateway grades the device's `read_text` and `move` `OUTCOME_UNKNOWN`, so the agent reports `read-unconfirmed` and
+leaves the file in `inbox/`. The trigger path itself does not depend on it.
 
 ### Integration of modules 2–4 into `main`
 
