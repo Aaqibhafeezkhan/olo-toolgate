@@ -4,6 +4,11 @@ Run checks for the behavior you change, then the required repository/CI gates.
 Use the [local CI runner](../development/local-ci.md) to inspect workflows and
 replay supported jobs. It reports coverage gaps explicitly.
 
+The production Gateway image smoke test (`python tools/gateway/container.py`)
+also qualifies offline SQLite backup and restore. The backup check inspects
+containers listed for the source volume to confirm they have stopped. Docker
+can briefly list a stopped container as running.
+
 | Scope | Entry point |
 |---|---|
 | Full repository | `python tools/check.py` |
