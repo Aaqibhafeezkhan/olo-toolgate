@@ -49,6 +49,16 @@ TRUST_FILES = {'device-ca.crt': 'device-ca.crt', 'device-ca.key': 'device-ca.pem
 TENANT = None  # Set from protected, persisted UUID state before composition starts.
 ISSUER = 'https://quickstart.local'
 GROUPS = ()  # Human portal permissions derive only from the reviewed Team/Role graph.
+# Control resources whose administration requires direct TLS ("Direct TLS required"); the supervisor forwards them to
+# :8443 instead of the plain management listener. tests/quickstart/test_direct_tls.py derives this from Control.
+DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/',
+                       '/api/control/v1/triggers/')
+
+
+def direct_tls(path):
+    return path.startswith(DIRECT_TLS_PREFIXES)
+
+
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
 BASE_USERS = ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
 CLAIM_PATH = '/api/quickstart/v1/demo-accounts/claim'
@@ -912,7 +922,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if mcp_http or path.startswith(('/console/', '/api/control/v1/', '/api/public/v1/clients', '/api/public/v1/installers')) or path in ('/','/console'):
                 # Direct TLS adapter is used for enrollment administration; device peers use :8443 itself.
                 # A Marketplace import fetches and verifies the package in Control (60 s per request), so it waits longer.
-                secure = path.startswith(('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/'))
+                secure = direct_tls(path)
                 client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 75 if path=='/api/control/v1/marketplace/imports' else 10)
                 forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent','toolgate-tenant-id'}
                 if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))

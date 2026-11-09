@@ -23,7 +23,10 @@ def run(arguments,**options):
 
 
 def qualify(image,source_volume,output=None):
-    if run(['ps','-q','--filter','volume='+source_volume]).strip():raise ValueError('Stop the source composition before offline backup qualification')
+    for container in run(['ps','-q','--filter','volume='+source_volume]).split():
+        # Docker's list can retain stale running state after stop (moby/moby#50133).
+        state=run(['inspect','--format','{{.State.Running}} {{.State.Restarting}}',container]).strip()
+        if state!='false false':raise ValueError('Stop the source composition before offline backup qualification')
     name='toolgate-sqlite-recovery-'+secrets.token_hex(6)
     volumes=[name+'-'+suffix for suffix in ('archive','reviews','restored')]
     archive,reviews,restored=volumes

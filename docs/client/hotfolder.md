@@ -59,6 +59,8 @@ and `/Library/Application Support/OLO/ToolGate` on macOS.
 `root` is absolute; `maxFileBytes` is 1 to 65,536; `maxEntries` 1 to 1,024; at most
 32 lowercase alphanumeric extensions. The service creates an owner-only root;
 symlinks, writable ancestors, reparse points and hard-linked files are rejected.
+Files must be owned by the service user and owner-only (mode 0600 on Linux): one
+other entry fails the whole listing, and with it every trigger that lists the area.
 Linux's unit confines writes to `/var/lib/olo-toolgate` and `/run/olo-toolgate`;
 for a root outside that tree, add the exact root to a systemd `ReadWritePaths`
 drop-in and restart. Do not remove confinement.
