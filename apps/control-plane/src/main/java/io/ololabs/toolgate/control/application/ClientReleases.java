@@ -26,6 +26,7 @@ import java.util.*;
  *  rollouts and permits stay separate reviewed authorities. */
 public final class ClientReleases {
     public static final String JAVA_SDK_MAIN = "io.ololabs.toolgate.runtime.Main";
+    /** The SDK runtime a Java package manifest declares; Python packages declare "python". */
     public static final String RUNTIME_ID = "jvm";
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
     private static final int MAX_DOCUMENT = 32768;
@@ -90,6 +91,7 @@ public final class ClientReleases {
         boolean python = "PYTHON".equals(language);
         if (python && settings.pythonBaseRepository() == null) throw incompatible("Configure an approved Python base image before releasing Python tools");
         String runtimeId = python ? "python" : RUNTIME_ID;
+        String deviceRuntime = deviceRuntimeId(packageId, runtimeId);
         String filename = python ? "tool.pyz" : "tool.jar";
         var jars = new ArrayList<JsonNode>(); for (var a : manifest.path("artifacts")) if (runtimeId.equals(a.path("runtimeId").asText())) jars.add(a);
         if (jars.size() != 1 || !jars.get(0).path("path").asText().endsWith(python ? ".pyz" : ".jar")) throw incompatible("A client release needs exactly one SDK artifact");
@@ -110,9 +112,7 @@ public final class ClientReleases {
         if (supported.isEmpty() && triggers.isEmpty()) throw incompatible("No export of this package can run on a client device");
 
         var image = push(packageId, version, jar, python);
-        // Each release owns its runtime: a device merges every assigned release and refuses a runtime id two packages share.
-        String releaseRuntimeId = releaseRuntimeId(runtimeId, packageId);
-        var runtime = JSON.objectNode().put("id", releaseRuntimeId).put("kind", python ? "PYTHON_SDK" : "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
+        var runtime = JSON.objectNode().put("id", deviceRuntime).put("kind", python ? "PYTHON_SDK" : "JAVA_SDK").put("image", image.reference()).put("version", image.javaVersion());
         var document = JSON.objectNode().put("formatVersion", 1).put("packageId", packageId).put("version", version);
         var platforms = document.putArray("platforms"); settings.platforms().forEach(platforms::add);
         var architectures = document.putArray("architectures"); image.architectures().forEach(architectures::add);
@@ -121,7 +121,7 @@ public final class ClientReleases {
         var tools = document.putArray("tools"); var tests = document.putArray("selfTests"); var records = new ArrayList<ObjectNode[]>();
         for (var tool : supported) {
             var d = tool.path("descriptor"); String toolId = d.path("toolId").asText(); var authorization = PackageAuthorization.of(d);
-            var registration = JSON.objectNode().put("toolId", toolId).put("action", authorization.action()).put("runtimeId", releaseRuntimeId)
+            var registration = JSON.objectNode().put("toolId", toolId).put("action", authorization.action()).put("runtimeId", deviceRuntime)
                 .put("entryPoint", "/opt/tool/" + packageId + "/" + filename);
             registration.set("inputSchema", d.get("inputSchema")); registration.set("outputSchema", d.get("outputSchema"));
             // The device brokers its files area only as the signed registration grants (ADR 027).
@@ -161,7 +161,7 @@ public final class ClientReleases {
                 boolean reads = false;
                 for (var permission : d.path("permissions")) reads |= permission.asText().equals("DEVICE_FILES_READ");
                 registrations.addObject().put("triggerId", d.path("triggerId").asText())
-                    .put("triggerDescriptorDigest", trigger.path("triggerDescriptorDigest").asText()).put("runtimeId", releaseRuntimeId)
+                    .put("triggerDescriptorDigest", trigger.path("triggerDescriptorDigest").asText()).put("runtimeId", deviceRuntime)
                     .put("entryPoint", "/opt/tool/" + packageId + "/" + filename).put("fileAccess", reads ? "READ" : "NONE");
             }
         }
@@ -191,12 +191,18 @@ public final class ClientReleases {
         return new Store.Reply(200, codec.json(result), 0);
     }
 
-    /** A trigger export a device can run: declared for clients, on the SDK runtime and entry point of this release. */
-    /** The release's runtime id: the SDK runtime scoped to its package ({@code jvm:examples.hotfolder}), at most 128 characters. */
-    public static String releaseRuntimeId(String sdkRuntimeId, String packageId) {
-        String scoped = sdkRuntimeId + ":" + packageId;
-        return scoped.length() <= 128 ? scoped : sdkRuntimeId + ":" + DirectoryService.digest(packageId).substring(0, 64);
+    /**
+     * The device runtime of one package's release. Each release runs its own image, and a device holds the runtimes of
+     * all its assigned packages under unique ids (docs/client/package-deployment.md), so the id is scoped to the package;
+     * a package id too long for an identifier is replaced by its digest.
+     */
+    public static String deviceRuntimeId(String packageId, String runtimeId) {
+        String scoped = packageId + "/" + runtimeId;
+        return scoped.length() <= 128 && scoped.matches("^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$") ? scoped
+            : DirectoryService.digest(packageId).substring(0, 64) + "/" + runtimeId;
     }
+
+    /** A trigger export a device can run: declared for clients, on the SDK runtime and entry point of this release. */
     private static boolean clientTrigger(JsonNode trigger, String runtimeId) {
         boolean client = false;
         for (var executor : trigger.path("descriptor").path("executors")) client |= executor.asText().equals("CLIENT");

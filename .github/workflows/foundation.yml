@@ -394,6 +394,7 @@ jobs:
         name: foundation-stage-ui
         path: .
     - name: Java build, publication proof and enterprise evidence
+      timeout-minutes: 35
       run: |
         python tools/check.py --ci-common --ci-part java
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

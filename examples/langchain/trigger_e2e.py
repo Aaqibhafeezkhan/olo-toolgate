@@ -34,24 +34,60 @@ def device(command):
     return subprocess.run(COMPOSE + ['exec', '-T', 'linux-device', 'sh', '-c', command], check=True, capture_output=True, text=True, cwd=HERE).stdout
 
 
+PROFILE = 'hotfolder-trigger'
+
+
+def provisioning(config):
+    """The profile's state and each package's step, state and bounded reason, as Control recorded them."""
+    try:
+        status = config.api('/api/control/v1/packages/provisioning/' + PROFILE)
+    except ValueError as refused:
+        return str(refused)
+    packages = '; '.join(f"{p.get('packageId')} step={p.get('step')} state={p.get('state')} reason={p.get('reason', '-')}"
+                         for p in status.get('packages', []))
+    return f"profile {PROFILE} generation={status.get('generation')} state={status.get('state')}: {packages or 'no packages'}"
+
+
 def running(config, timeout=300):
-    deadline, last = time.monotonic() + timeout, 'no response'
+    deadline = time.monotonic() + timeout
+    last = 'no instance reported yet'
     while time.monotonic() < deadline:
         try:
             items = config.api('/api/control/v1/triggers/instances?assignment=' + ta.ASSIGNMENT)['items']
             if any(item.get('phase') == 'Running' for item in items):
                 return items
             last = json.dumps([{key: item.get(key) for key in ('phase', 'conditions')} for item in items])[:2000]
-        except ValueError as failure:
-            last = str(failure)
+        except ValueError as refused:
+            last = str(refused)
         time.sleep(5)
-    raise ValueError('The profile assignment hotfolder-inbox has no Running instance; last observation: ' + last)
+    raise ValueError('The profile assignment hotfolder-inbox has no Running instance (last: ' + last + '; '
+                     + provisioning(config) + '); inspect the device report and Control logs')
+
+
+def delivery(config, instances):
+    """What the device last reported for the Running instance and which events Control stored for it, bounded."""
+    instance = next((item for item in instances if item.get('phase') == 'Running'), {})
+    report = {key: instance.get(key) for key in ('instanceId', 'phase', 'conditions', 'counters', 'outbox', 'lastEventAt', 'lastReconcileAt')}
+    try:
+        current = config.api('/api/control/v1/triggers/instances?assignment=' + ta.ASSIGNMENT)['items']
+        instance = next((item for item in current if item.get('instanceId') == instance.get('instanceId')), instance)
+        report.update({key: instance.get(key) for key in report})
+        events = config.api('/api/control/v1/triggers/events?assignment=' + ta.ASSIGNMENT + '&instanceId=' + str(instance.get('instanceId')))['items']
+        report['events'] = [{key: event.get(key) for key in ('subject', 'type', 'time', 'tgclassification')} for event in events[:5]]
+        report['eventCount'] = len(events)
+    except (ValueError, KeyError) as refused:
+        report['refused'] = str(refused)
+    try:
+        report['subscription'] = config.api('/api/control/v1/triggers/subscriptions/' + ta.SUBSCRIPTION).get('status')
+    except ValueError as refused:
+        report['subscription'] = str(refused)
+    return json.dumps(report, sort_keys=True)[:4000]
 
 
 def main():
     manage.load_environment()
     config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
-    running(config)
+    instances = running(config)
     print('Instance Running on the device', flush=True)
     directory = manage.STATE / 'agents'
     descriptor = json.loads((directory / 'linux.json').read_text(encoding='utf-8'))
@@ -74,8 +110,7 @@ def main():
 
     name = 'e2e-' + secrets.token_hex(4) + '.txt'
     text = 'hot folder end to end ' + name
-    # The files area is owner-only custody (docs/client/hotfolder.md): a group- or world-readable entry fails the whole
-    # inventory closed, so the dropped file is created owner-only, as a user's copy into the area must be.
+    # The files area accepts only owner-only files of the service user; one other entry fails the whole listing.
     device(f"umask 077 && printf '%s' '{text}' > {FOLDER}/inbox/{name}")
     print('Dropped inbox/' + name, flush=True)
     shown, outcomes = [], []
@@ -90,7 +125,7 @@ def main():
             outcomes.append(graph.invoke({'event': event}).get('outcome'))
     source.close()
     if not outcomes:
-        raise ValueError('The dropped file produced no event over the socket within 240 s')
+        raise ValueError('The dropped file produced no event over the socket within 240 s; Control holds: ' + delivery(config, instances))
     print('Event delivered over toolgate.triggers.v1; agent outcome: ' + outcomes[0], flush=True)
     listing = device(f'ls {FOLDER}/inbox {FOLDER}/processed')
     if outcomes[0] == 'processed':

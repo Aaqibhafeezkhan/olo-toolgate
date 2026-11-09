@@ -243,7 +243,8 @@ final class ClientReleasesTest {
         assertEquals("3.12.14", result.path("runtimeVersion").asText());
         var document = rig.codec.model(rig.codec.json(result.get("document")), FleetPackageDocument.class);
         assertEquals(LocalRuntimeKind.PYTHON_SDK, document.runtimes().getFirst().kind());
-        assertEquals("python:acme.greet", document.runtimes().getFirst().id());
+        assertEquals("acme.greet/python", document.runtimes().getFirst().id());
+        assertTrue(document.tools().stream().allMatch(t -> t.runtimeId().equals("acme.greet/python")));
         assertTrue(document.tools().stream().allMatch(t -> t.entryPoint().equals("/opt/tool/acme.greet/tool.pyz")));
         assertEquals(2, document.tools().size());
         FleetService.validatePackage(document);
@@ -382,7 +383,8 @@ final class ClientReleasesTest {
         var registration = document.triggers().getFirst();
         assertEquals("acme.greet/new-file", registration.triggerId());
         assertEquals("READ", registration.fileAccess().name());
-        assertEquals("jvm:acme.greet", registration.runtimeId());
+        assertEquals("acme.greet/jvm", registration.runtimeId());
+        assertEquals(document.runtimes().getFirst().id(), registration.runtimeId());
         var assignment = JSON.readTree(triggers.get(rig.admin, "lab-inbox").body());
         assertEquals("[\"lab\"]", assignment.path("spec").path("target").path("deviceGroups").toString());
         assertEquals("inbox", assignment.path("spec").path("config").path("folder").asText());
@@ -412,16 +414,21 @@ final class ClientReleasesTest {
         assertEquals(List.of("lab-1"), rig.fleet.targets(rig.admin, "acme.greet", "1.0.0", List.of("lab")).assigned());
         assertEquals(List.of("lab-1"), rig.fleet.targets(rig.admin, "acme.watch", "1.0.0", List.of("lab")).assigned());
         var greet = rig.fleet.document(rig.admin, "acme.greet", "1.0.0"); var watch = rig.fleet.document(rig.admin, "acme.watch", "1.0.0");
-        assertEquals("jvm:acme.greet", greet.runtimes().getFirst().id());
-        assertEquals("jvm:acme.watch", watch.runtimes().getFirst().id());
-        assertTrue(greet.tools().stream().allMatch(t -> t.runtimeId().equals("jvm:acme.greet")));
-        assertEquals("jvm:acme.watch", watch.triggers().getFirst().runtimeId());
+        assertEquals("acme.greet/jvm", greet.runtimes().getFirst().id());
+        assertEquals("acme.watch/jvm", watch.runtimes().getFirst().id());
+        assertTrue(greet.tools().stream().allMatch(t -> t.runtimeId().equals("acme.greet/jvm")));
+        assertEquals("acme.watch/jvm", watch.triggers().getFirst().runtimeId());
     }
-    @Test void aReleaseRuntimeIdIsAnIdentifierForEveryPackageIdLength() {
-        assertEquals("jvm:examples.hotfolder", ClientReleases.releaseRuntimeId("jvm", "examples.hotfolder"));
-        String id = "a" + "b".repeat(127), scoped = ClientReleases.releaseRuntimeId("python", id);
-        assertTrue(scoped.length() <= 128 && scoped.matches("^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$"), scoped);
-        assertNotEquals(scoped, ClientReleases.releaseRuntimeId("python", id + "c"));
+    @Test void deviceRuntimeIdsAreScopedToTheirPackageSoPackagesShareADevice() {
+        // Every Java SDK package declares runtime "jvm"; a device rejects duplicate runtime ids across its packages.
+        assertEquals("examples.hotfolder/jvm", ClientReleases.deviceRuntimeId("examples.hotfolder", ClientReleases.RUNTIME_ID));
+        assertEquals("examples.inbox-watch/jvm", ClientReleases.deviceRuntimeId("examples.inbox-watch", ClientReleases.RUNTIME_ID));
+        assertNotEquals(ClientReleases.deviceRuntimeId("a.one", "python"), ClientReleases.deviceRuntimeId("a.two", "python"));
+        String longId = "a" + ".b".repeat(70);
+        String hashed = ClientReleases.deviceRuntimeId(longId, ClientReleases.RUNTIME_ID);
+        assertTrue(hashed.matches("^[a-f0-9]{64}/jvm$"), hashed);
+        assertEquals(hashed, ClientReleases.deviceRuntimeId(longId, ClientReleases.RUNTIME_ID));
+        assertNotEquals(hashed, ClientReleases.deviceRuntimeId(longId + ".c", ClientReleases.RUNTIME_ID));
     }
 
     @Test void devicesNeedTheReleaseKeyAndNothingIsSubstituted() throws Exception {

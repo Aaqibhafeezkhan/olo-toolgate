@@ -88,7 +88,9 @@ In the root-owned client configuration add deployment.releaseKeys and
 deployment.organizationKeys arrays; supply existing execution engine settings and
 tools Gateway/device identity settings. Empty execution.runtimes/tools is valid
 for fleet-only registration. Local administrator registrations remain separate;
-package tool/runtime IDs cannot collide with local or other assigned IDs. Reload
+package tool/runtime IDs cannot collide with local or other assigned IDs. A client
+release names its runtime after its package (for example `examples.hotfolder/jvm`),
+so several SDK packages can be assigned to one device. Reload
 by restarting the OS service; IPC callers cannot upload trust keys or descriptors.
 
 ## Deploy, update, rollback and uninstall

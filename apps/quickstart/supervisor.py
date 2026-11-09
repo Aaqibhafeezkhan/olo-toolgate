@@ -49,6 +49,16 @@ TRUST_FILES = {'device-ca.crt': 'device-ca.crt', 'device-ca.key': 'device-ca.pem
 TENANT = None  # Set from protected, persisted UUID state before composition starts.
 ISSUER = 'https://quickstart.local'
 GROUPS = ()  # Human portal permissions derive only from the reviewed Team/Role graph.
+# Control resources whose administration requires direct TLS ("Direct TLS required"); the supervisor forwards them to
+# :8443 instead of the plain management listener. tests/quickstart/test_direct_tls.py derives this from Control.
+DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', '/api/control/v1/fleet/',
+                       '/api/control/v1/triggers/')
+
+
+def direct_tls(path):
+    return path.startswith(DIRECT_TLS_PREFIXES)
+
+
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
 BASE_USERS = ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
 CLAIM_PATH = '/api/quickstart/v1/demo-accounts/claim'

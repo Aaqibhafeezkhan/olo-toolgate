@@ -129,6 +129,20 @@ tasks.register<Test>("enterpriseTest") {
 }
 tasks.check { dependsOn("enterpriseTest") }
 
+val runningInCi = providers.environmentVariable("CI").map { it == "true" }.orElse(false)
+tasks.withType<Test>().matching { it.name == "test" || it.name == "enterpriseTest" }.configureEach {
+    if (runningInCi.get()) {
+        failFast = true
+        systemProperty("junit.jupiter.execution.timeout.default", "6 m")
+        systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "SEPARATE_THREAD")
+        systemProperty("junit.jupiter.execution.timeout.threaddump.enabled", "true")
+        testLogging {
+            events("started", "failed", "skipped")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
+    }
+}
+
 val consoleDirectory = rootProject.file("apps/admin-ui/dist")
 val prebuiltConsole = providers.gradleProperty("prebuiltAdminUi").map(String::toBoolean).getOrElse(false)
 val buildAdminUi = tasks.register<Exec>("buildAdminUi") {
