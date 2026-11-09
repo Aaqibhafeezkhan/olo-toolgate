@@ -4,6 +4,11 @@ Run checks for the behavior you change, then the required repository/CI gates.
 Use the [local CI runner](../development/local-ci.md) to inspect workflows and
 replay supported jobs. It reports coverage gaps explicitly.
 
+In CI, the Control Plane test tasks log each test as it starts and stop at the
+first failure. JUnit gives each test and lifecycle method six minutes by default,
+so a stalled test can fail with its name and stack trace. The Java workflow step
+also has a 35-minute cap for stalls outside JUnit.
+
 The production Gateway image smoke test (`python tools/gateway/container.py`)
 also qualifies offline SQLite backup and restore. The backup check inspects
 containers listed for the source volume to confirm they have stopped. Docker
