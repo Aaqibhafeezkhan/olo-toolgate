@@ -240,7 +240,8 @@ final class ClientReleasesTest {
         assertEquals("3.12.14", result.path("runtimeVersion").asText());
         var document = rig.codec.model(rig.codec.json(result.get("document")), FleetPackageDocument.class);
         assertEquals(LocalRuntimeKind.PYTHON_SDK, document.runtimes().getFirst().kind());
-        assertEquals("python", document.runtimes().getFirst().id());
+        assertEquals("acme.greet/python", document.runtimes().getFirst().id());
+        assertTrue(document.tools().stream().allMatch(t -> t.runtimeId().equals("acme.greet/python")));
         assertTrue(document.tools().stream().allMatch(t -> t.entryPoint().equals("/opt/tool/acme.greet/tool.pyz")));
         assertEquals(2, document.tools().size());
         FleetService.validatePackage(document);
@@ -379,7 +380,8 @@ final class ClientReleasesTest {
         var registration = document.triggers().getFirst();
         assertEquals("acme.greet/new-file", registration.triggerId());
         assertEquals("READ", registration.fileAccess().name());
-        assertEquals(ClientReleases.RUNTIME_ID, registration.runtimeId());
+        assertEquals("acme.greet/jvm", registration.runtimeId());
+        assertEquals(document.runtimes().getFirst().id(), registration.runtimeId());
         var assignment = JSON.readTree(triggers.get(rig.admin, "lab-inbox").body());
         assertEquals("[\"lab\"]", assignment.path("spec").path("target").path("deviceGroups").toString());
         assertEquals("inbox", assignment.path("spec").path("config").path("folder").asText());
@@ -394,6 +396,18 @@ final class ClientReleasesTest {
         // Refusals before anything changes.
         assertEquals(400, assertThrows(Failure.class, () -> provisioning.apply(rig.admin, profile.replace("acme.greet/new-file", "other.pkg/new-file"))).status());
         assertEquals(400, assertThrows(Failure.class, () -> provisioning.apply(rig.admin, profile.replace("\"deviceGroupIds\":[\"lab\"],", "").replace(",\"tools\":[{\"toolId\":\"acme.greet/client_greet\",\"toolGroupId\":\"lab-tools\"}]", ""))).status());
+    }
+
+    @Test void deviceRuntimeIdsAreScopedToTheirPackageSoPackagesShareADevice() {
+        // Every Java SDK package declares runtime "jvm"; a device rejects duplicate runtime ids across its packages.
+        assertEquals("examples.hotfolder/jvm", ClientReleases.deviceRuntimeId("examples.hotfolder", ClientReleases.RUNTIME_ID));
+        assertEquals("examples.inbox-watch/jvm", ClientReleases.deviceRuntimeId("examples.inbox-watch", ClientReleases.RUNTIME_ID));
+        assertNotEquals(ClientReleases.deviceRuntimeId("a.one", "python"), ClientReleases.deviceRuntimeId("a.two", "python"));
+        String longId = "a" + ".b".repeat(70);
+        String hashed = ClientReleases.deviceRuntimeId(longId, ClientReleases.RUNTIME_ID);
+        assertTrue(hashed.matches("^[a-f0-9]{64}/jvm$"), hashed);
+        assertEquals(hashed, ClientReleases.deviceRuntimeId(longId, ClientReleases.RUNTIME_ID));
+        assertNotEquals(hashed, ClientReleases.deviceRuntimeId(longId + ".c", ClientReleases.RUNTIME_ID));
     }
 
     @Test void devicesNeedTheReleaseKeyAndNothingIsSubstituted() throws Exception {
