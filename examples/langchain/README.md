@@ -142,7 +142,8 @@ Status (issue #274, draft PR #286):
   - unit tests: [test_trigger_agent.py](test_trigger_agent.py), `HotFolderTest`, `TriggerDeliveryTest`,
     `TriggerIngestTest` and `ClientReleasesTest`.
 
-  The Compose run has not been executed locally.
+  The hot-folder trigger path has been executed locally with the file-permission and
+  background WebSocket connection fixes (see the [validation record](../../docs/architecture/triggers-implementation-status.md)).
 - **Native HotFolder finality** (see the note at the top): until it is qualified, the Gateway reports `read_text`
   and `move` as `OUTCOME_UNKNOWN`. The agent then shows `read-unconfirmed` or `move-unconfirmed` and leaves the file
   in `inbox/`.
@@ -179,6 +180,11 @@ permission failures, changed identities and malformed status fail immediately.
 Metadata export reuses that verified identity so a concurrent health refresh
 cannot invalidate setup by temporarily removing its status file. Lifecycle and
 package regression tests also run in the early foundation gate.
+
+If Control stores an event but the agent receives nothing and Control logs
+`trigger_stream pump failed`, use a build containing the background WebSocket
+connection fix. The sender must retain the actual connection while its callback
+is active; a callback-scoped connection proxy cannot send from the background thread.
 
 An unhealthy device is a startup/executor failure; a failed rollout is
 a package activation failure; an empty catalog requires checking grants, package

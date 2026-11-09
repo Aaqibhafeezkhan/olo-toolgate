@@ -41,7 +41,12 @@ public class TriggerStreamSocket {
     private static final ScheduledExecutorService PUMP = Executors.newSingleThreadScheduledExecutor(r -> { var t = new Thread(r, "toolgate-trigger-stream"); t.setDaemon(true); return t; });
     static { PUMP.scheduleWithFixedDelay(TriggerStreamSocket::pumpAll, 500, 500, TimeUnit.MILLISECONDS); }
 
-    record Open(WebSocketConnection connection, TriggerStream.Session session, String principal, long[] lastPong) {}
+    record Open(WebSocketConnection connection, TriggerStream.Session session, String principal, long[] lastPong) {
+        Open {
+            // Resolve while the callback's session context is active. The pump runs outside that context.
+            connection = io.quarkus.arc.ClientProxy.unwrap(connection);
+        }
+    }
 
     @Inject WebSocketConnection connection;
     @Inject TriggerBootstrap triggers;

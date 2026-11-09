@@ -7,17 +7,18 @@ This is the live progress document for issue #274 (server and client triggers). 
 
 ## Overall progress
 
-Updated: **2026-11-07**.
+Updated: **2026-11-09**.
 
 **Overall: 27% complete; 73% pending.** 4 of 18 modules merged to `main`: module 1 (olo-labs/olo-toolgate#281,
 merge `16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`;
 reviewed as #282, #283 and #284). Modules 5, 10, 11 and 12 are implemented on `feature/triggers-m05-client-ingest` (draft PR
-olo-labs/olo-toolgate#286, plan 24.6 as amended). None of them is Done yet: the hot-folder run end to end, on Quickstart
-in CI, has not executed (see *Modules 5 and 10–12*). They earn 20% together only on that PR's merge (27% → 47%).
+olo-labs/olo-toolgate#286, plan 24.6 as amended). None of them is Done yet: the hot-folder run on Quickstart
+failed in CI; the local connection fix and validation are recorded below. Passing CI acceptance remains outstanding.
+They earn 20% together only on that PR's merge (27% → 47%).
 
 | Slice / gate | Needs modules | Status |
 |---|---|---|
-| Slice 1 — client POLL trigger end to end (35%) | 1–5 | 🔵 Module 5 implemented and unit/integration tested; the run on a real device has not been executed |
+| Slice 1 — client POLL trigger end to end (35%) | 1–5 | 🔵 Local Linux device-to-agent socket run passes with the CI fixes below; CI acceptance remains outstanding |
 | Slice 2 — server trigger with failover (56%) | 1–8 | ⏳ Pending |
 | Slice 3 — schedule and device trigger → authorized MCP (85%) | 1–14 | ⏳ Pending |
 | Slice 4 — composite MCP from an agent and an action (92%) | 1–15 | ⏳ Pending |
@@ -25,6 +26,45 @@ in CI, has not executed (see *Modules 5 and 10–12*). They earn 20% together on
 | Gate G-STATE (TLC model, stateful property tests, deterministic simulation) | 1, 3, 17 | 🔵 Item 1 (TLC) passes at the bounds in *Baseline changes*. Item 2 is delivered for the supervisor crate (module 3) and for Control ingest (module 5, a seeded-random stateful JUnit test instead of jqwik; see *Baseline changes*). Item 3 pending |
 | Gate G-IFC (conformance and adversarial corpus, security sign-off) | 11, 16 | ⏳ Not run |
 | M12 end-to-end scenarios | all | 0 of 58 passing in CI. Scenarios 16 and 31 pass at the protocol level in `TriggerDeliveryTest` (not over a live socket) |
+
+### CI hot-folder delivery fix (2026-11-09)
+
+Run `42585304990` on `fix/quickstart-trigger-tls` failed because a mode-0644 file
+made the device reject the inbox listing. Existing commit `2d78f200` changes the
+drop to owner-only mode. Local replay then exposed a second failure: the socket
+pump retained Quarkus's session-scoped connection proxy and threw
+`ContextNotActiveException` when sending outside the callback. `Open` now unwraps
+the connection while the callback context is active. Authorization, labels and
+acknowledgement rules are unchanged.
+
+Validation uses base revision `2d78f200` plus the socket fix; SHA-256 of
+`TriggerStreamSocket.java` is
+`d0741d53c3ca7d1bbfcdde6053540bfde9d50c879b1ce19bac8b791465a6d963`.
+The local Linux Quickstart/device images are the downloaded `module11` CI images;
+the verification image replaces only the compiled socket adapter classes.
+
+- Focused Java tests: `TriggerStreamSocketTest` (1) and `TriggerDeliveryTest` (7)
+  pass. The new regression closes the simulated callback context and sends on
+  another thread; the retained connection works while the scoped proxy fails.
+- LangChain tests pass: manage 35, packages 5, trigger agent 10, agent 14.
+- Live `trigger_e2e.py` passes: a new owner-only file reaches the agent over
+  `toolgate.triggers.v1`, with classification INTERNAL and outcome `read-unconfirmed`.
+- The full LangChain CI step replay passed with a fresh Compose stack and package
+  versions aligned to the CI images. It verified the native-outcome boundary and
+  the hot-folder delivery over the live socket.
+- PostgreSQL-backed `javaCheck` did not pass. The enterprise suite ran 447 tests
+  with one failure in `KillSwitchTest.separateOperatorMtlsListenerCommitsOnlyAcceptedOfflineQuorum`.
+  Gradle also reported a missing binary test-results file for `:control-plane:test`.
+- `python tools/check.py` with `PYTHONUTF8=1`: 422 CI tests pass (10 skipped),
+  then the contracts suite stops with the previously documented Windows failures:
+  two symlink privilege errors in `KnowledgeQualificationTest` and
+  `ScorecardTest.test_observation_requires_exact_executed_test_and_no_skip`.
+  The remaining full-repository gates were not reached. The initial non-UTF-8
+  invocation failed on release-note decoding before this rerun.
+
+This fixes the local trigger transport slice, not native HotFolder finality,
+the full M12 scenarios or roadmap completion. CI acceptance is the next required
+evidence. No module weight or baseline denominator changes; earned progress stays 27%.
 
 ## Module progress
 
@@ -495,8 +535,8 @@ and 31 pass (on Quickstart, plan 21 M12).
 | `tests/contracts` (incl. longest-value and bounds tests for the new definitions) | 176 pass, 2 skipped; the same 3 environment failures as on `main` |
 | TypeScript contracts tests; PHP 8.2 round trips | Pass: 2; 300 v1 and 393 v2 round trips |
 
-**Not run:** the hot-folder run on Quickstart (`trigger_e2e.py`, new in the CI LangChain job; it runs when CI runs
-this PR); M12 scenarios 16 and 31 over a live socket; two Control replicas routing one tenant; a real-socket test of
+**Outstanding:** passing CI acceptance of the hot-folder run on Quickstart (`trigger_e2e.py`; local fix validation
+is recorded above); M12 scenarios 16 and 31 over a live socket; two Control replicas routing one tenant; a real-socket test of
 `TriggerStreamSocket` (the protocol is tested through `TriggerStream` without the transport).
 
 **Known limit, outside this issue:** native HotFolder finality is not qualified (#230; `examples/langchain/README.md`).
