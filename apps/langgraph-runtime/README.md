@@ -1,5 +1,5 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Generic ToolGate LangGraph runtime — V1.2 foundation
+# Generic ToolGate runtime — execution and trigger foundations
 
 This package runs one fixed LangGraph supervisor/agent loop against a supplied
 `ToolGate` adapter. Workflows, agent IDs, explicit models, prompts, context tools,
@@ -8,8 +8,9 @@ The graph has no use-case IDs, provider keys, provider clients, arbitrary import
 or executable profile expressions. It does not union different agents' tools.
 
 **Integration is pending.** This is a tested executor library, not a working
-ToolGate run API, live LangChain/model-proxy integration, trigger listener or
-complete standalone program. There is no default fake adapter, local authority
+ToolGate run API, live LangChain/model-proxy integration or complete
+end-to-end standalone workflow program. The trigger subscriber described below
+uses the existing stream, but durable workflow admission still needs server implementation. There is no default fake adapter, local authority
 fallback or runnable-profile claim. V1.1 publication/readiness and V1.2 server
 admission/leases, runtime identities, model proxy and real transport must be
 implemented before the external message/trigger demo can run end to end.
@@ -91,7 +92,68 @@ model response; no such adapter is included yet.
   tracing was enabled by the host. This does not sandbox a hostile host or stop
   an application from explicitly logging its own inputs.
 
-No durable checkpoint, automatic failover/replay, cancellation propagation,
-streaming, container image or HTTP/trigger registration is delivered here.
+No durable workflow checkpoint, automatic workflow failover/replay, cancellation
+propagation, model streaming or container image is delivered here.
 See the [live status](../../docs/architecture/workflow-v1-status.md) and
 [architecture plan](../../docs/architecture/langgraph-runtime-plan.md).
+
+## V1.3 host trigger subscriber
+
+The generic listener reuses the current authenticated subscription/ticket APIs and
+`toolgate.triggers.v1`. Obtain the subscription name and immutable UID from the
+reviewed ToolGate configuration; supply the existing listener user's token through
+an environment variable, never an event or command-line token value. The listener
+does not create identities, grants or source assignments, and cannot select a
+workflow/default version or service Agent from event text.
+
+After installation outside containers:
+
+```sh
+.dev/workflow-runtime/bin/python -m toolgate_runtime.trigger_listener \
+  --control-origin https://toolgate.example \
+  --subscription subscription-from-profile \
+  --subscription-uid ts-immutable-uid-from-toolgate \
+  --ca-file /path/to/toolgate-ca.crt
+```
+
+Set `TOOLGATE_LISTENER_TOKEN` securely in that process's environment first. Use
+`--max-events 1` for one durable admission outcome. Output contains admission/run
+references and the disposition; it never claims the workflow completed. There is
+no built-in use-case selection or provider credential.
+
+Each connection rechecks the subscription's UID/Active state, obtains a fresh
+single-use ticket and selects only `toolgate.triggers.v1`. HTTPS and WSS verify
+certificates, disable ambient proxies and refuse redirects; the private socket
+logger cannot print ticket headers. Only the server's persisted cursor is used
+on reconnect; no local `resumeAfter` or ephemeral watch can skip work.
+
+The new canonical `WorkflowDispatchRequest` sends only `subscriptionUid` and
+`cursor` to `POST /api/control/v1/workflow-dispatches:admit` (ADR 063). The response
+is a matching `WorkflowDispatchReceipt`: durable admission ID, disposition and,
+where admitted, run ID. Control must look up its own event, resolve the published
+default-workflow binding and current service grants, and atomically store/dedupe
+the run/outcome by tenant/subscription UID/cursor. ADMITTED requires a run ID;
+DUPLICATE refers to the original durable outcome and may have no run for an
+original rejection/filter. The listener never substitutes its event payload for
+that authoritative lookup.
+
+**That Control endpoint is not implemented by this slice.** A current server's
+404/401/503, a timeout, or any non-durable/mismatched receipt stops the connection
+without ACK. There is no local admission ledger, fake production success or
+fallback workflow. Registration plus an uploaded profile is not yet enough for
+end-to-end execution: V1.1 publication and V1.2 admission/run/lease/model transport
+remain required. Once available, admitted work belongs to Control's run queue;
+the listener never fabricates a RunLease or executes an event as Python code.
+
+Processing is serial: commit evidence first, ACK second, credit third. Any error
+permanently stops that connection's bridge, preventing a cumulative ACK for a
+later cursor from skipping unresolved work. A lost ACK may cause redelivery;
+Control must return the original admission/run, not create another effect. Gaps,
+revocation and protocol errors stop visibly. Restarting/reconnecting revalidates
+UID and uses a new ticket; no automatic retry of workflow effects is added.
+
+The runtime gate includes local ephemeral-certificate HTTPS/WSS tests and a
+simulated admission ledger. These prove client protocol/order/failure behavior,
+not real Control persistence, authentication/delegation enforcement, exactly-once
+business effects or real trigger-to-workflow completion. TLS tests require
+OpenSSL and explicitly skip where it is unavailable.

@@ -5198,5 +5198,17 @@
       "deployment-1"
     ]
   },
-  "WorkflowRemediationMode": "PREPARE"
+  "WorkflowRemediationMode": "PREPARE",
+  "WorkflowDispatchRequest": {
+    "subscriptionUid": "ts-subscription-1",
+    "cursor": "0000000000000001"
+  },
+  "WorkflowDispatchDisposition": "ADMITTED",
+  "WorkflowDispatchReceipt": {
+    "subscriptionUid": "ts-subscription-1",
+    "cursor": "0000000000000001",
+    "admissionId": "dispatch-1",
+    "disposition": "ADMITTED",
+    "runId": "run-1"
+  }
 }

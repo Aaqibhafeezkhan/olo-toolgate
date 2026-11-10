@@ -4978,6 +4978,36 @@ pub struct WorkflowDispatchBinding {
     pub message_pointer: String,
     pub remediation_mode: WorkflowRemediationMode,
 }
+/// Canonical WorkflowDispatchDisposition wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkflowDispatchDisposition {
+    #[serde(rename = "ADMITTED")]
+    Admitted,
+    #[serde(rename = "DUPLICATE")]
+    Duplicate,
+    #[serde(rename = "REJECTED")]
+    Rejected,
+    #[serde(rename = "FILTERED")]
+    Filtered,
+}
+/// Durable admission evidence bound to this subscription UID and delivered cursor. ADMITTED requires runId; DUPLICATE returns its original durable outcome reference and runId when one exists. Terminal rejection/filtering is recorded, never inferred locally.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowDispatchReceipt {
+    pub subscription_uid: String,
+    pub cursor: String,
+    pub admission_id: String,
+    pub disposition: WorkflowDispatchDisposition,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+}
+/// A delivered subscription cursor for server-side workflow admission. Caller/event fields cannot select tenant, workflow, version, identity or prompts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowDispatchRequest {
+    pub subscription_uid: String,
+    pub cursor: String,
+}
 /// Profile declaration for WorkflowExecutionLimits; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

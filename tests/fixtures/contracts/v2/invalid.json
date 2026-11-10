@@ -3918,5 +3918,53 @@
         "tenantId": "foreign"
       }
     }
+  ],
+  "WorkflowDispatchRequest": [
+    {
+      "case": "payload-selected workflow",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "workflowId": "foreign"
+      }
+    },
+    {
+      "case": "caller-selected service identity",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "runAs": "foreign"
+      }
+    },
+    {
+      "case": "invalid cursor",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "1"
+      }
+    }
+  ],
+  "WorkflowDispatchReceipt": [
+    {
+      "case": "non-durable disposition",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "admissionId": "dispatch-1",
+        "disposition": "PENDING",
+        "runId": "run-1"
+      }
+    },
+    {
+      "case": "unknown workflow override",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "admissionId": "dispatch-1",
+        "disposition": "ADMITTED",
+        "runId": "run-1",
+        "workflowId": "foreign"
+      }
+    }
   ]
 }
