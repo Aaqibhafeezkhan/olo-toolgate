@@ -1,0 +1,24 @@
+{
+  "specVersion": 1,
+  "issue": 295,
+  "status": "SPECIFIED_NOT_EXECUTED",
+  "infrastructure": ["fresh-supported-store", "toolgate-gateway-control", "approved-model-deployments", "vault-secrets", "signed-tool-packages"],
+  "scenarios": [
+    {"id":"profile-ready","phase":"V1.1","given":"authorized-admin-and-complete-profile","when":"upload-review-publish","then":["all-references-closed","revision-ready","no-manual-catalog-edits"]},
+    {"id":"profile-incomplete","phase":"V1.1","given":"profile-with-missing-model-or-secret-reference","when":"publish","then":["not-ready","no-runnable-partial-revision","visible-reason"]},
+    {"id":"foreign-reference","phase":"V1.1","given":"profile-referring-to-foreign-tenant-resource","when":"import","then":["deny","no-foreign-resource-disclosure"]},
+    {"id":"message-result","phase":"V1.2","given":"ready-profile-and-authorized-user","when":"start-with-workflow-id-and-message","then":["configured-supervisor-model","two-configured-agent-models","per-agent-tools","governed-context","final-result"]},
+    {"id":"revocation","phase":"V1.2","given":"resolved-run-then-revoked-workflow-or-model-or-tool-grant","when":"next-protected-step","then":["deny","no-protected-effect"]},
+    {"id":"stale-owner","phase":"V1.2","given":"expired-run-ownership-token","when":"handoff-infer-tool-or-finish","then":["deny","no-effect-or-stale-write"]},
+    {"id":"prepare-and-ask","phase":"V1.2","given":"prepare-mode-or-ask-required-tool","when":"attempt-mutation","then":["no-unapproved-mutation","visible-nonexecuting-outcome"]},
+    {"id":"trigger-result","phase":"V1.3","given":"ready-default-workflow-binding-and-registered-external-listener","when":"receive-event-and-admit-by-subscription-uid-and-cursor","then":["server-resolved-input-and-service-identity","same-governed-run-path","ack-after-durable-admission","governed-write-back"]},
+    {"id":"replay-after-ack-loss","phase":"V1.3","given":"admission-committed-and-listener-crashes-before-ack","when":"redeliver-same-subscription-uid-and-cursor","then":["same-admission-reference","one-run","no-duplicate-effect"]},
+    {"id":"cumulative-ack","phase":"V1.3","given":"earlier-cursor-has-transient-admission-failure","when":"later-event-arrives","then":["no-ack-past-unresolved-cursor"]},
+    {"id":"dispatch-forgery","phase":"V1.3","given":"foreign-or-undelivered-cursor-or-payload-identity-override","when":"admit","then":["deny","no-run"]},
+    {"id":"binding-disabled","phase":"V1.3","given":"disabled-binding-or-retired-workflow-or-recreated-subscription","when":"admit-new-event","then":["deny","no-run"]},
+    {"id":"source-clearance","phase":"V1.3","given":"listener-cannot-read-required-source-data","when":"admit-for-more-privileged-service-agent","then":["deny","no-unredacted-data-rehydration"]},
+    {"id":"retention-gap","phase":"V1.3","given":"stream-gap-before-durable-admission","when":"listener-reconnects","then":["visible-gap-status","no-fabricated-success"]},
+    {"id":"uncertain-effect","phase":"V1.4","given":"runner-dies-after-possibly-applied-mutation","when":"restart","then":["no-blind-mutation-retry","visible-unknown-or-reconciled-outcome"]},
+    {"id":"two-profiles","phase":"V1.4","given":"two-unrelated-ready-profiles","when":"run-text-and-trigger-paths-outside-containers","then":["identical-python-source-digest","identical-dependency-lock","real-model-and-tool-results","no-use-case-code-edits"]}
+  ]
+}
