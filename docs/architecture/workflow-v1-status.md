@@ -16,7 +16,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; profile property and lifecycle console added to durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; Docker-packaged profile property and lifecycle console added to durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; HTTPS/WSS listener and admission contract tested, Control durable admission/execution pending | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; scenario/evidence controller implemented; live driver and server prerequisites missing | 0% |
@@ -139,6 +139,41 @@ authority; unchanged V1.1 directory/grant/subscription orchestration and V1.2/V1
 execution/admission gaps remain. No #230/#274 claim or phase completion changes.
 Next: finish these server prerequisites, expose catalog discovery, and qualify real
 profile lifecycle and message/trigger execution. Keep #297 draft.
+
+### Production Docker packaging correction and requested debug startup
+
+The console build stage now copies `packages/contracts/schemas/`, which the
+complete property editor imports directly. This corrects the source-only UI
+validation gap from `507c4dfe`: production Docker builds must have those canonical
+JSON documents too. No schema, authorization, runtime or phase scope changes.
+Dockerfile SHA-256: `a0d60112df0b556b4fdcfa5a14285c01e819b269c3ebe5682da9f544a66be636`.
+
+Executed: current-source `tools/quickstart/check.py --build --build-only --image
+olo-toolgate-quickstart:debug` passed, building the real Control console/Java/core
+packages and optimized Gateway/Tool Host Quickstart image. Quickstart image
+manifest: `sha256:043f2a2a73dc863e239594f209d822eb05b3193471e2ce6213f88939e635ceb0`.
+Windows `python -m unittest discover -s tests/ci -p test_debug_management.py -v`
+passed all four tests; the Linux invocation explicitly skipped them because
+Windows PowerShell is required. This is build/debug-management evidence, not a
+new full repository, default-parallel hook or workflow execution acceptance pass.
+The image uses empty client-download assets; native installer qualification is
+outside this UI startup request. The user explicitly requested local debug UI
+startup after the earlier instruction to defer demos. No workflow/model/tool
+demo or roadmap acceptance is implied; completion remains **0%**.
+
+The built image was loaded into Windows Docker Desktop (`desktop-linux`) and
+started with `docker compose -p toolgate-debug -f debug/compose.yaml up -d --wait
+--wait-timeout 150 --pull never`. The container became healthy; Windows HTTP
+verification returned 200 for `/console/` and found `Manage workflow profile` in
+the served production JavaScript. Console: `http://127.0.0.1:18090/console/`.
+The new Desktop project uses its own `toolgate-debug_data` volume; no existing
+store was converted or deleted. No authenticated lifecycle test is claimed:
+cookie-free session lookup returned 401, and automatic approval review blocked
+the subsequent combined scripted admin sign-in/browser-launch command without
+a more specific stated reason. Preflight, source/license/obvious-secret quality
+and whitespace checks passed. The packaging-only follow-up does not rerun the
+known failing parallel precommit UI suite; the actual Docker UI compilation and
+startup evidence above validate this correction.
 
 ## Delivery ledger
 
