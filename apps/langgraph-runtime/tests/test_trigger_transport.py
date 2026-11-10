@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import patch
 
 from websockets.sync.server import serve
+from websockets.exceptions import ConnectionClosedOK
 
 from toolgate_runtime.trigger_bridge import DispatchReceipt, ListenerFailure, PROTOCOL, Reason, Subscription
 from toolgate_runtime.trigger_transport import ControlTriggers, TriggerListener
@@ -149,17 +150,28 @@ class WireTests(unittest.TestCase):
                 self.assertFalse(thread.is_alive())
 
     def test_wss_subscription_ack_credit_and_fresh_ticket_on_each_reconnect(self):
-        seen, offered, finished = [], [], threading.Event()
+        seen, offered, closed, errors, finished = [], [], [], [], threading.Event()
         def handshake(connection, request): offered.append(request.headers["Sec-WebSocket-Protocol"])
         def handler(ws):
-            frames = [json.loads(ws.recv(timeout=3))]
-            seen.append(frames)
-            ws.send(json.dumps({"type": "subscribed", "subscription": SUB.name}))
-            ws.send(json.dumps({"type": "event", "subscription": SUB.name, "cursor": CURSOR,
-                                "event": {"workflowId": "forged", "runAs": "forged"}}))
-            frames.append(json.loads(ws.recv(timeout=3)))
-            frames.append(json.loads(ws.recv(timeout=3)))
-            if len(seen) == 2: finished.set()
+            try:
+                frames = [json.loads(ws.recv(timeout=3))]
+                seen.append(frames)
+                ws.send(json.dumps({"type": "subscribed", "subscription": SUB.name}))
+                ws.send(json.dumps({"type": "event", "subscription": SUB.name, "cursor": CURSOR,
+                                    "event": {"workflowId": "forged", "runAs": "forged"}}))
+                frames.append(json.loads(ws.recv(timeout=3)))
+                frames.append(json.loads(ws.recv(timeout=3)))
+                # The real stream stays open. Let the max-events client close it,
+                # rather than racing its final send with a server-initiated close.
+                try:
+                    ws.recv(timeout=3)
+                    errors.append("unexpected additional frame")
+                except ConnectionClosedOK:
+                    closed.append(True)
+                if len(closed) == 2: finished.set()
+            except Exception as failure:
+                errors.append(type(failure).__name__)
+                finished.set()
         with self.websocket(handler, process_request=handshake) as (_, origin):
             client = self.client(origin); checks, admissions, tickets = [], [], iter(("A" * 43, "B" * 43))
             client.verify_subscription = lambda sub: checks.append(sub.uid)
@@ -172,6 +184,8 @@ class WireTests(unittest.TestCase):
                 count, receipt = TriggerListener(client, SUB).listen_once(max_events=1)
                 self.assertEqual(count, 1); self.assertEqual(receipt.run_id, "run-1")
             self.assertTrue(finished.wait(3))
+            self.assertEqual(errors, [])
+            self.assertEqual(len(closed), 2)
             self.assertEqual(checks, [SUB.uid, SUB.uid])
             self.assertEqual(admissions, [(SUB.uid, CURSOR), (SUB.uid, CURSOR)])
             self.assertIn("ticket." + "A" * 43, offered[0]); self.assertIn("ticket." + "B" * 43, offered[1])
