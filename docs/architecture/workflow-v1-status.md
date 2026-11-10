@@ -95,6 +95,10 @@ No runtime capability or V1.0 acceptance is claimed. Overall remains **0%**.
 
 ## Current V1.1 implementation slice
 
+Implementation PR: [#299](https://github.com/olo-labs/olo-toolgate/pull/299),
+branch `codex/workflow-profile-validation`, known source revision `5ab911a6`.
+Open draft; not merged or phase-accepted.
+
 Canonical `workflow.schema.json` and Java/Rust/TypeScript/PHP bindings now define
 workflow groups, explicit supervisor/agent models, context sources, bounded
 execution and immutable subscription/source workflow bindings. Control adopts
@@ -138,15 +142,23 @@ PostgreSQL helper. The provisioned `./gradlew javaCheck -PprebuiltAdminUi=true
 failing and is still running. No full Java pass is claimed.
 
 The repository-wide `python tools/check.py` rerun uses tools/requirements.txt in
-an isolated Python environment and Node 22. It passed the CI, contract and Python
-SDK suites (83 SDK tests); remaining gates are still running. Initial verification
+an isolated Python environment and Node 22. It passed CI (422 tests, 17 skips),
+contracts (183 tests, 2 skips), Python SDK (83 tests) and Quickstart (51 tests).
+Its duplicate Java/build stage was interrupted to avoid overlapping Gradle builds
+in the same checkout; the separately provisioned Java gate remains active. Initial verification
 attempts without all Python dependencies failed; they are not acceptance evidence.
 
 The actual commit hook was exercised with Node 22: browser-extension tests,
 metadata/policy/secret checks and TypeScript checks passed. Admin UI tests under
-concurrent load reported 64 failures; a single-worker rerun is in progress and
-has also reported a Navigation timeout. The hook's browser smoke passed six
+concurrent load reported 64 failures; a single-worker default-timeout rerun completed with 259 passes and six 5-second
+timeouts. Rerunning the four affected files with one worker and a 30-second CLI
+timeout passed all 35 tests. This is diagnostic evidence, not a default-gate pass. The hook's browser smoke passed six
 experience/download checks and three cache-policy download checks. These are
 separate results, not a successful complete hook. Publication of the reviewed
 slice may bypass repeating that broad hook while these failures are recorded;
 keep its implementation PR in draft and do not credit or declare the phase done.
+The enterprise self-approval method passed in isolation on the pre-change
+integration revision `fd16d03e86aa6d57dc87153065ba322c81fe62c8`, using the same
+provisioned PostgreSQL helper. This does not establish a pre-existing failure;
+full-run ordering/concurrency versus a workflow regression remains unresolved.
+Do not weaken approval checks or merge #299 based on that single baseline pass.
