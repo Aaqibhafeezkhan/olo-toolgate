@@ -5,20 +5,18 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
-## Owned folder demo integration
+## Device-scoped trigger management
 
-The console's Devices → Triggers screen discovers client trigger exports from
-the packages assigned to the selected device. The SDK puts the trigger
-annotation description and the config record's schema in the signed package
-descriptor. The console uses that schema for field labels, help, and defaults.
-Control continues to validate the assignment and its configuration.
+The console discovers client trigger exports from packages assigned to the
+selected device. The SDK exports the trigger annotation description and the
+configuration record's schema in the signed package descriptor. The console
+uses that schema for field labels, help, and defaults. Control validates each
+assignment and checks the caller's permissions on its targets.
 
-In progress. The owned-device assignment and subscription tests passed on
-SQLite, including rejection of another device, a whole shared group, and
-access after ownership transfer. The folder selection screen built successfully
-and its focused UI tests passed. The composed acceptance run, PostgreSQL
-verification, and native file-operation receipts remain open. No module weight
-changes with this work in progress.
+The focused UI test exercises an unrelated package schema. SDK annotation and
+SQLite Control tests cover exported metadata, device-scoped discovery, and
+denial of access to another device or a shared group. This change claims no
+additional module weight.
 
 ## Overall progress
 
