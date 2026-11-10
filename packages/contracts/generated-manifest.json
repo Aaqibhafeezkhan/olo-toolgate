@@ -38,7 +38,7 @@
     "packages/contracts/schemas/v2/service-profile.schema.json": "380a26d4b259ed6e3156eb5989712d1846af0ea245d92cf453eb3ac242fb230a",
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a",
     "packages/contracts/schemas/v2/trigger.schema.json": "91670ec01f26bf542e8bc3d68add25894a852c0446b70953c450d09f9582a0cd",
-    "packages/contracts/schemas/v2/workflow.schema.json": "e76030917aeca9db7cbd042af39cb758c0bb951bd06bf485c2cd6d4c3dea6ca8"
+    "packages/contracts/schemas/v2/workflow.schema.json": "b08eba156c4ec1fc5310fbb2954c698de64d1af4bd1052ba6818533da9fc66cf"
   },
   "generatorSha256": "97c8ba972f69933485098cf6ffdf8596c4bf1655603fd9c1d0026a23ccadd493",
   "outputs": [
@@ -763,6 +763,9 @@
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowContextSource.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowDefinition.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowDispatchBinding.java",
+    "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowDispatchDisposition.java",
+    "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowDispatchReceipt.java",
+    "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowDispatchRequest.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowExecutionLimits.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowGroupDefinition.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowModelGroupDefinition.java",
@@ -1488,6 +1491,9 @@
     "packages/contracts/php/src/V2/WorkflowContextSource.php",
     "packages/contracts/php/src/V2/WorkflowDefinition.php",
     "packages/contracts/php/src/V2/WorkflowDispatchBinding.php",
+    "packages/contracts/php/src/V2/WorkflowDispatchDisposition.php",
+    "packages/contracts/php/src/V2/WorkflowDispatchReceipt.php",
+    "packages/contracts/php/src/V2/WorkflowDispatchRequest.php",
     "packages/contracts/php/src/V2/WorkflowExecutionLimits.php",
     "packages/contracts/php/src/V2/WorkflowGroupDefinition.php",
     "packages/contracts/php/src/V2/WorkflowModelGroupDefinition.php",

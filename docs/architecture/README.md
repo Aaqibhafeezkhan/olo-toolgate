@@ -14,8 +14,8 @@ Component guides describe current support and limitations.
 - [LangGraph runtime plan](langgraph-runtime-plan.md): proposed configuration-driven
   workflow/group creation, complete use-case profiles, ToolGate-driven prompts, context and models, and generic message/event execution (v0.8 section 19), tracked in
   [enhancement #295](https://github.com/olo-labs/olo-toolgate/issues/295).
-- [Generic LangGraph executor foundation](../../apps/langgraph-runtime/README.md):
-  tested V1.2 execution core; Control/model transport integration is pending.
+- [Generic executor and trigger transport foundations](../../apps/langgraph-runtime/README.md):
+  tested V1.2 execution and V1.3 HTTPS/WSS listener/ACK cores; server admission/model integration is pending.
 - [Workflow v1 live status](workflow-v1-status.md): effort weights, phase acceptance,
   validation evidence and required updates with every #295 PR.
 - [Triggers design](device-triggers-plan.md) and

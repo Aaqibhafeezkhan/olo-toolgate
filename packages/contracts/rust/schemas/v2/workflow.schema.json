@@ -330,6 +330,65 @@
         "dispatchBindings"
       ],
       "description": "Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowDispatchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A delivered subscription cursor for server-side workflow admission. Caller/event fields cannot select tenant, workflow, version, identity or prompts.",
+      "properties": {
+        "subscriptionUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        }
+      },
+      "required": [
+        "subscriptionUid",
+        "cursor"
+      ]
+    },
+    "WorkflowDispatchDisposition": {
+      "type": "string",
+      "enum": [
+        "ADMITTED",
+        "DUPLICATE",
+        "REJECTED",
+        "FILTERED"
+      ],
+      "description": "A durably recorded dispatch outcome. An HTTP/auth/transport failure without a matching receipt never permits acknowledgement."
+    },
+    "WorkflowDispatchReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Durable admission evidence bound to this subscription UID and delivered cursor. ADMITTED requires runId; DUPLICATE returns its original durable outcome reference and runId when one exists. Terminal rejection/filtering is recorded, never inferred locally.",
+      "properties": {
+        "subscriptionUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "admissionId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "disposition": {
+          "$ref": "#/$defs/WorkflowDispatchDisposition"
+        },
+        "runId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "subscriptionUid",
+        "cursor",
+        "admissionId",
+        "disposition"
+      ]
     }
   }
 }

@@ -2665,6 +2665,20 @@ export interface WorkflowDispatchBinding {
   readonly messagePointer: string;
   readonly remediationMode: WorkflowRemediationMode;
 }
+export type WorkflowDispatchDisposition = "ADMITTED" | "DUPLICATE" | "REJECTED" | "FILTERED";
+/** Durable admission evidence bound to this subscription UID and delivered cursor. ADMITTED requires runId; DUPLICATE returns its original durable outcome reference and runId when one exists. Terminal rejection/filtering is recorded, never inferred locally. */
+export interface WorkflowDispatchReceipt {
+  readonly subscriptionUid: string;
+  readonly cursor: string;
+  readonly admissionId: string;
+  readonly disposition: WorkflowDispatchDisposition;
+  readonly runId?: string;
+}
+/** A delivered subscription cursor for server-side workflow admission. Caller/event fields cannot select tenant, workflow, version, identity or prompts. */
+export interface WorkflowDispatchRequest {
+  readonly subscriptionUid: string;
+  readonly cursor: string;
+}
 /** Profile declaration for WorkflowExecutionLimits; eligibility and configuration confer no runtime authority. */
 export interface WorkflowExecutionLimits {
   readonly maxSteps: number;

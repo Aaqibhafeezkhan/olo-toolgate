@@ -11,7 +11,7 @@ description = "Pre-release generic ToolGate workflow executor; transport integra
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
-dependencies = ["langgraph==1.2.20", "langsmith==0.14.17"]
+dependencies = ["langgraph==1.2.20", "langsmith==0.14.17", "websockets==17.4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

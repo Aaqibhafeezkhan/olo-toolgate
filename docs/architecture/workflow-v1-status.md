@@ -18,7 +18,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
 | V1.1 — Profile to effective configuration | 25% | 35% | In progress; workflow contracts and read-only validation implemented, publication not connected | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
-| V1.3 — Trigger to the same run path | 20% | 90% | Not started / no accepted implementation evidence recorded | 0% |
+| V1.3 — Trigger to the same run path | 20% | 90% | In progress; HTTPS/WSS listener and admission contract tested, Control durable admission/execution pending | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | Not started / no accepted implementation evidence recorded | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
@@ -46,7 +46,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
 | V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Canonical WorkflowConfiguration and generated bindings; read-only local/dependency validation; six Control tests and cross-language checks pass | Catalog persistence, reviewed grants/publication, DeploymentProfile v2 integration and end-to-end readiness remain |
 | V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | Fixed LangGraph execution core with two simulated profiles; 20 focused runner tests pass; no live ToolGate integration claimed | Server admission/ledger/leases and runtime identities, model proxy, canonical snapshot transport, V1.1 publication and real model/tool qualification |
-| V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | None recorded | Integrate #274 dispatch with the same run path and test redelivery/effect safety |
+| V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Existing stream/ticket client, immutable UID validation, admission request/receipt contract, serial commit-before-ACK bridge and host CLI; 41 runtime/listener tests pass | Implement Control admission transaction/binding resolution and queue/lease execution; qualify real authorization, dedupe, disablement and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | None recorded | Build and execute repeatable qualification and document deployment limitations |
 
 ## Update required with every PR
@@ -233,3 +233,70 @@ For this Python-only delivery, the broad UI/browser commit hook was bypassed
 after executing the runtime, scoped Python, release, CI-ownership, metadata,
 source-policy, PR-policy and staged secret checks recorded above. Earlier broad
 Java/UI failures remain limitations; no waiver of final v1 qualification is implied.
+## V1.3 delivery — authenticated listener and admission contract
+
+Started at the user's request from integration revision
+`4b9c49d8bed9d00a9fa5044228f93fb691faed8c`. No weight/scope denominator change:
+V1.3 remains 20 points and earns zero until its full end-to-end exit criteria pass.
+
+Delivered code:
+
+- Canonical WorkflowDispatchRequest/Disposition/Receipt and generated Java,
+  Rust, TypeScript and PHP bindings. Requests carry only subscriptionUid/cursor;
+  tenant, default workflow/version, service identity and event lookup belong to
+  Control. ADMITTED requires a run ID at the consumer/application boundary.
+- A host-run HTTPS/WSS client for the existing subscription/ticket/stream APIs.
+  Each connection rechecks immutable subscription UID and Active state, obtains
+  a fresh single-use ticket and selects toolgate.triggers.v1. TLS verification,
+  no redirects/ambient proxies, bounded frames/responses and private socket
+  logging protect transport. Recreated or obsolete subscription resources deny.
+- A serial admission-before-ACK-before-credit bridge. Missing/mismatched or
+  non-durable receipts, transport/auth errors, protocol violations, retention
+  gaps and revocation stop the connection. No later cumulative ACK can skip an
+  unresolved event. Duplicate delivery goes back to Control; there is no local
+  dedupe authority, cursor override, workflow selection or effect retry.
+- `python -m toolgate_runtime.trigger_listener` accepts infrastructure/bootstrap
+  references and reads credentials from an environment variable. It reports
+  admission references, not workflow completion. No provider keys or use-case
+  logic are embedded in it.
+
+Validation actually executed:
+
+- `python tools/workflows/check.py`: 41 tests passed, no skips on this Linux host
+  (20 existing runner, 9 bridge, 12 transport/CLI). HTTPS/WSS tests used ephemeral
+  local certificates; bridge durability tests use a simulated ledger, not Control
+  database evidence. Tests include commit/ACK loss, duplicate terminal rejection,
+  concurrent ordering, forged payload fields, fresh reconnect tickets, UID
+  recreation, wrong protocol, missing admission endpoint, bad receipts, redirects,
+  untrusted certificates and credential/error-log suppression.
+- Seven v2 schema tests passed, including five new structural invalid fixtures;
+  generated binding/corpus checks passed. Java contract tests passed; focused
+  WorkflowConfigurationsTest passed (six tests) with a verified prebuilt UI
+  artifact as build prerequisite. These are not a full Java gate.
+- TypeScript typecheck/build and two wire tests passed; Rust v2 round trips
+  (two tests) and workspace format passed; PHP 421 v2 round trips/constant
+  negatives passed.
+- Scoped Python contract gate passed: 183 contract tests (2 skips), 83 SDK tests,
+  PHP 304 v1 and 421 v2 round trips/lint. Editable installation, host CLI help,
+  metadata/preflight, source policy, relative links and whitespace checks passed.
+
+Known tested source SHA-256 values:
+
+- Bridge: `1e7c35e5c8835aecd07708aba6d6d4336acafb9e619d137a18cc6110a72cd5f6`.
+- Transport: `a7464b15986bac0f1d56d50b8824e84c722b0192c5ef6fb783ccf3f1b6177c8b`.
+- Workflow schema: `b08eba156c4ec1fc5310fbb2954c698de64d1af4bd1052ba6818533da9fc66cf`.
+
+Limits and next work: the proposed
+`POST /api/control/v1/workflow-dispatches:admit` endpoint is **not implemented**.
+A 404/401/503 or timeout causes no ACK, rather than a fabricated local admission.
+Control must still authenticate ownership, look up stored event data, resolve the
+published binding/current service grants, atomically persist/dedupe admission/run
+and enqueue work. V1.1 publication and V1.2 admission/ledger/leases/model transport
+are unfinished, and no real trigger-to-workflow/write-back demo is qualified.
+The listener does not fabricate a Runner lease or execute the event as code.
+
+Earlier broad Java/UI issues were not rerun; no full repository/Java/UI pass is
+claimed. No #274 module completion or #230 security guarantee is claimed by this
+consumer adapter. The broad UI/browser commit hook is omitted for this focused
+slice after explicit policy/secret verification, as recorded in the delivery PR.
+The umbrella remains draft; overall earned v1 completion remains **0%**.
