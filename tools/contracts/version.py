@@ -64,6 +64,9 @@ def expected():
         suffix = {'dev': '.dev', 'alpha': 'a', 'beta': 'b', 'rc': 'rc'}
         pep440 = core if not prerelease else core + (suffix[match[1]] + (match[2] or '0') if match else '.dev0+' + prerelease)
         outputs[python_project] = re.sub(r'^version = "[^"]+"', f'version = "{pep440}"', python_project.read_text(encoding='utf-8'), flags=re.M)
+        runtime_project = ROOT/'apps/langgraph-runtime/pyproject.toml'
+        if runtime_project.is_file():
+            outputs[runtime_project] = re.sub(r'^version = "[^"]+"', f'version = "{pep440}"', runtime_project.read_text(encoding='utf-8'), flags=re.M)
         for example in (ROOT/'core-mcp').glob('*/pyproject.toml'):
             outputs[example] = re.sub(r'toolgate-sdk==[^"\s]+', 'toolgate-sdk==' + pep440,
                                       example.read_text(encoding='utf-8'))

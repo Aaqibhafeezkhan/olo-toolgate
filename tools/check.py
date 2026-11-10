@@ -160,6 +160,7 @@ def main():
         python('-m','unittest','discover','-s','tests/contracts','-v')
         python('-m','unittest','discover','-s','tool-sdk/python-sdk/tests','-v')
         if not args.contracts_only:
+            python('tools/workflows/check.py')
             quickstart_path = str(ROOT/'apps/quickstart')
             inherited_path = os.environ.get('PYTHONPATH')
             if inherited_path: quickstart_path += os.pathsep + inherited_path

@@ -197,6 +197,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
                 check.main()
             return recorded
         whole = commands(['check.py','--ci-common'])
+        self.assertEqual(whole.count(['python', 'tools/workflows/check.py']), 1)
         split = [args for part in check.CI_PARTS
                  for args in commands(['check.py','--ci-common','--ci-part',part])]
         # Only the browser job repeats npm ci, because it receives node_modules from no other job.
