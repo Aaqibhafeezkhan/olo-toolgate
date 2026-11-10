@@ -614,6 +614,11 @@ roadmap. No completion percentages or implementation completion are claimed.
 The original security gates remain required wherever their behavior ships;
 advanced capabilities and their associated gates move together to later versions.
 
+Live progress and the 100-point effort baseline are maintained in the
+[v1 status document](workflow-v1-status.md). Every #295 PR must update that
+document with actual evidence, limitations and next work; partial phases earn
+no completion weight.
+
 ### v1 acceptance contract
 
 On a fresh supported installation with ToolGate infrastructure, approved model
