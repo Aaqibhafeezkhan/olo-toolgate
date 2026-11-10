@@ -237,10 +237,11 @@ export interface DeploymentGrant {
 }
 /** Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package. */
 export interface DeploymentProfile {
-  readonly profileVersion: 1;
+  readonly profileVersion: 2;
   readonly profileId: string;
   readonly packages: ReadonlyArray<ProfilePackage>;
   readonly readiness?: ReadonlyArray<ProfileReadinessCase>;
+  readonly workflows?: WorkflowConfiguration;
 }
 /** Where the package runs. */
 export interface DeploymentTarget {
@@ -2634,6 +2635,7 @@ export interface WorkflowConfiguration {
   readonly agentDefinitions: ReadonlyArray<WorkflowAgentDefinition>;
   readonly workflows: ReadonlyArray<WorkflowDefinition>;
   readonly dispatchBindings: ReadonlyArray<WorkflowDispatchBinding>;
+  readonly modelDeployments: ReadonlyArray<WorkflowModelDeployment>;
 }
 /** Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority. */
 export interface WorkflowContextSource {
@@ -2690,9 +2692,37 @@ export interface WorkflowGroupDefinition {
   readonly id: string;
   readonly displayName: string;
 }
+/** An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner. */
+export interface WorkflowModelDeployment {
+  readonly id: string;
+  readonly origin: string;
+  readonly modelId: string;
+  readonly secretName: string;
+  readonly toolGroupId: string;
+  readonly deviceGroupId: string;
+}
 /** Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority. */
 export interface WorkflowModelGroupDefinition {
   readonly id: string;
   readonly deploymentIds: ReadonlyArray<string>;
+}
+/** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
+export interface WorkflowProfilePublishRequest {
+  readonly profileDigest: string;
+  readonly expectedGeneration: number;
+}
+/** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
+export interface WorkflowProfileReviewRequest {
+  readonly profileDigest: string;
+}
+export type WorkflowProfileState = "DRAFT" | "REVIEWED" | "PUBLISHED";
+/** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
+export interface WorkflowProfileStatus {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly state: WorkflowProfileState;
+  readonly generation: number;
+  readonly dependenciesReady: boolean;
+  readonly reviewedBy?: string;
 }
 export type WorkflowRemediationMode = "PREPARE" | "APPLY";

@@ -68,4 +68,12 @@ final class WorkflowConfigurationsTest {
         node = config(); ((ObjectNode)node.path("workflows").get(0).path("limits")).put("maxHandoffs", 11);
         String limits = node.toString(); assertThrows(Failure.class, () -> VALIDATOR.validate(limits, r -> true));
     }
+    @Test void modelDeploymentsRequireLocalClosureAndFixedTlsOrigins() throws Exception {
+        for (String origin : java.util.List.of("http://models.example", "https://user@models.example", "https://models.example/v1", "https://models.example?key=x", "https://models.example:0", "https://models.example:99999")) {
+            var node = config(); ((ObjectNode)node.path("modelDeployments").get(0)).put("origin", origin);
+            assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), reference -> true), origin);
+        }
+        var node = config(); ((ObjectNode)node.path("modelDeployments").get(0)).put("id", "another");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), reference -> true));
+    }
 }

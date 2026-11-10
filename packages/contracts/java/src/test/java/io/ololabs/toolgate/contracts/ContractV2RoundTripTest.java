@@ -437,7 +437,12 @@ final class ContractV2RoundTripTest {
         "WorkflowDispatchRequest",
         "WorkflowExecutionLimits",
         "WorkflowGroupDefinition",
+        "WorkflowModelDeployment",
         "WorkflowModelGroupDefinition",
+        "WorkflowProfilePublishRequest",
+        "WorkflowProfileReviewRequest",
+        "WorkflowProfileState",
+        "WorkflowProfileStatus",
         "WorkflowRemediationMode");
     private final ObjectMapper mapper = JsonMapper.builder()
         .defaultPropertyInclusion(JsonInclude.Value.construct(JsonInclude.Include.NON_NULL, JsonInclude.Include.ALWAYS))

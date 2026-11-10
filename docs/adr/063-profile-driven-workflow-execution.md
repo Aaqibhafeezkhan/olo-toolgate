@@ -135,6 +135,25 @@ confinement; credentials and endpoints remain protected by ToolGate enforcement.
 
 ## Delivery and verification
 
+The first lifecycle implementation uses tenant-owned immutable revision rows,
+separate compare-and-swap publication heads and permanent resource ownership.
+Private desired documents use the existing tenant vault key custody and AES-GCM
+envelopes, with 32-KiB chunks bounded by the 256-KiB profile ceiling. Associated
+data binds tenant, profile, canonical digest, key version, chunk index and count.
+Ciphertext rows reference the tenant key version; normal rotation retains the
+old READ_ONLY key. Unknown formats, unavailable/retired keys, modified or reordered
+chunks and cross-tenant use fail closed. No plaintext or legacy document reader
+is provided. Publication metadata and ownership IDs remain ordinary tenant rows.
+Canonical profile version 2 carries optional `workflows`; package-only profiles
+use the same current format. Explicit model deployments contain TLS origin,
+model ID and vault name/group references, never secret values. Initial lifecycle
+management is restricted to current Super Admins, with explicit self-review
+allowed; scoped workflow management roles and independent review quorums are
+not claimed. Package provisioning is a separate operation on reviewed bytes,
+and activation requires its exact digest's READY outcome. Tool readiness cases
+without integrated execution evidence block activation. This establishes the
+staging boundary, not complete profile provisioning or runtime authority.
+
 V1.1: profile schema/generated contracts, ownership and staged publication,
 workflow/group/model catalog and effective resolution. V1.2: minimal run ledger,
 workload claim/handoff, model proxy and standalone runner/message example.

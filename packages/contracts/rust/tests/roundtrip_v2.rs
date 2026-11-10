@@ -439,7 +439,12 @@ fn v2_fixture_round_trips() {
         WorkflowDispatchRequest,
         WorkflowExecutionLimits,
         WorkflowGroupDefinition,
+        WorkflowModelDeployment,
         WorkflowModelGroupDefinition,
+        WorkflowProfilePublishRequest,
+        WorkflowProfileReviewRequest,
+        WorkflowProfileState,
+        WorkflowProfileStatus,
         WorkflowRemediationMode,
     );
 }

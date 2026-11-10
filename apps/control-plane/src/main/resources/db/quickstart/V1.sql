@@ -1561,8 +1561,70 @@ CREATE TRIGGER control_triggers_update BEFORE UPDATE ON control_triggers WHEN NE
 -- END TRIGGERS
 
 -- statement
+CREATE TABLE control_workflow_profile_revisions(tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),profile_id varchar(128) NOT NULL,digest varchar(71) NOT NULL CHECK(length(digest)=71 AND substr(digest,1,7)='sha256:'),document text NOT NULL,key_version bigint NOT NULL CHECK(key_version>=1),state varchar(16) NOT NULL CHECK(state IN('DRAFT','REVIEWED')),reviewed_by varchar(128),CHECK((state='DRAFT' AND reviewed_by IS NULL) OR (state='REVIEWED' AND reviewed_by IS NOT NULL)),CHECK(length(CAST(document AS BLOB))<=393216),FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version),PRIMARY KEY(tenant_id,profile_id,digest));
+-- statement
+CREATE TRIGGER control_workflow_profile_revisions_tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_profile_revisions WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TABLE control_workflow_profile_heads(tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),profile_id varchar(128) NOT NULL,digest varchar(71) NOT NULL,generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),FOREIGN KEY(tenant_id,profile_id,digest) REFERENCES control_workflow_profile_revisions(tenant_id,profile_id,digest),PRIMARY KEY(tenant_id,profile_id));
+-- statement
+CREATE TRIGGER control_workflow_profile_heads_tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_profile_heads WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TABLE control_workflow_profile_owners(tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),resource_kind varchar(32) NOT NULL CHECK(resource_kind IN('WORKFLOW_GROUP','MODEL_GROUP','AGENT_DEFINITION','WORKFLOW','DISPATCH','MODEL_DEPLOYMENT','WORKFLOW_VERSION','DISPATCH_SOURCE')),resource_id varchar(128) NOT NULL,profile_id varchar(128) NOT NULL,definition_digest varchar(71),PRIMARY KEY(tenant_id,resource_kind,resource_id));
+-- statement
+CREATE TRIGGER control_workflow_profile_owners_tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_profile_owners WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER workflow_revision_immutable BEFORE UPDATE ON control_workflow_profile_revisions
+WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.profile_id<>OLD.profile_id OR NEW.digest<>OLD.digest OR NEW.document<>OLD.document OR NEW.key_version<>OLD.key_version OR OLD.state<>'DRAFT' OR NEW.state<>'REVIEWED' OR OLD.reviewed_by IS NOT NULL OR NEW.reviewed_by IS NULL
+BEGIN SELECT RAISE(ABORT,'immutable workflow profile revision'); END;
+
+-- statement
 -- BEGIN TENANT CAPACITY
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants BEGIN INSERT INTO control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id); END;
+-- statement
+CREATE TRIGGER control_workflow_profile_revisions_capacity_insert AFTER INSERT ON control_workflow_profile_revisions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_revisions_capacity_delete AFTER DELETE ON control_workflow_profile_revisions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_revisions_capacity_update AFTER UPDATE ON control_workflow_profile_revisions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_heads_capacity_insert AFTER INSERT ON control_workflow_profile_heads BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.profile_id AS BLOB)),0)+COALESCE(length(CAST(NEW.digest AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_heads_capacity_delete AFTER DELETE ON control_workflow_profile_heads BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.profile_id AS BLOB)),0)+COALESCE(length(CAST(OLD.digest AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_heads_capacity_update AFTER UPDATE ON control_workflow_profile_heads BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.profile_id AS BLOB)),0)+COALESCE(length(CAST(NEW.digest AS BLOB)),0))-(COALESCE(length(CAST(OLD.profile_id AS BLOB)),0)+COALESCE(length(CAST(OLD.digest AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_owners_capacity_insert AFTER INSERT ON control_workflow_profile_owners BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.resource_kind AS BLOB)),0)+COALESCE(length(CAST(NEW.resource_id AS BLOB)),0)+COALESCE(length(CAST(NEW.profile_id AS BLOB)),0)+COALESCE(length(CAST(NEW.definition_digest AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_owners_capacity_delete AFTER DELETE ON control_workflow_profile_owners BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.resource_kind AS BLOB)),0)+COALESCE(length(CAST(OLD.resource_id AS BLOB)),0)+COALESCE(length(CAST(OLD.profile_id AS BLOB)),0)+COALESCE(length(CAST(OLD.definition_digest AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_profile_owners_capacity_update AFTER UPDATE ON control_workflow_profile_owners BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.resource_kind AS BLOB)),0)+COALESCE(length(CAST(NEW.resource_id AS BLOB)),0)+COALESCE(length(CAST(NEW.profile_id AS BLOB)),0)+COALESCE(length(CAST(NEW.definition_digest AS BLOB)),0))-(COALESCE(length(CAST(OLD.resource_kind AS BLOB)),0)+COALESCE(length(CAST(OLD.resource_id AS BLOB)),0)+COALESCE(length(CAST(OLD.profile_id AS BLOB)),0)+COALESCE(length(CAST(OLD.definition_digest AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
 -- statement
 CREATE TRIGGER control_kill_gateways_capacity_insert AFTER INSERT ON control_kill_gateways BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.gateway_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;

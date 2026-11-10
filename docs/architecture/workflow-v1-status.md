@@ -16,10 +16,10 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; workflow contracts and read-only validation implemented, publication not connected | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; durable staging/review/publication and package provisioning connected; complete directory/grant provisioning pending | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; HTTPS/WSS listener and admission contract tested, Control durable admission/execution pending | 0% |
-| V1.4 — End-to-end qualification | 10% | 100% | Not started / no accepted implementation evidence recorded | 0% |
+| V1.4 — End-to-end qualification | 10% | 100% | Draft qualification tooling in #302; live driver and prerequisite server execution missing | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
 V1.2 carries the largest share because admission, runtime identity, model proxy,
@@ -44,7 +44,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 | Phase | Required acceptance summary | Delivered scope / evidence | Remaining work |
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
-| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Canonical WorkflowConfiguration and generated bindings; read-only local/dependency validation; six Control tests and cross-language checks pass | Catalog persistence, reviewed grants/publication, DeploymentProfile v2 integration and end-to-end readiness remain |
+| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks implemented in the current branch | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
 | V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | Fixed LangGraph execution core with two simulated profiles; 20 focused runner tests pass; no live ToolGate integration claimed | Server admission/ledger/leases and runtime identities, model proxy, canonical snapshot transport, V1.1 publication and real model/tool qualification |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Existing stream/ticket client, immutable UID validation, admission request/receipt contract, serial commit-before-ACK bridge and host CLI; 41 runtime/listener tests pass | Implement Control admission transaction/binding resolution and queue/lease execution; qualify real authorization, dedupe, disablement and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | None recorded | Build and execute repeatable qualification and document deployment limitations |
@@ -304,3 +304,100 @@ claimed. No #274 module completion or #230 security guarantee is claimed by this
 consumer adapter. The broad UI/browser commit hook is omitted for this focused
 slice after explicit policy/secret verification, as recorded in the delivery PR.
 The umbrella remains draft; overall earned v1 completion remains **0%**.
+
+## V1.1 follow-up — encrypted revisions and explicit publication
+
+Delivery: [draft PR #303](https://github.com/olo-labs/olo-toolgate/pull/303),
+branch `codex/workflow-profile-publication`, based on integration revision
+`3ccfd7d0efa44cc5d4af2f342491ff9c2afc40d9`. This resumes missing server work at
+the user's request before the local hotfolder demonstration. No phase weight or
+denominator changes; this is not complete V1.1 and earns **0%**.
+
+Delivered implementation:
+
+- Fresh DeploymentProfile **version 2**, with optional workflow configuration;
+  package-only profiles use the same current contract. Version 1 is rejected,
+  without conversion, deletion or schema migrations. Shipped profiles and
+  negative fixtures use the current/obsolete versions explicitly.
+- Explicit model deployments (fixed HTTPS origin, model ID and scoped vault
+  references), local model-group closure and generated Java/Rust/TypeScript/PHP
+  bindings. No provider secret value is supplied to a runner.
+- Tenant-transactional immutable desired revisions, explicit review, package
+  provisioning of reviewed bytes through PackageProvisioning, and an atomic
+  compare-and-swap publication pointer. New authenticated lifecycle endpoints
+  and OpenAPI/operator documentation. All operations require a current Super
+  Admin; cached actor flags cannot grant access. Self-review is allowed here;
+  no independent review quorum or scoped workflow management role is claimed.
+- Private profile documents encrypted through existing tenant vault custody and
+  AES-GCM, with bounded 32-KiB chunks bound to tenant/profile/digest/key version,
+  position and count. Normal key rotation keeps READ_ONLY keys usable; unavailable
+  or retired custody fails closed. There is no plaintext fallback reader.
+- Permanent profile resource ownership, immutable workflow ID/version contents,
+  and one profile owner per subscription/source default. Omission never deletes
+  resources or releases their ownership. Explicit cross-profile sharing is pending.
+- Current tenant reference checks for enabled agents/groups/tools, agent-group
+  membership, scoped vault metadata, matching-digest package READY evidence and
+  immutable active trigger binding references/current listener authority and full
+  source clearance. Publication is unavailable while these checks fail. An
+  internal admission lookup repeats them; historical PUBLISHED is not cached
+  execution authority. Nonempty tool readiness scenarios block activation until
+  their execution evidence is integrated.
+- All storage changes folded into fresh V1 initialization for SQLite/PostgreSQL,
+  with tenant keys/FKs, forced RLS/runtime privileges, tenant immutability and
+  existing capacity accounting. Unsupported existing stores are retained/refused.
+
+Final encrypted-source focused verification passed in a separate checkout with
+an isolated PostgreSQL instance and fresh SQLite stores: WorkflowProfilesTest
+9 tests, WorkflowConfigurationsTest 7, PackageProvisioningTest 6,
+ClientReleasesTest 11, and Java contracts 4, no skips/failures. The lifecycle
+matrix covers both engines; readiness tests exercise current directory/vault
+metadata, not live inference. Encryption tests cover multichunk private content,
+READ_ONLY rotation, reordered chunks and foreign-tenant refusal. UI assets were
+copied as a verified build prerequisite; this does not constitute a UI/browser
+execution check.
+
+Other executed checks: Python contract gate 183 tests (2 skips), SDK 83, PHP 304
+v1 and 426 v2 round trips/negatives plus lint passed; TypeScript typecheck/build
+and 2 wire tests passed; Rust 2 v2 round trips and workspace format passed;
+UI typecheck passed; existing runtime/listener gate 41 tests passed. Schema
+ownership/capacity checks (4), metadata/preflight (1515 bindings), generated UI
+API binding checks, source policy, Markdown links (328 files) and whitespace
+passed. Initial contract checks found a missing enum fixture and stale generated
+UI API client; both were fixed and affected checks passed. A concurrent source
+edit invalidated an early scorecard inventory test; its class passed in isolation
+(9) and the final contract suite passed without source edits during execution.
+
+The broad Java gate was started before the private-document encryption follow-up;
+`./gradlew javaCheck -PprebuiltAdminUi=true --max-workers=2` passed using the
+owned PostgreSQL helper: Control ordinary tests 346 (5 skips), enterprise tests
+447 (no skips/failures/errors), Java contracts and SDK component checks passed.
+This run predates encryption and its extra lifecycle test, so it is not a full
+final-source Java pass. The final lifecycle/dependency/schema sources were
+compared byte-for-byte with the successful isolated focused checkout. The
+final encrypted implementation is
+covered by the successful focused checks above; no full final-source repository,
+HTTP endpoint authentication qualification, real-provider or image/demo pass is
+claimed. Prior Java/UI limitations remain until applicable full gates resolve
+them. No hidden test bypass or roadmap acceptance is implied by focused results.
+The broad UI/browser commit hook is omitted for this server/schema slice after
+explicit component, generated UI typecheck, metadata, source, staged PR-policy
+and secret checks. This is not a complete repository/UI/browser gate pass or a
+waiver of final v1 qualification. Both owned PostgreSQL test containers were
+removed by their helpers; no test process is intentionally left running.
+
+Known tested final source SHA-256:
+
+- Lifecycle service: `0eca0c8b50c51f3ad5b4b242e99f48e634d499c85c92b229542be49d134ebb1e`.
+- Encrypted documents: `10884d6ea6865a451a097a56d59685a9477208d4757af72d3e76500a5dac49c6`.
+- Dependencies: `70904c6ba312994a71c7bbb34c0eb3526026797011dcf86b92bb740d9fc60b28`.
+
+Still pending for complete V1.1: one-upload provisioning of directory identities,
+roles/grants/bindings and listener subscriptions, reviewed sharing and scoped
+workflow management/user-filtered resolution, executable readiness-case evidence
+and complete-profile qualification. Metadata dependency readiness does not test
+provider credentials or make a model request. V1.2 still needs run admission,
+delegation/leases/step identity, current grant enforcement, model proxy and the
+real runtime adapter; V1.3 still needs durable dispatch/admission/run integration.
+No real model/tool or trigger-to-result/write-back qualification is claimed.
+The #230 native HotFolder finality limitation remains unchanged. No #230/#274
+stage/module completion or additional security guarantee is credited.

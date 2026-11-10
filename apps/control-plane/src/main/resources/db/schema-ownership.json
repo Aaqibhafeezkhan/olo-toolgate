@@ -3257,6 +3257,115 @@
         "SELECT",
         "UPDATE"
       ]
+    },
+    {
+      "name": "control_workflow_profile_heads",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "profile_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_workflow_profile_revisions",
+          "columns": [
+            "tenant_id",
+            "profile_id",
+            "digest"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "profile_id",
+            "digest"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_workflow_profile_owners",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "resource_kind",
+        "resource_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_workflow_profile_revisions",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "profile_id",
+        "digest"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_tenant_vault_keys",
+          "columns": [
+            "tenant_id",
+            "key_version"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "version"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
     }
   ]
 }

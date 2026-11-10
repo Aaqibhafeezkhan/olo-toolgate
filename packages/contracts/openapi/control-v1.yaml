@@ -9,6 +9,158 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /api/control/v1/workflow-profiles:
+    post:
+      operationId: stageWorkflowProfile
+      description: Current Super Admin only. Stages an immutable current-format profile; grants no execution.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/profile.schema.json#/$defs/DeploymentProfile
+      responses:
+        '201':
+          description: Staged draft
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileStatus
+        '200':
+          description: Existing identical revision, unchanged
+        '403':
+          description: Current Super Admin required
+        '409':
+          description: Profile ownership or immutable version conflict
+  /api/control/v1/workflow-profiles/{profileId}/revisions/{digest}:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: digest
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      operationId: getWorkflowProfileRevision
+      responses:
+        '200':
+          description: Lifecycle status with live dependency readiness, never execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileStatus
+        '403':
+          description: Current Super Admin required
+        '404':
+          description: Revision unavailable in this tenant
+  /api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/document:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: digest
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      operationId: getWorkflowProfileDocument
+      responses:
+        '200':
+          description: Private canonical document, no-store; contains no vault values
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/DeploymentProfile
+        '403':
+          description: Current Super Admin required
+        '404':
+          description: Revision unavailable in this tenant
+  /api/control/v1/workflow-profiles/{profileId}/review:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    post:
+      operationId: reviewWorkflowProfile
+      description: Current Super Admin explicit review; self-review allowed, no independent quorum claimed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileReviewRequest
+      responses:
+        '200':
+          description: Exact revision reviewed
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileStatus
+        '403':
+          description: Current Super Admin required
+  /api/control/v1/workflow-profiles/{profileId}/provision:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    post:
+      operationId: provisionWorkflowProfile
+      description: Provision reviewed bytes through existing package verification; does not activate a workflow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileReviewRequest
+      responses:
+        '200':
+          description: Package provisioning outcome
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/profile.schema.json#/$defs/ProvisioningStatus
+        '403':
+          description: Current Super Admin required
+        '409':
+          description: Revision not reviewed
+  /api/control/v1/workflow-profiles/{profileId}/publish:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    post:
+      operationId: publishWorkflowProfile
+      description: Atomically activate an exact reviewed dependency-ready revision at the expected generation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfilePublishRequest
+      responses:
+        '200':
+          description: Published revision, never cached execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileStatus
+        '403':
+          description: Current Super Admin required
+        '409':
+          description: Unreviewed, stale generation or dependencies not ready
   /api/control/v1/admin-session:
     get:
       operationId: getAdminSession
