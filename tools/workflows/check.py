@@ -22,6 +22,8 @@ def main():
     env = dict(os.environ, PYTHONPATH=str(RUNTIME / "src"))
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", str(RUNTIME / "tests"), "-v"],
                    cwd=ROOT, env=env, check=True)
+    subprocess.run([str(python), "-m", "unittest", "discover", "-s", "tools/workflows",
+                    "-p", "test_*.py", "-v"], cwd=ROOT, check=True)
 
 
 if __name__ == "__main__":

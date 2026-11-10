@@ -94,6 +94,9 @@ model response; no such adapter is included yet.
 
 No durable workflow checkpoint, automatic workflow failover/replay, cancellation
 propagation, model streaming or container image is delivered here.
+The [v1 qualification guide](../../docs/testing/workflow-v1-qualification.md)
+describes the repeatable scenario controller, private evidence reports and
+explicit blocked outcomes while live server integration is missing.
 See the [live status](../../docs/architecture/workflow-v1-status.md) and
 [architecture plan](../../docs/architecture/langgraph-runtime-plan.md).
 
