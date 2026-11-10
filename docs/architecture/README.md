@@ -12,7 +12,7 @@ Component guides describe current support and limitations.
 ## Workflow creation and execution
 
 - [LangGraph runtime plan](langgraph-runtime-plan.md): proposed configuration-driven
-  workflow creation and governed execution, tracked in
+  workflow/group creation, complete use-case profiles, ToolGate-driven prompts, context and models, and generic message/event execution (v0.8 section 19), tracked in
   [enhancement #295](https://github.com/olo-labs/olo-toolgate/issues/295).
 - [Triggers design](device-triggers-plan.md) and
   [implementation status](triggers-implementation-status.md): related trigger work

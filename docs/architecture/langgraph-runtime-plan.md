@@ -1,8 +1,10 @@
 # OLO ToolGate — Horizontally Scalable LangGraph Runtime under ToolGate Control
 
-**Status:** Architecture proposal for review · **Version:** 0.7 · **Date:** 2026-11-07
+**Status:** Architecture proposal for review · **Version:** 0.9 · **Date:** 2026-11-10
 **Supersedes:** `toolgate-enterprise-multitenant-langgraph-plan-v0.4.md` (see [Changelog](#17-changelog-from-v04))
 **Target repository:** https://github.com/olo-labs/olo-toolgate
+
+Section 15 is the current release and branch-delivery baseline. It supersedes older v0.7/v0.8 release allocations elsewhere in this document; later capability descriptions remain target architecture, not v1 requirements.
 
 This is the single normative plan. Earlier versions had three API tables, four
 roadmaps and three definitions of done; this one has one of each.
@@ -36,7 +38,7 @@ same workflow can also be started by API. Any replica can run or resume the run.
 next protected step of running ones. A second tenant cannot discover, trigger,
 read, infer through or affect any of it.
 
-### 1.1 Release scope
+### 1.1 Release scope (historical v0.7 allocation; superseded by section 15)
 
 | Release | Delivers |
 |---|---|
@@ -174,7 +176,7 @@ WorkflowVersion {
 }
 AgentDefinitionVersion {
   tenantId, agentId, versionId, systemPrompt (size-limited, classified),
-  modelGroupMode: EXPLICIT|INHERIT_WORKFLOW, modelGroupId?, requiredCapabilities,
+  modelGroupMode: EXPLICIT, modelGroupId, requiredCapabilities,
   outputSchema, checksum, publishedAt
 }
 ModelGroupMember {
@@ -604,27 +606,76 @@ Conform to ADR-029; do not redesign it. Deltas only:
 | Secrets, egress | `control_secrets`, ADR-013 egress broker |
 | Emergency stop | ADR-017 kill switch (also stops runs and inference) |
 
-## 15. Delivery phases
+## 15. Delivery phases — minimal end-to-end v1
 
-Each phase ships behind a feature flag with tests and ends in a demo.
+This v0.9 baseline replaces the v0.7 release allocation and section 19.6 phase
+mapping. v1 is a controlled end-to-end release, not the fully hardened production
+roadmap. No completion percentages or implementation completion are claimed.
+The original security gates remain required wherever their behavior ships;
+advanced capabilities and their associated gates move together to later versions.
 
-| Phase | Scope | Exit criteria |
+### v1 acceptance contract
+
+On a fresh supported installation with ToolGate infrastructure, approved model
+access, packages and vault secrets available: upload and publish one use-case
+profile; run the generic Python LangChain/LangGraph program **outside all
+containers**; authenticate and register its listener for the profile's trigger
+subscription; emit an authorized event; execute the configured default workflow,
+supervisor, agents, model calls, context retrieval and tools through ToolGate;
+observe its final result or governed write-back. A workflow ID plus text message
+uses the same execution path. No use-case edits to the Python program are allowed.
+Repeat with a second profile using the identical program and dependency lock.
+
+The runner registers through an authenticated ToolGate subscription API/protocol,
+not a new arbitrary callback endpoint. Registration cannot create a trigger,
+change grants or select a run identity. Reuse #274's `toolgate.triggers.v1`
+listener contract and delivery acknowledgement rules, including durable event
+identity. Only acknowledge once admission is durably recorded; duplicate delivery
+must resolve to that admission. The exact registration/claim adapter is settled
+in V1.0 against the existing implementation, not invented in the demo.
+
+| Phase | Minimal scope | Exit evidence |
 |---|---|---|
-| **0. ADRs** | Agent-step token; RunDelegation; claim/lease/fencing; Gateway model proxy (build thin, OpenAI-compatible); checkpoint encryption; migration policy (permit Flyway V2+ after the V1 empty-database release); OIDC integration scope | Decisions approved; code-vs-design gap list written |
-| **1. Catalog** | New directory kinds, grants, publish/versions, JSON import/export, simulate, `chat/workflows`, resolve | Zero grants → zero visibility; resolve returns only the effective agents and tools; cross-tenant and orphan references rejected |
-| **2. Run control** | Admission, RunDelegation, claim/heartbeat/fencing, handoff authorize, step tokens, events, cancel. Tested with a fake worker | Killed worker resumes elsewhere; stale epoch writes rejected; revocation blocks the next step; tenant round-robin holds |
-| **3. Worker + MVP model proxy** | Worker image, supervisor compiler, ChatOpenAI → proxy, MCP adapters → Gateway, encrypted checkpoints. Proxy: one model group, priority only, concurrency cap, 429. Runs started via `POST /workflows/{id}/runs` | End-to-end workflow with real tools and models started by API; direct provider/MCP egress blocked; no tenant config in image |
-| **4. Triggers** | Trigger kind, `API` and `WEBHOOK` triggers, HMAC/mTLS/OIDC-client caller auth, filter, mapping, dedupe, trigger limits, `TriggerEvent` log, dry-run test endpoint, service-mode runs, governed result write-back, full config bundle import | Sample ticket-created webhook starts the workflow; agents post findings back to the ticket via a governed tool; retried webhook creates no duplicate run; forged/stale signature rejected; disabled trigger admits nothing |
-| **5. Run lifecycle completeness** | Run events SSE with replay, ASK pause/resume on any replica, cancel, thread continuation via API, per-thread serialization, eligible catalog | Approval pause resumes on another replica; SSE replay after reconnect; second run on a thread continues its state (all chat prerequisites, §1.2) |
-| **6. Full model routing** | Weights, permitted fallback, budget reserve/settle, residency, health/circuit breakers, usage APIs | 70/30 converges over many requests; fallback never leaves the effective set; budgets never negative under concurrency |
-| **7. Scale + hardening** | KEDA, per-tenant and per-trigger quotas, dedicated pools, chaos, red-team, OTel dashboards, backup/restore, runbooks | 3+ replicas under load; webhook bursts do not starve other tenants; fairness metrics hold; §16 gates pass. **v1 complete.** |
+| **V1.0 Contract decisions** | Inventory #274 and existing profile/run/model/tool contracts; define one canonical profile, workflow/group creation, authenticated listener registration, dispatch-to-admission mapping, explicit model assignments, run identity and minimal state machine. Current schemas/fresh initialization only. | Agreed ADRs and endpoint/schema gap list; executable acceptance scenario and denied cases specified. No duplicate trigger bus or scheduler. |
+| **V1.1 Profile to effective configuration** | Import, validate, review/publish and readiness for workflow/group, agents/groups, explicit supervisor/agent model references, prompts/context, packages/tool bindings, grants and default-workflow subscription. Reuse existing installation and vault mechanisms. | One upload provisions the complete use case without manual catalog edits. Missing dependencies or unauthorized grants prevent READY; tenant/reference isolation and filtered per-user resolution pass. |
+| **V1.2 Message to governed result** | Minimal run admission, pinned revision/digest, user/service delegation, single active runner ownership, agent handoff authorization, thin model proxy, per-agent governed tool/context discovery, bounded supervisor loop and final status/result. External generic Python program starts via API/message. | Real supervisor and two agents use configured models/prompts/context and distinct tools. Current-grant checks deny revoked/forged authority. No provider credentials in the program. PREPARE does not mutate; BLOCK/ASK cannot be bypassed (ASK may end in a visible awaiting-approval outcome in v1). |
+| **V1.3 Trigger to the same run path** | Authenticated listener registration for existing configured subscriptions, default-workflow dispatch, event-to-message mapping, durable event admission/dedupe and governed result delivery. Reuse existing trigger authentication and effects. | External listener receives an event and completes the workflow with real model/tools; duplicate deliveries create one run; forged events, payload-selected identities, disabled subscriptions and invalid defaults deny. APPLY requires current authorization and existing effect safeguards. |
+| **V1.4 End-to-end qualification** | Fresh-install scripts, one-upload example profiles, locked standalone runner dependencies, status/error documentation and repeatable positive/negative smoke suite. | Two unrelated profiles run with unchanged external code; text and trigger paths complete. Run failure is visible; reconnect/redelivery does not duplicate effects. Restart with uncertain effect outcome never blindly reruns it. All applicable component checks and v1 security gates pass with recorded revisions. **v1 complete only here.** |
 
-**v2 (after v1 is complete)**
+V1.1–V1.3 are integration increments, not separately completed releases. No
+custom fairness scheduler, token/cost accounting service, weighted model router,
+new chat UI or container packaging is required to prove this path. A single
+runner is sufficient. If a runner dies, v1 may fail the run visibly rather than
+promise transparent checkpoint recovery; existing effect reconciliation and
+single-use permits still apply. New durable transcript/checkpoint storage is
+not required; any persisted sensitive data must use existing protected storage.
 
-| Phase | Scope | Exit criteria |
-|---|---|---|
-| **8. Chat flow** | OIDC login/BFF ADR and integration, chat session token, `chat/sessions`, `chat/sessions/{id}/messages`, merged session SSE | Streaming chat in a browser using the unchanged worker image, run model and authorization path; chat-specific gates (session hijack, event-stream access) pass |
-| **9. Scheduled triggers** | `SCHEDULE` trigger kind on the same Trigger model | Cron trigger starts runs under service identity with the same gates |
+### Later releases
+
+| Release | Planned scope and exit evidence |
+|---|---|
+| **v2 — capacity and operational controls** | Tenant/trigger/model quotas, token/cost budgets, fair admission, concurrency tuning, model priority/weight/fallback, usage reporting and load tests. Prove budget/routing/fairness gates before claiming those capabilities. Basic finite request sizes, execution step/time limits and existing security rate limits remain in v1. |
+| **v3 — durable lifecycle and packaging** | Cross-replica claims/leases/fencing, encrypted checkpoints, crash recovery, durable ASK resume, cancellation propagation, continuation and replayable SSE. Package the already generic external runner as an independent container; qualify unchanged profile behavior and denied direct egress in the supported deployment. Prove recovery and stale-owner gates. |
+| **v4 — broader entry points and production qualification** | Browser chat/OIDC/BFF, native schedules where not supplied by #274, dedicated pools, autoscaling, chaos/red-team/backup qualification and production SLOs. Production readiness requires the full applicable section 16 suite and operational evidence. |
+
+Minimum authorization, tenant isolation, secret handling, authenticated events,
+revocation, dedupe and protected-effect correctness are v1 requirements. Quotas
+and advanced hardening are deferred; existing security controls are not removed.
+For a host-run program, endpoint-side authorization is enforceable but ToolGate
+cannot promise arbitrary host egress confinement. Document that deployment limit;
+network-confinement certification belongs to the controlled container deployment.
+
+### Branch integration and draft PR
+
+`feature/workflow-enhancement` is the integration branch for #295. Keep one draft
+PR from it to `main` throughout v1. Create each implementation branch from the
+latest integration head and target its PR back to `feature/workflow-enhancement`.
+Run the focused and applicable component checks, then merge each reviewed slice
+into that branch; update the integration branch before starting dependent work.
+Do not target intermediate work at `main` or merge the umbrella PR early. Keep
+its description and phase evidence current; request final review only after
+V1.4 passes. Later-release scope stays separate from v1 acceptance. This workflow
+does not alter #230 or #274's own authoritative delivery/status requirements.
 
 ## 16. Verification gates (before production)
 
@@ -697,3 +748,168 @@ Each phase ships behind a feature flag with tests and ends in a demo.
 6. Which ticketing system to use for the reference trigger and write-back tool (e.g. Jira, ServiceNow, GitHub Issues).
 7. Whether triggers may follow `current` workflow version, or must always pin one.
 8. Payload retention for `TriggerEvent` (digest only, or full payload for N days).
+## 19. Profile-driven use cases and generic external execution (v0.8)
+
+This section updates the proposal for issue #295 as of 2026-11-10. It takes
+precedence where v0.7 allowed model inheritance, omitted profile orchestration,
+or deferred the text-message demonstration. It describes planned behavior,
+not implemented support. The original phase exit criteria still apply.
+
+### 19.1 One profile describes one complete use case
+
+A use-case profile is the canonical import/export bundle for all ToolGate-owned
+configuration needed by that use case. It has an immutable published revision,
+content digest, tenant scope and readiness report. It declares:
+
+- Workflow groups, workflows and their immutable versions, supervisor prompts,
+  input/result schemas, routing constraints, budgets and execution limits.
+- Agent identities and groups, versioned agent prompts, context sources,
+  structured outputs and each agent's explicit model-group assignment.
+- A separate explicit supervisor model-group assignment for each workflow.
+  Agents never silently inherit the workflow model. Different assignments may
+  deliberately reference the same approved deployment; each remains separately
+  authorized, budgeted and attributable.
+- Model groups, deployment references, routing/fallback constraints and vault
+  references; tool groups, pinned packages, execution bindings and target
+  selectors; teams, roles, service identities and reviewed grant tuples.
+- Triggers and subscriptions, default workflow/version bindings, event/message
+  mappings, deduplication, result delivery and prepare-versus-apply policy.
+- Required resource declarations, secret references, context retention and
+  redaction policy, and positive/negative readiness scenarios.
+
+This extends the existing [deployment profile](../deployment/profiles.md)
+concept through a shared schema/application design; do not introduce a competing
+package installer or imply that today's DeploymentProfile supports these fields.
+A follow-up ADR must settle the canonical schema and application transaction
+boundaries before implementation. Current contracts and fresh initialization
+are required; no migration, backfill or legacy format conversion is introduced.
+
+An administrator uploads one profile, reviews its effective changes, supplies
+any required vault secrets through the existing secure mechanism, and publishes
+it. No per-use-case Python, worker image change or manual catalog edits are
+required. A profile cannot manufacture credentials, deploy absent infrastructure
+or grant its uploader authority they do not hold. Import validates the full
+reference closure, tenant scope, supported schema and permissions before
+publication. Packages use existing signature/digest verification. Provisioning
+may progress asynchronously, but admission requires a published, ready revision;
+partial provisioning cannot expose a runnable half-profile. Reapplication of an
+identical digest is idempotent. Removal never implicitly deletes resources or
+revokes shared grants. Conflicting ownership across profiles is rejected until
+an explicit reviewed shared-resource reference is supplied.
+
+### 19.2 Workflow and workflow group creation
+
+1. Create or reference a tenant WorkflowGroup and define its management,
+   discovery, execution and run-observation grants using existing role tuples.
+   Membership alone grants nothing.
+2. Create a workflow draft in exactly one group, with its supervisor prompt,
+   explicit model group, input/result schemas, context declarations and limits.
+3. Bind eligible agent groups and narrowing filters. Each referenced agent
+   definition supplies its own prompt, context, output schema and explicit model
+   group; validate references and model/tool eligibility before publication.
+4. Configure API/message entry and optional monitoring-trigger bindings,
+   including the explicit default workflow version and service run identity.
+5. Dry-run the complete profile, review changes and effective-access evidence,
+   then publish an immutable revision. READY means dependencies are provisioned
+   and applicable readiness scenarios passed; it does not bypass runtime grants.
+
+### 19.3 Message-to-result execution contract
+
+The external application's use-case inputs are only `workflowId` and `message`.
+Authentication, transport correlation, idempotency and optional thread continuation
+are protocol metadata, not caller-selected security identities. ToolGate derives
+the tenant and user from authenticated credentials; a supplied user ID cannot
+impersonate another user. A minimal text demo uses the v1 run API with a message
+parameter; browser chat/OIDC/BFF remain phase 8 scope.
+
+1. ToolGate authorizes the user to execute the requested workflow, resolves the
+   ready published profile revision and pins its config digest to the run.
+2. Resolve only agents eligible for this workflow AND available under this user's
+   current delegation and complete grant tuples. Do not enumerate all tenant
+   agents and filter in the client. Discoverability is not execution authority.
+3. Resolve each authorized agent's own tools and schemas, prompts, context-source
+   declarations, output schema and model alias. Workflow-level context and the
+   supervisor's model/prompt also come from ToolGate. Definition-read permissions
+   remain distinct from lease-scoped worker resolution.
+4. The generic runner compiles the returned safe supervisor configuration,
+   invokes the supervisor model through ToolGate, and requests authorization for
+   each selected agent handoff. It discovers tools under that agent step token,
+   never one union of all agents' tools.
+5. Every inference, context retrieval and tool effect uses current ToolGate
+   authorization. Context retrieval uses governed tools/resources; no hardcoded
+   local files, direct databases or provider SDK calls. Caller text and retrieved
+   content are untrusted data and cannot override prompts or grant authority.
+6. Publish fenced events, result and usage; pause for ASK, resume, cancel and
+   recover under the existing run lifecycle. A resolved snapshot never preserves
+   authority after revocation. Pin configuration for reproducibility while
+   rechecking mutable authorization at every protected step.
+
+### 19.4 Self-monitoring events and the default workflow
+
+A profile's monitoring subscription binds a default workflow and explicit
+published version, service identity, configured prompt/context references,
+validated event-to-message mapping, dedupe policy and remediation mode. There
+is no installation-wide implicit workflow fallback. A disabled, missing,
+retired or unready binding fails closed with an auditable outcome.
+
+Reuse #274's governed trigger/subscription and external-listener contracts.
+ToolGate resolves and records the workflow binding at admission and makes its
+reference available in the authorized dispatch envelope. The external listener
+passes the admitted workflow reference and mapped event/message to the same
+run path; it does not choose an identity, model, prompt or replacement workflow.
+External webhook payloads cannot set these fields. Authoritative prompt content
+is resolved by the leased runner, rather than copied into untrusted events.
+
+A binding revision is pinned for each admitted event/run. Retry/redelivery uses
+that binding and dedupe key, not a newly selected default; disabling the binding
+or revoking its authority blocks subsequent protected steps. Reconcile this
+adapter with #274 before adding any new event bus, scheduler or duplicate
+Trigger object. Native scheduling remains later scope; existing monitoring
+producers can exercise the event-driven path first.
+
+`PREPARE` investigates and produces a proposed fix without a mutating effect.
+`APPLY` may execute a fix only through an explicitly configured governed tool,
+current grants, resource constraints and ALLOW/ASK/BLOCK evaluation. A prompt,
+profile label or model recommendation is never permission to apply. Prevent
+self-trigger loops with correlation/causation IDs, bounded depth/rate, dedupe and
+explicit suppression rules; do not suppress unrelated external incidents.
+
+### 19.5 Independent runner container
+
+The runner is external to Control and has one generic code path for user
+messages and trigger messages. It knows transport/authentication, safe graph
+constructs, token handling, lifecycle and checkpoints. All use-case fields are
+resolved from ToolGate. Bootstrap contains only infrastructure endpoints,
+workload credentials, runtime storage, concurrency and telemetry settings.
+It contains no use-case IDs, prompts, models, tool inventories or provider keys.
+
+Qualify the same image digest against at least two unrelated profiles before
+calling the runtime generic. A later independent container/repository release
+must use the versioned runtime contract and conformance suite; it must not depend
+on importing Control internals. Network policy blocks direct provider/tool
+access and permits only the documented infrastructure destinations. Existing
+checkpoint isolation, leases/fencing and governed effect guarantees remain
+mandatory; stateless execution does not mean discarding durable run state.
+
+### 19.6 Delivery additions and acceptance evidence (v0.8 mapping; superseded by section 15)
+
+These requirements extend the existing phase scope; no phase is marked complete
+by this document. Record the changed baseline before implementation estimates.
+
+| Existing phase | Added scope and required demonstration |
+|---|---|
+| 0 — decisions | Canonical use-case profile schema, ownership/apply boundaries, #274 dispatch binding, explicit supervisor/agent models, safe context sources and fresh-schema design agreed; code/design gap inventory recorded. |
+| 1 — catalog | Workflow/group creation and whole-profile dry-run/publish/export; closed references and readiness; missing model/prompt/context/package/secret reference or unauthorized grant blocks publication/readiness. No secret values exported. |
+| 2 — run control | User-scoped workflow/agent/per-agent-tool resolution, pinned profile digest, service dispatch binding and current-grant checks; forged user/workflow/version and stale binding tests deny. |
+| 3 — worker | Text message plus workflow ID runs end to end. Supervisor and at least two agents use their configured model assignments, prompts, context and distinct governed tools. Changing profile configuration requires no worker rebuild/restart. |
+| 4 — triggers | A monitoring event dispatches its configured default workflow through the #274 adapter, prepares a fix, and applies only where separately authorized. Duplicate events, disabled bindings, malicious payload overrides and remediation loops are tested. |
+| 5–7 — lifecycle/hardening | Revocation between discovery/handoff/inference/effect denies; cross-tenant profile/reference access denies; crash/resume preserves pinned config and dedupe; ASK and PREPARE prevent mutation; two unrelated profiles run using the same image digest, including replica failover. |
+
+The demo must start from a fresh supported store with provisioned infrastructure
+and required secrets, upload one use-case profile, reach READY, send a message,
+and observe the governed result. Repeat with another profile and the identical
+runner image. Capture profile/image digests, admission decisions, selected
+workflow/agent model assignments, context/tool authorization, effects and run
+events with sensitive content redacted. Include failed and denied scenarios,
+not only successful model output. These are future verification gates; no
+implementation, test execution or production guarantee is claimed here.
