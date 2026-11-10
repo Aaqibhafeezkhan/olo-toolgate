@@ -37,6 +37,11 @@ public class WorkflowProfileResource {
     public Response upload(String document) {
         var actor = actors.management(); return reply(service(actor).upload(actor, body(document), correlation.id()));
     }
+    @GET
+    public Response list(@QueryParam("afterProfileId") String afterProfileId, @QueryParam("afterDigest") String afterDigest,
+                         @QueryParam("limit") @DefaultValue("50") int limit) {
+        var actor = actors.management(); return reply(service(actor).list(actor, afterProfileId, afterDigest, limit));
+    }
     @GET @Path("{profileId}/revisions/{digest}")
     public Response get(@PathParam("profileId") String id, @PathParam("digest") String digest) {
         var actor = actors.management(); return reply(service(actor).get(actor, id, digest));

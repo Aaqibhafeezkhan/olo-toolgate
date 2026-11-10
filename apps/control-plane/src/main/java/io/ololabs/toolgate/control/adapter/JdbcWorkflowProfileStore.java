@@ -32,6 +32,18 @@ final class JdbcWorkflowProfileStore implements WorkflowProfileStore {
             statement.executeUpdate();
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    public java.util.List<Revision> page(String afterProfileId, String afterDigest, int limit) {
+        if (limit < 1 || limit > 50) throw Failure.validation();
+        try (var statement = statement("SELECT profile_id,digest,document,key_version,state,reviewed_by FROM control_workflow_profile_revisions WHERE tenant_id=? AND (profile_id>? OR (profile_id=? AND digest>?)) ORDER BY profile_id,digest LIMIT ?",
+                afterProfileId, afterProfileId, afterDigest)) {
+            statement.setInt(5, limit);
+            try (var rows = statement.executeQuery()) {
+                var result = new java.util.ArrayList<Revision>();
+                while (rows.next()) result.add(new Revision(rows.getString(1), rows.getString(2), rows.getString(3), rows.getLong(4), rows.getString(5), rows.getString(6)));
+                return java.util.List.copyOf(result);
+            }
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
     public void review(String profileId, String digest, String reviewer) {
         try (var statement = connection.prepareStatement("UPDATE control_workflow_profile_revisions SET state='REVIEWED',reviewed_by=? WHERE tenant_id=? AND profile_id=? AND digest=? AND state='DRAFT'")) {
             statement.setString(1, reviewer); statement.setString(2, tenant); statement.setString(3, profileId); statement.setString(4, digest);

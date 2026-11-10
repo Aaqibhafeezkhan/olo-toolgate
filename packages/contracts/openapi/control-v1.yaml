@@ -10,6 +10,41 @@ security:
 - adminAccessToken: []
 paths:
   /api/control/v1/workflow-profiles:
+    get:
+      operationId: listWorkflowProfiles
+      description: Current Super Admin only. Tenant-scoped immutable revision metadata ordered by profile identifier and digest. Continue after the last returned pair; a page shorter than limit is final. No profile documents or prompts are returned.
+      parameters:
+      - name: afterProfileId
+        in: query
+        description: Last profile identifier; must be supplied together with afterDigest.
+        schema:
+          type: string
+      - name: afterDigest
+        in: query
+        description: Last revision digest; must be supplied together with afterProfileId.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 50
+      responses:
+        '200':
+          description: Revision metadata page with current lifecycle and dependency readiness
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 50
+                items:
+                  $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileStatus
+        '400':
+          description: Invalid cursor pair or page limit
+        '403':
+          description: Current Super Admin required
     post:
       operationId: stageWorkflowProfile
       description: Current Super Admin only. Stages an immutable current-format profile; grants no execution.

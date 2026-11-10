@@ -53,6 +53,33 @@ final class WorkflowProfilesTest {
     private String publish(String digest, long generation) { return codec.json(Map.of("profileDigest", digest, "expectedGeneration", generation)); }
     @Test void sqliteLifecycleIsAtomicAndPublishedSeparately() throws Exception { lifecycle(false); }
     @Test void postgresLifecycleIsAtomicAndPublishedSeparately() throws Exception { lifecycle(true); }
+    @Test void sqliteCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(false); }
+    @Test void postgresCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(true); }
+    private void catalog(boolean postgres) throws Exception {
+        var rig = rig(postgres); var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
+        var expected = new HashSet<String>();
+        for (int i = 0; i < 3; i++) {
+            var value = profile(); ((ObjectNode)value.path("workflows").path("agentDefinitions").get(0)).put("systemPrompt", "Private prompt " + i);
+            expected.add(node(service.upload(rig.admin, value.toString(), "catalog-" + i)).path("profileDigest").asText());
+        }
+        var found = new HashSet<String>(); String afterId = null, afterDigest = null;
+        for (int i = 0; i < 4; i++) {
+            var page = node(service.list(rig.admin, afterId, afterDigest, 1)); assertTrue(page.isArray());
+            if (i == 3) { assertEquals(0, page.size()); break; }
+            assertEquals(1, page.size()); var entry = page.get(0);
+            assertFalse(entry.has("document")); assertFalse(entry.toString().contains("Private prompt"));
+            afterId = entry.path("profileId").asText(); afterDigest = entry.path("profileDigest").asText();
+            assertTrue(found.add(afterDigest));
+        }
+        assertEquals(expected, found);
+        var other = TestSupport.seed(rig.store, codec, Tenants.id("other"), "root");
+        assertEquals(0, node(service.list(other, null, null, 50)).size());
+        var forged = new DirectoryService.Actor(rig.tenant, DirectoryService.digest("forged"), true, true, "intruder");
+        assertEquals(403, assertThrows(Failure.class, () -> service.list(forged, null, "bad", 0)).status());
+        assertEquals(400, assertThrows(Failure.class, () -> service.list(rig.admin, null, null, 51)).status());
+        assertEquals(400, assertThrows(Failure.class, () -> service.list(rig.admin, "support", null, 50)).status());
+        assertEquals(400, assertThrows(Failure.class, () -> service.list(rig.admin, "support", "bad", 50)).status());
+    }
     private void lifecycle(boolean postgres) throws Exception {
         var rig = rig(postgres); var ready = new AtomicBoolean(true);
         var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> ready.get(), keys());
@@ -63,6 +90,7 @@ final class WorkflowProfilesTest {
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "early")).status());
         assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.workflowProfiles().publication("support")));
         assertEquals("REVIEWED", node(service.review(rig.admin, "support", review(digest), "review")).path("state").asText());
+        assertTrue(node(service.get(rig.admin, "support", digest)).path("dependenciesReady").asBoolean(), "reviewed ready revisions must be publishable from the console");
         service.review(rig.admin, "support", review(digest), "review-repeat");
         ready.set(false);
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "unready")).status());

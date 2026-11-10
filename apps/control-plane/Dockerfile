@@ -30,6 +30,7 @@ COPY packages/contracts/VERSION packages/contracts/VERSION
 COPY apps/admin-ui/ apps/admin-ui/
 COPY config/initial/ config/initial/
 COPY tests/fixtures/contracts/v1/valid.json tests/fixtures/contracts/v1/valid.json
+COPY tests/fixtures/contracts/v2/valid.json tests/fixtures/contracts/v2/valid.json
 COPY tools/ui/build.mjs tools/ui/build.mjs
 ARG BUILD_NUMBER=local
 ENV TOOLGATE_BUILD=$BUILD_NUMBER

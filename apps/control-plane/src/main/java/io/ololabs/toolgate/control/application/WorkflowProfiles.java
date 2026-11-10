@@ -87,7 +87,7 @@ public final class WorkflowProfiles {
     private WorkflowProfileStatus status(Store.Session tx, Ids.TenantId tenant, WorkflowProfileStore.Revision revision) {
         var head = tx.workflowProfiles().publication(revision.profileId());
         boolean published = head != null && head.digest().equals(revision.digest());
-        boolean ready = published && readiness.ready(tx, profile(documents.open(tx, tenant, revision)));
+        boolean ready = revision.state().equals("REVIEWED") && readiness.ready(tx, profile(documents.open(tx, tenant, revision)));
         return new WorkflowProfileStatus(revision.profileId(), revision.digest(),
             published ? WorkflowProfileState.PUBLISHED : WorkflowProfileState.valueOf(revision.state()),
             head == null ? 0L : head.generation(), ready, revision.reviewedBy());
@@ -120,6 +120,17 @@ public final class WorkflowProfiles {
     }
     public Store.Reply get(DirectoryService.Actor actor, String id, String digest) {
         return store.transaction(actor.tenant(), false, tx -> { require(tx, actor); return reply(tx, actor.tenant(), revision(tx, actor.tenant(), id, digest), 200); });
+    }
+    /** Bounded metadata discovery; prompts/documents remain behind exact-revision retrieval. */
+    public Store.Reply list(DirectoryService.Actor actor, String afterProfileId, String afterDigest, int limit) {
+        return store.transaction(actor.tenant(), false, tx -> {
+            require(tx, actor);
+            if (limit < 1 || limit > 50 || (afterProfileId == null) != (afterDigest == null)) throw Failure.validation();
+            if (afterProfileId != null) { Ids.valid(afterProfileId); digest(afterDigest); }
+            var rows = tx.workflowProfiles().page(afterProfileId == null ? "" : afterProfileId, afterDigest == null ? "" : afterDigest, limit);
+            var statuses = rows.stream().map(row -> status(tx, actor.tenant(), revision(tx, actor.tenant(), row.profileId(), row.digest()))).toList();
+            return new Store.Reply(200, codec.json(statuses), 0);
+        });
     }
     /** Reviewed document retrieval stays behind current management authorization; prompts are private configuration. */
     public Store.Reply document(DirectoryService.Actor actor, String id, String digest, boolean reviewed) {

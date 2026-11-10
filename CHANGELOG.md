@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Configure workflows, workflow groups, models and trigger mappings from a
+  dedicated Workflows menu. Agents now has prompts/context and workflow mapping
+  pages with links from each agent record. Open tenant profile revisions from a
+  catalog and edit a shared draft before review and publication.
+
 - Manage every current deployment profile property from the Super Admin console,
   including workflow groups, workflows, agents, models, prompts, context and
   dispatch settings. Stage, review, provision and publish exact profile revisions

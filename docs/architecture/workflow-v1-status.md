@@ -16,7 +16,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; Docker-packaged profile property and lifecycle console added to durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; HTTPS/WSS listener and admission contract tested, Control durable admission/execution pending | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; scenario/evidence controller implemented; live driver and server prerequisites missing | 0% |
@@ -44,7 +44,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 | Phase | Required acceptance summary | Delivered scope / evidence | Remaining work |
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
-| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete canonical property editor and lifecycle console implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
+| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete property editor, dedicated workflow/group/agent screens and tenant-scoped revision discovery implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
 | V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | Fixed LangGraph execution core with two simulated profiles; 20 focused runner tests pass; no live ToolGate integration claimed | Server admission/ledger/leases and runtime identities, model proxy, canonical snapshot transport, V1.1 publication and real model/tool qualification |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Existing stream/ticket client, immutable UID validation, admission request/receipt contract, serial commit-before-ACK bridge and host CLI; 41 runtime/listener tests pass | Implement Control admission transaction/binding resolution and queue/lease execution; qualify real authorization, dedupe, disablement and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | Repeatable 16-scenario controller, source/artifact hashes, explicit blocked/error/failed reports and operator guide; controller tests use simulations | Implement server prerequisites and live-install driver/fresh provisioning with canonical example profiles; execute and review real integration evidence |
@@ -174,6 +174,79 @@ a more specific stated reason. Preflight, source/license/obvious-secret quality
 and whitespace checks passed. The packaging-only follow-up does not rerun the
 known failing parallel precommit UI suite; the actual Docker UI compilation and
 startup evidence above validate this correction.
+
+### Dedicated workflow, group and agent management (2026-11-11)
+
+Delivered directly to umbrella #297 as requested, based on `6a2f03ec`. Workflows
+now has separate Workflows, Workflow groups, Models, Trigger mappings and Profiles
+pages. Agents has Prompts & context and Workflow mappings with links scoped to
+the agent selected in its directory editor. One in-memory profile draft persists
+across these pages; editing requires restaging before lifecycle actions become
+available. Changes to an already staged workflow definition through its own page
+or the mapping page produce a new version and update its matching dispatch pins
+in the draft. All canonical fields remain available in Profiles.
+
+Control adds bounded, tenant-scoped metadata discovery on `GET
+/api/control/v1/workflow-profiles`, with an exclusive profile-id/digest cursor and
+at most 50 rows. Only a current Super Admin may list or open revisions. The list
+returns lifecycle metadata, never prompts or documents. Exact document loading
+uses the existing encrypted revision path. Reviewed revisions report live
+dependency readiness before publication; publish still rechecks readiness and
+the current generation. No store schema, migration or runtime authority changes.
+
+Executed verification:
+
+- `:control-plane:test --tests io.ololabs.toolgate.control.WorkflowProfilesTest`
+  with the provisioned PostgreSQL helper: 11 passed, including SQLite/PostgreSQL
+  pagination, tenant isolation, forged-role denial, metadata privacy and readiness
+  before publication.
+- Final production UI typecheck/build passed. Full serial console coverage run
+  (`vitest run --coverage --maxWorkers=1 --testTimeout=30000`) passed 274 of 275
+  tests, including all six new workflow tests. One existing workload reauthorization
+  test timed out waiting for a row during concurrent builds. Its entire
+  `DemoConsole.test.tsx` suite passed all 14 tests in isolation. No single-run
+  complete UI gate or final coverage threshold pass is claimed.
+- Three production-preview Playwright tests passed: dedicated group/workflow/agent
+  navigation and draft continuity, scoped-admin deep-link denial, and the existing
+  profile editor’s accessibility/mobile checks. Corrected the test runner’s JSON
+  fixture import and ambiguous navigation locator before the passing rerun.
+- `tools/check.py --contracts-only`: CI 422 tests (17 skips), contract 183 tests
+  (2 skips) and Python SDK 83 tests passed; canceled its duplicate Gradle phase to
+  avoid overlapping the provisioned Java gate. No complete repository pass claimed.
+- Provisioned `javaCheck` reported `Persistence unavailable` in
+  `EnterpriseConfigurationTest.superAdministratorCanSubmitApproveAndApplyAnotherUsersDraft`
+  and was interrupted for isolation. The first isolated class run passed 13/14;
+  `thresholdIsCapturedWhenTheChangeIsCreated` hit the same approval clock rollback
+  guard. The fixture now uses a fixed clock at the persisted observation floor;
+  production clock checks and approval assertions are unchanged. Final isolated
+  `:control-plane:enterpriseTest --tests io.ololabs.toolgate.control.EnterpriseConfigurationTest`
+  passed all 14 tests. No complete `javaCheck` rerun or pass is claimed.
+- The production Control/Quickstart build passed after adding the v2 contract test
+  fixture to the Docker UI build context. Image manifest:
+  `sha256:6a0c4a8bebd5e15f64e0468b377cd47243478979f290034ca916da7bbf123d76`.
+  Loaded into Docker Desktop and restarted `toolgate-debug`, preserving its named
+  data volume. Container healthy; authenticated browser showed the real empty
+  catalog, both new menus and the workflow group and agent editor actions. The
+  temporary browser draft was discarded. The live anonymous catalog request returned
+  HTTP 401. No profile was published or workflow executed on the debug stack.
+
+Tested source SHA-256: `WorkflowManagement.tsx`
+`ee8401bfad0ca91e0f63f3acd71cddbe301cdc94dea166ee7fba85131d85b263`;
+`WorkflowProfiles.java`
+`51dd8563017aff2ebd7bb369d2f619b8ff4e0437acac5868d7f8af2d894e8201`;
+`control-v1.yaml`
+`15cec15d4f57139175f5441a45f943a4329a0ce5348e1c9df64051449c8db417`;
+Control Dockerfile `7cda31f90ea121d3d5dc55a268fcf9d85a83b8a2bd525086456006c6631bf6a8`.
+Approval fixture SHA-256:
+`38eb8915ecaa223505454338c1eadc5aae7ea00f75bcfe7bf4c35b80912ed585`.
+Metadata/preflight, quality, UI operation drift, staged PR policy, secret scan
+and whitespace checks passed. The commit uses these explicit checks rather than
+rerunning the default parallel hook; no complete hook pass is claimed.
+
+Remaining: workflow-scoped roles, complete directory/grant/subscription
+provisioning, executed readiness and runtime qualification. Current management
+stays Super Admin only. No phase or security guarantee is newly accepted; earned
+completion remains **0 / 100 = 0%**. Keep #297 draft.
 
 ## Delivery ledger
 

@@ -7,6 +7,7 @@ public interface WorkflowProfileStore {
     record Revision(String profileId, String digest, String document, long keyVersion, String state, String reviewedBy) {}
     record Publication(String profileId, String digest, long generation) {}
     Revision revision(String profileId, String digest);
+    java.util.List<Revision> page(String afterProfileId, String afterDigest, int limit);
     void insert(Revision revision);
     void review(String profileId, String digest, String reviewer);
     Publication publication(String profileId);

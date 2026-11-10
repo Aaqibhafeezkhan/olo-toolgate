@@ -73,6 +73,7 @@ export function ServerPackages({ client, superAdmin=false }: { client: ControlCl
     .filter(route => !['olo-memory', 'olo-rag'].includes(route.destination)).map(route => [route.id, route])).values()];
   const running = new Map(deployments.map(d => [d.packageDigest, d]));
   return <><p className="eyebrow">Tool Hosts</p><h1>Server packages</h1>
+    {superAdmin&&<p><a href="#workflows">Open workflow management</a> · <a href="#workflowGroups">Workflow groups</a></p>}
     <p className="intro">Upload a package built with <code>toolgate pack</code>, then deploy it to Tool Hosts. Name the hosts to run it on, a server or a laptop alike, and deploy again with another host to move it. New tools start disabled; enable each one with a reviewed change, add it to a Tool Group and grant it.</p>
     {validation && <p className="notice error" role="alert">{validation}</p>}
     {Boolean(error) && <Failure error={error} retry={() => setAttempt(a => a + 1)} />}

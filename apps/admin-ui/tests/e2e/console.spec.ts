@@ -76,7 +76,7 @@ test('real reader denial, session expiration, wrong signature and empty director
 
 test('Super Admin manages roles, team inheritance and audit through grouped navigation',async({page,request})=>{
   await login(page,'super');await expect(page.getByRole('navigation')).toBeVisible();
-  await expect(page.locator('nav details')).toHaveCount(6);
+  await expect(page.locator('nav details')).toHaveCount(7);
   await navigate(page,'Roles');await page.getByRole('button',{name:'Add role',exact:true}).click();
   await page.getByLabel('Identifier',{exact:true}).fill('browser-cloud-role');await page.getByLabel('Display name').fill('Browser cloud role');
   await page.getByLabel('IT Cloud Admin',{exact:true}).check();await page.getByLabel('Approval reviewer',{exact:true}).check();
