@@ -8,3 +8,17 @@
 - [Repository layout](monorepo-layout.md) and [decision records](../adr/README.md).
 
 Component guides describe current support and limitations.
+
+## Workflow creation and execution
+
+- [LangGraph runtime plan](langgraph-runtime-plan.md): proposed configuration-driven
+  workflow creation and governed execution, tracked in
+  [enhancement #295](https://github.com/olo-labs/olo-toolgate/issues/295).
+- [Triggers design](device-triggers-plan.md) and
+  [implementation status](triggers-implementation-status.md): related trigger work
+  tracked in [issue #274](https://github.com/olo-labs/olo-toolgate/issues/274).
+- [Trigger architecture decision](../adr/058-triggers.md): trigger boundaries and contracts.
+
+The runtime plan is a proposal, not a statement of supported functionality.
+Repository instructions remain authoritative where its migration or compatibility
+proposals conflict with the fresh breaking-build constraints for #230 and #274.
