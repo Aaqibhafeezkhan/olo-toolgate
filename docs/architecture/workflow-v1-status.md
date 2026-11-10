@@ -235,6 +235,10 @@ source-policy, PR-policy and staged secret checks recorded above. Earlier broad
 Java/UI failures remain limitations; no waiver of final v1 qualification is implied.
 ## V1.3 delivery — authenticated listener and admission contract
 
+Delivery: [PR #301](https://github.com/olo-labs/olo-toolgate/pull/301) into
+`feature/workflow-enhancement`, tested implementation revision `ef9d11a7`.
+Integration is tracked by the PR; this slice does not satisfy full V1.3 acceptance.
+
 Started at the user's request from integration revision
 `4b9c49d8bed9d00a9fa5044228f93fb691faed8c`. No weight/scope denominator change:
 V1.3 remains 20 points and earns zero until its full end-to-end exit criteria pass.
