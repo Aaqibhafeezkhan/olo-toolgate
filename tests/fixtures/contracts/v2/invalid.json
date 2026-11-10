@@ -2095,7 +2095,7 @@
     {
       "case": "unknown profile version",
       "value": {
-        "profileVersion": 2,
+        "profileVersion": 1,
         "profileId": "demo3",
         "packages": []
       }
@@ -2103,7 +2103,7 @@
     {
       "case": "executable tool definition",
       "value": {
-        "profileVersion": 1,
+        "profileVersion": 2,
         "profileId": "demo3",
         "packages": [],
         "tools": [

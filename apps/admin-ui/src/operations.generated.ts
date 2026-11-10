@@ -3,6 +3,12 @@
 // GENERATED FILE — DO NOT EDIT; python tools/ui/generate.py
 import type { ControlAccessGrant, ControlAccessGrantPage, ControlAgent, ControlAgentDelegation, ControlAgentDelegationPage, ControlAgentGroup, ControlAgentGroupPage, ControlAgentPage, ControlDelegation, ControlDelegationPage, ControlDevice, ControlDeviceEvidence, ControlDeviceEvidencePage, ControlDeviceGroup, ControlDeviceGroupPage, ControlDevicePage, ControlExecutionBinding, ControlExecutionBindingPage, ControlIdentityBinding, ControlIdentityBindingPage, ControlPolicy, ControlPolicyPage, ControlResourceExtractor, ControlResourceExtractorPage, ControlRole, ControlRolePage, ControlTeam, ControlTeamPage, ControlTool, ControlToolGroup, ControlToolGroupPage, ControlToolPage, ControlUser, ControlUserPage, ControlWorkloadBinding, ControlWorkloadBindingPage } from '@olo-labs/toolgate-contracts';
 export const operations = {
+  stageWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles' },
+  getWorkflowProfileRevision: { method: 'GET', path: '/api/control/v1/workflow-profiles/{profileId}/revisions/{digest}' },
+  getWorkflowProfileDocument: { method: 'GET', path: '/api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/document' },
+  reviewWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/review' },
+  provisionWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/provision' },
+  publishWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/publish' },
   getAdminSession: { method: 'GET', path: '/api/control/v1/admin-session' },
   publicClientInstallers: { method: 'GET', path: '/api/public/v1/installers' },
   publicClientDownloads: { method: 'GET', path: '/api/public/v1/clients' },

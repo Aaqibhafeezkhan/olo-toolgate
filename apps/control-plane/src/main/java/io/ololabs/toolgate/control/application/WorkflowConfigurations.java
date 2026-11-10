@@ -29,12 +29,22 @@ public final class WorkflowConfigurations {
         var config = codec.model(document, WorkflowConfiguration.class);
         var groups = index(config.workflowGroups(), g -> g.id(), "workflow group");
         var models = index(config.modelGroups(), g -> g.id(), "model group");
+        var deployments = index(config.modelDeployments(), d -> d.id(), "model deployment");
         var agents = index(config.agentDefinitions(), a -> a.agentId(), "agent");
         var workflows = index(config.workflows(), w -> w.id(), "workflow");
         index(config.dispatchBindings(), b -> b.id(), "dispatch binding");
         var external = new LinkedHashSet<Reference>();
+        for (var deployment : config.modelDeployments()) {
+            try {
+                EndpointService.origin(deployment.origin());
+                int port = java.net.URI.create(deployment.origin()).getPort();
+                if (port == 0 || port > 65535) throw new IllegalArgumentException();
+            } catch (IllegalArgumentException invalid) { throw invalid("A model requires a fixed HTTPS origin"); }
+            external.add(new Reference(ResourceKind.MODEL_DEPLOYMENT, deployment.id()));
+        }
         for (var model : config.modelGroups()) {
             unique(model.deploymentIds(), "model deployment");
+            model.deploymentIds().forEach(id -> require(deployments, id, "model deployment"));
             model.deploymentIds().forEach(id -> external.add(new Reference(ResourceKind.MODEL_DEPLOYMENT, id)));
         }
         for (var agent : config.agentDefinitions()) {

@@ -4491,6 +4491,37 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE public.control_triggers TO toolgate_c
 GRANT SELECT,INSERT,UPDATE ON TABLE public.control_triggers TO toolgate_control_platform;
 -- END TRIGGERS
 
+CREATE TABLE control_workflow_profile_revisions(tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),profile_id varchar(128) NOT NULL,digest varchar(71) NOT NULL CHECK(length(digest)=71 AND substr(digest,1,7)='sha256:'),document text NOT NULL,key_version bigint NOT NULL CHECK(key_version>=1),state varchar(16) NOT NULL CHECK(state IN('DRAFT','REVIEWED')),reviewed_by varchar(128),CHECK((state='DRAFT' AND reviewed_by IS NULL) OR (state='REVIEWED' AND reviewed_by IS NOT NULL)),CHECK(octet_length(document)<=393216),FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version),PRIMARY KEY(tenant_id,profile_id,digest));
+ALTER TABLE control_workflow_profile_revisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_profile_revisions FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_profile_revisions USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_profile_revisions AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_profile_revisions FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_profile_revisions TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_profile_revisions TO toolgate_control_platform;
+CREATE TABLE control_workflow_profile_heads(tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),profile_id varchar(128) NOT NULL,digest varchar(71) NOT NULL,generation bigint NOT NULL CHECK(generation BETWEEN 1 AND 9007199254740991),FOREIGN KEY(tenant_id,profile_id,digest) REFERENCES control_workflow_profile_revisions(tenant_id,profile_id,digest),PRIMARY KEY(tenant_id,profile_id));
+ALTER TABLE control_workflow_profile_heads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_profile_heads FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_profile_heads USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_profile_heads AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_profile_heads FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_profile_heads TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_profile_heads TO toolgate_control_platform;
+CREATE TABLE control_workflow_profile_owners(tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),resource_kind varchar(32) NOT NULL CHECK(resource_kind IN('WORKFLOW_GROUP','MODEL_GROUP','AGENT_DEFINITION','WORKFLOW','DISPATCH','MODEL_DEPLOYMENT','WORKFLOW_VERSION','DISPATCH_SOURCE')),resource_id varchar(128) NOT NULL,profile_id varchar(128) NOT NULL,definition_digest varchar(71),PRIMARY KEY(tenant_id,resource_kind,resource_id));
+ALTER TABLE control_workflow_profile_owners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_profile_owners FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_profile_owners USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_profile_owners AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_profile_owners FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT ON TABLE public.control_workflow_profile_owners TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_workflow_profile_owners TO toolgate_control_platform;
+CREATE FUNCTION control_workflow_revision_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.tenant_id IS DISTINCT FROM OLD.tenant_id OR NEW.profile_id IS DISTINCT FROM OLD.profile_id OR NEW.digest IS DISTINCT FROM OLD.digest OR NEW.document IS DISTINCT FROM OLD.document OR NEW.key_version IS DISTINCT FROM OLD.key_version OR OLD.state<>'DRAFT' OR NEW.state<>'REVIEWED' OR OLD.reviewed_by IS NOT NULL OR NEW.reviewed_by IS NULL THEN
+ RAISE EXCEPTION 'immutable workflow profile revision'; END IF; RETURN NEW;
+END;$$;
+CREATE TRIGGER workflow_revision_immutable BEFORE UPDATE ON control_workflow_profile_revisions FOR EACH ROW EXECUTE FUNCTION control_workflow_revision_guard();
+
 -- BEGIN TENANT CAPACITY
 GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
 
@@ -4500,6 +4531,42 @@ CREATE FUNCTION control_capacity_seed() RETURNS trigger LANGUAGE plpgsql SECURIT
 BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id);RETURN NEW;END;$$;
 REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
+
+CREATE FUNCTION control_workflow_profile_revisions_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_profile_revisions_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_profile_revisions FOR EACH ROW EXECUTE FUNCTION control_workflow_profile_revisions_capacity();
+
+CREATE FUNCTION control_workflow_profile_heads_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.profile_id),0)+COALESCE(octet_length(NEW.digest),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.profile_id),0)+COALESCE(octet_length(OLD.digest),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_profile_heads_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_profile_heads FOR EACH ROW EXECUTE FUNCTION control_workflow_profile_heads_capacity();
+
+CREATE FUNCTION control_workflow_profile_owners_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.resource_kind),0)+COALESCE(octet_length(NEW.resource_id),0)+COALESCE(octet_length(NEW.profile_id),0)+COALESCE(octet_length(NEW.definition_digest),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.resource_kind),0)+COALESCE(octet_length(OLD.resource_id),0)+COALESCE(octet_length(OLD.profile_id),0)+COALESCE(octet_length(OLD.definition_digest),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_profile_owners_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_profile_owners FOR EACH ROW EXECUTE FUNCTION control_workflow_profile_owners_capacity();
 
 CREATE FUNCTION control_kill_gateways_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;

@@ -177,6 +177,7 @@ public class PostgresStore implements Store {
         public io.ololabs.toolgate.control.application.InsightsStore insights() {return new JdbcInsightsStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.TriggerStore triggers() { return new PostgresTriggerStore(connection, tenant); }
+        public io.ololabs.toolgate.control.application.WorkflowProfileStore workflowProfiles() { return new JdbcWorkflowProfileStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.BuilderStore builder() { return new PostgresBuilderStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.RunEventStore runEvents() { return new JdbcRunEventStore(connection, tenant); }
         private EnrollmentRecord enrollmentRows(java.sql.PreparedStatement statement) throws SQLException {

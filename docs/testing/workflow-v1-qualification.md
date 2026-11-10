@@ -7,12 +7,13 @@ it does not grant phase acceptance or prove that an operator's assertions are tr
 The [live status](../architecture/workflow-v1-status.md) remains authoritative.
 
 **The current implementation cannot complete this suite against ToolGate.**
-Profile publication/readiness, run admission/leases/model transport and durable
+Complete profile provisioning/readiness, run admission/leases/model transport and durable
 trigger dispatch are unfinished. There is deliberately no built-in production
 driver, substitute profile format or simulated success fallback. One-upload
 example profiles and fresh-install orchestration must use the actual canonical
-profile application and server APIs when those are implemented. Existing
-DeploymentProfile v1 does not support this use case.
+profile application and server APIs. Current DeploymentProfile v2 carries workflow
+configuration with staged publication; complete directory/grant/subscription
+provisioning and execution remain unfinished. Obsolete version 1 is rejected.
 
 ## Run outside containers
 

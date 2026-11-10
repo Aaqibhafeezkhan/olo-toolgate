@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Stage and review immutable workflow profile revisions, provision their packages
+  and activate a dependency-ready revision explicitly. Current version-2 profiles
+  include explicit model deployments and vault references; use fresh stores.
+  Workflow execution and complete one-upload provisioning remain in progress.
+
 - Add explicit generic HTTP target fencing with peer-bound permits, dedicated
   target consumption, shared SQL claim ownership and conservative crash recovery.
   Review the target identity/class in the console; deploy matching current

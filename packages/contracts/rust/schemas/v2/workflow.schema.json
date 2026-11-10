@@ -320,6 +320,14 @@
           },
           "minItems": 0,
           "maxItems": 64
+        },
+        "modelDeployments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowModelDeployment"
+          },
+          "minItems": 1,
+          "maxItems": 64
         }
       },
       "required": [
@@ -327,7 +335,8 @@
         "modelGroups",
         "agentDefinitions",
         "workflows",
-        "dispatchBindings"
+        "dispatchBindings",
+        "modelDeployments"
       ],
       "description": "Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority."
     },
@@ -388,6 +397,118 @@
         "cursor",
         "admissionId",
         "disposition"
+      ]
+    },
+    "WorkflowProfileReviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "profileDigest"
+      ],
+      "description": "Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness."
+    },
+    "WorkflowProfilePublishRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740990
+        }
+      },
+      "required": [
+        "profileDigest",
+        "expectedGeneration"
+      ],
+      "description": "Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness."
+    },
+    "WorkflowProfileStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "state": {
+          "$ref": "#/$defs/WorkflowProfileState"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dependenciesReady": {
+          "type": "boolean"
+        },
+        "reviewedBy": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "profileId",
+        "profileDigest",
+        "state",
+        "generation",
+        "dependenciesReady"
+      ],
+      "description": "Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness."
+    },
+    "WorkflowProfileState": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "REVIEWED",
+        "PUBLISHED"
+      ],
+      "description": "DRAFT and REVIEWED revisions are unavailable to runs; PUBLISHED identifies the activated revision, not cached runtime authority."
+    },
+    "WorkflowModelDeployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner.",
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 2048
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "secretName": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deviceGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "id",
+        "origin",
+        "modelId",
+        "secretName",
+        "toolGroupId",
+        "deviceGroupId"
       ]
     }
   }

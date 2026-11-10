@@ -2435,7 +2435,7 @@
     }
   },
   "DeploymentProfile": {
-    "profileVersion": 1,
+    "profileVersion": 2,
     "profileId": "demo3",
     "packages": [
       {
@@ -5143,6 +5143,16 @@
         "messagePointer": "/summary",
         "remediationMode": "PREPARE"
       }
+    ],
+    "modelDeployments": [
+      {
+        "id": "deployment-1",
+        "origin": "https://models.example",
+        "modelId": "approved-model",
+        "secretName": "model-key",
+        "toolGroupId": "model-tools",
+        "deviceGroupId": "model-devices"
+      }
     ]
   },
   "WorkflowContextSource": {
@@ -5210,5 +5220,28 @@
     "admissionId": "dispatch-1",
     "disposition": "ADMITTED",
     "runId": "run-1"
-  }
+  },
+  "WorkflowProfileReviewRequest": {
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "WorkflowProfilePublishRequest": {
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expectedGeneration": 0
+  },
+  "WorkflowProfileStatus": {
+    "profileId": "orders",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "DRAFT",
+    "generation": 0,
+    "dependenciesReady": false
+  },
+  "WorkflowModelDeployment": {
+    "id": "deployment-1",
+    "origin": "https://models.example",
+    "modelId": "approved-model",
+    "secretName": "model-key",
+    "toolGroupId": "model-tools",
+    "deviceGroupId": "model-devices"
+  },
+  "WorkflowProfileState": "DRAFT"
 }

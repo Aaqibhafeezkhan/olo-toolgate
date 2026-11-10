@@ -11,7 +11,7 @@ or executable profile expressions. It does not union different agents' tools.
 ToolGate run API, live LangChain/model-proxy integration or complete
 end-to-end standalone workflow program. The trigger subscriber described below
 uses the existing stream, but durable workflow admission still needs server implementation. There is no default fake adapter, local authority
-fallback or runnable-profile claim. V1.1 publication/readiness and V1.2 server
+fallback or runnable-profile claim. Complete V1.1 provisioning/readiness and V1.2 server
 admission/leases, runtime identities, model proxy and real transport must be
 implemented before the external message/trigger demo can run end to end.
 
@@ -144,7 +144,7 @@ that authoritative lookup.
 404/401/503, a timeout, or any non-durable/mismatched receipt stops the connection
 without ACK. There is no local admission ledger, fake production success or
 fallback workflow. Registration plus an uploaded profile is not yet enough for
-end-to-end execution: V1.1 publication and V1.2 admission/run/lease/model transport
+end-to-end execution: complete V1.1 provisioning/readiness and V1.2 admission/run/lease/model transport
 remain required. Once available, admitted work belongs to Control's run queue;
 the listener never fabricates a RunLease or executes an event as Python code.
 

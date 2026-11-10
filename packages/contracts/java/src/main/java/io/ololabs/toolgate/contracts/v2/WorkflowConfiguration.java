@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param agentDefinitions canonical agentDefinitions value
  * @param workflows canonical workflows value
  * @param dispatchBindings canonical dispatchBindings value
+ * @param modelDeployments canonical modelDeployments value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record WorkflowConfiguration(
@@ -17,7 +18,8 @@ public record WorkflowConfiguration(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "modelGroups", required = true) java.util.List<WorkflowModelGroupDefinition> modelGroups,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentDefinitions", required = true) java.util.List<WorkflowAgentDefinition> agentDefinitions,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "workflows", required = true) java.util.List<WorkflowDefinition> workflows,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "dispatchBindings", required = true) java.util.List<WorkflowDispatchBinding> dispatchBindings
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "dispatchBindings", required = true) java.util.List<WorkflowDispatchBinding> dispatchBindings,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "modelDeployments", required = true) java.util.List<WorkflowModelDeployment> modelDeployments
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,6 +28,7 @@ public record WorkflowConfiguration(
      * @param agentDefinitions canonical agentDefinitions value
      * @param workflows canonical workflows value
      * @param dispatchBindings canonical dispatchBindings value
+     * @param modelDeployments canonical modelDeployments value
      */
     public WorkflowConfiguration {
         java.util.Objects.requireNonNull(workflowGroups, "workflowGroups");
@@ -38,5 +41,7 @@ public record WorkflowConfiguration(
         workflows = workflows == null ? null : java.util.List.copyOf(workflows);
         java.util.Objects.requireNonNull(dispatchBindings, "dispatchBindings");
         dispatchBindings = dispatchBindings == null ? null : java.util.List.copyOf(dispatchBindings);
+        java.util.Objects.requireNonNull(modelDeployments, "modelDeployments");
+        modelDeployments = modelDeployments == null ? null : java.util.List.copyOf(modelDeployments);
     }
 }
