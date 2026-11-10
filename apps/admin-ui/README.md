@@ -139,6 +139,31 @@ and checksums in `build/ui/`. `make check` includes unit, drift and browser gate
 See [authentication and operations](../../docs/control-plane/admin-ui.md),
 [ADR 004](../../docs/adr/004-embedded-admin-console.md) and
 [approval architecture](../../docs/adr/006-ask-approvals.md).
+## Workflow profile management
+
+Current Super Admin users open **Tools > Server packages > Manage workflow
+profile**. Create a version-2 deployment profile or load an existing immutable
+revision using its profile identifier and digest. The current Control API has no
+catalog listing endpoint; retain the digest returned by staging.
+
+The editor exposes every canonical profile property: packages and their targets,
+globals, activations and triggers; readiness calls; workflow groups; model
+deployments and vault secret references; model groups; agent definitions, prompts,
+context sources and output schemas; workflows, supervisor settings, parameter and
+result schemas, limits and agent bindings; and trigger dispatch bindings.
+Use Add/Remove for optional sections and collection entries. Open JSON objects
+(arguments, schemas, globals and trigger configuration) have JSON object editors.
+No provider secret value is requested or saved in browser storage.
+
+Stage creates an immutable draft. Review applies to its exact digest; provisioning
+applies reviewed packages, and publication uses the displayed generation and
+requires ready dependencies. Editing any field clears the lifecycle controls
+until the changed document is staged again. Refresh lifecycle status after a
+conflict before retrying publication. Control remains authoritative for current
+permissions, reference validation, dependency readiness and publication. These
+controls do not complete directory/grant/subscription provisioning or enable the
+unfinished workflow execution path.
+
 ## Custom tools
 
 The **Tool builder** route authors bounded code/schema/AI metadata, displays

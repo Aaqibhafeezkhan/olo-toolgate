@@ -7,6 +7,7 @@ import { Failure } from './Failure';
 import {EffectPolicyReview, reviewedEffects, type EffectDrafts} from './EffectPolicyReview';
 import { Marketplace } from './Marketplace';
 import { Provisioning } from './Provisioning';
+import { WorkflowProfiles } from './WorkflowProfiles';
 import { Table } from './Table';
 import { usePermissions } from './Permissions';
 
@@ -27,7 +28,7 @@ export function runsOn(deployment: PackageDeployment): string {
 
 /** Control verifies every upload and builds what Tool Hosts run. Deploying adds each new tool disabled: it still needs a
  * reviewed enable, a Tool Group, a binding that allows the package and a grant. */
-export function ServerPackages({ client }: { client: ControlClient }) {
+export function ServerPackages({ client, superAdmin=false }: { client: ControlClient; superAdmin?:boolean }) {
   const {can}=usePermissions(client),canImport=can('package.import'),canDeploy=can('package.deploy');
   const [validation, setValidation] = useState('');
   const [effects, setEffects] = useState<EffectDrafts>({});
@@ -92,6 +93,7 @@ export function ServerPackages({ client }: { client: ControlClient }) {
       <textarea id="server-package-globals" required readOnly={!canDeploy} maxLength={65536} value={globals} onChange={e => setGlobals(e.target.value)} />
       <EffectPolicyReview routes={effectRoutes} values={effects} disabled={busy || !canDeploy} onChange={setEffects} />
       <button disabled={busy || !selected || !canDeploy}>Deploy</button></form></section>
+    {superAdmin && <WorkflowProfiles client={client}/>}
     {can('package.read') && <Provisioning client={client} refresh={attempt} />}
     <Marketplace client={client} onImported={() => setAttempt(a => a + 1)} />
   </>;

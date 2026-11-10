@@ -5,7 +5,7 @@ Issue: [#295](https://github.com/olo-labs/olo-toolgate/issues/295) ·
 Integration: `feature/workflow-enhancement` ·
 Umbrella: [draft PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
 
-Last updated: 2026-11-10. Baseline: **v1-effort-1**, 100 effort points.
+Last updated: 2026-11-11. Baseline: **v1-effort-1**, 100 effort points.
 Architecture and acceptance: [runtime plan, section 15](langgraph-runtime-plan.md#15-delivery-phases--minimal-end-to-end-v1).
 This is the authoritative live status for #295 v1; the architecture plan owns
 scope and acceptance. These estimates are relative shares of expected v1 work,
@@ -16,7 +16,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; durable staging/review/publication and package provisioning connected; complete directory/grant provisioning pending | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; profile property and lifecycle console added to durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; HTTPS/WSS listener and admission contract tested, Control durable admission/execution pending | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; scenario/evidence controller implemented; live driver and server prerequisites missing | 0% |
@@ -44,7 +44,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 | Phase | Required acceptance summary | Delivered scope / evidence | Remaining work |
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
-| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks implemented in the current branch | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
+| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete canonical property editor and lifecycle console implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
 | V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | Fixed LangGraph execution core with two simulated profiles; 20 focused runner tests pass; no live ToolGate integration claimed | Server admission/ledger/leases and runtime identities, model proxy, canonical snapshot transport, V1.1 publication and real model/tool qualification |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Existing stream/ticket client, immutable UID validation, admission request/receipt contract, serial commit-before-ACK bridge and host CLI; 41 runtime/listener tests pass | Implement Control admission transaction/binding resolution and queue/lease execution; qualify real authorization, dedupe, disablement and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | Repeatable 16-scenario controller, source/artifact hashes, explicit blocked/error/failed reports and operator guide; controller tests use simulations | Implement server prerequisites and live-install driver/fresh provisioning with canonical example profiles; execute and review real integration evidence |
@@ -74,6 +74,71 @@ For each PR, record:
 Use the latest integration head for intermediate branches; merge their reviewed
 PRs into `feature/workflow-enhancement`. Keep #297 in draft until V1.4 passes.
 This process does not change the authoritative #230/#274 delivery rules.
+
+## Admin UI property management slice (2026-11-11)
+
+User-requested delivery into umbrella #297 (`feature/workflow-enhancement`),
+prepared on `codex/workflow-profile-admin-ui` from known integration revision
+`990c7415b991b3596214263755c8b68792c47c83`. V1.1 remains in progress;
+baseline weights and overall earned completion remain **0 / 100 = 0%**.
+
+The Super Admin console under Tools > Server packages now provides guided editing
+for every reachable current DeploymentProfile property directly from canonical
+schemas. This includes workflow/group/agent configuration, model deployments and
+vault references, prompts/context/schemas, execution limits, agent/dispatch
+bindings, package targets/globals/tools/triggers and readiness cases. Optional
+sections and collection entries can be added/removed; arbitrary JSON objects
+remain JSON object editors. Exact immutable revision loading, staging, explicit
+review, package provisioning, live status refresh and generation-bound publication
+use existing generated operations and the centralized authenticated transport.
+Editing clears displayed lifecycle authority until staging succeeds. API errors
+do not produce successful lifecycle state. Drafts are not persisted in storage.
+
+Executed on Linux/WSL with Node 22:
+
+- `npm run ui:check` and `npm run ui:build` passed.
+- `npm --workspace @olo-labs/toolgate-admin-ui exec -- vitest run
+  --maxWorkers=1 --testTimeout=30000`: all 269 tests in 38 files passed.
+- Focused editor/package tests: 11 passed, covering all reachable schema fields,
+  exact document preservation, editing invalidation, denied staging and exact
+  digest/generation lifecycle requests. Final focused rerun after the mobile CSS
+  and ordinary-admin visibility assertion changes also passed all 11 tests.
+- Production-preview Playwright `workflow-profiles.spec.ts`: one test passed
+  against inert API fixtures, including nested editing, exact staged bytes,
+  publication denial presentation, axe accessibility, mobile overflow and modal
+  focus return. Fixed mobile digest/form overflow found by the first browser run;
+  an earlier fixture lacked explicit package.read capability and was corrected.
+- `python tools/check.py` was bounded to 180 seconds: CI 422 tests (17 skips),
+  contracts 183 tests (2 skips) and Python SDK 83 tests passed; the deadline ended
+  the workflow-runtime dependency installation. No full repository, real Control
+  browser lifecycle, Java or live workflow execution pass is claimed.
+- UI operation-generation drift, metadata/preflight, source/license/obvious-secret
+  quality checks and whitespace passed.
+- The actual precommit command passed metadata, staged policy, extension tests,
+  secret scan and UI typecheck, then reported 263 UI tests passed / 6 failed:
+  four default-timeout failures, an enrollment assertion and an editor error-label
+  assertion. The editor label was fixed and focused tests passed; these parallel
+  results do not establish that the other failures are pre-existing. The browser
+  hook was run separately: six experience/download checks and three cache-policy
+  download checks passed. No full default-parallel hook pass is claimed.
+- Final-source `vitest run --coverage --maxWorkers=1` passed all 269 tests across
+  38 files with the normal default timeout; API coverage thresholds passed
+  (statements 87.54%, branches 84.26%, functions 87.7%, lines 91.25%). Final-source
+  production build and workflow browser test passed again. The commit skips
+  re-executing the parallel hook after these explicit checks; its earlier failure
+  remains recorded above, rather than being presented as a successful hook.
+
+Known tested SHA-256:
+`ProfileFields.tsx` = `16d7f45c557e04d927008e1d60a7c1c02369e74c87ad41e46bbcf828ff59cd0c`;
+`WorkflowProfiles.tsx` = `432dc4fc6e5fa32ceeb6497b6f998899aa8b46c3556b0ffd30434b2f3b12c7b2`.
+
+Limits: current Super Admin management only; no profile catalog listing API exists,
+so existing revision loading requires its identifier and digest. Server validation
+and authorization remain authoritative. Publication is configuration, not runtime
+authority; unchanged V1.1 directory/grant/subscription orchestration and V1.2/V1.3
+execution/admission gaps remain. No #230/#274 claim or phase completion changes.
+Next: finish these server prerequisites, expose catalog discovery, and qualify real
+profile lifecycle and message/trigger execution. Keep #297 draft.
 
 ## Delivery ledger
 
