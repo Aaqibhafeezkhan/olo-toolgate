@@ -90,6 +90,7 @@ class TriggerDeclarationTest {
         assertEquals("HALT", d.path("onTerminalRejection").asText());
         assertEquals(1, d.path("checkpointSchemaVersion").asInt());
         assertEquals("[\"folder\"]", d.path("configSchema").path("required").toString());
+        assertEquals("Reports new files", d.path("configSchema").path("description").asText());
         assertEquals(".pdf", d.path("configSchema").path("properties").path("suffix").path("default").asText());
         assertEquals("[\"name\",\"size\"]", d.path("eventSchema").path("required").toString());
         assertFalse(d.path("eventSchema").path("additionalProperties").asBoolean(true));

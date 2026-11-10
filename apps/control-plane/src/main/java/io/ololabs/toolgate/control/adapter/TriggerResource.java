@@ -34,7 +34,7 @@ public class TriggerResource {
     }
 
     @GET @Path("triggers/definitions") @io.quarkus.security.Authenticated
-    public Response definitions(@QueryParam("pageToken") String token, @QueryParam("pageSize") Integer size) { return response(service.definitions(actor(), token, size)); }
+    public Response definitions(@QueryParam("deviceId") String device, @QueryParam("pageToken") String token, @QueryParam("pageSize") Integer size) { return response(service.definitions(actor(), device, token, size)); }
 
     @POST @Path("triggers/assignments") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response create(@HeaderParam("Idempotency-Key") String key, @QueryParam("dryRun") String dryRun, String body) {

@@ -116,7 +116,7 @@ export const managementCatalog = {
     "kill-events": [
       "kill.read"
     ],
-    "folder-triggers": [
+    "triggers": [
       "trigger.read",
       "trigger.manage"
     ]

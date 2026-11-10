@@ -271,8 +271,13 @@ export class ControlClient {
   }
   pendingEnrollments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointEnrollmentPage>{return this.send(operations.listEndpointEnrollments,{signal});}
   managedDevices(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointManagedDevicePage>{return this.send(operations.listEndpointDevices,{signal});}
-  folderTriggers(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{query:new URLSearchParams(pageToken?{pageToken}:{}),signal});}
-  createFolderTrigger(body:import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentCreate,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentResult>{return this.send(operations.createTriggerAssignment,{body,key});}
+  triggerDefinitions(deviceId:string,pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{
+    const query = new URLSearchParams({deviceId});
+    if(pageToken)query.set('pageToken',pageToken);
+    return this.send(operations.listTriggerDefinitions,{query,signal});
+  }
+  triggerAssignments(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{query:new URLSearchParams(pageToken?{pageToken}:{}),signal});}
+  createTriggerAssignment(body:import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentCreate,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentResult>{return this.send(operations.createTriggerAssignment,{body,key});}
   managedDeviceDeployments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointManagedDeviceDeploymentPage>{return this.send(operations.listEndpointDevices,{signal,query:new URLSearchParams({deployment:'true'})});}
   setDeviceApproval(id:string,body:import('@olo-labs/toolgate-contracts').EndpointApprovalRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.setEndpointApproval,{id,body,key});}
   requestDeviceApproval(id:string,body:import('@olo-labs/toolgate-contracts').EndpointRevokeRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.requestEndpointDeviceApproval,{id,body,key});}

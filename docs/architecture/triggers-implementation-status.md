@@ -7,6 +7,12 @@ This is the live progress document for issue #274 (server and client triggers). 
 
 ## Owned folder demo integration
 
+The console's Devices → Triggers screen discovers client trigger exports from
+the packages assigned to the selected device. The SDK puts the trigger
+annotation description and the config record's schema in the signed package
+descriptor. The console uses that schema for field labels, help, and defaults.
+Control continues to validate the assignment and its configuration.
+
 In progress. The owned-device assignment and subscription tests passed on
 SQLite, including rejection of another device, a whole shared group, and
 access after ownership transfer. The folder selection screen built successfully

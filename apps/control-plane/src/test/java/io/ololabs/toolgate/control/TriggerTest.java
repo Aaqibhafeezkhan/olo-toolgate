@@ -381,6 +381,19 @@ final class TriggerTest {
                 return null;
             });
             var visitor = new DirectoryService(w.store(), codec, 512, 1048576).portalActor(w.tenant(), "b".repeat(64), "visitor");
+            assertEquals(403, status(() -> w.triggers().definitions(visitor, null, null)));
+            assertEquals(403, status(() -> w.triggers().definitions(visitor, "device-b", null, null)));
+            assertEquals(0, json(w.triggers().definitions(visitor, "device-a", null, null).body()).path("items").size());
+            w.store().transaction(w.tenant(), true, tx -> {
+                var release = new FleetPackageRelease(PACKAGE, "1.0.0", "0".repeat(64),
+                        10L, new FleetSignedDocument("e30.e30.e30"));
+                var snapshot = new FleetDesiredSnapshot("device-a", 1L, List.of(new FleetAssignment(release, true)));
+                tx.fleet().save(FleetStore.Kind.DESIRED, new FleetStore.Row("device-a", 1L, codec.json(snapshot)), 0);
+                return null;
+            });
+            var exports = json(w.triggers().definitions(visitor, "device-a", null, null).body()).path("items");
+            assertEquals(1, exports.size());
+            assertEquals(PACKAGE + "/new-file", exports.get(0).path("triggerId").asText());
             String own = "{\"executor\":\"CLIENT\",\"devices\":[\"device-a\"]}";
             String other = "{\"executor\":\"CLIENT\",\"devices\":[\"device-b\"]}";
             String group = "{\"executor\":\"CLIENT\",\"deviceGroups\":[\"finance\"]}";
