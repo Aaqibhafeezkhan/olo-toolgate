@@ -139,13 +139,13 @@ fixture failures; it was cancelled and replaced with the repository's isolated
 PostgreSQL helper. The provisioned `./gradlew javaCheck -PprebuiltAdminUi=true
 --max-workers=2` run has reported
 `EnterpriseConfigurationTest.superAdministratorCanApproveOwnRequestAndSatisfyTwoReviewQuorum`
-failing and is still running. No full Java pass is claimed.
+failing. That broad run was interrupted after diagnosis; no full Java pass is claimed.
 
 The repository-wide `python tools/check.py` rerun uses tools/requirements.txt in
 an isolated Python environment and Node 22. It passed CI (422 tests, 17 skips),
 contracts (183 tests, 2 skips), Python SDK (83 tests) and Quickstart (51 tests).
 Its duplicate Java/build stage was interrupted to avoid overlapping Gradle builds
-in the same checkout; the separately provisioned Java gate remains active. Initial verification
+in the same checkout; the separately provisioned Java gate was also interrupted after its reported failure. Initial verification
 attempts without all Python dependencies failed; they are not acceptance evidence.
 
 The actual commit hook was exercised with Node 22: browser-extension tests,
@@ -162,3 +162,12 @@ integration revision `fd16d03e86aa6d57dc87153065ba322c81fe62c8`, using the same
 provisioned PostgreSQL helper. This does not establish a pre-existing failure;
 full-run ordering/concurrency versus a workflow regression remains unresolved.
 Do not weaken approval checks or merge #299 based on that single baseline pass.
+Final focused diagnosis for this slice: the entire EnterpriseConfigurationTest
+class passed in isolation against implementation source `5ab911a6` (14 tests,
+zero skips/failures/errors), using a separate checkout and isolated PostgreSQL.
+The method also passed alone at pre-change integration `fd16d03e`. The broad-run
+failure therefore remains unresolved suite-order/concurrency evidence, not proof
+of either a workflow regression or a verified pre-existing defect. Both broad
+runs were interrupted; their helper contexts cleaned up their test databases.
+No verification processes are intentionally left to continue this implementation.
+Keep #299 draft/unmerged; resolve the broad gate before advancing publication.
