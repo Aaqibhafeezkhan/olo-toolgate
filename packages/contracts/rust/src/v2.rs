@@ -4913,6 +4913,101 @@ pub enum ValueType {
     #[serde(rename = "BINARY")]
     Binary,
 }
+/// Profile declaration for WorkflowAgentBinding; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowAgentBinding {
+    pub agent_id: String,
+    pub agent_group_id: String,
+    pub entry_eligible: bool,
+    pub delegation_allowed: bool,
+}
+/// Profile declaration for WorkflowAgentDefinition; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowAgentDefinition {
+    pub agent_id: String,
+    pub model_group_id: String,
+    pub system_prompt: String,
+    pub context_sources: Vec<WorkflowContextSource>,
+    pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowConfiguration {
+    pub workflow_groups: Vec<WorkflowGroupDefinition>,
+    pub model_groups: Vec<WorkflowModelGroupDefinition>,
+    pub agent_definitions: Vec<WorkflowAgentDefinition>,
+    pub workflows: Vec<WorkflowDefinition>,
+    pub dispatch_bindings: Vec<WorkflowDispatchBinding>,
+}
+/// Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowContextSource {
+    pub tool_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowDefinition {
+    pub id: String,
+    pub version_id: String,
+    pub workflow_group_id: String,
+    pub model_group_id: String,
+    pub system_prompt: String,
+    pub context_sources: Vec<WorkflowContextSource>,
+    pub parameter_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    pub result_schema: std::collections::BTreeMap<String, serde_json::Value>,
+    pub limits: WorkflowExecutionLimits,
+    pub agents: Vec<WorkflowAgentBinding>,
+}
+/// Profile declaration for WorkflowDispatchBinding; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowDispatchBinding {
+    pub id: String,
+    pub subscription_uid: String,
+    pub source_assignment_uid: String,
+    pub workflow_id: String,
+    pub workflow_version_id: String,
+    pub service_agent_id: String,
+    pub service_agent_group_id: String,
+    pub message_pointer: String,
+    pub remediation_mode: WorkflowRemediationMode,
+}
+/// Profile declaration for WorkflowExecutionLimits; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowExecutionLimits {
+    pub max_steps: u64,
+    pub max_handoffs: u64,
+    pub max_duration_seconds: u64,
+}
+/// Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowGroupDefinition {
+    pub id: String,
+    pub display_name: String,
+}
+/// Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowModelGroupDefinition {
+    pub id: String,
+    pub deployment_ids: Vec<String>,
+}
+/// Canonical WorkflowRemediationMode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkflowRemediationMode {
+    #[serde(rename = "PREPARE")]
+    Prepare,
+    #[serde(rename = "APPLY")]
+    Apply,
+}
 const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
 const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
 const_field!(
@@ -5075,5 +5170,9 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/trigger.schema.json",
         include_str!("../schemas/v2/trigger.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/workflow.schema.json",
+        include_str!("../schemas/v2/workflow.schema.json"),
     ),
 ];

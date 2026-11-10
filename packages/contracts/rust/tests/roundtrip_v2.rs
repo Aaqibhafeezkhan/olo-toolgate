@@ -428,6 +428,16 @@ fn v2_fixture_round_trips() {
         TriggerViewEvent,
         ValueSource,
         ValueType,
+        WorkflowAgentBinding,
+        WorkflowAgentDefinition,
+        WorkflowConfiguration,
+        WorkflowContextSource,
+        WorkflowDefinition,
+        WorkflowDispatchBinding,
+        WorkflowExecutionLimits,
+        WorkflowGroupDefinition,
+        WorkflowModelGroupDefinition,
+        WorkflowRemediationMode,
     );
 }
 

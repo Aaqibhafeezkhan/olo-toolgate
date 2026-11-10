@@ -92,3 +92,25 @@ The chart sets the same variables from `control.profile.configMap` (a ConfigMap 
 `private.pem` and its key id; the key must also be in the fleet release trust keys). `control.networkPolicy.registryTo`
 opens egress to the registry on the port its URL names.
 
+
+## Workflow configuration foundation (#295)
+
+The workflow feature branch defines `WorkflowConfiguration` in
+`packages/contracts/schemas/v2/workflow.schema.json`, with generated Java, Rust,
+TypeScript and PHP models. It declares workflow groups, supervisor prompts and
+models, agent prompts/models/context, bounded execution, and default-workflow
+subscription bindings. Model deployment, identity, tool and trigger references
+must be checked in the current tenant. Configuration membership grants no access.
+
+Control's `WorkflowConfigurations` service validates local reference closure,
+duplicate identifiers, explicit models, entry agents, execution limits and
+unambiguous dispatch bindings before asking its tenant-scoped dependency port
+about external references. An unavailable dependency returns a generic error.
+It is a read-only validation component; no resource is provisioned or published.
+
+This foundation is not yet accepted by deployment profile upload. The existing
+DeploymentProfile contract remains unchanged until version-2 orchestration,
+management authorization, catalog persistence and readiness are delivered. Do
+not add these fields to a deployed version-1 profile or interpret successful
+structural validation as READY or execution permission. See the
+[live workflow status](../architecture/workflow-v1-status.md) for remaining work.

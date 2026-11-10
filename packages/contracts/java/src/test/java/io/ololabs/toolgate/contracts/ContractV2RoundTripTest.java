@@ -425,7 +425,17 @@ final class ContractV2RoundTripTest {
         "TriggerTerminalRejectionPolicy",
         "TriggerViewEvent",
         "ValueSource",
-        "ValueType");
+        "ValueType",
+        "WorkflowAgentBinding",
+        "WorkflowAgentDefinition",
+        "WorkflowConfiguration",
+        "WorkflowContextSource",
+        "WorkflowDefinition",
+        "WorkflowDispatchBinding",
+        "WorkflowExecutionLimits",
+        "WorkflowGroupDefinition",
+        "WorkflowModelGroupDefinition",
+        "WorkflowRemediationMode");
     private final ObjectMapper mapper = JsonMapper.builder()
         .defaultPropertyInclusion(JsonInclude.Value.construct(JsonInclude.Include.NON_NULL, JsonInclude.Include.ALWAYS))
         .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES).build();

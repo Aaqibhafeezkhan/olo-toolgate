@@ -67,3 +67,15 @@ Do not commit intermediate stage fragments or separate progress-only follow-ups.
 Preserve existing history. Partial stages earn no weight; full roadmap phases
 still require all original exit criteria. Record any baseline scope/weight change
 explicitly rather than silently changing the percentage denominator.
+
+## Issue #295: Workflow execution progress
+
+For #295, `docs/architecture/workflow-v1-status.md` is the authoritative live
+status and weighted baseline. Every implementation/fix/test/documentation PR
+updates it in the same commit series with delivered scope, checks actually run,
+known tested revision or digest, limitations and next work. Partial phases earn
+no weight; record scope/weight changes explicitly. Target intermediate branches
+at `feature/workflow-enhancement`, and keep umbrella PR #297 into main in draft
+until V1.4 end-to-end acceptance. Do not claim runnable profiles or runtime
+security from structural validation alone. Reuse #274 trigger interfaces and
+preserve #230/#274's own component verification and progress requirements.
