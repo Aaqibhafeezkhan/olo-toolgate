@@ -421,7 +421,17 @@ $models = [
     'TriggerTerminalRejectionPolicy',
     'TriggerViewEvent',
     'ValueSource',
-    'ValueType'
+    'ValueType',
+    'WorkflowAgentBinding',
+    'WorkflowAgentDefinition',
+    'WorkflowConfiguration',
+    'WorkflowContextSource',
+    'WorkflowDefinition',
+    'WorkflowDispatchBinding',
+    'WorkflowExecutionLimits',
+    'WorkflowGroupDefinition',
+    'WorkflowModelGroupDefinition',
+    'WorkflowRemediationMode'
 ];
 $count = 0;
 foreach ($fixtures as $name => $fixture) {

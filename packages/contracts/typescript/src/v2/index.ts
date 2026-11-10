@@ -2612,3 +2612,73 @@ export type UnixMs = number;
 export type ValueSource = "ENVIRONMENT" | "DATABASE" | "DEFAULT";
 export type ValueType = "STRING" | "INT" | "LONG" | "NUMBER" | "BOOLEAN" | "DATE" | "DATE_TIME" | "DURATION" | "ENUM" | "URI" | "OBJECT" | "ARRAY" | "BINARY";
 export type VariableName = string;
+/** Profile declaration for WorkflowAgentBinding; eligibility and configuration confer no runtime authority. */
+export interface WorkflowAgentBinding {
+  readonly agentId: string;
+  readonly agentGroupId: string;
+  readonly entryEligible: boolean;
+  readonly delegationAllowed: boolean;
+}
+/** Profile declaration for WorkflowAgentDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowAgentDefinition {
+  readonly agentId: string;
+  readonly modelGroupId: string;
+  readonly systemPrompt: string;
+  readonly contextSources: ReadonlyArray<WorkflowContextSource>;
+  readonly outputSchema: Record<string, unknown>;
+}
+/** Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority. */
+export interface WorkflowConfiguration {
+  readonly workflowGroups: ReadonlyArray<WorkflowGroupDefinition>;
+  readonly modelGroups: ReadonlyArray<WorkflowModelGroupDefinition>;
+  readonly agentDefinitions: ReadonlyArray<WorkflowAgentDefinition>;
+  readonly workflows: ReadonlyArray<WorkflowDefinition>;
+  readonly dispatchBindings: ReadonlyArray<WorkflowDispatchBinding>;
+}
+/** Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority. */
+export interface WorkflowContextSource {
+  readonly toolId: string;
+  readonly arguments: Record<string, unknown>;
+}
+/** Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowDefinition {
+  readonly id: string;
+  readonly versionId: string;
+  readonly workflowGroupId: string;
+  readonly modelGroupId: string;
+  readonly systemPrompt: string;
+  readonly contextSources: ReadonlyArray<WorkflowContextSource>;
+  readonly parameterSchema: Record<string, unknown>;
+  readonly resultSchema: Record<string, unknown>;
+  readonly limits: WorkflowExecutionLimits;
+  readonly agents: ReadonlyArray<WorkflowAgentBinding>;
+}
+/** Profile declaration for WorkflowDispatchBinding; eligibility and configuration confer no runtime authority. */
+export interface WorkflowDispatchBinding {
+  readonly id: string;
+  readonly subscriptionUid: string;
+  readonly sourceAssignmentUid: string;
+  readonly workflowId: string;
+  readonly workflowVersionId: string;
+  readonly serviceAgentId: string;
+  readonly serviceAgentGroupId: string;
+  readonly messagePointer: string;
+  readonly remediationMode: WorkflowRemediationMode;
+}
+/** Profile declaration for WorkflowExecutionLimits; eligibility and configuration confer no runtime authority. */
+export interface WorkflowExecutionLimits {
+  readonly maxSteps: number;
+  readonly maxHandoffs: number;
+  readonly maxDurationSeconds: number;
+}
+/** Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowGroupDefinition {
+  readonly id: string;
+  readonly displayName: string;
+}
+/** Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowModelGroupDefinition {
+  readonly id: string;
+  readonly deploymentIds: ReadonlyArray<string>;
+}
+export type WorkflowRemediationMode = "PREPARE" | "APPLY";

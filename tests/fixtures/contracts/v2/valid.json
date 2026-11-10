@@ -5058,5 +5058,145 @@
       "tgclassification": "INTERNAL",
       "tgredacted": false
     }
-  }
+  },
+  "WorkflowAgentBinding": {
+    "agentId": "investigator",
+    "agentGroupId": "support-agents",
+    "entryEligible": true,
+    "delegationAllowed": true
+  },
+  "WorkflowAgentDefinition": {
+    "agentId": "investigator",
+    "modelGroupId": "models",
+    "systemPrompt": "Investigate with governed tools.",
+    "contextSources": [
+      {
+        "toolId": "acme.support/ticket.read",
+        "arguments": {}
+      }
+    ],
+    "outputSchema": {}
+  },
+  "WorkflowConfiguration": {
+    "workflowGroups": [
+      {
+        "id": "support",
+        "displayName": "Support"
+      }
+    ],
+    "modelGroups": [
+      {
+        "id": "models",
+        "deploymentIds": [
+          "deployment-1"
+        ]
+      }
+    ],
+    "agentDefinitions": [
+      {
+        "agentId": "investigator",
+        "modelGroupId": "models",
+        "systemPrompt": "Investigate with governed tools.",
+        "contextSources": [
+          {
+            "toolId": "acme.support/ticket.read",
+            "arguments": {}
+          }
+        ],
+        "outputSchema": {}
+      }
+    ],
+    "workflows": [
+      {
+        "id": "investigate",
+        "versionId": "revision-1",
+        "workflowGroupId": "support",
+        "modelGroupId": "models",
+        "systemPrompt": "Route the request to the investigator.",
+        "contextSources": [],
+        "parameterSchema": {},
+        "resultSchema": {},
+        "limits": {
+          "maxSteps": 10,
+          "maxHandoffs": 5,
+          "maxDurationSeconds": 120
+        },
+        "agents": [
+          {
+            "agentId": "investigator",
+            "agentGroupId": "support-agents",
+            "entryEligible": true,
+            "delegationAllowed": true
+          }
+        ]
+      }
+    ],
+    "dispatchBindings": [
+      {
+        "id": "ticket-created",
+        "subscriptionUid": "ts-123",
+        "sourceAssignmentUid": "ta-123",
+        "workflowId": "investigate",
+        "workflowVersionId": "revision-1",
+        "serviceAgentId": "automation",
+        "serviceAgentGroupId": "automation-group",
+        "messagePointer": "/summary",
+        "remediationMode": "PREPARE"
+      }
+    ]
+  },
+  "WorkflowContextSource": {
+    "toolId": "acme.support/ticket.read",
+    "arguments": {}
+  },
+  "WorkflowDefinition": {
+    "id": "investigate",
+    "versionId": "revision-1",
+    "workflowGroupId": "support",
+    "modelGroupId": "models",
+    "systemPrompt": "Route the request to the investigator.",
+    "contextSources": [],
+    "parameterSchema": {},
+    "resultSchema": {},
+    "limits": {
+      "maxSteps": 10,
+      "maxHandoffs": 5,
+      "maxDurationSeconds": 120
+    },
+    "agents": [
+      {
+        "agentId": "investigator",
+        "agentGroupId": "support-agents",
+        "entryEligible": true,
+        "delegationAllowed": true
+      }
+    ]
+  },
+  "WorkflowDispatchBinding": {
+    "id": "ticket-created",
+    "subscriptionUid": "ts-123",
+    "sourceAssignmentUid": "ta-123",
+    "workflowId": "investigate",
+    "workflowVersionId": "revision-1",
+    "serviceAgentId": "automation",
+    "serviceAgentGroupId": "automation-group",
+    "messagePointer": "/summary",
+    "remediationMode": "PREPARE"
+  },
+  "WorkflowExecutionLimits": {
+    "maxSteps": 10,
+    "maxHandoffs": 5,
+    "maxDurationSeconds": 120
+  },
+  "WorkflowGroupDefinition": {
+    "id": "support",
+    "displayName": "Support"
+  },
+  "WorkflowModelGroupDefinition": {
+    "id": "models",
+    "deploymentIds": [
+      "deployment-1"
+    ]
+  },
+  "WorkflowRemediationMode": "PREPARE"
 }

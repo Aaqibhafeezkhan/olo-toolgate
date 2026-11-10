@@ -16,7 +16,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | Not started / no accepted implementation evidence recorded | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; workflow contracts and read-only validation implemented, publication not connected | 0% |
 | V1.2 — Message to governed result | 35% | 70% | Not started / no accepted implementation evidence recorded | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | Not started / no accepted implementation evidence recorded | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | Not started / no accepted implementation evidence recorded | 0% |
@@ -44,7 +44,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 | Phase | Required acceptance summary | Delivered scope / evidence | Remaining work |
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
-| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | None recorded | Implement and verify complete profile application, deny cases and readiness |
+| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Canonical WorkflowConfiguration and generated bindings; read-only local/dependency validation; six Control tests and cross-language checks pass | Catalog persistence, reviewed grants/publication, DeploymentProfile v2 integration and end-to-end readiness remain |
 | V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | None recorded | Implement minimal governed run and unchanged external Python execution |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | None recorded | Integrate #274 dispatch with the same run path and test redelivery/effect safety |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | None recorded | Build and execute repeatable qualification and document deployment limitations |
@@ -81,7 +81,7 @@ This process does not change the authoritative #230/#274 delivery rules.
 |---|---|---|---|---|
 | [#297](https://github.com/olo-labs/olo-toolgate/pull/297), known planning revision `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89` | Planning; no phase credit | v0.9 profile-driven minimal-v1 architecture published on integration branch; umbrella PR remains draft | Relative Markdown links, whitespace, metadata/preflight, staged PR policy and secret scan passed for that revision. Full check reported 6 failures, 9 errors, 4 skips in CI tests; commit hook reported browser-extension failures and did not finish promptly; documentation commit bypassed that hook | No implementation or complete-suite pass. Next: V1.0 contract inventory/ADRs |
 
-| [#298](https://github.com/olo-labs/olo-toolgate/pull/298), inspected baseline `54a9c21c`, reviewed source revision `995000be` | V1.0 — in progress, 0% earned | Source inventory, proposed ADR 063 and 16 machine-readable scenario specifications; open draft into integration branch | Links passed across 327 files; nine link-checker tests passed; JSON parse, whitespace and staged PR policy passed. ADR SHA-256 `36eca2b74a2e1296c9b15a489ec63ac220d07fa88d8455082189922dc7cc498f`; scenario SHA-256 `a31ecc9cadad44637cc302c99c76efb70809c60c9fafe8f3616ba9f471834d6c` | Documentation-only; no runtime scenarios executed, broad failing/hanging hook bypassed. Next: review contract decisions and implement V1.1 schema/catalog with executable acceptance harness |
+| [#298](https://github.com/olo-labs/olo-toolgate/pull/298), inspected baseline `54a9c21c`, reviewed source revision `995000be` | V1.0 — in progress, 0% earned | Source inventory, proposed ADR 063 and 16 machine-readable scenario specifications; merged into integration branch at `fd16d03e`; no phase acceptance | Links passed across 327 files; nine link-checker tests passed; JSON parse, whitespace and staged PR policy passed. ADR SHA-256 `36eca2b74a2e1296c9b15a489ec63ac220d07fa88d8455082189922dc7cc498f`; scenario SHA-256 `a31ecc9cadad44637cc302c99c76efb70809c60c9fafe8f3616ba9f471834d6c` | Documentation-only; no runtime scenarios executed, broad failing/hanging hook bypassed. Next: review contract decisions and implement V1.1 schema/catalog with executable acceptance harness |
 
 ## Current V1.0 slice
 
@@ -93,9 +93,60 @@ authority remain separate. Proposed dispatch admission uses a delivered cursor,
 server-side event lookup and durable dedupe before cumulative acknowledgement.
 No runtime capability or V1.0 acceptance is claimed. Overall remains **0%**.
 
+## Current V1.1 implementation slice
+
+Canonical `workflow.schema.json` and Java/Rust/TypeScript/PHP bindings now define
+workflow groups, explicit supervisor/agent models, context sources, bounded
+execution and immutable subscription/source workflow bindings. Control adopts
+these definitions in ContractCodec. WorkflowConfigurations is read-only: it
+rejects duplicate IDs, broken local references, absent entry agents, inconsistent
+limits and conflicting dispatch defaults before invoking a required dependency
+port. That port must resolve only the current tenant's readable resources;
+these unit tests do not certify actual cross-tenant store enforcement.
+
+Executed evidence: six WorkflowConfigurationsTest tests passed; both Java
+contract test classes passed (four tests); seven v2 canonical-schema tests passed;
+TypeScript typecheck/build and two wire tests passed; two Rust v2 round-trip tests
+and workspace formatting passed; PHP passed 418 v2 model round trips and constant
+negatives; generated bindings/corpus and metadata/preflight passed. Added eight
+structural rejection fixtures. The initial Java attempt failed with Node 18;
+the focused Java check passed after using Node 22.23.4.
+
+Known inspected integration revision: `fd16d03e86aa6d57dc87153065ba322c81fe62c8`.
+Tested schema SHA-256: `e76030917aeca9db7cbd042af39cb758c0bb951bd06bf485c2cd6d4c3dea6ca8`.
+Tested validator SHA-256: `931a7ba59adbc7561065b9a104589847c20260f6dbb375929f93e8f05d23530e`.
+
+Limitations: no upload endpoint, profile-version change, catalog persistence,
+publication pointer, provisioning orchestration, runtime admission or grants are
+enabled by this slice. Successful validation is neither READY nor authorization.
+No full phase weight is earned. Next: connect catalog storage and management
+review to fresh version-2 profile application, then qualify complete readiness.
+
 ## Baseline history
 
 - **v1-effort-1 (2026-11-10):** initial estimated allocation 10/25/35/20/10;
   100-point denominator. No effort or completion baseline previously published.
   Quotas/budgets, advanced routing, distributed recovery/container packaging and
   wider production qualification remain later releases, as section 15 specifies.
+### Broader verification for the V1.1 slice
+
+The first broad Java attempt lacked CONTROL_TEST_URL and encountered PostgreSQL
+fixture failures; it was cancelled and replaced with the repository's isolated
+PostgreSQL helper. The provisioned `./gradlew javaCheck -PprebuiltAdminUi=true
+--max-workers=2` run has reported
+`EnterpriseConfigurationTest.superAdministratorCanApproveOwnRequestAndSatisfyTwoReviewQuorum`
+failing and is still running. No full Java pass is claimed.
+
+The repository-wide `python tools/check.py` rerun uses tools/requirements.txt in
+an isolated Python environment and Node 22. It passed the CI, contract and Python
+SDK suites (83 SDK tests); remaining gates are still running. Initial verification
+attempts without all Python dependencies failed; they are not acceptance evidence.
+
+The actual commit hook was exercised with Node 22: browser-extension tests,
+metadata/policy/secret checks and TypeScript checks passed. Admin UI tests under
+concurrent load reported 64 failures; a single-worker rerun is in progress and
+has also reported a Navigation timeout. The hook's browser smoke passed six
+experience/download checks and three cache-policy download checks. These are
+separate results, not a successful complete hook. Publication of the reviewed
+slice may bypass repeating that broad hook while these failures are recorded;
+keep its implementation PR in draft and do not credit or declare the phase done.
