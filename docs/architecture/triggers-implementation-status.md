@@ -5,6 +5,15 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Owned folder demo integration
+
+In progress. The owned-device assignment and subscription tests passed on
+SQLite, including rejection of another device, a whole shared group, and
+access after ownership transfer. The folder selection screen built successfully
+and its focused UI tests passed. The composed acceptance run, PostgreSQL
+verification, and native file-operation receipts remain open. No module weight
+changes with this work in progress.
+
 ## Overall progress
 
 Updated: **2026-11-10**.

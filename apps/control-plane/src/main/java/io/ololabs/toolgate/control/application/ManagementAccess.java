@@ -30,6 +30,8 @@ public final class ManagementAccess {
     /** Rules that confer authority over whole groups; relationship scopes require explicit target context. */
     public java.util.stream.Stream<EnterpriseManagementRule> groupRules(Directory directory,String user){return access(directory,user).grants().stream().filter(r->!own(r));}
     public static boolean own(EnterpriseManagementRule rule){return rule.deviceScope()!=null;}
+    /** Trigger authority follows the same explicit device-owner boundary as device administration. */
+    public static boolean deviceScopedPermission(String action){return action.startsWith("device.")||Set.of("trigger.read","trigger.manage","trigger.subscribe").contains(action);}
     public String devicePlacementGroup(Directory directory,String user,String permission,String device,String currentDevice,long now){return access(directory,user).grants().stream().filter(r->r.actions().contains(permission)&&current(r.conditions(),now)&&("OWNED".equals(r.deviceScope())||"CURRENT".equals(r.deviceScope())&&device!=null&&device.equals(currentDevice))).map(r->r.groups().ids().getFirst()).sorted().findFirst().orElse(null);}
     public boolean mayEstablishDeviceContext(Directory directory,String user,boolean pending,long now){return superAdministrator(directory,user)||access(directory,user).grants().stream().anyMatch(r->current(r.conditions(),now)&&r.actions().stream().anyMatch(a->pending?a.equals("device.enroll"):a.startsWith("device."))&&(!r.groups().ids().isEmpty()||r.groups().all()));}
     public Set<String> capabilities(Directory directory,String user,long now){
@@ -47,7 +49,7 @@ public final class ManagementAccess {
         return true;
     }
     public boolean deviceAllowed(Directory directory,String user,String action,String id,String owner,String currentDevice,long now){
-        action=permission(Kind.DEVICE,action);if(!action.startsWith("device.")||!ManagementPermissionCatalog.ALL.contains(action))return false;
+        action=permission(Kind.DEVICE,action);if(!deviceScopedPermission(action)||!ManagementPermissionCatalog.ALL.contains(action))return false;
         if(groupDeviceAllowed(directory,user,action,id,now))return true;
         if(owner==null||!owner.equals(user))return false;
         var groups=GroupGraph.memberships(directory,codec,Kind.DEVICE,id,false);final String requested=action;
@@ -55,7 +57,7 @@ public final class ManagementAccess {
             &&("OWNED".equals(rule.deviceScope())||"CURRENT".equals(rule.deviceScope())&&id.equals(currentDevice))
             &&(groups.isEmpty()||groups.stream().allMatch(g->EnterpriseEvaluator.selected(rule.groups(),g))));
     }
-    public List<String> deviceCapabilities(Directory directory,String user,String id,String owner,String currentDevice,long now){return ManagementPermissionCatalog.ALL.stream().filter(p->p.startsWith("device.")&&deviceAllowed(directory,user,p,id,owner,currentDevice,now)).sorted().toList();}
+    public List<String> deviceCapabilities(Directory directory,String user,String id,String owner,String currentDevice,long now){return ManagementPermissionCatalog.ALL.stream().filter(p->deviceScopedPermission(p)&&deviceAllowed(directory,user,p,id,owner,currentDevice,now)).sorted().toList();}
     /** Resolve live directory membership; never trust token roles or an actor's cached flag. */
     public boolean superAdministrator(Directory directory,String user) {return access(directory,user).portalRole()==UserRole.SUPER_ADMIN;}
     public void require(Directory directory,String user,String action,Kind group,String id,long now) {
@@ -70,7 +72,7 @@ public final class ManagementAccess {
         if(superAdministrator(directory,user))return;
         var kind=entry.id().kind();
         if(GroupGraph.group(kind)) {require(directory,user,requested,kind,entry.id().value(),now);return;}
-        if(kind==Kind.DEVICE&&requested.startsWith("device.")) {var device=codec.model(entry.document(),ControlDevice.class);if(!deviceAllowed(directory,user,requested,device.id(),device.ownerUserId(),currentDevice,now))throw denied();return;}
+        if(kind==Kind.DEVICE&&deviceScopedPermission(requested)) {var device=codec.model(entry.document(),ControlDevice.class);if(!deviceAllowed(directory,user,requested,device.id(),device.ownerUserId(),currentDevice,now))throw denied();return;}
         if(GroupGraph.individual(kind)) {
             var groups=GroupGraph.memberships(directory,codec,kind,entry.id().value(),false);
             if(groups.isEmpty())groups=List.of(GroupGraph.DEFAULTS.get(GroupGraph.groupKind(kind)));

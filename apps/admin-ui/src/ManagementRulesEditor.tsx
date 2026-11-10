@@ -23,12 +23,12 @@ export function ManagementRulesEditor({client,value,change,disabled,superAdmin=f
    <fieldset><legend>Group boundary</legend>{Object.keys(groupKinds).map(kind=><label className="checkbox" key={kind}><input type="checkbox" checked={rule.groupType===kind} onChange={event=>{if(event.target.checked)update(index,{groupType:kind as EnterpriseManagementRule['groupType'],groups:{ids:[],all:false},deviceScope:undefined});}}/>{groupLabels[kind as keyof typeof groupKinds]}</label>)}</fieldset>
    <GroupSelector client={client} kind={groupKinds[rule.groupType]} label={`Groups for permission scope ${index+1}`} value={rule.groups} change={groups=>update(index,{groups})}/>
    {rule.groupType==='DEVICE_GROUP'&&<fieldset><legend>Device relationship</legend>
-    <label className="checkbox"><input type="checkbox" disabled={rule.actions.some(a=>!a.startsWith('device.'))} checked={rule.deviceScope==='OWNED'} onChange={e=>update(index,{deviceScope:e.target.checked?'OWNED':undefined})}/>Owned devices</label>
-    <label className="checkbox"><input type="checkbox" disabled={rule.actions.some(a=>!a.startsWith('device.'))} checked={rule.deviceScope==='CURRENT'} onChange={e=>update(index,{deviceScope:e.target.checked?'CURRENT':undefined})}/>Self (this device)</label>
-    {rule.actions.some(a=>!a.startsWith('device.'))&&<p>Move non-Device permissions to a separate scope before selecting a device relationship.</p>}
+    <label className="checkbox"><input type="checkbox" disabled={rule.actions.some(a=>!a.startsWith('device.')&&!a.startsWith('trigger.'))} checked={rule.deviceScope==='OWNED'} onChange={e=>update(index,{deviceScope:e.target.checked?'OWNED':undefined})}/>Owned devices</label>
+    <label className="checkbox"><input type="checkbox" disabled={rule.actions.some(a=>!a.startsWith('device.')&&!a.startsWith('trigger.'))} checked={rule.deviceScope==='CURRENT'} onChange={e=>update(index,{deviceScope:e.target.checked?'CURRENT':undefined})}/>Self (this device)</label>
+    {rule.actions.some(a=>!a.startsWith('device.')&&!a.startsWith('trigger.'))&&<p>Move permissions other than Device and Trigger to a separate scope before selecting a device relationship.</p>}
     <p className="hint">Self requires server-verified device context from Chrome Connect. Device relationship scopes use one placement group and Device permissions only. A code verifies ownership, not the current browser device.</p>
    </fieldset>}
-   {managementCatalog.resources.filter(resource=>!rule.deviceScope||resource.id==='device').map(resource=>{
+   {managementCatalog.resources.filter(resource=>!rule.deviceScope||resource.id==='device'||resource.id==='trigger').map(resource=>{
     const selected=resource.actions.filter(action=>rule.actions.includes(`${resource.id}.${action}`)).length;
     return <details key={resource.id} open={selected>0}><summary>{resource.label}{selected>0?` · ${selected} selected`:''}</summary>{resource.actions.map(action=>{const permission=`${resource.id}.${action}`;return <label className="checkbox" key={permission}><input type="checkbox" aria-label={`${resource.label}: ${label(action)} in scope ${index+1}`} checked={rule.actions.includes(permission)} onChange={e=>toggle(index,permission,e.target.checked)}/>{label(action)}</label>;})}</details>;
    })}

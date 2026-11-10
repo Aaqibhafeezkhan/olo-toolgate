@@ -115,6 +115,10 @@ export const managementCatalog = {
     ],
     "kill-events": [
       "kill.read"
+    ],
+    "folder-triggers": [
+      "trigger.read",
+      "trigger.manage"
     ]
   },
   "resources": [
