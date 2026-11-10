@@ -145,8 +145,11 @@ class VersionPropagationTests(unittest.TestCase):
             target = Path(temporary)
             exact = {'VERSION','LICENSE','NOTICE.md','CHANGELOG.md','RELEASE-NOTES.md','Cargo.toml','Cargo.lock','package.json','build.gradle.kts',
                      'package-lock.json','apps/admin-ui/package.json','apps/browser-extension/manifest.json','core-mcp/echo/toolgate.json','examples/tool-builder-json/toolgate.json',
-                     'deploy/helm/olo-toolgate/Chart.yaml','tools/contracts/version.py','tools/contracts/generate.py'}
+                     'deploy/helm/olo-toolgate/Chart.yaml','tools/contracts/version.py','tools/contracts/generate.py',
+                     'tool-sdk/python-sdk/pyproject.toml','tool-sdk/python-sdk/src/toolgate/_version.py',
+                     'apps/langgraph-runtime/pyproject.toml'}
             names = subprocess.check_output(['git','ls-files','-z'], cwd=ROOT).decode().split('\0')
+            names = set(names) | {'apps/langgraph-runtime/pyproject.toml'}
             for name in names:
                 if name and (name in exact or name.startswith(('packages/contracts/', 'config/initial/')) or name.endswith('/gradle-artifact.lockfile')):
                     path = target/name
@@ -159,6 +162,8 @@ class VersionPropagationTests(unittest.TestCase):
             for language in ('java', 'rust', 'typescript', 'php'):
                 self.assertEqual(rendered, (target/f'packages/contracts/{language}/RELEASE-NOTES.md').read_text(encoding='utf-8'))
             self.assertEqual((target/'VERSION').read_text().strip(), '1.0.0-beta.42')
+            self.assertEqual(tomllib.loads((target/'apps/langgraph-runtime/pyproject.toml').read_text())['project']['version'], '1.0.0b42')
+            self.assertEqual(tomllib.loads((target/'tool-sdk/python-sdk/pyproject.toml').read_text())['project']['version'], '1.0.0b42')
             self.assertEqual(json.loads((target/'core-mcp/echo/toolgate.json').read_text())['sdkVersion'], '1.0.0-beta.42')
             self.assertEqual(json.loads((target/'examples/tool-builder-json/toolgate.json').read_text())['sdkVersion'], '1.0.0-beta.42')
             self.assertEqual((target/'packages/contracts/VERSION').read_text().strip(), '1.0.0-beta.42')

@@ -1,0 +1,17 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "olo-toolgate-langgraph-runtime"
+version = "1.0.0.dev1"
+description = "Pre-release generic ToolGate workflow executor; transport integration is pending"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = ["langgraph==1.2.20", "langsmith==0.14.17"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

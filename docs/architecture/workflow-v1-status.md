@@ -17,7 +17,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
 | V1.1 — Profile to effective configuration | 25% | 35% | In progress; workflow contracts and read-only validation implemented, publication not connected | 0% |
-| V1.2 — Message to governed result | 35% | 70% | Not started / no accepted implementation evidence recorded | 0% |
+| V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | Not started / no accepted implementation evidence recorded | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | Not started / no accepted implementation evidence recorded | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
@@ -45,7 +45,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
 | V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Canonical WorkflowConfiguration and generated bindings; read-only local/dependency validation; six Control tests and cross-language checks pass | Catalog persistence, reviewed grants/publication, DeploymentProfile v2 integration and end-to-end readiness remain |
-| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | None recorded | Implement minimal governed run and unchanged external Python execution |
+| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | Fixed LangGraph execution core with two simulated profiles; 20 focused runner tests pass; no live ToolGate integration claimed | Server admission/ledger/leases and runtime identities, model proxy, canonical snapshot transport, V1.1 publication and real model/tool qualification |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | None recorded | Integrate #274 dispatch with the same run path and test redelivery/effect safety |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | None recorded | Build and execute repeatable qualification and document deployment limitations |
 
@@ -97,7 +97,7 @@ No runtime capability or V1.0 acceptance is claimed. Overall remains **0%**.
 
 Implementation PR: [#299](https://github.com/olo-labs/olo-toolgate/pull/299),
 branch `codex/workflow-profile-validation`, known source revision `5ab911a6`.
-Open draft; not merged or phase-accepted.
+Merged into `feature/workflow-enhancement` at `2abdafe3358004c6a50c557b755f440635100134`; not phase-accepted.
 
 Canonical `workflow.schema.json` and Java/Rust/TypeScript/PHP bindings now define
 workflow groups, explicit supervisor/agent models, context sources, bounded
@@ -170,4 +170,66 @@ failure therefore remains unresolved suite-order/concurrency evidence, not proof
 of either a workflow regression or a verified pre-existing defect. Both broad
 runs were interrupted; their helper contexts cleaned up their test databases.
 No verification processes are intentionally left to continue this implementation.
-Keep #299 draft/unmerged; resolve the broad gate before advancing publication.
+That recommendation was made before #299 was merged. The merge does not resolve
+the broad gate or establish phase acceptance.
+## V1.2 phase jump — generic runner foundation
+
+Delivery: [PR #300](https://github.com/olo-labs/olo-toolgate/pull/300) into
+`feature/workflow-enhancement`, tested implementation revision `ed8336d5`.
+The PR tracks integration; this tested slice does not satisfy full V1.2 acceptance.
+
+On 2026-11-10 the user requested starting the next phase before V1.1 publication
+and its broad verification were complete. V1.2 now proceeds from the latest
+integration revision `2abdafe3358004c6a50c557b755f440635100134` (which includes
+merged #299). This changes sequencing only: scope, effort weights and the
+100-point denominator are unchanged. Neither V1.1 nor V1.2 earns weight yet.
+
+`apps/langgraph-runtime` now provides a fixed LangGraph supervisor/agent loop.
+Its leased snapshot supplies prompts, distinct explicit model groups, context
+sources, candidate agents, remediation mode and finite step/handoff/time limits.
+A required ToolGate port handles step authorization, refreshed agent summaries, per-agent tool discovery,
+inference, context/tool calls and confirmed completion. The graph uses no
+provider client, use-case IDs, direct tool connection or executable profile code.
+
+Local checks narrow candidates and verify returned step/run/lease/model scope;
+they do not establish actual server authorization. Context is read-only even in
+APPLY, PREPARE refuses mutation, ASK waits, denial/unknown outcomes stop without
+retries, ownership loss propagates, and missing/foreign completion acknowledgements
+cannot produce a successful result. Credentials stay out of graph state/repr and
+internal LangSmith tracing is disabled. Host egress confinement is not delivered.
+
+Validation executed:
+
+- `python tools/workflows/check.py`: isolated dependency installation, pip check
+  and 20 real-LangGraph tests passed against a simulated ToolGate boundary. Two
+  distinct profiles use unchanged code and separate supervisor/agent model
+  assignments. These are not live model/tool or end-to-end authorization tests.
+- Editable package installation succeeded. Dependencies are version-pinned in
+  requirements.lock; hash/cross-platform production qualification is pending.
+- `test_product_release.py`: 25 tests passed, including central version stamping
+  of the new runtime package. `test_unified_ci.py`: 16 tests passed; the Python
+  CI group invokes the isolated runtime gate. Metadata/preflight, source policy
+  and whitespace checks passed.
+
+Tested source SHA-256 values:
+
+- Runner: `31f001655924a2da6848f22ca35a51a8cb29a512b0153a6e16954fe7812e7dc3`.
+- Tests: `c5488f0af97fef381be32134745bd1e0132d949094a8d49cbe0547903bbfca7c`.
+- Dependency lock: `65e6328bed3120bb831a86caa444b8d75cdc3f8a15dc26b86037ebdbb2ce3246`.
+
+`tools/check.py --ci-common --ci-part python --contracts-only` passed: 183
+contract tests (2 skips), 83 SDK tests, PHP 304 v1 and 418 v2 model round trips,
+PHP lint and the scoped Python foundation gate. That command deliberately skips
+the runtime dependency environment; its separate isolated gate passed all 20
+tests. The earlier broad Java/UI failures were not rerun for this Python-only
+slice. No complete repository or real-model/real-tool end-to-end pass is claimed. Outstanding:
+Control admission/ledger/leases, authenticated runtime/step tokens, governed model
+proxy and wire adapter, V1.1 publication/readiness, real external message/trigger
+execution, and the earlier broad Java/UI gate issues. No runnable-profile,
+container, trigger registration, checkpoint/failover or full V1.2 completion is
+claimed. The umbrella PR remains draft and overall earned completion is **0%**.
+
+For this Python-only delivery, the broad UI/browser commit hook was bypassed
+after executing the runtime, scoped Python, release, CI-ownership, metadata,
+source-policy, PR-policy and staged secret checks recorded above. Earlier broad
+Java/UI failures remain limitations; no waiver of final v1 qualification is implied.
