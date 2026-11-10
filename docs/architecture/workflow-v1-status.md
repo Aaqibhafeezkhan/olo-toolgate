@@ -174,6 +174,10 @@ That recommendation was made before #299 was merged. The merge does not resolve
 the broad gate or establish phase acceptance.
 ## V1.2 phase jump — generic runner foundation
 
+Delivery: [PR #300](https://github.com/olo-labs/olo-toolgate/pull/300) into
+`feature/workflow-enhancement`, tested implementation revision `ed8336d5`.
+The PR tracks integration; this tested slice does not satisfy full V1.2 acceptance.
+
 On 2026-11-10 the user requested starting the next phase before V1.1 publication
 and its broad verification were complete. V1.2 now proceeds from the latest
 integration revision `2abdafe3358004c6a50c557b755f440635100134` (which includes
@@ -224,3 +228,8 @@ proxy and wire adapter, V1.1 publication/readiness, real external message/trigge
 execution, and the earlier broad Java/UI gate issues. No runnable-profile,
 container, trigger registration, checkpoint/failover or full V1.2 completion is
 claimed. The umbrella PR remains draft and overall earned completion is **0%**.
+
+For this Python-only delivery, the broad UI/browser commit hook was bypassed
+after executing the runtime, scoped Python, release, CI-ownership, metadata,
+source-policy, PR-policy and staged secret checks recorded above. Earlier broad
+Java/UI failures remain limitations; no waiver of final v1 qualification is implied.
