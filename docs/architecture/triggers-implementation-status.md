@@ -93,7 +93,7 @@ evidence. No module weight or baseline denominator changes; earned progress stay
 | 3 | Supervisor crate | C | 8% | ✅ Merged (via #285) | 8% | #283, #285 |
 | 4 | Control core for client triggers | D | 8% | ✅ Merged (via #285) | 8% | #284, #285 |
 | 5 | ★ Client integration and ingest | E | 8% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
-| 6 | Lifecycle, rollout and raw page | D | 6% | ⏳ Pending | 0% | — |
+| 6 | Lifecycle, rollout and raw page | D | 6% | 🔵 In progress locally | 0% | — |
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
 | 8 | ★ Server triggers on the Tool Host | E | 8% | ⏳ Pending | 0% | — |
 | 9 | Python SDK parity | B | 4% | ⏳ Pending | 0% | — |
@@ -165,7 +165,15 @@ passed using Java 21 and Node 24. They cover override precedence, rejection of
 an invalid mixed scope, unaffected desired generations, and persistence across
 a config edit. Tested Java sources SHA-256: `7575c5bbea173e10b9dffb6bf5ec8bf0213b394accab73f7f968fe70f1fdb16e` (concatenated in path order).
 
-Outstanding: Deploy and Remove actions, cross-assignment actions, contracts and
+Scoped Remove now drops direct targets or groups and excludes a removed
+device when group targeting remains. The existing reconciliation revokes
+the lease and omits the removed instance from signed desired state. The
+focused test now checks group-targeted removal and preservation of a second
+device and rejection of the removed device’s previous lease. All 7 focused
+Gradle tests passed with this change. Tested Java sources SHA-256:
+`55a081fc0aa2e87362ab716848f5a20b48b40f668b47f330767190a73ed369cb` (concatenated in path order).
+
+Outstanding: Deploy and cross-assignment actions, contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.

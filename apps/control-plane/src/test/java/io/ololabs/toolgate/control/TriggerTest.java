@@ -199,6 +199,14 @@ final class TriggerTest {
             assertEquals(412, status(() -> w.triggers().action(w.admin(), "inbox", pause, "W/\"1\"", "request")));
             w.triggers().action(w.admin(), "inbox", pause.replace("Pause", "Clear"), "W/\"5\"", "request");
             assertEquals("Running", desired(w, "device-a").instances().getFirst().desiredState().name());
+            var lease = leases(w, "device-a").leases().getFirst();
+            assertTrue(valid(w, "device-a", lease.instanceId(), lease.leaseEpoch(), lease.leaseToken()));
+            var removed = json(w.triggers().action(w.admin(), "inbox", stop.replace("Stop", "Remove"),
+                    "W/\"6\"", "request").body());
+            assertEquals("Removed", removed.path("changes").path(0).path("change").asText());
+            assertFalse(valid(w, "device-a", lease.instanceId(), lease.leaseEpoch(), lease.leaseToken()));
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+            assertEquals(1, desired(w, "device-c").instances().size());
         }
     }
 

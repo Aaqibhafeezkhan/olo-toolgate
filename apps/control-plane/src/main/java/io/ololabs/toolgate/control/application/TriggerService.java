@@ -403,12 +403,13 @@ public final class TriggerService {
                 || !reason.isTextual() || reason.asText().isBlank() || reason.asText().length() > 1024) {
             throw invalid("Specify an action, one scope and a reason of at most 1024 characters");
         }
+        boolean remove = "Remove".equals(request.path("action").asText());
         var state = switch (request.path("action").asText()) {
             case "Run" -> TriggerDesiredState.Running;
             case "Pause" -> TriggerDesiredState.Paused;
             case "Stop" -> TriggerDesiredState.Stopped;
-            case "Clear" -> null;
-            default -> throw invalid("Expected Run, Pause, Stop or Clear");
+            case "Clear", "Remove" -> null;
+            default -> throw invalid("Expected Run, Pause, Stop, Clear or Remove");
         };
         String kind = scope.fieldNames().next();
         var targets = scope.path(kind);
@@ -440,13 +441,37 @@ public final class TriggerService {
             requireTargets(tx, actor, authorized, "trigger.manage");
             match(before, ifMatch);
             var document = before.document().deepCopy();
-            var overrides = document.withObjectProperty("overrides").withObjectProperty(kind);
-            for (String id : ids) {
-                if (state == null) overrides.remove(id);
-                else overrides.put(id, state.name());
-            }
+            var overrides = document.withObjectProperty("overrides");
             long revision = before.row().revision() + 1;
             var metadata = (ObjectNode) document.path("assignment").path("metadata");
+            if (remove) {
+                var target = (ObjectNode) document.path("assignment").path("spec").path("target");
+                if ("deviceGroups".equals(kind)) {
+                    var groups = new ArrayList<>(strings(target.path("deviceGroups")));
+                    groups.removeAll(ids);
+                    target.set("deviceGroups", JSON.valueToTree(groups));
+                    overrides.withObjectProperty("deviceGroups").remove(ids);
+                } else {
+                    var removedDevices = strings(authorized.path("devices"));
+                    var explicit = new ArrayList<>(strings(target.path("devices")));
+                    explicit.removeAll(removedDevices);
+                    var exclusions = new TreeSet<>(strings(target.path("excludeDevices")));
+                    if (!strings(target.path("deviceGroups")).isEmpty()) exclusions.addAll(removedDevices);
+                    if (exclusions.size() > 256) throw conflict("An assignment supports at most 256 excluded devices");
+                    target.set("devices", JSON.valueToTree(explicit));
+                    target.set("excludeDevices", JSON.valueToTree(exclusions));
+                    overrides.withObjectProperty("devices").remove(removedDevices);
+                    for (String device : removedDevices) overrides.withObjectProperty("instances").remove(instanceId(before.uid(), device));
+                }
+                if (strings(target.path("devices")).isEmpty() && strings(target.path("deviceGroups")).isEmpty()) document.put("removed", true);
+                metadata.put("generation", next(metadata.path("generation").asLong()));
+            } else {
+                var scoped = overrides.withObjectProperty(kind);
+                for (String id : ids) {
+                    if (state == null) scoped.remove(id);
+                    else scoped.put(id, state.name());
+                }
+            }
             metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
             var row = new TriggerStore.Row(name, revision, codec.json(document));
             var after = new Stored(row, document);
