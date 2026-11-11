@@ -737,19 +737,25 @@ public final class TriggerService {
                 .put("triggerDescriptorDigest", stored.document().path("triggerDescriptorDigest").asText())
                 .put("configRevision", stored.assignment().path("metadata").path("configRevision").asLong())
                 .put("desiredState", desired.state().name()).put("desiredStateSource", desired.source());
-        // Executors report phases from check-in ingest (module 5); until then an instance waits for its executor.
-        String phase = removed ? "Removed" : row == null ? "Pending" : read(row.document()).path("view").path("phase").asText("Pending");
+        var old = row == null ? JSON.createObjectNode() : read(row.document());
+        var oldView = old.path("view");
+        boolean revisionChanged = view.path("configRevision").asLong() != oldView.path("configRevision").asLong();
+        boolean halted = !removed && old.path("haltedByControl").asBoolean();
+        String phase = removed ? "Removed" : halted ? "Failed"
+                : revisionChanged ? "Pending" : oldView.path("phase").asText("Pending");
         if (!removed && "Removed".equals(phase)) phase = "Pending";
         view.put("phase", phase);
-        view.set("conditions", row == null ? JSON.createArrayNode() : read(row.document()).path("view").path("conditions").deepCopy());
-        // What the executor last reported (module 5 ingest) survives a change of the assignment.
-        var old = row == null ? JSON.createObjectNode() : read(row.document());
-        for (String reported : List.of("counters", "outbox", "lastEventAt", "lastReconcileAt")) if (!removed && old.path("view").has(reported)) view.set(reported, old.path("view").get(reported).deepCopy());
+        // A report of readiness belongs to the exact assigned configuration revision.
+        view.set("conditions", row == null || revisionChanged && !halted
+                ? JSON.createArrayNode() : oldView.path("conditions").deepCopy());
+        for (String reported : List.of("counters", "outbox", "lastEventAt", "lastReconcileAt")) {
+            if (!removed && oldView.has(reported)) view.set(reported, oldView.get(reported).deepCopy());
+        }
         var document = JSON.createObjectNode();
         document.set("view", view);
         document.put("updatedAtUnixMs", now);
         if (old.has("lastSeenAtUnixMs")) document.put("lastSeenAtUnixMs", old.path("lastSeenAtUnixMs").asLong());
-        if (!removed && old.path("haltedByControl").asBoolean()) document.put("haltedByControl", true);
+        if (halted) document.put("haltedByControl", true);
         String text = codec.json(document);
         if (row != null && read(row.document()).path("view").equals(view)) return;
         tx.triggers().save(INSTANCE, new TriggerStore.Row(recordId, row == null ? 1 : row.revision() + 1, text), row == null ? 0 : row.revision());

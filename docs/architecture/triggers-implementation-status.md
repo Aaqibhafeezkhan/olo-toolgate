@@ -185,6 +185,12 @@ All 7 focused Gradle tests passed, including redeployment, a fresh lease
 epoch and rejection of a missing initial state. Tested source SHA-256:
 `9ab9732e60644e604ae513afc3c169ea3aa2c9bbe3840c801dcbde3f95b9a1ed` (changed Java and OpenAPI sources concatenated in path order).
 
+Control now checks the configuration revision of each instance snapshot
+before applying its reported status. A new assigned revision clears readiness
+from the previous revision. All 6 focused Gradle tests passed, including
+replay of an old snapshot after a config edit. Tested Java sources SHA-256:
+`f230c583731aa3c6a89be58cc61895ca1c18fcce8ab8a74827d3a52d570a13d2` (changed Java sources concatenated in path order).
+
 Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns

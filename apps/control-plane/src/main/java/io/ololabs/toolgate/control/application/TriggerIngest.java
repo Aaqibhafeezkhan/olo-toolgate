@@ -87,7 +87,9 @@ public final class TriggerIngest {
         if (sync.snapshot() != null) {
             for (var report : sync.snapshot().instances()) {
                 var instance = resolved.get(report.instanceId());
-                if (instance != null) report(tx, instance, report, now);
+                if (instance != null && report.configRevision().equals(instance.desired().configRevision())) {
+                    report(tx, instance, report, now);
+                }
             }
             pages.add(new TriggerSnapshotPageAck(sync.snapshot().snapshotGeneration(), sync.snapshot().page()));
         }
