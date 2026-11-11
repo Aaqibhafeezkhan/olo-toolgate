@@ -120,7 +120,7 @@ export class ControlClient {
   }
   dispose(): void { this.token = ''; this.lifetime.abort(); }
 
-  private async send<T>(operation: Operation, options: { id?: string; params?: Record<string, string>; query?: URLSearchParams; body?: unknown; raw?: Blob; revision?: number; key?: string; signal?: AbortSignal; contentType?: string; timeoutMs?: number } = {}): Promise<T> {
+  private async send<T>(operation: Operation, options: { id?: string; params?: Record<string, string>; query?: URLSearchParams; body?: unknown; raw?: Blob; revision?: number; etag?: string; key?: string; signal?: AbortSignal; contentType?: string; timeoutMs?: number } = {}): Promise<T> {
     if (this.lifetime.signal.aborted) throw new DOMException('Session ended', 'AbortError');
     const timeout = AbortSignal.timeout(options.timeoutMs ?? 15000);
     const signal = AbortSignal.any([this.lifetime.signal, timeout, ...(options.signal ? [options.signal] : [])]);
@@ -128,7 +128,8 @@ export class ControlClient {
     const headers = new Headers({ Accept: 'application/json', Authorization: `Bearer ${this.token}` });
     if (options.body !== undefined || options.raw) headers.set('Content-Type', options.contentType ?? 'application/json');
     if (options.key) headers.set('Idempotency-Key', options.key);
-    if (options.revision !== undefined) headers.set('If-Match', `"${options.revision}"`);
+    if (options.etag !== undefined) headers.set('If-Match', options.etag);
+    else if (options.revision !== undefined) headers.set('If-Match', `"${options.revision}"`);
     let response: Response;
     try {
       response = await this.transport(path + (options.query ? `?${options.query}` : ''), {
@@ -161,6 +162,12 @@ export class ControlClient {
     const query=new URLSearchParams({assignment});
     if(pageToken)query.set('pageToken',pageToken);
     return this.send(operations.listTriggerInstances,{signal,query});
+  }
+  triggerAssignmentAction(name:string,etag:string,body:unknown):Promise<unknown>{
+    return this.send(operations.actOnTriggerAssignment,{params:{name},etag,body});
+  }
+  rollbackTriggerAssignment(name:string,etag:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentResult>{
+    return this.send(operations.rollbackTriggerAssignment,{params:{name},etag});
   }
   triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
   triggerDefinitions(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{return this.send(operations.listTriggerDefinitions,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}

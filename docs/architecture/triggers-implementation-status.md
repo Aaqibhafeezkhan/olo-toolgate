@@ -234,6 +234,12 @@ available on that page. Admin UI type checking and all nine focused UI
 tests passed. Tested UI source SHA-256: `cd5ac41a80d69c32c812154cb8086be1fed1825c89701c68bd2bcd2f1fc39ef2`
 (changed sources and test concatenated in path order).
 
+Operators with `trigger.manage` can apply scoped lifecycle actions or
+roll back an assignment from the console. Requests carry the exact ETag
+shown by the list. Admin UI type checking and all ten focused UI tests
+passed, including the scoped Pause request and its ETag. Tested UI source
+SHA-256: `139118470e629cb64a9e7e879ae72a91c739bbb1f89e76d7504cdb2114e5bf59` (changed sources and test in path order).
+
 Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
