@@ -111,6 +111,27 @@ A full Java or repository gate was not run for this increment. Next is
 reviewed directory/grant provisioning and resolution of newly created
 subscription and assignment identities. Phase credit remains zero.
 
+## V1.1 reviewed revision and package readiness binding (2026-11-11)
+
+Stage validation now checks the canonical document before sealing it or
+reserving ownership. A canonicalization conflict returns a validation error
+and leaves no revision or ownership behind. Status, publication and internal
+published-profile resolution use the stored revision digest when checking
+package provisioning readiness.
+
+The isolated Control gate passed all 19 tests in WorkflowProfilesTest and
+PackageProvisioningTest, including SQLite and PostgreSQL lifecycle cases,
+normalization collision rollback and refusal of READY evidence for another
+revision. The stale-digest test seeds package status directly and does not
+exercise a live package installation. Tested source SHA-256:
+
+- WorkflowProfiles: `3ff6175d47a531a10c7346f6eb39b6602d6e01037bdff200ee592b621c75dcf9`.
+- WorkflowProfileDependencies: `ad976373e58000d964e67870c8ea3673e74171179f3c94dd9ace80e363e63511`.
+
+Phase credit is unchanged. One-upload directory, grant and subscription
+provisioning and executed tool readiness evidence still precede live run
+admission and end-to-end qualification.
+
 ## V1.1 profile editor validation follow-up (2026-11-11)
 
 The serial console suite reported 276 passes and an intermittent failure

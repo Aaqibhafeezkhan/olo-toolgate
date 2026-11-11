@@ -13,7 +13,7 @@ import java.util.Objects;
 
 /** Immutable staged profile revisions. Publication is separate from package provisioning and live authority. */
 public final class WorkflowProfiles {
-    @FunctionalInterface public interface Readiness { boolean ready(Store.Session tx, DeploymentProfile profile); }
+    @FunctionalInterface public interface Readiness { boolean ready(Store.Session tx, DeploymentProfile profile, String profileDigest); }
     private final Store store;
     private final Codec codec;
     private final Readiness readiness;
@@ -77,7 +77,7 @@ public final class WorkflowProfiles {
     private WorkflowProfileStatus status(Store.Session tx, Ids.TenantId tenant, WorkflowProfileStore.Revision revision) {
         var head = tx.workflowProfiles().publication(revision.profileId());
         boolean published = head != null && head.digest().equals(revision.digest());
-        boolean ready = revision.state().equals("REVIEWED") && readiness.ready(tx, profile(documents.open(tx, tenant, revision)));
+        boolean ready = revision.state().equals("REVIEWED") && readiness.ready(tx, profile(documents.open(tx, tenant, revision)), revision.digest());
         return new WorkflowProfileStatus(revision.profileId(), revision.digest(),
             published ? WorkflowProfileState.PUBLISHED : WorkflowProfileState.valueOf(revision.state()),
             head == null ? 0L : head.generation(), ready, revision.reviewedBy());
@@ -90,10 +90,19 @@ public final class WorkflowProfiles {
         Ids.valid(requestId);
         // Authenticate before parsing profile data or disclosing any reference information.
         return store.transaction(actor.tenant(), true, tx -> {
-            require(tx, actor); var profile = profile(document);
+            require(tx, actor);
+            // Check the input format first, then validate and use the exact document we seal.
+            profile(document);
+            byte[] canonicalBytes;
+            try {
+                canonicalBytes = Canonical.bytes((JsonNode)codec.value(document));
+            } catch (IllegalArgumentException invalid) {
+                throw Failure.validation();
+            }
+            String canonical = new String(canonicalBytes, StandardCharsets.UTF_8);
+            var profile = profile(canonical);
             PackageProvisioning.validateDeclarations(profile);
-            String canonical = new String(Canonical.bytes((JsonNode)codec.value(document)), StandardCharsets.UTF_8);
-            String digest = Canonical.sha256(canonical.getBytes(StandardCharsets.UTF_8));
+            String digest = Canonical.sha256(canonicalBytes);
             var old = tx.workflowProfiles().revision(profile.profileId(), digest);
             if (old != null) return reply(tx, actor.tenant(), revision(tx, actor.tenant(), profile.profileId(), digest), 200);
             for (var resource : owned(profile)) {
@@ -155,7 +164,7 @@ public final class WorkflowProfiles {
             if (head != null && head.digest().equals(revision.digest())) return reply(tx, actor.tenant(), revision, 200);
             if (request.expectedGeneration() != generation) throw Failure.conflict();
             var profile = profile(documents.open(tx, actor.tenant(), revision));
-            if (!readiness.ready(tx, profile)) throw new Failure(ErrorCode.CONFLICT, 409, "Workflow profile dependencies are not ready");
+            if (!readiness.ready(tx, profile, revision.digest())) throw new Failure(ErrorCode.CONFLICT, 409, "Workflow profile dependencies are not ready");
             tx.workflowProfiles().publish(new WorkflowProfileStore.Publication(id, revision.digest(), generation + 1), generation);
             tx.audit(actor.id(), "WORKFLOW_PROFILE_PUBLISH", "profile:" + id, generation + 1, requestId, revision.digest().substring(7));
             return reply(tx, actor.tenant(), revision, 200);
@@ -168,7 +177,7 @@ public final class WorkflowProfiles {
         var revision = revision(tx, tenant, id, head.digest());
         if (!revision.state().equals("REVIEWED")) throw Failure.unavailable();
         var profile = profile(documents.open(tx, tenant, revision));
-        if (!readiness.ready(tx, profile)) throw ManagementAccess.denied();
+        if (!readiness.ready(tx, profile, revision.digest())) throw ManagementAccess.denied();
         return profile;
     }
 }

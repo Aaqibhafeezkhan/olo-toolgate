@@ -22,13 +22,13 @@ public final class WorkflowProfileDependencies implements WorkflowProfiles.Readi
         var entry = tx.load().entries().get(kind.id(id));
         return entry != null && entry.enabled();
     }
-    public boolean ready(Store.Session tx, DeploymentProfile profile) {
+    public boolean ready(Store.Session tx, DeploymentProfile profile, String profileDigest) {
         if (profile.workflows() == null) return false;
         // Tool execution readiness cases cannot be assumed from package installation alone.
         if (profile.readiness() != null && !profile.readiness().isEmpty()) return false;
         if (!profile.packages().isEmpty()) {
             var packages = tx.packages().provisioning(profile.profileId());
-            if (packages == null || !packages.profileDigest().equals(Canonical.digest((JsonNode)codec.value(codec.json(profile))))
+            if (packages == null || !packages.profileDigest().equals(profileDigest)
                     || !"READY".equals(((JsonNode)codec.value(packages.document())).path("state").asText())) return false;
         }
         try {

@@ -58,7 +58,7 @@ final class WorkflowProfilesTest {
     @Test void postgresCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(true); }
     @Test void malformedPackageDeclarationsCannotBeStaged() throws Exception {
         var rig = rig(false);
-        var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
         var value = profile();
         var entry = ((ArrayNode)value.get("packages")).addObject();
         entry.put("packageId", "examples.inbox-watch").put("version", "0.1.0")
@@ -73,8 +73,22 @@ final class WorkflowProfilesTest {
         assertEquals(201, service.upload(rig.admin, value.toString(), "valid-declarations").status());
     }
 
+    @Test void normalizationConflictCannotReserveProfileOwnership() throws Exception {
+        var rig = rig(false);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
+        var invalid = profile();
+        var workflow = (ObjectNode)invalid.path("workflows").path("workflows").get(0);
+        workflow.putObject("parameterSchema").put("\u00e9", true).put("e\u0301", false);
+
+        assertEquals(400, assertThrows(Failure.class,
+            () -> service.upload(rig.admin, invalid.toString(), "colliding-keys")).status());
+        assertEquals(0, node(service.list(rig.admin, null, null, 50)).size());
+        assertEquals(201, service.upload(rig.admin, profile().put("profileId", "another-profile").toString(),
+            "valid-owner").status());
+    }
+
     private void catalog(boolean postgres) throws Exception {
-        var rig = rig(postgres); var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
+        var rig = rig(postgres); var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
         var expected = new HashSet<String>();
         for (int i = 0; i < 3; i++) {
             var value = profile(); ((ObjectNode)value.path("workflows").path("agentDefinitions").get(0)).put("systemPrompt", "Private prompt " + i);
@@ -100,7 +114,7 @@ final class WorkflowProfilesTest {
     }
     private void lifecycle(boolean postgres) throws Exception {
         var rig = rig(postgres); var ready = new AtomicBoolean(true);
-        var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> ready.get(), keys());
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> ready.get(), keys());
         String document = profile().toString();
         var staged = node(service.upload(rig.admin, document, "stage")); String digest = staged.path("profileDigest").asText();
         assertEquals("DRAFT", staged.path("state").asText()); assertFalse(staged.path("dependenciesReady").asBoolean());
@@ -142,7 +156,7 @@ final class WorkflowProfilesTest {
         }
     }
     @Test void ownershipAndVersionConflictsRollBackWithoutPublishing() throws Exception {
-        var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
+        var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
         var initial = profile(); String digest = node(service.upload(rig.admin, initial.toString(), "initial")).path("profileDigest").asText();
         var changed = initial.deepCopy(); changed.put("profileId", "competitor");
         assertEquals(409, assertThrows(Failure.class, () -> service.upload(rig.admin, changed.toString(), "steal")).status());
@@ -151,7 +165,7 @@ final class WorkflowProfilesTest {
         assertEquals("DRAFT", node(service.get(rig.admin, "support", digest)).path("state").asText());
     }
     @Test void foreignTenantAndForgedCachedSuperAdminNeverReadOrModifyARevision() throws Exception {
-        var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
+        var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
         String digest = node(service.upload(rig.admin, profile().toString(), "initial")).path("profileDigest").asText();
         var other = TestSupport.seed(rig.store, codec, Tenants.id("other"), "root");
         assertEquals(404, assertThrows(Failure.class, () -> service.get(other, "support", digest)).status());
@@ -171,10 +185,10 @@ final class WorkflowProfilesTest {
                     })));
             }
         };
-        var value = profile(); var service = new WorkflowProfiles(failing, codec, (tx, p) -> true, keys());
+        var value = profile(); var service = new WorkflowProfiles(failing, codec, (tx, p, digest) -> true, keys());
         assertEquals(503, assertThrows(Failure.class, () -> service.upload(rig.admin, value.toString(), "fail-audit")).status());
         assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.workflowProfiles().owner("WORKFLOW", "investigate")));
-        assertEquals(201, new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys()).upload(rig.admin, value.toString(), "retry").status());
+        assertEquals(201, new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys()).upload(rig.admin, value.toString(), "retry").status());
     }
     @Test void currentFormatOnlyAndUnreadyProductionDependenciesNeverPublish() throws Exception {
         var rig = rig(false); var deps = new WorkflowProfileDependencies(codec, java.time.Clock.systemUTC(), null, null, rig.tenant);
@@ -187,7 +201,7 @@ final class WorkflowProfilesTest {
         assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.workflowProfiles().publication("support")));
     }
     @Test void concurrentIdenticalUploadCreatesOneRevision() throws Exception {
-        var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys()); String value = profile().toString();
+        var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys()); String value = profile().toString();
         var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
         try {
             var a = executor.submit(() -> service.upload(rig.admin, value, "thread-a").status());
@@ -198,6 +212,8 @@ final class WorkflowProfilesTest {
     @Test void realDependencyChecksRequireVaultScopeAndCurrentAgentMembership() throws Exception {
         var rig = rig(false); var deps = new WorkflowProfileDependencies(codec, java.time.Clock.systemUTC(), null, null, rig.tenant);
         var service = new WorkflowProfiles(rig.store, codec, deps, keys()); var value = profile();
+        value.putArray("packages").addObject().put("packageId", "examples.inbox-watch")
+            .put("version", "0.1.0").put("source", "PREBUILT_CORE").put("required", true);
         ((ObjectNode)value.path("workflows")).putArray("dispatchBindings");
         ((ObjectNode)value.path("workflows").path("agentDefinitions").get(0)).putArray("contextSources");
         rig.store.transaction(rig.tenant, true, tx -> {
@@ -210,6 +226,10 @@ final class WorkflowProfilesTest {
         });
         String digest = node(service.upload(rig.admin, value.toString(), "stage")).path("profileDigest").asText();
         service.review(rig.admin, "support", review(digest), "review");
+        rig.store.transaction(rig.tenant, true, tx -> {
+            tx.packages().saveProvisioning(new PackageStore.Provisioning("support", 1, digest, "{\"state\":\"READY\"}"));
+            return null;
+        });
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "no-secret")).status());
         var keys = new TenantVaultKeys(codec, new LocalVaultWrappingProvider("fixture", Map.of("fixture", new byte[32])));
         new VaultService(rig.store, codec, keys).write(rig.admin,
@@ -217,6 +237,17 @@ final class WorkflowProfilesTest {
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "wrong-secret-scope")).status());
         new VaultService(rig.store, codec, keys).write(rig.admin,
             codec.json(Map.of("name", "model-key", "toolGroupId", "model-tools", "deviceGroupId", "model-devices", "value", "fixture-value")), "secret");
+        rig.store.transaction(rig.tenant, true, tx -> {
+            tx.packages().saveProvisioning(new PackageStore.Provisioning(
+                "support", 2, "sha256:" + "0".repeat(64), "{\"state\":\"READY\"}"));
+            return null;
+        });
+        assertEquals(409, assertThrows(Failure.class,
+            () -> service.publish(rig.admin, "support", publish(digest, 0), "stale-packages")).status());
+        rig.store.transaction(rig.tenant, true, tx -> {
+            tx.packages().saveProvisioning(new PackageStore.Provisioning("support", 3, digest, "{\"state\":\"READY\"}"));
+            return null;
+        });
         assertTrue(node(service.publish(rig.admin, "support", publish(digest, 0), "publish")).path("dependenciesReady").asBoolean());
         rig.store.transaction(rig.tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
@@ -228,7 +259,7 @@ final class WorkflowProfilesTest {
     }
     @Test void privateDocumentsAreEncryptedBoundToTenantAndSurviveReadOnlyKeyRotation() throws Exception {
         var rig = rig(false); var keys = keys(); var documents = new WorkflowProfileDocuments(codec, keys);
-        var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys); var value = profile();
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys); var value = profile();
         String privatePrompt = "private-profile-content-" + "文".repeat(20000);
         ((ObjectNode)value.path("workflows").path("workflows").get(0)).put("systemPrompt", privatePrompt);
         String digest = node(service.upload(rig.admin, value.toString(), "large")).path("profileDigest").asText();
