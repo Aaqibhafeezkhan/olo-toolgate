@@ -10598,6 +10598,50 @@ paths:
           description: If-Match is required
         '503':
           description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/assignments/{name}:rollback:
+    post:
+      operationId: rollbackTriggerAssignment
+      summary: Restore the previous configuration of an active trigger rollout
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 63
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 20
+      responses:
+        '200':
+          description: Restored assignment and affected instances
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentResult
+        '401':
+          description: Direct TLS and an authenticated actor required
+        '403':
+          description: The actor lacks trigger.manage on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '409':
+          description: No active rollout or concurrent change conflict
+        '412':
+          description: If-Match does not match the current ETag
+        '428':
+          description: If-Match is required
+        '503':
+          description: Triggers are off or a dependency is unavailable
   /api/control/v1/triggers/instances:
     get:
       operationId: listTriggerInstances

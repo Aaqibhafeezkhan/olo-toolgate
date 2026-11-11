@@ -201,6 +201,25 @@ pattern boundary check passed. The Python trigger contract suite could not
 start with the system Python because `referencing` was missing. Tested schema
 SHA-256: `6230d9966e4d4d734e4dce19af60904ab7efdf1b599f673723aa60294509a22b`.
 
+The rollout selector counts existing unavailability against the configured
+limit. It selects devices in ID order, waits when no slots remain, and stops
+selecting replacements on failure or pause. Both selector unit tests passed.
+For assignments with a rollout strategy, Control now persists the previous
+revision and pending devices on a config edit. Device check-ins advance the
+rollout, and pending devices continue to receive the previous revision with
+current lifecycle overrides. The integration test covers a two-device rollout
+with one slot and a failed replacement. That test passed before the rollback
+change. Assignment status now shows `Progressing` and `RolloutStalled`.
+The rollback endpoint checks the ETag and target permissions, then restores
+the previous payload as a new config revision for the current targets.
+Rollback applies to an active rollout, including a stalled one, and publishes
+the restoration to all its devices. Post-completion revision history and
+budgeted rollback are outstanding. All 8 focused Gradle tests passed,
+including stale-ETag rejection and restoration after a stalled replacement.
+The two Quickstart direct TLS route tests, preflight, and UI operation
+regeneration also passed. Tested source SHA-256: `c4b71d1af0458edc10f88dd6ed7610894b6b6383a06947bd437452d73569ab3b`
+(changed implementation and test sources concatenated in path order).
+
 Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns

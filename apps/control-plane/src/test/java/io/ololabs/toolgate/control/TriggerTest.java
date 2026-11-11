@@ -222,6 +222,56 @@ final class TriggerTest {
     }
 
     @Test
+    void rollingUpdateWaitsForReadinessAndStallsOnFailure() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            reportRolloutPhase(w, "device-a", "Running", true);
+            reportRolloutPhase(w, "device-c", "Running", true);
+
+            w.triggers().patch(w.admin(), "inbox", """
+                    {"spec":{"config":{"folder":"updated"},"strategy":{"rollingUpdate":{"maxUnavailable":"1"}}}}
+                    """, "W/\"1\"", null, false, "request");
+            assertEquals(2L, desired(w, "device-a").instances().getFirst().configRevision());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+
+            reportRolloutPhase(w, "device-a", "Failed", false);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision(),
+                    "a stalled rollout stays stalled until an explicit recovery");
+            var assignment = json(w.triggers().get(w.admin(), "inbox").body());
+            assertEquals("RolloutStalled", assignment.path("status").path("conditions").path(1).path("reason").asText());
+            String etag = assignment.path("metadata").path("resourceVersion").asText();
+            assertEquals(412, status(() -> w.triggers().rollback(w.admin(), "inbox", "W/\"1\"", "request")));
+            assertEquals(200, w.triggers().rollback(w.admin(), "inbox", etag, "request").status());
+            for (String deviceId : List.of("device-a", "device-c")) {
+                var restored = desired(w, deviceId).instances().getFirst();
+                assertEquals(3L, restored.configRevision());
+                assertEquals("inbox", restored.config().get("folder").asText());
+            }
+        }
+    }
+
+    private void reportRolloutPhase(World w, String deviceId, String phase, boolean ready) {
+        var document = desired(w, deviceId);
+        var instance = document.instances().getFirst();
+        String snapshot = """
+                {"observedGeneration":%d,"pending":0,"snapshot":{
+                  "snapshotGeneration":1,"snapshotDigest":"sha256:%s","page":1,"pageCount":1,"pageDigest":"sha256:%s","instances":[{
+                    "instanceId":"%s","configRevision":%d,"phase":"%s",
+                    "conditions":[{"type":"Ready","status":"%s","reason":"TestReport","lastTransitionTime":"2023-11-14T22:13:20Z"}],
+                    "counters":{"emitted":0,"rejected":0,"dropped":0,"restarts":0},"outbox":{"depth":0,"oldestAgeMs":0}
+                  }]}}
+                """.formatted(document.generation(), "1".repeat(64), "2".repeat(64), instance.instanceId(),
+                instance.configRevision(), phase, ready ? "True" : "False");
+        var sync = codec.model(snapshot, io.ololabs.toolgate.contracts.v2.TriggerSync.class);
+        var ingest = new io.ololabs.toolgate.control.application.TriggerIngest(w.triggers(), codec);
+        w.store().transaction(w.tenant(), true, tx -> ingest.sync(tx, device(w, deviceId), sync, "request"));
+    }
+
+    @Test
     void assignmentLifecycleDesiredDocumentsAndLeases() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");

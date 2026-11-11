@@ -60,6 +60,11 @@ public class TriggerResource {
         return response(service.action(actor(), name, body, ifMatch, correlation.id()));
     }
 
+    @POST @Path("triggers/assignments/{name}:rollback") @io.quarkus.security.Authenticated
+    public Response rollback(@PathParam("name") String name, @HeaderParam("If-Match") String ifMatch) {
+        return response(service.rollback(actor(), name, ifMatch, correlation.id()));
+    }
+
     @DELETE @Path("triggers/assignments/{name}") @io.quarkus.security.Authenticated
     public Response delete(@PathParam("name") String name, @HeaderParam("If-Match") String ifMatch, @HeaderParam("Idempotency-Key") String key,
                            @QueryParam("dryRun") String dryRun) {
