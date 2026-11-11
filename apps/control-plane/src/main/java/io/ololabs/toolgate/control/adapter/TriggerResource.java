@@ -55,6 +55,11 @@ public class TriggerResource {
         return response(service.patch(actor(), name, body, ifMatch, key, dryRun(dryRun), correlation.id()));
     }
 
+    @POST @Path("triggers:action") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response bulkAction(String body) {
+        return response(service.bulkAction(actor(), body, correlation.id()));
+    }
+
     @POST @Path("triggers/assignments/{name}:action") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response action(@PathParam("name") String name, @HeaderParam("If-Match") String ifMatch, String body) {
         return response(service.action(actor(), name, body, ifMatch, correlation.id()));

@@ -222,6 +222,34 @@ final class TriggerTest {
     }
 
     @Test
+    void bulkActionUsesOnlyAuthorizedGroupsAndMatchingTriggers() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            for (String name : List.of("one", "two")) {
+                w.triggers().create(w.admin(), create(name, TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            }
+            limited(w, "limited", "finance", List.of("trigger.manage"));
+            var actor = new DirectoryService(w.store(), codec, 512, 1048576).portalActor(w.tenant(), "b".repeat(64), "limited");
+            String stop = """
+                    {"action":"Stop","selector":{"deviceGroups":["finance"],"triggers":["acme.watch/*"]},"reason":"Maintenance"}
+                    """;
+            assertEquals(403, status(() -> w.triggers().bulkAction(actor,
+                    stop.replace("\"finance\"", "\"finance\",\"spare\""), "request")));
+            assertTrue(desired(w, "device-a").instances().stream().allMatch(i -> i.desiredState().name().equals("Running")));
+
+            var other = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
+            var outsider = TestSupport.seed(w.store(), codec, other, "root");
+            assertEquals(404, status(() -> w.triggers().bulkAction(outsider, stop, "request")));
+            assertEquals(0, json(w.triggers().bulkAction(actor, stop.replace("acme.watch/*", "unrelated/*"), "request").body())
+                    .path("assignments").size());
+            assertEquals(2, json(w.triggers().bulkAction(actor, stop, "request").body()).path("assignments").size());
+            assertEquals(2, desired(w, "device-a").instances().stream().filter(i -> i.desiredState().name().equals("Stopped")).count());
+            assertEquals(2, desired(w, "device-c").instances().stream().filter(i -> i.desiredState().name().equals("Running")).count());
+        }
+    }
+
+    @Test
     void rollingUpdateWaitsForReadinessAndStallsOnFailure() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");

@@ -516,18 +516,89 @@ public final class TriggerService {
                     else scoped.put(id, state.name());
                 }
             }
-            metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
-            var row = new TriggerStore.Row(name, revision, codec.json(document));
-            var after = new Stored(row, document);
-            var changes = reconcile(tx, directory, before, after, now, false);
-            tx.triggers().save(ASSIGNMENT, row, before.row().revision());
-            var result = JSON.createObjectNode().put("resourceVersion", etag(revision));
-            var affected = result.putArray("changes");
-            changes.stream().filter(change -> !"Unchanged".equals(change.path("change").asText())).forEach(affected::add);
-            tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ACTION", "trigger-assignment:" + name, revision, requestId,
-                    DirectoryService.digest(text + "\n" + codec.json(affected)));
+            var result = saveAction(tx, directory, actor, before, document, now, requestId, text);
+            result.remove("name");
             return new Store.Reply(200, codec.json(result), revision);
         });
+    }
+
+    /** Applies a lifecycle override to matching assignments in a single tenant transaction. */
+    public Store.Reply bulkAction(DirectoryService.Actor actor, String body, String requestId) {
+        tenantOf(actor);
+        String text = body(body);
+        var request = read(text);
+        var selector = request.path("selector");
+        var reason = request.path("reason");
+        if (!request.isObject() || request.size() != 3 || !selector.isObject() || selector.size() != 2
+                || !reason.isTextual() || reason.asText().isBlank() || reason.asText().length() > 1024) {
+            throw invalid("Specify an action, a selector and a reason of at most 1024 characters");
+        }
+        var state = switch (request.path("action").asText()) {
+            case "Run" -> TriggerDesiredState.Running;
+            case "Pause" -> TriggerDesiredState.Paused;
+            case "Stop" -> TriggerDesiredState.Stopped;
+            case "Clear" -> null;
+            default -> throw invalid("A bulk action must be Run, Pause, Stop or Clear");
+        };
+        var groups = selectorIds(selector.path("deviceGroups"));
+        var triggers = selectorIds(selector.path("triggers"));
+        for (String trigger : triggers) {
+            if (!trigger.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*/(?:[a-zA-Z0-9][a-zA-Z0-9._-]*|[*])")) {
+                throw invalid("Trigger selectors must use package/trigger or package/*");
+            }
+        }
+        return store.transaction(tenant, true, tx -> {
+            long now = now(tx);
+            var authorized = JSON.createObjectNode();
+            authorized.set("deviceGroups", JSON.valueToTree(groups));
+            requireTargets(tx, actor, authorized, "trigger.manage");
+            var directory = tx.load();
+            var affected = JSON.createArrayNode();
+            for (var before : assignments(tx, null)) {
+                String trigger = before.spec().path("trigger").asText();
+                if (!triggers.contains(trigger) && !triggers.contains(trigger.substring(0, trigger.indexOf('/') + 1) + "*")) continue;
+                var matched = new TreeSet<>(strings(before.spec().path("target").path("deviceGroups")));
+                matched.retainAll(groups);
+                if (matched.isEmpty()) continue;
+                var document = before.document().deepCopy();
+                var overrides = document.withObjectProperty("overrides").withObjectProperty("deviceGroups");
+                for (String group : matched) {
+                    if (state == null) overrides.remove(group);
+                    else overrides.put(group, state.name());
+                }
+                affected.add(saveAction(tx, directory, actor, before, document, now, requestId, text));
+            }
+            return new Store.Reply(200, codec.json(JSON.createObjectNode().set("assignments", affected)), 0);
+        });
+    }
+
+    private static Set<String> selectorIds(JsonNode values) {
+        if (!values.isArray() || values.isEmpty() || values.size() > 256) throw invalid("Selector must list between 1 and 256 IDs");
+        var ids = new LinkedHashSet<String>();
+        for (var value : values) {
+            if (!value.isTextual() || value.asText().isBlank() || value.asText().length() > 257 || !ids.add(value.asText())) {
+                throw invalid("Selector entries must be distinct bounded IDs");
+            }
+        }
+        return ids;
+    }
+
+    private ObjectNode saveAction(Store.Session tx, io.ololabs.toolgate.control.domain.Directory directory,
+                                  DirectoryService.Actor actor, Stored before, ObjectNode document, long now,
+                                  String requestId, String request) {
+        long revision = next(before.row().revision());
+        var metadata = (ObjectNode) document.path("assignment").path("metadata");
+        metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
+        var row = new TriggerStore.Row(before.name(), revision, codec.json(document));
+        var after = new Stored(row, document);
+        var changes = reconcile(tx, directory, before, after, now, false);
+        tx.triggers().save(ASSIGNMENT, row, before.row().revision());
+        var result = JSON.createObjectNode().put("name", before.name()).put("resourceVersion", etag(revision));
+        var affected = result.putArray("changes");
+        changes.stream().filter(change -> !"Unchanged".equals(change.path("change").asText())).forEach(affected::add);
+        tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ACTION", "trigger-assignment:" + before.name(), revision, requestId,
+                DirectoryService.digest(request + "\n" + codec.json(affected)));
+        return result;
     }
 
     /** Restores the previous payload of an assignment as a new configuration revision. */

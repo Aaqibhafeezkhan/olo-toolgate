@@ -247,8 +247,14 @@ create retry. Admin UI type checking and all three focused assignment UI
 tests passed. See the [operator guide](../control-plane/trigger-assignments.md).
 Tested source SHA-256: `09300fb805bce058c6c1461c7860733f29a3f9e3a1a8d0f5c41d2c5724ea4377` (changed sources, test and guide in path order).
 
-Outstanding: cross-assignment actions, their contracts and
-audit detail, budgeted rollback, the Live subscriptions panel, PostgreSQL
+The cross-assignment lifecycle endpoint applies Run, Pause, Stop or Clear
+to selected Device Groups and trigger exports in one tenant transaction.
+Quickstart forwards the exact endpoint over direct TLS. Both focused TLS
+routing tests passed. All 8 focused Control tests passed, including an
+unauthorized mixed scope, cross-tenant denial and a wildcard match. Tested
+source SHA-256: `e63fd8d1bbf81b954628a8ff47f1d983be7970e1cc49146b00a876346a857ae0` (changed sources in path order).
+
+Outstanding: lifecycle audit detail, budgeted rollback, the Live subscriptions panel, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 

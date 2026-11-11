@@ -34,3 +34,9 @@ device. The workflow profile editor on the same page manages profile drafts.
    initial desired state. Rollback restores the previous configuration.
    If Control reports a revision conflict, close the dialog, refresh
    assignments, and review the latest state before retrying.
+
+For an incident that spans multiple assignments, use
+`POST /api/control/v1/triggers:action` with a Device Group selector and
+trigger export IDs or `package/*` patterns. The request applies Run, Pause,
+Stop, or Clear to every matching group within one transaction. Control
+requires `trigger.manage` on every group in the selector.

@@ -10475,6 +10475,90 @@ paths:
           description: If-Match is required
         '503':
           description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers:action:
+    post:
+      operationId: actOnTriggerAssignments
+      summary: Apply a lifecycle action across matching trigger assignments
+      description: Applies the action atomically to the intersection of authorized Device Groups and matching trigger exports.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, selector, reason]
+              properties:
+                action:
+                  type: string
+                  enum: [Run, Pause, Stop, Clear]
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1024
+                selector:
+                  type: object
+                  additionalProperties: false
+                  required: [deviceGroups, triggers]
+                  properties:
+                    deviceGroups:
+                      type: array
+                      minItems: 1
+                      maxItems: 256
+                      uniqueItems: true
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 257
+                    triggers:
+                      type: array
+                      minItems: 1
+                      maxItems: 256
+                      uniqueItems: true
+                      items:
+                        type: string
+                        maxLength: 257
+                        pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*/(?:[a-zA-Z0-9][a-zA-Z0-9._-]*|[*])$'
+      responses:
+        '200':
+          description: Assignment revisions and affected instances
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [assignments]
+                properties:
+                  assignments:
+                    type: array
+                    maxItems: 256
+                    items:
+                      type: object
+                      required: [name, resourceVersion, changes]
+                      properties:
+                        name:
+                          type: string
+                        resourceVersion:
+                          type: string
+                        changes:
+                          type: array
+                          maxItems: 4096
+                          items:
+                            $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerInstanceChange
+        '400':
+          description: Invalid action, selector or Device Group
+        '401':
+          description: Direct TLS and an authenticated actor required
+        '403':
+          description: The actor lacks trigger.manage on a selected Device Group
+        '404':
+          description: Unknown tenant
+        '409':
+          description: Concurrent change conflict
+        '503':
+          description: Triggers are off or a dependency is unavailable
   /api/control/v1/triggers/assignments/{name}:action:
     post:
       operationId: actOnTriggerAssignment
