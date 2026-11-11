@@ -163,6 +163,9 @@ export class ControlClient {
     if(pageToken)query.set('pageToken',pageToken);
     return this.send(operations.listTriggerInstances,{signal,query});
   }
+  createTriggerAssignment(body:import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentCreate,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentResult>{
+    return this.send(operations.createTriggerAssignment,{body,key});
+  }
   triggerAssignmentAction(name:string,etag:string,body:unknown):Promise<unknown>{
     return this.send(operations.actOnTriggerAssignment,{params:{name},etag,body});
   }

@@ -240,8 +240,15 @@ shown by the list. Admin UI type checking and all ten focused UI tests
 passed, including the scoped Pause request and its ETag. Tested UI source
 SHA-256: `139118470e629cb64a9e7e879ae72a91c739bbb1f89e76d7504cdb2114e5bf59` (changed sources and test in path order).
 
+The Triggers page supports signed package upload with `package.import`
+and raw assignment creation with `trigger.manage`. It sends the selected
+package bytes directly to Control and keeps the idempotency key for an exact
+create retry. Admin UI type checking and all three focused assignment UI
+tests passed. See the [operator guide](../control-plane/trigger-assignments.md).
+Tested source SHA-256: `09300fb805bce058c6c1461c7860733f29a3f9e3a1a8d0f5c41d2c5724ea4377` (changed sources, test and guide in path order).
+
 Outstanding: cross-assignment actions, their contracts and
-audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
+audit detail, budgeted rollback, the Live subscriptions panel, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 

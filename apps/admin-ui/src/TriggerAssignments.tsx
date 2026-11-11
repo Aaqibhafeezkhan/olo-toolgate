@@ -1,7 +1,7 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import {useEffect,useState,useSyncExternalStore} from 'react';
-import type {TriggerAssignment,TriggerAssignmentPage,TriggerInstancePage,TriggerLifecycleAction} from '@olo-labs/toolgate-contracts/v2';
+import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
+import type {TriggerAssignment,TriggerAssignmentCreate,TriggerAssignmentPage,TriggerInstancePage,TriggerLifecycleAction} from '@olo-labs/toolgate-contracts/v2';
 import type {ControlClient} from './api';
 import {Failure} from './Failure';
 import {Table} from './Table';
@@ -10,6 +10,10 @@ import {EditorDialog} from './EditorDialog';
 export function TriggerAssignments({client}:{client:ControlClient}){
   useSyncExternalStore(client.subscribePermissions,client.permissionSnapshot,client.permissionSnapshot);
   const canManage=client.can('trigger.manage');
+  const canImport=client.can('package.import');
+  const [creating,setCreating]=useState(false);
+  const [uploading,setUploading]=useState(false);
+  const [uploadError,setUploadError]=useState<unknown>();
   const [editing,setEditing]=useState<TriggerAssignment>();
   const [notice,setNotice]=useState('');
   const [page,setPage]=useState<TriggerAssignmentPage>();
@@ -27,8 +31,29 @@ export function TriggerAssignments({client}:{client:ControlClient}){
     return()=>abort.abort();
   },[client,token,revision]);
 
+  async function upload(file:File){
+    if(uploading)return;
+    setUploading(true);
+    setNotice('');
+    setUploadError(undefined);
+    try{
+      const version=await client.uploadServerPackage(file);
+      setNotice(`Verified ${version.packageId} ${version.version}.`);
+    }catch(error){setUploadError(error);}
+    finally{setUploading(false);}
+  }
+
   return <section className="guidance">
     <div className="page-heading"><h2>Trigger assignments</h2><button onClick={()=>refresh(value=>value+1)}>Refresh assignments</button></div>
+    {canImport&&<label>Upload trigger package<input type="file" accept=".tgpkg" disabled={uploading} onChange={event=>{
+      const file=event.currentTarget.files?.[0];
+      event.currentTarget.value='';
+      if(file)void upload(file);
+    }}/></label>}
+    {uploadError!==undefined&&<Failure error={uploadError}/>}
+    {canManage&&<button onClick={()=>{setNotice('');setCreating(true);}}>Create trigger assignment</button>}
+    {canManage&&creating&&<CreateAssignment client={client} close={()=>setCreating(false)}
+      complete={()=>{setCreating(false);setNotice('Assignment created.');setToken(undefined);refresh(value=>value+1);}}/>}
     {error!==undefined?<Failure error={error}/>:!page?<p role="status">Loading trigger assignments…</p>:page.items.length===0?<p>No trigger assignments.</p>:
       <div className="table-wrap"><Table>
         <caption>Assignments in Control</caption>
@@ -48,6 +73,39 @@ export function TriggerAssignments({client}:{client:ControlClient}){
       complete={()=>{setEditing(undefined);setNotice('Assignment updated.');refresh(value=>value+1);}}/>}
     {selected&&<TriggerInstances key={selected} client={client} assignment={selected} revision={revision}/>}
   </section>;
+}
+
+function CreateAssignment({client,close,complete}:{client:ControlClient;close:()=>void;complete:()=>void}){
+  const [source,setSource]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState<unknown>();
+  const retry=useRef<{source:string;key:string}|undefined>(undefined);
+
+  async function submit(){
+    if(busy)return;
+    setBusy(true);
+    setError(undefined);
+    try{
+      const body=JSON.parse(source) as TriggerAssignmentCreate;
+      if(!body||Array.isArray(body)||typeof body!=='object'||typeof body.name!=='string'||!body.spec){
+        throw new Error('Enter a trigger assignment JSON object with a name and spec.');
+      }
+      if(retry.current?.source!==source)retry.current={source,key:crypto.randomUUID()};
+      await client.createTriggerAssignment(body,retry.current.key);
+      complete();
+    }catch(error){setError(error);}
+    finally{setBusy(false);}
+  }
+
+  return <EditorDialog title="Create trigger assignment" close={close} busy={busy}>
+    <form onSubmit={event=>{event.preventDefault();void submit();}}>
+      <fieldset disabled={busy}>
+        <label>Assignment JSON<textarea required rows={12} value={source} onChange={event=>setSource(event.target.value)}/></label>
+        {error!==undefined&&<Failure error={error}/>}
+        <button className="primary">Create assignment</button>
+      </fieldset>
+    </form>
+  </EditorDialog>;
 }
 
 const actions=['Run','Pause','Stop','Clear','Deploy','Remove'] as const satisfies readonly TriggerLifecycleAction[];

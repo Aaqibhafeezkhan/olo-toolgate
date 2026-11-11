@@ -45,3 +45,27 @@ it('uses the displayed resource version for a scoped lifecycle action',async()=>
     action:'Pause',scope:{deviceGroups:['finance']},reason:'Maintenance',
   });
 });
+
+it('uploads the exact selected package and creates a raw assignment with an idempotency key',async()=>{
+  const transport=vi.fn<typeof fetch>().mockImplementation(async(_url,options)=>{
+    const body=options?.method!=='POST'?{items:[]}:options?.body instanceof Blob?{packageId:'acme.watch',version:'1.0.0'}:{};
+    return new Response(JSON.stringify(body),{status:200});
+  });
+  const client=new ControlClient('token',vi.fn(),transport);
+  vi.spyOn(client,'can').mockImplementation(permission=>['package.import','trigger.manage'].includes(permission));
+  render(<TriggerAssignments client={client}/>);
+  const file=new File(['signed bytes'],'watch.tgpkg');
+  fireEvent.change(screen.getByLabelText('Upload trigger package'),{target:{files:[file]}});
+  await screen.findByText('Verified acme.watch 1.0.0.');
+  const upload=transport.mock.calls.find(([,options])=>options?.body===file);
+  expect(upload).toBeDefined();
+  expect(new Headers(upload?.[1]?.headers).get('Content-Type')).toBe('application/vnd.ololabs.toolgate.package+zip');
+
+  fireEvent.click(screen.getByRole('button',{name:'Create trigger assignment'}));
+  fireEvent.change(screen.getByLabelText('Assignment JSON'),{target:{value:JSON.stringify(fixture.TriggerAssignmentCreate)}});
+  fireEvent.click(screen.getByRole('button',{name:'Create assignment'}));
+  await screen.findByText('Assignment created.');
+  const create=transport.mock.calls.find(([url,options])=>String(url).endsWith('/triggers/assignments')&&options?.method==='POST');
+  expect(JSON.parse(String(create?.[1]?.body))).toEqual(fixture.TriggerAssignmentCreate);
+  expect(new Headers(create?.[1]?.headers).get('Idempotency-Key')).toBeTruthy();
+});
