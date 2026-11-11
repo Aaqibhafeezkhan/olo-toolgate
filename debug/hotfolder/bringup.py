@@ -90,6 +90,9 @@ def main():
     if os.name != 'posix':
         raise ValueError('Run this script from Linux or WSL with a Linux filesystem bind mount')
     os.umask(0o077)
+    docker_config = PRIVATE / 'docker-cli'
+    if not os.environ.get('DOCKER_CONFIG') and not os.environ.get('DOCKER_CONTEXT') and (docker_config / 'config.json').is_file():
+        os.environ['DOCKER_CONFIG'] = str(docker_config)
     os.environ.update(TOOLGATE_LANGCHAIN_PROJECT=PROJECT, TOOLGATE_LANGCHAIN_STATE=str(STATE),
                       TOOLGATE_QUICKSTART_IMAGE=IMAGE, TOOLGATE_HTTP_PORT=HTTP, TOOLGATE_TLS_PORT='18452',
                       TOOLGATE_REGISTRY_PORT='18553', TOOLGATE_HOTFOLDER_ROOT=str(ROOT), TOOLGATE_HOTFOLDER_FILES=str(FILES),

@@ -303,6 +303,16 @@ in Windows `--help` checks. The launcher shell passed `bash -n`, and its status
 command confirmed the existing local stack and listener were running. The lab
 answered ready on port 18092, so no restart or stop was needed for verification.
 
+The lab now has a runnable LangChain entry point under `debug/hotfolder/langchain`.
+Validation based on `730050cd` found expired device check-ins. Restarting the
+existing device restored accepted check-ins. The existing listener received
+`demo-order-1043.txt`, and the new runner connected and received a second fresh
+sample, `demo-order-1044.txt`. Both reached the signed read call and reported
+`read-unconfirmed`, with no move or retry. Python compilation, shell syntax,
+source quality, Markdown links and whitespace checks passed. Tested runner
+SHA-256 `f9249ce711b46e6fdd9d368a1ebb31f3bce450b7ee333e1a6f66186b9b0717f3`.
+The runner remains connected in the local lab. No phase or finality credit changes.
+
 ## Delivery ledger
 
 | PR / known revision | Phase | Scope and integration state | Validation actually executed | Limits / next work |

@@ -5,10 +5,6 @@ set -euo pipefail
 
 cd -- "$(dirname -- "$0")/../.."
 lab_dir="$PWD/.dev/debug/hotfolder"
-if [[ -z ${DOCKER_CONFIG:-} && -z ${DOCKER_CONTEXT:-} && -f $lab_dir/docker-cli/config.json ]]; then
-    export DOCKER_CONFIG="$lab_dir/docker-cli"
-fi
-
 python_runner=python3
 if [[ $1 == start ]]; then
     python_runner="$lab_dir/venv/bin/python"

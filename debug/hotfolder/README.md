@@ -41,6 +41,9 @@ directory's `console-passwords.json`. The device uses the existing local-only
 evaluation Docker executor; only this trusted debug device gets the engine
 socket. Tool runtimes have no host-folder or Docker socket mount.
 
+The [local LangChain example](langchain/README.md) provides a runner for the
+mounted inbox and the live trigger smoke test.
+
 The host directory **`.dev/debug/hotfolder/files`** is bound directly at
 `/var/lib/olo-toolgate/hotfolder` in the device container. The trigger watches
 its `inbox/` for new `.txt` files. Direct host writers must create root-owned
