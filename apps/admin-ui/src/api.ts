@@ -172,6 +172,9 @@ export class ControlClient {
   rollbackTriggerAssignment(name:string,etag:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentResult>{
     return this.send(operations.rollbackTriggerAssignment,{params:{name},etag});
   }
+  triggerStreamTicket(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerStreamTicket>{
+    return this.send(operations.createTriggerStreamTicket,{signal});
+  }
   triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
   triggerDefinitions(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{return this.send(operations.listTriggerDefinitions,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}

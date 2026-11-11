@@ -40,3 +40,8 @@ For an incident that spans multiple assignments, use
 trigger export IDs or `package/*` patterns. The request applies Run, Pause,
 Stop, or Clear to every matching group within one transaction. Control
 requires `trigger.manage` on every group in the selector.
+
+With `trigger.subscribe` on the assignment's targets, choose **Watch** to
+see incoming events over HTTPS. The Live panel shows events that arrive
+after the watch starts and displays the event fields your clearance
+permits. The watch has no stored cursor. Choose **Stop watching** to close it.

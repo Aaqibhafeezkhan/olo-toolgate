@@ -6,11 +6,14 @@ import type {ControlClient} from './api';
 import {Failure} from './Failure';
 import {Table} from './Table';
 import {EditorDialog} from './EditorDialog';
+import {TriggerLive} from './TriggerLive';
 
 export function TriggerAssignments({client}:{client:ControlClient}){
   useSyncExternalStore(client.subscribePermissions,client.permissionSnapshot,client.permissionSnapshot);
   const canManage=client.can('trigger.manage');
   const canImport=client.can('package.import');
+  const canSubscribe=client.can('trigger.subscribe');
+  const [watching,setWatching]=useState<string>();
   const [creating,setCreating]=useState(false);
   const [uploading,setUploading]=useState(false);
   const [uploadError,setUploadError]=useState<unknown>();
@@ -57,12 +60,13 @@ export function TriggerAssignments({client}:{client:ControlClient}){
     {error!==undefined?<Failure error={error}/>:!page?<p role="status">Loading trigger assignments…</p>:page.items.length===0?<p>No trigger assignments.</p>:
       <div className="table-wrap"><Table>
         <caption>Assignments in Control</caption>
-        <thead><tr><th>Assignment</th><th>Trigger</th><th>Package version</th><th>Running</th><th>Status</th><th>Instances</th>{canManage&&<th>Actions</th>}</tr></thead>
+        <thead><tr><th>Assignment</th><th>Trigger</th><th>Package version</th><th>Running</th><th>Status</th><th>Instances</th>{canSubscribe&&<th>Live</th>}{canManage&&<th>Actions</th>}</tr></thead>
         <tbody>{page.items.map(item=><tr key={item.metadata.uid}>
           <th scope="row">{item.metadata.name}</th><td>{item.spec.trigger}</td><td>{item.spec.packageVersion}</td>
           <td>{item.status.instances.running} / {item.status.instances.desired}</td>
           <td>{item.status.conditions.map(condition=>condition.reason).join(', ')}</td>
           <td><button onClick={()=>setSelected(item.metadata.name)}>View {item.metadata.name} instances</button></td>
+          {canSubscribe&&<td><button onClick={()=>setWatching(item.metadata.name)}>Watch {item.metadata.name}</button></td>}
           {canManage&&<td><button onClick={()=>{setNotice('');setEditing(item);}}>Manage {item.metadata.name}</button></td>}
         </tr>)}</tbody>
       </Table></div>}
@@ -71,6 +75,7 @@ export function TriggerAssignments({client}:{client:ControlClient}){
     {notice&&<p role="status">{notice}</p>}
     {canManage&&editing&&<AssignmentActions client={client} assignment={editing} close={()=>setEditing(undefined)}
       complete={()=>{setEditing(undefined);setNotice('Assignment updated.');refresh(value=>value+1);}}/>}
+    {canSubscribe&&watching&&<TriggerLive key={watching} client={client} assignment={watching} close={()=>setWatching(undefined)}/>}
     {selected&&<TriggerInstances key={selected} client={client} assignment={selected} revision={revision}/>}
   </section>;
 }

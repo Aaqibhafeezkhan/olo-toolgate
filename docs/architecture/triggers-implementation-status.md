@@ -268,7 +268,14 @@ An already failed replacement can start recovery without spending a slot
 on a healthy device. All ten focused rollout and Control tests passed.
 Tested Java sources SHA-256: `f2cfb69795af0d88edd326d345404a82278a22b4f9de3b05304c11742826a0af` (concatenated in path order).
 
-Outstanding: the Live subscriptions panel, PostgreSQL
+The Live panel opens an ephemeral watch for the selected assignment over
+`toolgate.triggers.v1`. It sends the ticket as a subprotocol, replenishes
+credit, keeps at most 100 events in memory, and clears events on revocation.
+Admin UI type checking and 12 focused tests passed. The socket test uses
+a simulated WebSocket and does not count as live-socket acceptance.
+Tested source SHA-256: `d35888cb26f95d7c81cedde92fda116ab5060fdc2efa3df90f8f7b22c5d60852` (changed sources and guide in path order).
+
+Outstanding: PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 
