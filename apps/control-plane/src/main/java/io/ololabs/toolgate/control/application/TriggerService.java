@@ -399,7 +399,8 @@ public final class TriggerService {
         var request = read(text);
         var scope = request.path("scope");
         var reason = request.path("reason");
-        if (!request.isObject() || request.size() != 3 || !scope.isObject() || scope.size() != 1
+        boolean deploy = "Deploy".equals(request.path("action").asText());
+        if (!request.isObject() || request.size() != (deploy ? 4 : 3) || !scope.isObject() || scope.size() != 1
                 || !reason.isTextual() || reason.asText().isBlank() || reason.asText().length() > 1024) {
             throw invalid("Specify an action, one scope and a reason of at most 1024 characters");
         }
@@ -408,8 +409,14 @@ public final class TriggerService {
             case "Run" -> TriggerDesiredState.Running;
             case "Pause" -> TriggerDesiredState.Paused;
             case "Stop" -> TriggerDesiredState.Stopped;
+            case "Deploy" -> switch (request.path("desiredState").asText()) {
+                case "Running" -> TriggerDesiredState.Running;
+                case "Paused" -> TriggerDesiredState.Paused;
+                case "Stopped" -> TriggerDesiredState.Stopped;
+                default -> throw invalid("Deploy requires a desiredState of Running, Paused or Stopped");
+            };
             case "Clear", "Remove" -> null;
-            default -> throw invalid("Expected Run, Pause, Stop, Clear or Remove");
+            default -> throw invalid("Expected Deploy, Run, Pause, Stop, Clear or Remove");
         };
         String kind = scope.fieldNames().next();
         var targets = scope.path(kind);
@@ -417,6 +424,7 @@ public final class TriggerService {
                 || !targets.isArray() || targets.isEmpty() || targets.size() > MAX_INSTANCES_PER_ASSIGNMENT) {
             throw invalid("Scope must list deviceGroups, devices or instances");
         }
+        if (deploy && "instances".equals(kind)) throw invalid("Deploy requires devices or Device Groups");
         var ids = new LinkedHashSet<String>();
         for (var target : targets) {
             if (!target.isTextual() || target.asText().isBlank() || !ids.add(target.asText())) throw invalid("Scope entries must be distinct IDs");
@@ -426,7 +434,9 @@ public final class TriggerService {
             var directory = tx.load();
             var before = existing(tx, name);
             var authorized = JSON.createObjectNode();
-            if ("deviceGroups".equals(kind)) {
+            if (deploy) {
+                authorized.set(kind, JSON.valueToTree(ids));
+            } else if ("deviceGroups".equals(kind)) {
                 if (!strings(before.spec().path("target").path(kind)).containsAll(ids)) throw notFound();
                 authorized.set("deviceGroups", JSON.valueToTree(ids));
             } else {
@@ -466,6 +476,20 @@ public final class TriggerService {
                 if (strings(target.path("devices")).isEmpty() && strings(target.path("deviceGroups")).isEmpty()) document.put("removed", true);
                 metadata.put("generation", next(metadata.path("generation").asLong()));
             } else {
+                if (deploy) {
+                    var target = (ObjectNode) document.path("assignment").path("spec").path("target");
+                    var expanded = new LinkedHashSet<>(strings(target.path(kind)));
+                    expanded.addAll(ids);
+                    target.set(kind, JSON.valueToTree(expanded));
+                    if ("devices".equals(kind)) {
+                        var excluded = new ArrayList<>(strings(target.path("excludeDevices")));
+                        excluded.removeAll(ids);
+                        target.set("excludeDevices", JSON.valueToTree(excluded));
+                    }
+                    codec.model(codec.json(Map.of("name", name, "spec", document.path("assignment").path("spec"))),
+                            TriggerAssignmentCreate.class);
+                    metadata.put("generation", next(metadata.path("generation").asLong()));
+                }
                 var scoped = overrides.withObjectProperty(kind);
                 for (String id : ids) {
                     if (state == null) scoped.remove(id);

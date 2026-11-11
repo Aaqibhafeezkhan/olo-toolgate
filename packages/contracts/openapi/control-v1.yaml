@@ -10503,10 +10503,25 @@ paths:
               type: object
               additionalProperties: false
               required: [action, scope, reason]
+              if:
+                properties:
+                  action:
+                    const: Deploy
+              then:
+                required: [desiredState]
+                properties:
+                  scope:
+                    not:
+                      required: [instances]
+              else:
+                not:
+                  required: [desiredState]
               properties:
                 action:
                   type: string
-                  enum: [Run, Pause, Stop, Clear, Remove]
+                  enum: [Deploy, Run, Pause, Stop, Clear, Remove]
+                desiredState:
+                  $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerDesiredState
                 scope:
                   type: object
                   minProperties: 1

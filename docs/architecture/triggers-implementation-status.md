@@ -178,7 +178,14 @@ generated UI operation catalog exposes it. Contract binding and UI operation
 regeneration checks pass. Checked sources SHA-256: `3d3b39ea74421073c87de72db2b9d8c6043c660f613b78441844c15d8d7db27d`
 (OpenAPI operation catalog followed by the Control specification).
 
-Outstanding: Deploy and cross-assignment actions, their contracts and
+Scoped Deploy now adds devices or Device Groups to an existing assignment
+with an explicit initial desired state. Deploying an excluded device clears
+its exclusion. The endpoint contract requires the initial state for Deploy.
+All 7 focused Gradle tests passed, including redeployment, a fresh lease
+epoch and rejection of a missing initial state. Tested source SHA-256:
+`9ab9732e60644e604ae513afc3c169ea3aa2c9bbe3840c801dcbde3f95b9a1ed` (changed Java and OpenAPI sources concatenated in path order).
+
+Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.

@@ -207,6 +207,17 @@ final class TriggerTest {
             assertFalse(valid(w, "device-a", lease.instanceId(), lease.leaseEpoch(), lease.leaseToken()));
             assertTrue(desired(w, "device-a").instances().isEmpty());
             assertEquals(1, desired(w, "device-c").instances().size());
+            String deploy = """
+                    {"action":"Deploy","scope":{"devices":["device-a"]},"reason":"Maintenance complete","desiredState":"Paused"}
+                    """;
+            assertEquals(400, status(() -> w.triggers().action(w.admin(), "inbox",
+                    deploy.replace(",\"desiredState\":\"Paused\"", ""), "W/\"7\"", "request")));
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+            var deployed = json(w.triggers().action(w.admin(), "inbox", deploy, "W/\"7\"", "request").body());
+            assertEquals("Added", deployed.path("changes").path(0).path("change").asText());
+            assertEquals("Paused", desired(w, "device-a").instances().getFirst().desiredState().name());
+            var newLease = leases(w, "device-a").leases().getFirst();
+            assertTrue(newLease.leaseEpoch() > lease.leaseEpoch());
         }
     }
 
