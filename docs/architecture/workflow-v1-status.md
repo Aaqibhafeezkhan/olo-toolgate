@@ -90,6 +90,27 @@ The qualification harness tests use simulated drivers. The live Control
 endpoint inventory still needs reconciliation as those endpoints are
 implemented. No phase weight or live execution qualification is claimed.
 
+## V1.1 package declaration preflight (2026-11-11)
+
+Workflow staging and package provisioning share declaration validation.
+Duplicate targets or exports and assignments without device groups are
+rejected before a new draft is written. Sealed inventory and live dependency
+checks still run at provisioning. Existing stored drafts can be inspected.
+
+Executed `./gradlew :control-plane:test --tests '*WorkflowProfilesTest'
+--tests '*PackageProvisioningTest' --max-workers=2` with the isolated
+PostgreSQL fixture. All 18 tests passed, including SQLite/PostgreSQL lifecycle
+coverage and a regression proving an invalid upload creates no revision.
+The v2 schema suite (7 tests), metadata and generated-binding preflight
+also passed. Source SHA-256 values:
+
+- PackageProvisioning: `533c2e8a684471df15e3ef1ec4288eff9351d802d97052076cb7fe8785cc9189`.
+- WorkflowProfiles: `d7b4632c40e516773999eb04a58d82b8a31bb5aaadac95f222fcd3d20932e716`.
+
+A full Java or repository gate was not run for this increment. Next is
+reviewed directory/grant provisioning and resolution of newly created
+subscription and assignment identities. Phase credit remains zero.
+
 ## Admin UI property management slice (2026-11-11)
 
 User-requested delivery into umbrella #297 (`feature/workflow-enhancement`),

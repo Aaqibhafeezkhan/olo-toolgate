@@ -56,6 +56,10 @@ Workflow profiles use these authenticated Control APIs:
 | `POST /api/control/v1/workflow-profiles/{id}/provision` with the same digest request | Provision the reviewed revision's packages through the existing package service; return its ordinary provisioning status. |
 | `POST /api/control/v1/workflow-profiles/{id}/publish` with `{"profileDigest":"sha256:…","expectedGeneration":0}` | Atomically activate a reviewed, dependency-ready revision. Use the latest generation for a replacement. Stale generations or unready dependencies return 409. |
 
+Workflow staging rejects invalid package declarations such as duplicate target
+groups and trigger assignments without a target group. The sealed package
+inventory and installation dependencies are checked when provisioning.
+
 This initial management boundary requires a **current Super Admin** for every
 operation, including document/status reads. Cached actor flags and token roles
 cannot grant access. Scoped workflow management roles and user-filtered runtime

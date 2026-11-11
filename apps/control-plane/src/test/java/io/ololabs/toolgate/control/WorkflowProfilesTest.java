@@ -4,6 +4,7 @@ package io.ololabs.toolgate.control;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.ololabs.toolgate.control.adapter.*;
 import io.ololabs.toolgate.control.application.*;
@@ -55,6 +56,23 @@ final class WorkflowProfilesTest {
     @Test void postgresLifecycleIsAtomicAndPublishedSeparately() throws Exception { lifecycle(true); }
     @Test void sqliteCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(false); }
     @Test void postgresCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(true); }
+    @Test void malformedPackageDeclarationsCannotBeStaged() throws Exception {
+        var rig = rig(false);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
+        var value = profile();
+        var entry = ((ArrayNode)value.get("packages")).addObject();
+        entry.put("packageId", "examples.inbox-watch").put("version", "0.1.0")
+            .put("source", "PREBUILT_CORE").put("required", true);
+        entry.putArray("deviceGroupIds").add("devices").add("devices");
+
+        assertEquals(400, assertThrows(Failure.class,
+            () -> service.upload(rig.admin, value.toString(), "duplicate-groups")).status());
+        assertEquals(0, node(service.list(rig.admin, null, null, 50)).size());
+
+        entry.putArray("deviceGroupIds").add("devices");
+        assertEquals(201, service.upload(rig.admin, value.toString(), "valid-declarations").status());
+    }
+
     private void catalog(boolean postgres) throws Exception {
         var rig = rig(postgres); var service = new WorkflowProfiles(rig.store, codec, (tx, p) -> true, keys());
         var expected = new HashSet<String>();

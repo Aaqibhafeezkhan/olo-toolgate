@@ -32,16 +32,6 @@ public final class WorkflowProfiles {
         if (document == null || document.getBytes(StandardCharsets.UTF_8).length > 262144) throw Failure.validation();
         var profile = codec.model(document, DeploymentProfile.class);
         if (profile.workflows() == null) throw Failure.validation();
-        var packageIds = new java.util.HashSet<String>();
-        var assignments = new java.util.HashSet<String>();
-        for (var entry : profile.packages()) {
-            if (!packageIds.add(entry.packageId())) throw Failure.validation();
-            if (entry.source() == ProfilePackageSource.MARKETPLACE && entry.packageDigest() == null) throw Failure.validation();
-            if (entry.triggers() != null) for (var trigger : entry.triggers())
-                if (!assignments.add(trigger.assignment()) || !trigger.triggerId().startsWith(entry.packageId() + "/")) throw Failure.validation();
-            if (entry.tools() != null) for (var tool : entry.tools())
-                if (!tool.toolId().startsWith(entry.packageId() + "/")) throw Failure.validation();
-        }
         // Drafts may have unavailable external dependencies; they are never executable.
         new WorkflowConfigurations(codec).validate(codec.json(profile.workflows()), reference -> true);
         return profile;
@@ -101,6 +91,7 @@ public final class WorkflowProfiles {
         // Authenticate before parsing profile data or disclosing any reference information.
         return store.transaction(actor.tenant(), true, tx -> {
             require(tx, actor); var profile = profile(document);
+            PackageProvisioning.validateDeclarations(profile);
             String canonical = new String(Canonical.bytes((JsonNode)codec.value(document)), StandardCharsets.UTF_8);
             String digest = Canonical.sha256(canonical.getBytes(StandardCharsets.UTF_8));
             var old = tx.workflowProfiles().revision(profile.profileId(), digest);
