@@ -153,6 +153,23 @@ Each merged module records: delivered scope against its *Done when*, the checks 
 (including skips and failures), the M12 scenarios that now pass, shared-file changes, #230 coordination, and known
 limits. Results are never invented; a check that was not run is listed as not run.
 
+### Module 6 — Lifecycle, rollout and raw page (in progress)
+
+The local branch `feature/triggers-m06-lifecycle` starts from `aa33a9d3`.
+Control applies instance, device and targeted-group overrides to signed desired
+state and instance views. Scoped Run, Pause, Stop and Clear actions validate
+their entire scope and ETag before writing. Assignment edits preserve overrides.
+
+Focused Gradle tests (`TriggerTest` and `TriggerLifecycleTest`, 7 tests)
+passed using Java 21 and Node 24. They cover override precedence, rejection of
+an invalid mixed scope, unaffected desired generations, and persistence across
+a config edit. Tested Java sources SHA-256: `7575c5bbea173e10b9dffb6bf5ec8bf0213b394accab73f7f968fe70f1fdb16e` (concatenated in path order).
+
+Outstanding: Deploy and Remove actions, cross-assignment actions, contracts and
+audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
+and full component verification, and M12 scenarios 10 and 11. Module 6 earns
+no weight until its acceptance criteria are met and it merges.
+
 ### Module 1 — Contracts, ADR and model (merged, #281)
 
 Scope: ADR 058; `v2/trigger.schema.json` with protocol frames and Trigger Sync messages; generated Java, Rust, PHP

@@ -55,6 +55,11 @@ public class TriggerResource {
         return response(service.patch(actor(), name, body, ifMatch, key, dryRun(dryRun), correlation.id()));
     }
 
+    @POST @Path("triggers/assignments/{name}:action") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response action(@PathParam("name") String name, @HeaderParam("If-Match") String ifMatch, String body) {
+        return response(service.action(actor(), name, body, ifMatch, correlation.id()));
+    }
+
     @DELETE @Path("triggers/assignments/{name}") @io.quarkus.security.Authenticated
     public Response delete(@PathParam("name") String name, @HeaderParam("If-Match") String ifMatch, @HeaderParam("Idempotency-Key") String key,
                            @QueryParam("dryRun") String dryRun) {

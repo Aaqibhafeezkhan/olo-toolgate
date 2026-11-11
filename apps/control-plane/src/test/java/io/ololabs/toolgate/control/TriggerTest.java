@@ -169,6 +169,40 @@ final class TriggerTest {
     }
 
     @Test
+    void scopedActionChangesOnlyTheTargetedDesiredDocument() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            var unaffected = desired(w, "device-c");
+            String pause = """
+                    {"action":"Pause","scope":{"deviceGroups":["finance"]},"reason":"Maintenance"}
+                    """;
+            assertEquals(404, status(() -> w.triggers().action(w.admin(), "inbox",
+                    pause.replace("\"finance\"", "\"finance\",\"unknown\""), "W/\"1\"", "request")));
+            assertEquals("Running", desired(w, "device-a").instances().getFirst().desiredState().name());
+
+            var result = json(w.triggers().action(w.admin(), "inbox", pause, "W/\"1\"", "request").body());
+            assertEquals(1, result.path("changes").size());
+            assertEquals("Paused", desired(w, "device-a").instances().getFirst().desiredState().name());
+            assertEquals(unaffected.generation(), desired(w, "device-c").generation());
+            String stop = """
+                    {"action":"Stop","scope":{"devices":["device-a"]},"reason":"Maintenance"}
+                    """;
+            w.triggers().action(w.admin(), "inbox", stop, "W/\"2\"", "request");
+            assertEquals("Stopped", desired(w, "device-a").instances().getFirst().desiredState().name());
+            w.triggers().patch(w.admin(), "inbox", "{\"spec\":{\"config\":{\"folder\":\"other\"}}}",
+                    "W/\"3\"", null, false, "request");
+            assertEquals("Stopped", desired(w, "device-a").instances().getFirst().desiredState().name());
+            w.triggers().action(w.admin(), "inbox", stop.replace("Stop", "Clear"), "W/\"4\"", "request");
+            assertEquals("Paused", desired(w, "device-a").instances().getFirst().desiredState().name());
+            assertEquals(412, status(() -> w.triggers().action(w.admin(), "inbox", pause, "W/\"1\"", "request")));
+            w.triggers().action(w.admin(), "inbox", pause.replace("Pause", "Clear"), "W/\"5\"", "request");
+            assertEquals("Running", desired(w, "device-a").instances().getFirst().desiredState().name());
+        }
+    }
+
+    @Test
     void assignmentLifecycleDesiredDocumentsAndLeases() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");

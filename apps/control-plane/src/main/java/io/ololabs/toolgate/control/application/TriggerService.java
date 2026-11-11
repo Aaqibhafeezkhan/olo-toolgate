@@ -31,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -380,6 +379,7 @@ public final class TriggerService {
             assignment.set("metadata", meta);
             assignment.set("spec", spec);
             var document = document(assignment, definition, false);
+            if (before.document().has("overrides")) document.set("overrides", before.document().get("overrides").deepCopy());
             var row = new TriggerStore.Row(name, revision, codec.json(document));
             var changes = reconcile(tx, directory, before, new Stored(row, document), now, dryRun);
             if (!dryRun) {
@@ -389,6 +389,75 @@ public final class TriggerService {
             var result = result(tx, new Stored(row, document), dryRun, changes, 200);
             if (!dryRun && key != null) tx.remember(actor.id(), key, digest, result);
             return result;
+        });
+    }
+
+    /** Sets or clears lifecycle overrides for one assignment and one scope atomically. */
+    public Store.Reply action(DirectoryService.Actor actor, String name, String body, String ifMatch, String requestId) {
+        tenantOf(actor);
+        String text = body(body);
+        var request = read(text);
+        var scope = request.path("scope");
+        var reason = request.path("reason");
+        if (!request.isObject() || request.size() != 3 || !scope.isObject() || scope.size() != 1
+                || !reason.isTextual() || reason.asText().isBlank() || reason.asText().length() > 1024) {
+            throw invalid("Specify an action, one scope and a reason of at most 1024 characters");
+        }
+        var state = switch (request.path("action").asText()) {
+            case "Run" -> TriggerDesiredState.Running;
+            case "Pause" -> TriggerDesiredState.Paused;
+            case "Stop" -> TriggerDesiredState.Stopped;
+            case "Clear" -> null;
+            default -> throw invalid("Expected Run, Pause, Stop or Clear");
+        };
+        String kind = scope.fieldNames().next();
+        var targets = scope.path(kind);
+        if (!List.of("deviceGroups", "devices", "instances").contains(kind)
+                || !targets.isArray() || targets.isEmpty() || targets.size() > MAX_INSTANCES_PER_ASSIGNMENT) {
+            throw invalid("Scope must list deviceGroups, devices or instances");
+        }
+        var ids = new LinkedHashSet<String>();
+        for (var target : targets) {
+            if (!target.isTextual() || target.asText().isBlank() || !ids.add(target.asText())) throw invalid("Scope entries must be distinct IDs");
+        }
+        return store.transaction(tenant, true, tx -> {
+            long now = now(tx);
+            var directory = tx.load();
+            var before = existing(tx, name);
+            var authorized = JSON.createObjectNode();
+            if ("deviceGroups".equals(kind)) {
+                if (!strings(before.spec().path("target").path(kind)).containsAll(ids)) throw notFound();
+                authorized.set("deviceGroups", JSON.valueToTree(ids));
+            } else {
+                var matched = new ArrayList<String>();
+                for (String device : devices(directory, before)) {
+                    String id = "instances".equals(kind) ? instanceId(before.uid(), device) : device;
+                    if (ids.contains(id)) matched.add(device);
+                }
+                if (matched.size() != ids.size()) throw notFound();
+                authorized.set("devices", JSON.valueToTree(matched));
+            }
+            requireTargets(tx, actor, authorized, "trigger.manage");
+            match(before, ifMatch);
+            var document = before.document().deepCopy();
+            var overrides = document.withObjectProperty("overrides").withObjectProperty(kind);
+            for (String id : ids) {
+                if (state == null) overrides.remove(id);
+                else overrides.put(id, state.name());
+            }
+            long revision = before.row().revision() + 1;
+            var metadata = (ObjectNode) document.path("assignment").path("metadata");
+            metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
+            var row = new TriggerStore.Row(name, revision, codec.json(document));
+            var after = new Stored(row, document);
+            var changes = reconcile(tx, directory, before, after, now, false);
+            tx.triggers().save(ASSIGNMENT, row, before.row().revision());
+            var result = JSON.createObjectNode().put("resourceVersion", etag(revision));
+            var affected = result.putArray("changes");
+            changes.stream().filter(change -> !"Unchanged".equals(change.path("change").asText())).forEach(affected::add);
+            tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ACTION", "trigger-assignment:" + name, revision, requestId,
+                    DirectoryService.digest(text + "\n" + codec.json(affected)));
+            return new Store.Reply(200, codec.json(result), revision);
         });
     }
 
@@ -524,8 +593,29 @@ public final class TriggerService {
         return out;
     }
 
+    private TriggerLifecycle.Desired desiredState(io.ololabs.toolgate.control.domain.Directory directory, Stored stored, String device) {
+        var overrides = stored.document().path("overrides");
+        var memberships = new ArrayList<String>();
+        var groups = new HashMap<String, TriggerDesiredState>();
+        for (String group : strings(stored.spec().path("target").path("deviceGroups"))) {
+            var state = overrideState(overrides.path("deviceGroups").path(group));
+            if (state == null) continue;
+            var entry = directory.entries().get(Ids.Kind.DEVICE_GROUP.id(group));
+            if (entry == null || !entry.enabled() || !GroupGraph.members(entry, codec).contains(device)) continue;
+            memberships.add(group);
+            groups.put(group, state);
+        }
+        return TriggerLifecycle.resolve(TriggerDesiredState.valueOf(stored.spec().path("desiredState").asText()),
+                overrideState(overrides.path("instances").path(instanceId(stored.uid(), device))),
+                overrideState(overrides.path("devices").path(device)), memberships, groups);
+    }
+
+    private static TriggerDesiredState overrideState(JsonNode value) {
+        return value.isMissingNode() ? null : TriggerDesiredState.valueOf(value.asText());
+    }
+
     /** The resolved instance of one assignment on one device, as the desired document carries it. */
-    private ObjectNode desiredInstance(Stored stored, String device) {
+    private ObjectNode desiredInstance(Stored stored, String device, TriggerLifecycle.Desired desired) {
         var spec = stored.spec();
         var instance = JSON.createObjectNode();
         instance.put("instanceId", instanceId(stored.uid(), device));
@@ -535,8 +625,7 @@ public final class TriggerService {
         instance.put("configRevision", stored.assignment().path("metadata").path("configRevision").asLong());
         instance.set("config", spec.path("config"));
         instance.put("bindingDigest", "sha256:" + DirectoryService.digest(codec.json(Map.of("globals", spec.path("globals")))));
-        // Overrides at group, device or instance scope arrive with lifecycle actions; until then the assignment decides.
-        instance.put("desiredState", spec.path("desiredState").asText());
+        instance.put("desiredState", desired.state().name());
         return instance;
     }
 
@@ -544,7 +633,7 @@ public final class TriggerService {
     private List<ObjectNode> resolved(io.ololabs.toolgate.control.domain.Directory directory, List<Stored> all, String device) {
         var out = new TreeMap<String, ObjectNode>();
         for (var stored : all) if (devices(directory, stored).contains(device)) {
-            var instance = desiredInstance(stored, device);
+            var instance = desiredInstance(stored, device, desiredState(directory, stored, device));
             out.put(instance.path("instanceId").asText(), instance);
         }
         return new ArrayList<>(out.values());
@@ -568,17 +657,19 @@ public final class TriggerService {
             var instances = resolved(directory, all, device);
             if (instances.size() > MAX_INSTANCES_PER_CLIENT) throw conflict("Device " + device + " would hold more than " + MAX_INSTANCES_PER_CLIENT + " trigger instances");
             String id = instanceId(uid, device);
-            String oldState = oldDevices.contains(device) && before != null ? before.spec().path("desiredState").asText() : null;
-            String newState = newDevices.contains(device) ? after.spec().path("desiredState").asText() : null;
+            var oldDesired = oldDevices.contains(device) ? desiredState(directory, before, device) : null;
+            var newDesired = newDevices.contains(device) ? desiredState(directory, after, device) : null;
+            String oldState = oldDesired == null ? null : oldDesired.state().name();
+            String newState = newDesired == null ? null : newDesired.state().name();
             var change = JSON.createObjectNode().put("instanceId", id).put("executorId", device);
             if (oldState == null) change.put("change", "Added");
             else if (newState == null) change.put("change", "Removed");
-            else change.put("change", Objects.equals(desiredDigest(before, device), desiredDigest(after, device)) ? "Unchanged" : "Updated");
+            else change.put("change", oldDesired.equals(newDesired) && desiredInstance(before, device, oldDesired).equals(desiredInstance(after, device, newDesired)) ? "Unchanged" : "Updated");
             if (oldState != null) change.put("oldDesiredState", oldState);
             if (newState != null) change.put("newDesiredState", newState);
             changes.put(id, change);
             if (dryRun) continue;
-            writeInstance(tx, after, device, newState == null, now);
+            writeInstance(tx, after, device, newDesired == null ? oldDesired : newDesired, newDesired == null, now);
             refreshDesired(tx, device, instances);
             if (newState == null) revoke(tx, device, id, TriggerRevocationReason.AssignmentRemoved);
             else if (newState.equals("Stopped")) revoke(tx, device, id, TriggerRevocationReason.AssignmentStopped);
@@ -586,11 +677,7 @@ public final class TriggerService {
         return new ArrayList<>(changes.values());
     }
 
-    private String desiredDigest(Stored stored, String device) {
-        return stored == null || stored.removed() ? null : DirectoryService.digest(codec.json(desiredInstance(stored, device)));
-    }
-
-    private void writeInstance(Store.Session tx, Stored stored, String device, boolean removed, long now) {
+    private void writeInstance(Store.Session tx, Stored stored, String device, TriggerLifecycle.Desired desired, boolean removed, long now) {
         String recordId = stored.uid() + "/" + device;
         var row = tx.triggers().get(INSTANCE, recordId);
         var view = JSON.createObjectNode();
@@ -600,7 +687,7 @@ public final class TriggerService {
                 .put("packageDigest", stored.document().path("packageDigest").asText())
                 .put("triggerDescriptorDigest", stored.document().path("triggerDescriptorDigest").asText())
                 .put("configRevision", stored.assignment().path("metadata").path("configRevision").asLong())
-                .put("desiredState", spec.path("desiredState").asText()).put("desiredStateSource", "Assignment");
+                .put("desiredState", desired.state().name()).put("desiredStateSource", desired.source());
         // Executors report phases from check-in ingest (module 5); until then an instance waits for its executor.
         String phase = removed ? "Removed" : row == null ? "Pending" : read(row.document()).path("view").path("phase").asText("Pending");
         if (!removed && "Removed".equals(phase)) phase = "Pending";
@@ -704,7 +791,7 @@ public final class TriggerService {
         var all = assignments(tx, null);
         var instances = resolved(directory, all, device.deviceId());
         if (instances.size() > MAX_INSTANCES_PER_CLIENT) throw Failure.conflict();
-        for (var stored : all) if (devices(directory, stored).contains(device.deviceId())) writeInstance(tx, stored, device.deviceId(), false, now);
+        for (var stored : all) if (devices(directory, stored).contains(device.deviceId())) writeInstance(tx, stored, device.deviceId(), desiredState(directory, stored, device.deviceId()), false, now);
         long generation = refreshDesired(tx, device.deviceId(), instances);
         var desired = new ArrayList<TriggerDesiredInstance>();
         for (var instance : instances) desired.add(codec.model(codec.json(instance), TriggerDesiredInstance.class));
