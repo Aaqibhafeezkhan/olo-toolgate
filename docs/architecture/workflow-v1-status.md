@@ -297,6 +297,12 @@ Full repository verification and #274 M12 acceptance were not executed.
 This lab does not exercise #295 workflow dispatch admission or qualify #230
 native HotFolder finality. No phase weight changes; #297 stays draft.
 
+Windows `start.bat` and `stop.bat` now launch the HotFolder commands through
+WSL from the script directory. Both launchers reached the correct Python command
+in Windows `--help` checks. The launcher shell passed `bash -n`, and its status
+command confirmed the existing local stack and listener were running. The lab
+answered ready on port 18092, so no restart or stop was needed for verification.
+
 ## Delivery ledger
 
 | PR / known revision | Phase | Scope and integration state | Validation actually executed | Limits / next work |

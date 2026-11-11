@@ -12,7 +12,13 @@ endpoint and the existing `olo-toolgate-quickstart:debug` image. The console is
 at [port 18092](http://127.0.0.1:18092/console/), TLS at 18452, and the local
 package registry at 18553. The standard debug stack on 18090 is separate.
 
-From the repository root:
+On Windows, run `start.bat` and `stop.bat` in this directory. They use the
+default WSL distribution, which needs access to this checkout and the Linux
+Docker engine. `start.bat --prepared` reuses the lab's prepared packages.
+The Windows launcher creates the Python environment if needed and uses the
+lab's local Docker CLI configuration when present.
+
+From a Linux or WSL shell at the repository root:
 
 ```sh
 python3 -m venv .dev/debug/hotfolder/venv
