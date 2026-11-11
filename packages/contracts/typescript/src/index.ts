@@ -286,6 +286,7 @@ export interface ControlAudit {
   readonly occurredAt: string;
   readonly requestDigest: string;
   readonly evidence?: ControlAuditEvidence;
+  readonly triggerLifecycleEvidence?: ControlTriggerLifecycleEvidence;
 }
 /** Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials. */
 export interface ControlAuditEvidence {
@@ -579,6 +580,14 @@ export interface ControlToolGroupPage {
 export interface ControlToolPage {
   readonly items: ReadonlyArray<ControlTool>;
   readonly nextCursor?: string;
+}
+/** Scope, reason and resolved state changes for a trigger assignment lifecycle action. */
+export interface ControlTriggerLifecycleEvidence {
+  readonly action: V2.TriggerLifecycleAction;
+  readonly scopeKind: string;
+  readonly scopeIds: ReadonlyArray<string>;
+  readonly reason: string;
+  readonly changes: ReadonlyArray<V2.TriggerInstanceChange>;
 }
 /** Tenant-scoped users configuration record. Not a runtime credential or policy grant. */
 export interface ControlUser {

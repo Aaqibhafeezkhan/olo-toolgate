@@ -246,6 +246,19 @@ final class TriggerTest {
             assertEquals(2, json(w.triggers().bulkAction(actor, stop, "request").body()).path("assignments").size());
             assertEquals(2, desired(w, "device-a").instances().stream().filter(i -> i.desiredState().name().equals("Stopped")).count());
             assertEquals(2, desired(w, "device-c").instances().stream().filter(i -> i.desiredState().name().equals("Running")).count());
+            var audit = json(w.store().transaction(w.tenant(), false, tx -> tx.auditPage(0, 100)));
+            int audited = 0;
+            for (var item : audit.path("items")) {
+                if (!"TRIGGER_ASSIGNMENT_ACTION".equals(item.path("operation").asText())) continue;
+                var evidence = item.path("triggerLifecycleEvidence");
+                assertEquals("Stop", evidence.path("action").asText());
+                assertEquals("deviceGroups", evidence.path("scopeKind").asText());
+                assertEquals("finance", evidence.path("scopeIds").path(0).asText());
+                assertEquals("Maintenance", evidence.path("reason").asText());
+                assertEquals("Stopped", evidence.path("changes").path(0).path("newDesiredState").asText());
+                audited++;
+            }
+            assertEquals(2, audited);
         }
     }
 

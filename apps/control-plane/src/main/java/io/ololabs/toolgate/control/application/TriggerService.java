@@ -447,7 +447,7 @@ public final class TriggerService {
         if (deploy && "instances".equals(kind)) throw invalid("Deploy requires devices or Device Groups");
         var ids = new LinkedHashSet<String>();
         for (var target : targets) {
-            if (!target.isTextual() || target.asText().isBlank() || !ids.add(target.asText())) throw invalid("Scope entries must be distinct IDs");
+            if (!target.isTextual() || target.asText().isBlank() || target.asText().length() > 257 || !ids.add(target.asText())) throw invalid("Scope entries must be distinct IDs");
         }
         return store.transaction(tenant, true, tx -> {
             long now = now(tx);
@@ -516,7 +516,7 @@ public final class TriggerService {
                     else scoped.put(id, state.name());
                 }
             }
-            var result = saveAction(tx, directory, actor, before, document, now, requestId, text);
+            var result = saveAction(tx, directory, actor, before, document, now, requestId, text, kind, ids);
             result.remove("name");
             return new Store.Reply(200, codec.json(result), revision);
         });
@@ -566,7 +566,7 @@ public final class TriggerService {
                     if (state == null) overrides.remove(group);
                     else overrides.put(group, state.name());
                 }
-                affected.add(saveAction(tx, directory, actor, before, document, now, requestId, text));
+                affected.add(saveAction(tx, directory, actor, before, document, now, requestId, text, "deviceGroups", matched));
             }
             return new Store.Reply(200, codec.json(JSON.createObjectNode().set("assignments", affected)), 0);
         });
@@ -585,7 +585,7 @@ public final class TriggerService {
 
     private ObjectNode saveAction(Store.Session tx, io.ololabs.toolgate.control.domain.Directory directory,
                                   DirectoryService.Actor actor, Stored before, ObjectNode document, long now,
-                                  String requestId, String request) {
+                                  String requestId, String request, String kind, Set<String> scopeIds) {
         long revision = next(before.row().revision());
         var metadata = (ObjectNode) document.path("assignment").path("metadata");
         metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
@@ -596,8 +596,13 @@ public final class TriggerService {
         var result = JSON.createObjectNode().put("name", before.name()).put("resourceVersion", etag(revision));
         var affected = result.putArray("changes");
         changes.stream().filter(change -> !"Unchanged".equals(change.path("change").asText())).forEach(affected::add);
+        var input = read(request);
+        var evidence = JSON.createObjectNode().put("action", input.path("action").asText())
+                .put("scopeKind", kind).put("reason", input.path("reason").asText());
+        evidence.set("scopeIds", JSON.valueToTree(scopeIds));
+        evidence.set("changes", affected);
         tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ACTION", "trigger-assignment:" + before.name(), revision, requestId,
-                DirectoryService.digest(request + "\n" + codec.json(affected)));
+                DirectoryService.digest(request), codec.json(evidence));
         return result;
     }
 

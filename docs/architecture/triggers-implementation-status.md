@@ -254,7 +254,15 @@ routing tests passed. All 8 focused Control tests passed, including an
 unauthorized mixed scope, cross-tenant denial and a wildcard match. Tested
 source SHA-256: `e63fd8d1bbf81b954628a8ff47f1d983be7970e1cc49146b00a876346a857ae0` (changed sources in path order).
 
-Outstanding: lifecycle audit detail, budgeted rollback, the Live subscriptions panel, PostgreSQL
+Lifecycle audit entries now carry the authorized scope, reason, and
+affected instance state changes as structured evidence. The existing audit
+chain covers those evidence bytes, and the tenant audit page exposes them
+separately from invocation evidence. Eight focused Control tests and four
+Java contract tests passed. Preflight verified generated bindings and fixture
+coverage. Tested source SHA-256: `6c29d08639b522626285b04e8b6d8b99f884e977529893849d1ae8566bef708c`
+(changed sources and fixtures concatenated in path order).
+
+Outstanding: budgeted rollback, the Live subscriptions panel, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 
