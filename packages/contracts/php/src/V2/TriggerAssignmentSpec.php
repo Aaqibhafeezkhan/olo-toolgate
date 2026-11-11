@@ -13,12 +13,13 @@ final readonly class TriggerAssignmentSpec implements \JsonSerializable {
         public TriggerTarget $target,
         public \stdClass $config,
         public TriggerDesiredState $desiredState,
-        public ?\stdClass $globals = null
+        public ?\stdClass $globals = null,
+        public ?TriggerRolloutStrategy $strategy = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['trigger', 'packageVersion', 'target', 'config', 'globals', 'desiredState']) || array_diff(['trigger', 'packageVersion', 'target', 'config', 'desiredState'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['trigger', 'packageVersion', 'target', 'config', 'globals', 'desiredState', 'strategy']) || array_diff(['trigger', 'packageVersion', 'target', 'config', 'desiredState'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +28,8 @@ final readonly class TriggerAssignmentSpec implements \JsonSerializable {
             TriggerTarget::fromArray($data['target']),
             (object) $data['config'],
             TriggerDesiredState::from($data['desiredState']),
-            array_key_exists('globals', $data) ? (object) $data['globals'] : null
+            array_key_exists('globals', $data) ? (object) $data['globals'] : null,
+            array_key_exists('strategy', $data) ? TriggerRolloutStrategy::fromArray($data['strategy']) : null
         );
     }
 

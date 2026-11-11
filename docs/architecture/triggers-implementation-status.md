@@ -191,6 +191,16 @@ from the previous revision. All 6 focused Gradle tests passed, including
 replay of an old snapshot after a config edit. Tested Java sources SHA-256:
 `f230c583731aa3c6a89be58cc61895ca1c18fcce8ab8a74827d3a52d570a13d2` (changed Java sources concatenated in path order).
 
+The assignment contract defines `strategy.rollingUpdate.maxUnavailable`.
+The design's count and percentage forms are both encoded as strings, for
+example `"1"` and `"25%"`, because the generated bindings cannot represent
+an integer-or-string union. This wire representation differs from the
+plan's numeric count example and leaves module scope and weights unchanged.
+Generated binding and fixture checks, Java v2 round-trip tests, and a direct
+pattern boundary check passed. The Python trigger contract suite could not
+start with the system Python because `referencing` was missing. Tested schema
+SHA-256: `6230d9966e4d4d734e4dce19af60904ab7efdf1b599f673723aa60294509a22b`.
+
 Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns

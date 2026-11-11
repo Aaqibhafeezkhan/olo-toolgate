@@ -11,6 +11,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param config canonical config value
  * @param globals canonical globals value
  * @param desiredState canonical desiredState value
+ * @param strategy canonical strategy value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record TriggerAssignmentSpec(
@@ -19,7 +20,8 @@ public record TriggerAssignmentSpec(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "target", required = true) TriggerTarget target,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "config", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> config,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "globals", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> globals,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "desiredState", required = true) TriggerDesiredState desiredState
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "desiredState", required = true) TriggerDesiredState desiredState,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "strategy", required = false) TriggerRolloutStrategy strategy
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -29,6 +31,7 @@ public record TriggerAssignmentSpec(
      * @param config canonical config value
      * @param globals canonical globals value
      * @param desiredState canonical desiredState value
+     * @param strategy canonical strategy value
      */
     public TriggerAssignmentSpec {
         java.util.Objects.requireNonNull(trigger, "trigger");

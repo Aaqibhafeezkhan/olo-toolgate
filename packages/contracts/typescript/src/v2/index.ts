@@ -2016,6 +2016,7 @@ export interface TriggerAssignmentSpec {
   readonly config: Record<string, unknown>;
   readonly globals?: Record<string, unknown>;
   readonly desiredState: TriggerDesiredState;
+  readonly strategy?: TriggerRolloutStrategy;
 }
 /** Observed assignment status. */
 export interface TriggerAssignmentStatus {
@@ -2437,6 +2438,14 @@ export interface TriggerRevocation {
   readonly reason: TriggerRevocationReason;
 }
 export type TriggerRevocationReason = "AssignmentStopped" | "AssignmentRemoved" | "PackageSuspended" | "KillSwitch" | "ExecutorDeregistered" | "DeviceRevoked" | "Compromised" | "Reassigned";
+/** Availability limit for a rolling trigger update. */
+export interface TriggerRollingUpdate {
+  readonly maxUnavailable: string;
+}
+/** Client package and configuration rollout strategy. */
+export interface TriggerRolloutStrategy {
+  readonly rollingUpdate: TriggerRollingUpdate;
+}
 /** POLL interval or PUSH resync interval. */
 export interface TriggerSchedule {
   readonly intervalMs?: number;
