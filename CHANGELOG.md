@@ -6,6 +6,24 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Move standard debug scripts into `debug/standard` and add a separate
+  `debug/hotfolder` lab with a host-mounted inbox and a real trigger smoke check.
+
+- Configure workflows, workflow groups, models and trigger mappings from a
+  dedicated Workflows menu. Agents now has prompts/context and workflow mapping
+  pages with links from each agent record. Open tenant profile revisions from a
+  catalog and edit a shared draft before review and publication.
+
+- Manage every current deployment profile property from the Super Admin console,
+  including workflow groups, workflows, agents, models, prompts, context and
+  dispatch settings. Stage, review, provision and publish exact profile revisions
+  from Tools > Server packages.
+
+- Stage and review immutable workflow profile revisions, provision their packages
+  and activate a dependency-ready revision explicitly. Current version-2 profiles
+  include explicit model deployments and vault references; use fresh stores.
+  Workflow execution and complete one-upload provisioning remain in progress.
+
 - Add explicit generic HTTP target fencing with peer-bound permits, dedicated
   target consumption, shared SQL claim ownership and conservative crash recovery.
   Review the target identity/class in the console; deploy matching current

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "olo-toolgate-debug": {
-      "command": "D:/git/olo-toolgate/.dev/debug/venv/Scripts/python.exe",
-      "args": ["D:/git/olo-toolgate/debug/agent-mcp-stdio.py"]
-    }
-  }
-}

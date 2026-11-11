@@ -82,6 +82,13 @@ async function readBody(response: Response): Promise<unknown> {
  */
 export class ConfigurationPending extends Error {constructor(readonly changeId:string){super('Draft created. Review its impact, submit it for independent approval, then apply the reviewed change.');}}
 export class ControlClient {
+  async workflowProfiles(after?:Pick<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus,'profileId'|'profileDigest'>,signal?:AbortSignal):Promise<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus[]>{const query=new URLSearchParams({limit:'50'});if(after){query.set('afterProfileId',after.profileId);query.set('afterDigest',after.profileDigest);}const page=await this.send<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus[]>(operations.listWorkflowProfiles,{query,signal});if(!Array.isArray(page))throw new ApiError(502,'INVALID_RESPONSE');return page;}
+  stageWorkflowProfile(body:import('@olo-labs/toolgate-contracts/v2').DeploymentProfile):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.stageWorkflowProfile,{body});}
+  workflowProfileDocument(profileId:string,digest:string):Promise<import('@olo-labs/toolgate-contracts/v2').DeploymentProfile>{return this.send(operations.getWorkflowProfileDocument,{params:{profileId,digest}});}
+  workflowProfileStatus(profileId:string,digest:string):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.getWorkflowProfileRevision,{params:{profileId,digest}});}
+  reviewWorkflowProfile(profileId:string,profileDigest:string):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.reviewWorkflowProfile,{params:{profileId},body:{profileDigest}});}
+  provisionWorkflowProfile(profileId:string,profileDigest:string):Promise<import('@olo-labs/toolgate-contracts/v2').ProvisioningStatus>{return this.send(operations.provisionWorkflowProfile,{params:{profileId},body:{profileDigest}});}
+  publishWorkflowProfile(profileId:string,profileDigest:string,expectedGeneration:number):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.publishWorkflowProfile,{params:{profileId},body:{profileDigest,expectedGeneration}});}
   killOverview(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').KillOverview>{return this.send(operations.killDeliveryOverview,{signal});}
   killProposals(after?:string,signal?:AbortSignal):Promise<readonly import('@olo-labs/toolgate-contracts/v2').KillProposal[]>{const query=new URLSearchParams({limit:'50'});if(after)query.set('after',after);return this.send(operations.listKillProposals,{query,signal});}
   killProposal(id:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').KillProposal>{return this.send(operations.getKillProposal,{id,signal});}
@@ -147,6 +154,9 @@ export class ControlClient {
     }
   }
 
+  triggerAssignments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{signal});}
+  triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
+  triggerDefinitions(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{return this.send(operations.listTriggerDefinitions,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
   serverDeployments(signal?:AbortSignal):Promise<PackageDeploymentPage>{return this.send(operations.listServerPackageDeployments,{signal});}
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */

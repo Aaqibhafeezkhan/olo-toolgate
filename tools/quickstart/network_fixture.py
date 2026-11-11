@@ -11,10 +11,37 @@ import http.client
 import http.server
 import json
 from pathlib import Path
+import re
 import ssl
 import sys
 import threading
 import time
+
+
+# This relay connects only to its own Control/Gateway listener and accepts
+# origin-form API targets, never proxy targets or authority overrides.
+API_TARGET = re.compile(r"/api/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*", re.ASCII)
+HEADER_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", re.ASCII)
+HEADER_VALUE = re.compile(r"[\t\x20-\x7e\x80-\xff]*")
+HOP_HEADERS = frozenset(("connection", "keep-alive", "proxy-connection",
+                         "transfer-encoding", "proxy-authorization",
+                         "proxy-authenticate", "te", "trailer", "upgrade"))
+
+
+def request_target(path):
+    if not API_TARGET.fullmatch(path):
+        raise ValueError("Fixture requires an origin-form API request target")
+    return path
+
+
+def relay_headers(headers, *, exclude=()):
+    omitted = HOP_HEADERS.union(exclude)
+    for key, value in headers:
+        if not HEADER_NAME.fullmatch(key) or not HEADER_VALUE.fullmatch(value):
+            raise ValueError("Invalid fixture HTTP header")
+        if key.lower() == "connection":
+            omitted = omitted.union(part.strip().lower() for part in value.split(","))
+    return [(key, value) for key, value in headers if key.lower() not in omitted]
 
 
 class LinkFixture(http.server.ThreadingHTTPServer):
@@ -150,10 +177,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         host = None
         upstream = None
         try:
+            target = request_target(self.path)
             host, context = self.server.peer(self.connection.getpeercert(binary_form=True))
-            blocked, mode = self.server.blocked(host, self.path, self.command)
+            blocked, mode = self.server.blocked(host, target, self.command)
             if blocked:
-                self.server.record(host, self.path, "DROPPED", mode)
+                self.server.record(host, target, "DROPPED", mode)
                 self.close_connection = True
                 self.connection.close()
                 return
@@ -162,34 +190,36 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     or lengths and (not lengths[0].isdigit() or int(lengths[0]) > 16*1024*1024)):
                 raise ValueError("Bounded unambiguous fixture request required")
             body = self.rfile.read(int(lengths[0])) if lengths else None
+            if lengths and len(body) != int(lengths[0]):
+                raise ValueError("Incomplete fixture request body")
             upstream = http.client.HTTPSConnection("127.0.0.1", 8443, context=context, timeout=7)
-            upstream.putrequest(self.command, self.path, skip_host=True, skip_accept_encoding=True)
-            for key, value in self.headers.items():
-                if key.lower() not in ("connection", "keep-alive", "proxy-connection",
-                                       "transfer-encoding", "proxy-authorization"):
-                    upstream.putheader(key, value)
+            upstream.putrequest(self.command, target, skip_accept_encoding=True)
+            for key, value in relay_headers(self.headers.items(), exclude=("host", "content-length")):
+                upstream.putheader(key, value)
+            if lengths:
+                upstream.putheader("Content-Length", str(len(body)))
             upstream.putheader("Connection", "close")
             upstream.endheaders(body)
             response = upstream.getresponse()
             payload = response.read(128*1024*1024+1)
             if len(payload) > 128*1024*1024:
                 raise ValueError("Owned fixture response budget exceeded")
-            blocked, mode = self.server.blocked(host, self.path, self.command)
+            blocked, mode = self.server.blocked(host, target, self.command)
             if blocked:
-                self.server.record(host, self.path, "DROPPED", mode)
+                self.server.record(host, target, "DROPPED", mode)
                 self.close_connection = True
                 self.connection.close()
                 return
+            headers = relay_headers(response.getheaders(), exclude=("content-length",))
             self.send_response(response.status)
-            for key, value in response.getheaders():
-                if key.lower() not in ("content-length", "connection", "transfer-encoding", "keep-alive"):
-                    self.send_header(key, value)
+            for key, value in headers:
+                self.send_header(key, value)
             self.send_header("Content-Length", str(len(payload)))
             self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(payload)
             self.wfile.flush()
-            self.server.record(host, self.path, "FORWARDED", mode, response.status)
+            self.server.record(host, target, "FORWARDED", mode, response.status)
         except (OSError, ValueError, KeyError, http.client.HTTPException):
             self.close_connection = True
             self.connection.close()

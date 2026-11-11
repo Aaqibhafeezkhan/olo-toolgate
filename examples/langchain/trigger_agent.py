@@ -266,7 +266,7 @@ def main():
     sys.path.insert(0, str(HERE))
     import manage   # the host-side example configuration: Control origin and the installation's API login
     # After `manage.py setup --bootstrap-local` the rotated local passwords are in .state; otherwise .env supplies them.
-    mimic = _load('agent_mimic', ROOT / 'debug/agent-mimic.py')
+    mimic = _load('agent_mimic', ROOT / 'debug/standard/agent-mimic.py')
     manage.load_environment()
     config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
     directory = manage.STATE / 'agents'

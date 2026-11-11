@@ -11,22 +11,24 @@ final readonly class DeploymentProfile implements \JsonSerializable {
         public int $profileVersion,
         public string $profileId,
         public array $packages,
-        public ?array $readiness = null
+        public ?array $readiness = null,
+        public ?WorkflowConfiguration $workflows = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['profileVersion', 'profileId', 'packages', 'readiness']) || array_diff(['profileVersion', 'profileId', 'packages'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['profileVersion', 'profileId', 'packages', 'readiness', 'workflows']) || array_diff(['profileVersion', 'profileId', 'packages'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
-        if ($data['profileVersion'] !== 1) {
-            throw new \InvalidArgumentException('profileVersion must be 1');
+        if ($data['profileVersion'] !== 2) {
+            throw new \InvalidArgumentException('profileVersion must be 2');
         }
         return new self(
             $data['profileVersion'],
             $data['profileId'],
             array_map(static fn ($item) => ProfilePackage::fromArray($item), $data['packages']),
-            array_key_exists('readiness', $data) ? array_map(static fn ($item) => ProfileReadinessCase::fromArray($item), $data['readiness']) : null
+            array_key_exists('readiness', $data) ? array_map(static fn ($item) => ProfileReadinessCase::fromArray($item), $data['readiness']) : null,
+            array_key_exists('workflows', $data) ? WorkflowConfiguration::fromArray($data['workflows']) : null
         );
     }
 

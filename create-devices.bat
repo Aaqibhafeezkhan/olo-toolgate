@@ -1,7 +1,7 @@
 @echo off
 rem Copyright 2026 OLO Labs
 rem SPDX-License-Identifier: Apache-2.0
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0debug\create-devices.ps1" %*
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0debug\standard\create-devices.ps1" %*
 set "result=%errorlevel%"
 if not "%result%"=="0" pause
 exit /b %result%

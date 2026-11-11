@@ -26,8 +26,8 @@ class DebugReleaseLookupTest(unittest.TestCase):
     def lookup(self, token=None, rejected=False, cached=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root/'debug').mkdir()
-            shutil.copyfile(ROOT/'debug/client-assets.ps1', root/'debug/client-assets.ps1')
+            (root/'debug/standard').mkdir(parents=True)
+            shutil.copyfile(ROOT/'debug/standard/client-assets.ps1', root/'debug/standard/client-assets.ps1')
             (root/'VERSION').write_text('fixture\n')
             compiler = root/'.dev/debug/toolgate-inno-6.7.1/ISCC.exe'
             compiler.parent.mkdir(parents=True)
@@ -61,7 +61,7 @@ function fixture-python {
     Add-Content -LiteralPath $env:TEST_ASSETS_CALLS -Value (ConvertTo-Json -InputObject @{kind='build'; arguments=@($args)} -Compress)
     $global:LASTEXITCODE = 0
 }
-& "$PSScriptRoot/debug/client-assets.ps1" -Python fixture-python
+& "$PSScriptRoot/debug/standard/client-assets.ps1" -Python fixture-python
 ''', encoding='utf-8')
             environment = dict(os.environ, TEST_ASSETS_CALLS=str(root/'calls.jsonl'),
                                TEST_ASSETS_REJECTED='1' if rejected else '0')

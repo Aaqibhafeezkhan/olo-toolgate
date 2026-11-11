@@ -10,7 +10,7 @@ another file and set that variable to use a different profile with the same imag
 
 ```json
 {
-  "profileVersion": 1,
+  "profileVersion": 2,
   "profileId": "fresh",
   "packages": [
     {
@@ -35,6 +35,73 @@ another file and set that variable to use a different profile with the same imag
 | `bindingIds` | Existing execution bindings whose allowed package digests become exactly the profile packages that name them. |
 | `required` | A required package that fails makes the profile `FAILED`; an optional one is reported without blocking readiness. |
 | `readiness` | Calls a deployment script makes through the Gateway, as the named agent, before it declares the profile ready. |
+| `workflows` | Optional workflow catalog, explicit model deployments/groups, prompts/context, agent definitions, workflow groups and immutable default dispatch bindings. This uses the profile lifecycle below; package provisioning alone cannot publish it. |
+
+## Reviewed workflow profile revisions
+
+Only the current `profileVersion: 2` format is accepted. Version 1 inputs and
+existing stores with an older fresh-schema checksum are rejected and retained;
+there is no conversion, deletion, migration or compatibility mode. Use fresh
+stores and matching current Control, SDK and profile artifacts for this branch.
+Package-only deployment profiles still use the same current version-2 contract.
+
+Workflow profiles use these authenticated Control APIs:
+
+| Request | Result |
+|---|---|
+| `POST /api/control/v1/workflow-profiles` with a DeploymentProfile containing `workflows` | Stage a canonical immutable DRAFT and return its digest; identical content is idempotent. No publication or grants. |
+| `GET /api/control/v1/workflow-profiles/{id}/revisions/{digest}` | Current lifecycle status, publication generation and live dependency readiness. |
+| `GET /api/control/v1/workflow-profiles/{id}/revisions/{digest}/document` | Private canonical desired document for review; contains prompts and secret references, never vault values. |
+| `POST /api/control/v1/workflow-profiles/{id}/review` with `{"profileDigest":"sha256:…"}` | Record explicit review of those exact immutable bytes. |
+| `POST /api/control/v1/workflow-profiles/{id}/provision` with the same digest request | Provision the reviewed revision's packages through the existing package service; return its ordinary provisioning status. |
+| `POST /api/control/v1/workflow-profiles/{id}/publish` with `{"profileDigest":"sha256:…","expectedGeneration":0}` | Atomically activate a reviewed, dependency-ready revision. Use the latest generation for a replacement. Stale generations or unready dependencies return 409. |
+
+This initial management boundary requires a **current Super Admin** for every
+operation, including document/status reads. Cached actor flags and token roles
+cannot grant access. Scoped workflow management roles and user-filtered runtime
+resolution are still pending; do not treat this endpoint as their implementation.
+Self-review is allowed at this explicit Super Admin boundary; no independent
+review quorum is claimed. These routes do not grant execution or service delegation.
+
+Workflow/model groups, workflow definitions, model deployments, agent prompt
+definitions and dispatch bindings are owned by one profile. Another profile
+cannot overwrite them. A workflow ID/version cannot be reused with different
+definition content; publish a new version. A subscription/source pair has one
+profile owner. Omission never deletes resources, releases ownership or revokes
+shared grants. Explicit reviewed cross-profile sharing is not implemented yet.
+
+Model deployments declare `id`, a fixed HTTPS `origin` with no path/query/userinfo,
+`modelId`, `secretName`, `toolGroupId` and `deviceGroupId`. Model-group references
+must close over these local declarations. Supervisor and agents each name their
+own model group. Vault values stay in the existing vault; readiness checks that
+the tenant's secret reference exists under the declared enabled groups. This is
+a dependency/reference check, not a provider credential validity test or live
+inference. No provider request is made during upload, review or publication.
+
+Publication requires current enabled agents/groups/tools, matching group
+membership, scoped vault references and the **same profile digest's** READY
+package provisioning result. Trigger bindings also require current immutable
+subscription/assignment UIDs, active unexpired subscriptions, Running assignments,
+source membership, current listener subscription grants/full source clearance,
+and service-agent group membership. Missing/unavailable authority never activates
+a draft. Nonempty tool readiness cases currently block workflow publication
+because their execution evidence is not integrated; they are not silently skipped.
+
+The pointer, ownership, review and audit share tenant transactions. Private
+prompts/configuration are stored in tenant-vault-encrypted documents;
+the canonical digest and lifecycle metadata remain visible within
+the tenant. Envelopes bind every chunk to tenant, profile, digest and key version.
+Normal key rotation retains READ_ONLY custody for existing revisions; retired
+or unavailable keys block reads. There is no plaintext fallback.
+
+Replacing a draft or failed dependency cannot expose partial runnable configuration; current
+dependency checks run again when the internal admission boundary resolves a
+published profile. A PUBLISHED status is historical activation, and may report
+`dependenciesReady: false` after membership/dependency changes. It is never cached
+runtime authorization. No runnable API, grants, model proxy, lease or trigger
+admission is created by this lifecycle alone. Complete one-upload directory and
+grant provisioning, readiness-case execution, runtime authorization and the
+real two-profile demo remain tracked in the [workflow status](../architecture/workflow-v1-status.md).
 
 ## How Control applies a profile
 
@@ -92,3 +159,25 @@ The chart sets the same variables from `control.profile.configMap` (a ConfigMap 
 `private.pem` and its key id; the key must also be in the fleet release trust keys). `control.networkPolicy.registryTo`
 opens egress to the registry on the port its URL names.
 
+
+## Workflow configuration foundation (#295)
+
+The workflow feature branch defines `WorkflowConfiguration` in
+`packages/contracts/schemas/v2/workflow.schema.json`, with generated Java, Rust,
+TypeScript and PHP models. It declares workflow groups, supervisor prompts and
+models, agent prompts/models/context, bounded execution, and default-workflow
+subscription bindings. Model deployment, identity, tool and trigger references
+must be checked in the current tenant. Configuration membership grants no access.
+
+Control's `WorkflowConfigurations` service validates local reference closure,
+duplicate identifiers, explicit models, entry agents, execution limits and
+unambiguous dispatch bindings before asking its tenant-scoped dependency port
+about external references. An unavailable dependency returns a generic error.
+It is a read-only validation component; no resource is provisioned or published.
+
+This foundation is not yet accepted by deployment profile upload. The existing
+DeploymentProfile contract remains unchanged until version-2 orchestration,
+management authorization, catalog persistence and readiness are delivered. Do
+not add these fields to a deployed version-1 profile or interpret successful
+structural validation as READY or execution permission. See the
+[live workflow status](../architecture/workflow-v1-status.md) for remaining work.

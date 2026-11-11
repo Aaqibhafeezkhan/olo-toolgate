@@ -237,10 +237,11 @@ export interface DeploymentGrant {
 }
 /** Deployment-time package provisioning for one profile (docs/contracts/platform-requirements.md). Applied by Control at deployment; removing an entry never uninstalls a package. */
 export interface DeploymentProfile {
-  readonly profileVersion: 1;
+  readonly profileVersion: 2;
   readonly profileId: string;
   readonly packages: ReadonlyArray<ProfilePackage>;
   readonly readiness?: ReadonlyArray<ProfileReadinessCase>;
+  readonly workflows?: WorkflowConfiguration;
 }
 /** Where the package runs. */
 export interface DeploymentTarget {
@@ -2612,3 +2613,116 @@ export type UnixMs = number;
 export type ValueSource = "ENVIRONMENT" | "DATABASE" | "DEFAULT";
 export type ValueType = "STRING" | "INT" | "LONG" | "NUMBER" | "BOOLEAN" | "DATE" | "DATE_TIME" | "DURATION" | "ENUM" | "URI" | "OBJECT" | "ARRAY" | "BINARY";
 export type VariableName = string;
+/** Profile declaration for WorkflowAgentBinding; eligibility and configuration confer no runtime authority. */
+export interface WorkflowAgentBinding {
+  readonly agentId: string;
+  readonly agentGroupId: string;
+  readonly entryEligible: boolean;
+  readonly delegationAllowed: boolean;
+}
+/** Profile declaration for WorkflowAgentDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowAgentDefinition {
+  readonly agentId: string;
+  readonly modelGroupId: string;
+  readonly systemPrompt: string;
+  readonly contextSources: ReadonlyArray<WorkflowContextSource>;
+  readonly outputSchema: Record<string, unknown>;
+}
+/** Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority. */
+export interface WorkflowConfiguration {
+  readonly workflowGroups: ReadonlyArray<WorkflowGroupDefinition>;
+  readonly modelGroups: ReadonlyArray<WorkflowModelGroupDefinition>;
+  readonly agentDefinitions: ReadonlyArray<WorkflowAgentDefinition>;
+  readonly workflows: ReadonlyArray<WorkflowDefinition>;
+  readonly dispatchBindings: ReadonlyArray<WorkflowDispatchBinding>;
+  readonly modelDeployments: ReadonlyArray<WorkflowModelDeployment>;
+}
+/** Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority. */
+export interface WorkflowContextSource {
+  readonly toolId: string;
+  readonly arguments: Record<string, unknown>;
+}
+/** Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowDefinition {
+  readonly id: string;
+  readonly versionId: string;
+  readonly workflowGroupId: string;
+  readonly modelGroupId: string;
+  readonly systemPrompt: string;
+  readonly contextSources: ReadonlyArray<WorkflowContextSource>;
+  readonly parameterSchema: Record<string, unknown>;
+  readonly resultSchema: Record<string, unknown>;
+  readonly limits: WorkflowExecutionLimits;
+  readonly agents: ReadonlyArray<WorkflowAgentBinding>;
+}
+/** Profile declaration for WorkflowDispatchBinding; eligibility and configuration confer no runtime authority. */
+export interface WorkflowDispatchBinding {
+  readonly id: string;
+  readonly subscriptionUid: string;
+  readonly sourceAssignmentUid: string;
+  readonly workflowId: string;
+  readonly workflowVersionId: string;
+  readonly serviceAgentId: string;
+  readonly serviceAgentGroupId: string;
+  readonly messagePointer: string;
+  readonly remediationMode: WorkflowRemediationMode;
+}
+export type WorkflowDispatchDisposition = "ADMITTED" | "DUPLICATE" | "REJECTED" | "FILTERED";
+/** Durable admission evidence bound to this subscription UID and delivered cursor. ADMITTED requires runId; DUPLICATE returns its original durable outcome reference and runId when one exists. Terminal rejection/filtering is recorded, never inferred locally. */
+export interface WorkflowDispatchReceipt {
+  readonly subscriptionUid: string;
+  readonly cursor: string;
+  readonly admissionId: string;
+  readonly disposition: WorkflowDispatchDisposition;
+  readonly runId?: string;
+}
+/** A delivered subscription cursor for server-side workflow admission. Caller/event fields cannot select tenant, workflow, version, identity or prompts. */
+export interface WorkflowDispatchRequest {
+  readonly subscriptionUid: string;
+  readonly cursor: string;
+}
+/** Profile declaration for WorkflowExecutionLimits; eligibility and configuration confer no runtime authority. */
+export interface WorkflowExecutionLimits {
+  readonly maxSteps: number;
+  readonly maxHandoffs: number;
+  readonly maxDurationSeconds: number;
+}
+/** Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowGroupDefinition {
+  readonly id: string;
+  readonly displayName: string;
+}
+/** An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner. */
+export interface WorkflowModelDeployment {
+  readonly id: string;
+  readonly origin: string;
+  readonly modelId: string;
+  readonly secretName: string;
+  readonly toolGroupId: string;
+  readonly deviceGroupId: string;
+}
+/** Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority. */
+export interface WorkflowModelGroupDefinition {
+  readonly id: string;
+  readonly deploymentIds: ReadonlyArray<string>;
+}
+/** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
+export interface WorkflowProfilePublishRequest {
+  readonly profileDigest: string;
+  readonly expectedGeneration: number;
+}
+/** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
+export interface WorkflowProfileReviewRequest {
+  readonly profileDigest: string;
+}
+export type WorkflowProfileState = "DRAFT" | "REVIEWED" | "PUBLISHED";
+/** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
+export interface WorkflowProfileStatus {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly state: WorkflowProfileState;
+  readonly generation: number;
+  readonly dependenciesReady: boolean;
+  readonly reviewedBy?: string;
+}
+export type WorkflowRemediationMode = "PREPARE" | "APPLY";

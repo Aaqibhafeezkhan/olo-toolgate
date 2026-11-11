@@ -9,13 +9,15 @@ package io.ololabs.toolgate.contracts.v2;
  * @param profileId canonical profileId value
  * @param packages canonical packages value
  * @param readiness canonical readiness value
+ * @param workflows canonical workflows value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record DeploymentProfile(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "profileVersion", required = true) Long profileVersion,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "profileId", required = true) String profileId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "packages", required = true) java.util.List<ProfilePackage> packages,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "readiness", required = false) java.util.List<ProfileReadinessCase> readiness
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "readiness", required = false) java.util.List<ProfileReadinessCase> readiness,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "workflows", required = false) WorkflowConfiguration workflows
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,10 +25,11 @@ public record DeploymentProfile(
      * @param profileId canonical profileId value
      * @param packages canonical packages value
      * @param readiness canonical readiness value
+     * @param workflows canonical workflows value
      */
     public DeploymentProfile {
         java.util.Objects.requireNonNull(profileVersion, "profileVersion");
-        if (profileVersion != null && !java.util.Objects.equals(profileVersion, 1L)) throw new IllegalArgumentException("profileVersion must be 1");
+        if (profileVersion != null && !java.util.Objects.equals(profileVersion, 2L)) throw new IllegalArgumentException("profileVersion must be 2");
         java.util.Objects.requireNonNull(profileId, "profileId");
         java.util.Objects.requireNonNull(packages, "packages");
         packages = packages == null ? null : java.util.List.copyOf(packages);

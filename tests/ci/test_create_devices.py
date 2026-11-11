@@ -67,7 +67,7 @@ exit $LASTEXITCODE
                        TEST_DEVICE_CALLS=str(work / 'calls.jsonl'), TEST_DEVICE_COUNT=str(count),
                        TEST_DEVICE_PROMPT='1' if prompt else '0',
                        TEST_DEVICE_VALIDATE='1' if validate else '0',
-                       TEST_DEVICE_SCRIPT=str(ROOT / 'debug/create-devices.ps1'))
+                       TEST_DEVICE_SCRIPT=str(ROOT / 'debug/standard/create-devices.ps1'))
             result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass',
                                      '-File', str(harness)], input='\n', env=env,
                                     capture_output=True, text=True, timeout=30)
@@ -121,7 +121,7 @@ exit $LASTEXITCODE
 
 class DeviceRelayTests(unittest.TestCase):
     def test_relay_preserves_binary_data_and_half_closed_connections(self):
-        spec = importlib.util.spec_from_file_location('device_entrypoint', ROOT / 'debug/device-entrypoint.py')
+        spec = importlib.util.spec_from_file_location('device_entrypoint', ROOT / 'debug/standard/device-entrypoint.py')
         entrypoint = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(entrypoint)
 

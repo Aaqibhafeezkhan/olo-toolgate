@@ -97,7 +97,7 @@ def toolgate_cli():
     image='olo-toolgate-client-debug-tools:rust-1.94.1'
     target='x86_64-pc-windows-gnu'
     registry=ROOT/'.dev/cargo-registry';registry.mkdir(parents=True,exist_ok=True)
-    run(['docker','build','-f',str(ROOT/'debug/windows-client.Dockerfile'),'-t',image,str(ROOT)])
+    run(['docker','build','-f',str(ROOT/'debug/standard/windows-client.Dockerfile'),'-t',image,str(ROOT)])
     run(['docker','run','--rm','-v',f'{ROOT.as_posix()}:/work',
          '-v',f'{registry.as_posix()}:/usr/local/cargo/registry','-w','/work',
          '-e','CARGO_TARGET_DIR=/work/target/client-release',image,

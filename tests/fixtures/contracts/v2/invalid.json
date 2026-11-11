@@ -2095,7 +2095,7 @@
     {
       "case": "unknown profile version",
       "value": {
-        "profileVersion": 2,
+        "profileVersion": 1,
         "profileId": "demo3",
         "packages": []
       }
@@ -2103,7 +2103,7 @@
     {
       "case": "executable tool definition",
       "value": {
-        "profileVersion": 1,
+        "profileVersion": 2,
         "profileId": "demo3",
         "packages": [],
         "tools": [
@@ -3709,6 +3709,261 @@
         "uploadId": "up-1",
         "chunkBytes": 1024,
         "expiresAtUnixMs": 1
+      }
+    }
+  ],
+  "WorkflowAgentDefinition": [
+    {
+      "case": "model inheritance is unsupported",
+      "value": {
+        "agentId": "investigator",
+        "systemPrompt": "Investigate with governed tools.",
+        "contextSources": [
+          {
+            "toolId": "acme.support/ticket.read",
+            "arguments": {}
+          }
+        ],
+        "outputSchema": {}
+      }
+    }
+  ],
+  "WorkflowDefinition": [
+    {
+      "case": "missing supervisor prompt",
+      "value": {
+        "id": "investigate",
+        "versionId": "revision-1",
+        "workflowGroupId": "support",
+        "modelGroupId": "models",
+        "contextSources": [],
+        "parameterSchema": {},
+        "resultSchema": {},
+        "limits": {
+          "maxSteps": 10,
+          "maxHandoffs": 5,
+          "maxDurationSeconds": 120
+        },
+        "agents": [
+          {
+            "agentId": "investigator",
+            "agentGroupId": "support-agents",
+            "entryEligible": true,
+            "delegationAllowed": true
+          }
+        ]
+      }
+    },
+    {
+      "case": "no eligible candidate agents",
+      "value": {
+        "id": "investigate",
+        "versionId": "revision-1",
+        "workflowGroupId": "support",
+        "modelGroupId": "models",
+        "systemPrompt": "Route the request to the investigator.",
+        "contextSources": [],
+        "parameterSchema": {},
+        "resultSchema": {},
+        "limits": {
+          "maxSteps": 10,
+          "maxHandoffs": 5,
+          "maxDurationSeconds": 120
+        },
+        "agents": []
+      }
+    },
+    {
+      "case": "unbounded execution",
+      "value": {
+        "id": "investigate",
+        "versionId": "revision-1",
+        "workflowGroupId": "support",
+        "modelGroupId": "models",
+        "systemPrompt": "Route the request to the investigator.",
+        "contextSources": [],
+        "parameterSchema": {},
+        "resultSchema": {},
+        "limits": {
+          "maxSteps": 0,
+          "maxHandoffs": 5,
+          "maxDurationSeconds": 120
+        },
+        "agents": [
+          {
+            "agentId": "investigator",
+            "agentGroupId": "support-agents",
+            "entryEligible": true,
+            "delegationAllowed": true
+          }
+        ]
+      }
+    }
+  ],
+  "WorkflowDispatchBinding": [
+    {
+      "case": "payload-controlled identity",
+      "value": {
+        "id": "ticket-created",
+        "subscriptionUid": "ts-123",
+        "sourceAssignmentUid": "ta-123",
+        "workflowId": "investigate",
+        "workflowVersionId": "revision-1",
+        "serviceAgentId": "automation",
+        "serviceAgentGroupId": "automation-group",
+        "messagePointer": "/summary",
+        "remediationMode": "PREPARE",
+        "runAs": "foreign"
+      }
+    },
+    {
+      "case": "malformed JSON pointer",
+      "value": {
+        "id": "ticket-created",
+        "subscriptionUid": "ts-123",
+        "sourceAssignmentUid": "ta-123",
+        "workflowId": "investigate",
+        "workflowVersionId": "revision-1",
+        "serviceAgentId": "automation",
+        "serviceAgentGroupId": "automation-group",
+        "messagePointer": "/invalid~2escape",
+        "remediationMode": "PREPARE"
+      }
+    },
+    {
+      "case": "unsupported remediation mode",
+      "value": {
+        "id": "ticket-created",
+        "subscriptionUid": "ts-123",
+        "sourceAssignmentUid": "ta-123",
+        "workflowId": "investigate",
+        "workflowVersionId": "revision-1",
+        "serviceAgentId": "automation",
+        "serviceAgentGroupId": "automation-group",
+        "messagePointer": "/summary",
+        "remediationMode": "AUTONOMOUS"
+      }
+    }
+  ],
+  "WorkflowConfiguration": [
+    {
+      "case": "caller-controlled tenant",
+      "value": {
+        "workflowGroups": [
+          {
+            "id": "support",
+            "displayName": "Support"
+          }
+        ],
+        "modelGroups": [
+          {
+            "id": "models",
+            "deploymentIds": [
+              "deployment-1"
+            ]
+          }
+        ],
+        "agentDefinitions": [
+          {
+            "agentId": "investigator",
+            "modelGroupId": "models",
+            "systemPrompt": "Investigate with governed tools.",
+            "contextSources": [
+              {
+                "toolId": "acme.support/ticket.read",
+                "arguments": {}
+              }
+            ],
+            "outputSchema": {}
+          }
+        ],
+        "workflows": [
+          {
+            "id": "investigate",
+            "versionId": "revision-1",
+            "workflowGroupId": "support",
+            "modelGroupId": "models",
+            "systemPrompt": "Route the request to the investigator.",
+            "contextSources": [],
+            "parameterSchema": {},
+            "resultSchema": {},
+            "limits": {
+              "maxSteps": 10,
+              "maxHandoffs": 5,
+              "maxDurationSeconds": 120
+            },
+            "agents": [
+              {
+                "agentId": "investigator",
+                "agentGroupId": "support-agents",
+                "entryEligible": true,
+                "delegationAllowed": true
+              }
+            ]
+          }
+        ],
+        "dispatchBindings": [
+          {
+            "id": "ticket-created",
+            "subscriptionUid": "ts-123",
+            "sourceAssignmentUid": "ta-123",
+            "workflowId": "investigate",
+            "workflowVersionId": "revision-1",
+            "serviceAgentId": "automation",
+            "serviceAgentGroupId": "automation-group",
+            "messagePointer": "/summary",
+            "remediationMode": "PREPARE"
+          }
+        ],
+        "tenantId": "foreign"
+      }
+    }
+  ],
+  "WorkflowDispatchRequest": [
+    {
+      "case": "payload-selected workflow",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "workflowId": "foreign"
+      }
+    },
+    {
+      "case": "caller-selected service identity",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "runAs": "foreign"
+      }
+    },
+    {
+      "case": "invalid cursor",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "1"
+      }
+    }
+  ],
+  "WorkflowDispatchReceipt": [
+    {
+      "case": "non-durable disposition",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "admissionId": "dispatch-1",
+        "disposition": "PENDING",
+        "runId": "run-1"
+      }
+    },
+    {
+      "case": "unknown workflow override",
+      "value": {
+        "subscriptionUid": "ts-subscription-1",
+        "cursor": "0000000000000001",
+        "admissionId": "dispatch-1",
+        "disposition": "ADMITTED",
+        "runId": "run-1",
+        "workflowId": "foreign"
       }
     }
   ]

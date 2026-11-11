@@ -2435,7 +2435,7 @@
     }
   },
   "DeploymentProfile": {
-    "profileVersion": 1,
+    "profileVersion": 2,
     "profileId": "demo3",
     "packages": [
       {
@@ -5058,5 +5058,190 @@
       "tgclassification": "INTERNAL",
       "tgredacted": false
     }
-  }
+  },
+  "WorkflowAgentBinding": {
+    "agentId": "investigator",
+    "agentGroupId": "support-agents",
+    "entryEligible": true,
+    "delegationAllowed": true
+  },
+  "WorkflowAgentDefinition": {
+    "agentId": "investigator",
+    "modelGroupId": "models",
+    "systemPrompt": "Investigate with governed tools.",
+    "contextSources": [
+      {
+        "toolId": "acme.support/ticket.read",
+        "arguments": {}
+      }
+    ],
+    "outputSchema": {}
+  },
+  "WorkflowConfiguration": {
+    "workflowGroups": [
+      {
+        "id": "support",
+        "displayName": "Support"
+      }
+    ],
+    "modelGroups": [
+      {
+        "id": "models",
+        "deploymentIds": [
+          "deployment-1"
+        ]
+      }
+    ],
+    "agentDefinitions": [
+      {
+        "agentId": "investigator",
+        "modelGroupId": "models",
+        "systemPrompt": "Investigate with governed tools.",
+        "contextSources": [
+          {
+            "toolId": "acme.support/ticket.read",
+            "arguments": {}
+          }
+        ],
+        "outputSchema": {}
+      }
+    ],
+    "workflows": [
+      {
+        "id": "investigate",
+        "versionId": "revision-1",
+        "workflowGroupId": "support",
+        "modelGroupId": "models",
+        "systemPrompt": "Route the request to the investigator.",
+        "contextSources": [],
+        "parameterSchema": {},
+        "resultSchema": {},
+        "limits": {
+          "maxSteps": 10,
+          "maxHandoffs": 5,
+          "maxDurationSeconds": 120
+        },
+        "agents": [
+          {
+            "agentId": "investigator",
+            "agentGroupId": "support-agents",
+            "entryEligible": true,
+            "delegationAllowed": true
+          }
+        ]
+      }
+    ],
+    "dispatchBindings": [
+      {
+        "id": "ticket-created",
+        "subscriptionUid": "ts-123",
+        "sourceAssignmentUid": "ta-123",
+        "workflowId": "investigate",
+        "workflowVersionId": "revision-1",
+        "serviceAgentId": "automation",
+        "serviceAgentGroupId": "automation-group",
+        "messagePointer": "/summary",
+        "remediationMode": "PREPARE"
+      }
+    ],
+    "modelDeployments": [
+      {
+        "id": "deployment-1",
+        "origin": "https://models.example",
+        "modelId": "approved-model",
+        "secretName": "model-key",
+        "toolGroupId": "model-tools",
+        "deviceGroupId": "model-devices"
+      }
+    ]
+  },
+  "WorkflowContextSource": {
+    "toolId": "acme.support/ticket.read",
+    "arguments": {}
+  },
+  "WorkflowDefinition": {
+    "id": "investigate",
+    "versionId": "revision-1",
+    "workflowGroupId": "support",
+    "modelGroupId": "models",
+    "systemPrompt": "Route the request to the investigator.",
+    "contextSources": [],
+    "parameterSchema": {},
+    "resultSchema": {},
+    "limits": {
+      "maxSteps": 10,
+      "maxHandoffs": 5,
+      "maxDurationSeconds": 120
+    },
+    "agents": [
+      {
+        "agentId": "investigator",
+        "agentGroupId": "support-agents",
+        "entryEligible": true,
+        "delegationAllowed": true
+      }
+    ]
+  },
+  "WorkflowDispatchBinding": {
+    "id": "ticket-created",
+    "subscriptionUid": "ts-123",
+    "sourceAssignmentUid": "ta-123",
+    "workflowId": "investigate",
+    "workflowVersionId": "revision-1",
+    "serviceAgentId": "automation",
+    "serviceAgentGroupId": "automation-group",
+    "messagePointer": "/summary",
+    "remediationMode": "PREPARE"
+  },
+  "WorkflowExecutionLimits": {
+    "maxSteps": 10,
+    "maxHandoffs": 5,
+    "maxDurationSeconds": 120
+  },
+  "WorkflowGroupDefinition": {
+    "id": "support",
+    "displayName": "Support"
+  },
+  "WorkflowModelGroupDefinition": {
+    "id": "models",
+    "deploymentIds": [
+      "deployment-1"
+    ]
+  },
+  "WorkflowRemediationMode": "PREPARE",
+  "WorkflowDispatchRequest": {
+    "subscriptionUid": "ts-subscription-1",
+    "cursor": "0000000000000001"
+  },
+  "WorkflowDispatchDisposition": "ADMITTED",
+  "WorkflowDispatchReceipt": {
+    "subscriptionUid": "ts-subscription-1",
+    "cursor": "0000000000000001",
+    "admissionId": "dispatch-1",
+    "disposition": "ADMITTED",
+    "runId": "run-1"
+  },
+  "WorkflowProfileReviewRequest": {
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "WorkflowProfilePublishRequest": {
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expectedGeneration": 0
+  },
+  "WorkflowProfileStatus": {
+    "profileId": "orders",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "state": "DRAFT",
+    "generation": 0,
+    "dependenciesReady": false
+  },
+  "WorkflowModelDeployment": {
+    "id": "deployment-1",
+    "origin": "https://models.example",
+    "modelId": "approved-model",
+    "secretName": "model-key",
+    "toolGroupId": "model-tools",
+    "deviceGroupId": "model-devices"
+  },
+  "WorkflowProfileState": "DRAFT"
 }

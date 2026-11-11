@@ -68,7 +68,9 @@ class DeploymentProfileTests(unittest.TestCase):
 
     def test_the_contract_refuses_floating_versions_and_executable_definitions(self):
         profile_schema = validator('DeploymentProfile')
-        base = {'profileVersion': 1, 'profileId': 'x', 'packages': []}
+        base = {'profileVersion': 2, 'profileId': 'x', 'packages': []}
+        self.assertTrue(profile_schema.is_valid(base))
+        self.assertFalse(profile_schema.is_valid(dict(base, profileVersion=1)))
         self.assertFalse(profile_schema.is_valid(dict(base, packages=[{'packageId': 'examples.loans', 'source': 'MARKETPLACE', 'version': 'latest', 'required': True}])))
         self.assertFalse(profile_schema.is_valid(dict(base, tools=[{'id': 'x', 'command': 'sh'}])))
         self.assertFalse(profile_schema.is_valid(dict(base, packages=[{'packageId': 'examples.loans', 'source': 'FILE', 'version': '0.1.0', 'required': True}])))

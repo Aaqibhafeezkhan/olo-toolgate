@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('device_entrypoint', ROOT/'debug/device-entrypoint.py')
+spec = importlib.util.spec_from_file_location('device_entrypoint', ROOT/'debug/standard/device-entrypoint.py')
 device = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(device)
 spec = importlib.util.spec_from_file_location('container_device', ROOT/'apps/device/entrypoint.py')

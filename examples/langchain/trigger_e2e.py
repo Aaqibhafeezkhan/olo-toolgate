@@ -84,14 +84,14 @@ def delivery(config, instances):
     return json.dumps(report, sort_keys=True)[:4000]
 
 
-def main():
+def main(drop=None):
     manage.load_environment()
     config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
     instances = running(config)
     print('Instance Running on the device', flush=True)
     directory = manage.STATE / 'agents'
     descriptor = json.loads((directory / 'linux.json').read_text(encoding='utf-8'))
-    mimic = ta._load('agent_mimic', manage.ROOT / 'debug/agent-mimic.py')
+    mimic = ta._load('agent_mimic', manage.ROOT / 'debug/standard/agent-mimic.py')
     gateway = mimic.Agent(descriptor['gateway'], directory / 'linux.token', directory / 'gateway-ca.crt')
     from websockets.sync.client import connect
     ta.ensure_subscription(config.api, int(time.time() * 1000))
@@ -111,7 +111,10 @@ def main():
     name = 'e2e-' + secrets.token_hex(4) + '.txt'
     text = 'hot folder end to end ' + name
     # The files area accepts only owner-only files of the service user; one other entry fails the whole listing.
-    device(f"umask 077 && printf '%s' '{text}' > {FOLDER}/inbox/{name}")
+    if drop is None:
+        device(f"umask 077 && printf '%s' '{text}' > {FOLDER}/inbox/{name}")
+    else:
+        drop(name, text)
     print('Dropped inbox/' + name, flush=True)
     shown, outcomes = [], []
     graph = ta.build_graph(ta.gateway_call(gateway, (mimic.UnconfirmedOperation,)), lambda path, content: shown.append((path, content)))

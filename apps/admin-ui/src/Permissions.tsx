@@ -3,6 +3,7 @@
 import {useSyncExternalStore,type ReactNode} from 'react';
 import {ControlClient} from './api';
 import {managementCatalog} from './managementPermissions.generated';
+import {isWorkflowPage} from './WorkflowManagement';
 
 const requirements=managementCatalog.routes as Readonly<Record<string,readonly string[]>>;
 const safeActions=new Set(['read','run']);
@@ -20,8 +21,9 @@ export function usePermissions(client?:ControlClient){
 }
 
 /** Shared read-only presentation for feature screens; directory dialogs guard individual actions. */
-export function FeatureAccess({client,route,children}:{client:ControlClient;route:string;children:ReactNode}){
+export function FeatureAccess({client,route,children,superAdmin=false}:{client:ControlClient;route:string;children:ReactNode;superAdmin?:boolean}){
  const permissions=usePermissions(client);
+ if(isWorkflowPage(route))return superAdmin?<>{children}</>:<section><h1>Access unavailable</h1><p>Current Super Admin authority is required to manage workflow profiles.</p></section>;
  if(!permissions.view(route))return <section><h1>Access unavailable</h1><p>Your role does not grant access to this feature.</p></section>;
  const directory=(managementCatalog.directoryRoutes as readonly string[]).includes(route);
  if(directory||permissions.edit(route)||route==='about'||route==='overview'||route==='analytics'||route==='builder'||route==='server-packages'||route==='kill-events')return <>{children}</>;
