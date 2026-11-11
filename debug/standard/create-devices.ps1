@@ -6,7 +6,7 @@ param(
     [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
-$deviceRoot = Split-Path $PSScriptRoot -Parent
+$deviceRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $deviceImage = 'olo-toolgate-linux-device:debug'
 $deviceLabel = 'io.ololabs.toolgate.debug-device'
 $deviceDocker = @()
@@ -51,11 +51,11 @@ try {
     $engine = Invoke-DeviceDocker @('info', '--format', '{{.OSType}}')
     if ($engine -ne 'linux') { throw 'Linux devices require a Linux Docker engine. Switch Docker Desktop to Linux containers.' }
     $serverIds = @(Invoke-DeviceDocker @('ps', '--filter', 'label=com.docker.compose.project=toolgate-debug', '--filter', 'label=com.docker.compose.service=quickstart', '--format', '{{.ID}}'))
-    if ($serverIds.Count -ne 1) { throw 'Start the local debug stack with debug\start.bat before creating devices.' }
+    if ($serverIds.Count -ne 1) { throw 'Start the local debug stack with debug\standard\start.bat before creating devices.' }
     $server = ((Invoke-DeviceDocker @('inspect', $serverIds[0])) -join "`n" | ConvertFrom-Json)[0]
     if ($server.State.Health.Status -ne 'healthy') { throw 'The debug Quickstart container must be healthy before creating devices.' }
     if ($server.Config.Env -notcontains 'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL=https://localhost:18450') {
-        throw 'Restart debug\start.bat to use the expected local endpoint https://localhost:18450.'
+        throw 'Restart debug\standard\start.bat to use the expected local endpoint https://localhost:18450.'
     }
     $network = @($server.NetworkSettings.Networks.PSObject.Properties)[0].Name
     $upstream = $server.Name.TrimStart('/')

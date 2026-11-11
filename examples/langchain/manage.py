@@ -20,7 +20,7 @@ import packages
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 STATE = Path(os.environ.get('TOOLGATE_LANGCHAIN_STATE', str(HERE / '.state'))).resolve()
-spec = importlib.util.spec_from_file_location('debug_configuration', ROOT / 'debug/configure-debug-agent.py')
+spec = importlib.util.spec_from_file_location('debug_configuration', ROOT / 'debug/standard/configure-debug-agent.py')
 shared = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(shared)
 TOOLS = packages.TOOLS
@@ -312,7 +312,7 @@ def configure_package_device():
 
 
 def load_mimic():
-    spec = importlib.util.spec_from_file_location('agent_mimic', ROOT / 'debug/agent-mimic.py')
+    spec = importlib.util.spec_from_file_location('agent_mimic', ROOT / 'debug/standard/agent-mimic.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

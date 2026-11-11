@@ -4,7 +4,7 @@
 function Start-DebugConsoleLog {
     param([string]$Name)
     if ($Name -notmatch '^[a-z][a-z0-9-]+$') { throw 'Invalid debug log name.' }
-    $consoleLogRoot = Split-Path $PSScriptRoot -Parent
+    $consoleLogRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $consoleLogDirectory = Join-Path $consoleLogRoot '.dev/debug/logs'
     [void](New-Item -ItemType Directory -Path $consoleLogDirectory -Force)
     $consoleLogStamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss_fff'

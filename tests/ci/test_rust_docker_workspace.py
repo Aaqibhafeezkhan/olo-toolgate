@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class RustDockerWorkspaceTests(unittest.TestCase):
     def test_sdk_embedded_resources_are_copied_with_the_cli_source(self):
-        dockerfiles = [*ROOT.glob('apps/*/Dockerfile'), *ROOT.glob('debug/*.Dockerfile')]
+        dockerfiles = [*ROOT.glob('apps/*/Dockerfile'), *ROOT.glob('debug/*/*.Dockerfile')]
         for dockerfile in dockerfiles:
             copies = []
             instructions = re.sub(r'\\\n\s*', ' ', dockerfile.read_text(encoding='utf-8')).splitlines()
@@ -48,7 +48,7 @@ class RustDockerWorkspaceTests(unittest.TestCase):
 
     def test_workspace_manifests_are_copied_before_cargo(self):
         workspace = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))
-        dockerfiles = [*ROOT.glob('apps/*/Dockerfile'), *ROOT.glob('debug/*.Dockerfile')]
+        dockerfiles = [*ROOT.glob('apps/*/Dockerfile'), *ROOT.glob('debug/*/*.Dockerfile')]
         for dockerfile in dockerfiles:
             instructions = re.sub(r'\\\n\s*', ' ', dockerfile.read_text(encoding='utf-8')).splitlines()
             copies = []

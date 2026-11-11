@@ -23,7 +23,8 @@ Browser checks need Playwright Chromium; follow the foundation guide for setup.
 | Task | Command or guide |
 |---|---|
 | Build and verify Quickstart with disposable fixtures | `python tools/quickstart/check.py --build` |
-| Persistent Windows debug installation | `debug/start.bat`; [debug guide](../../debug/README.md) |
+| Persistent Windows debug installation | `debug/standard/start.bat`; [debug guide](../../debug/README.md) |
+| Mounted HotFolder trigger lab | `python debug/hotfolder/bringup.py start`; [HotFolder guide](../../debug/hotfolder/README.md) |
 | Run an evaluation image and retain its state | [Quickstart Compose](../../deploy/compose/QuickStart/README.md) |
 | Full repository checks | `python tools/check.py` (or `make check`) |
 | Contract checks | `python tools/check.py --contracts-only` |

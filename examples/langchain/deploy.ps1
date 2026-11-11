@@ -18,7 +18,7 @@ try {
     if (-not $env:TOOLGATE_DEVICE_IMAGE) { $env:TOOLGATE_DEVICE_IMAGE = 'ololab/olo-toolgate-device:dev' }
     if ($Target -eq 'windows' -and -not $DeviceId) { throw 'Windows targeting requires the enrolled -DeviceId and package executor setup from the README.' }
     if (-not $Python) {
-        . (Join-Path $PSScriptRoot '../../debug/python.ps1')
+        . (Join-Path $PSScriptRoot '../../debug/standard/python.ps1')
         $Python = Find-DebugPython
     }
     Invoke-ExampleCommand 'docker' @('compose','version')

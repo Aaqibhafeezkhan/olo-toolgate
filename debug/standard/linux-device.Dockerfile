@@ -23,8 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-cert
     && mkdir -p /etc/systemd/system /etc/olo-toolgate /var/lib/olo-toolgate /usr/local/lib/olo-toolgate \
     && chmod 700 /var/lib/olo-toolgate
 COPY --from=builder /client /opt/toolgate/client
-COPY debug/device-entrypoint.py /opt/toolgate/device-entrypoint.py
-COPY debug/device-systemctl.sh /usr/bin/systemctl
+COPY debug/standard/device-entrypoint.py /opt/toolgate/device-entrypoint.py
+COPY debug/standard/device-systemctl.sh /usr/bin/systemctl
 COPY LICENSE NOTICE.md /usr/share/licenses/olo-toolgate/
 RUN chmod 755 /opt/toolgate/client /usr/bin/systemctl
 LABEL org.opencontainers.image.title="ToolGate Linux debug device" \

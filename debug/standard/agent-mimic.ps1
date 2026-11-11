@@ -8,7 +8,7 @@ param(
     [ValidateRange(0,60)][int]$DurationSeconds = 8
 )
 $ErrorActionPreference = 'Stop'
-$mimicRoot = Split-Path $PSScriptRoot -Parent
+$mimicRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 . "$PSScriptRoot/console-log.ps1"
 $mimicLogging = $false
 $mimicExitCode = 1

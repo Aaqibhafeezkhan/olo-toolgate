@@ -88,7 +88,7 @@ def check(image, quickstart):
         def start_proxy():
             run('docker', 'exec', '-i', gateway, '/opt/quickstart-python/bin/python', '-c',
                 "import sys;from pathlib import Path;Path('/tmp/device_relay.py').write_text(sys.stdin.read())",
-                input=(ROOT/'debug/device-entrypoint.py').read_text(encoding='utf-8'))
+                input=(ROOT/'debug/standard/device-entrypoint.py').read_text(encoding='utf-8'))
             run('docker', 'exec', '-d', gateway, '/opt/quickstart-python/bin/python', '-B', '-c',
                 "import sys,os;from pathlib import Path;Path('/tmp/device-relay.pid').write_text(str(os.getpid()));sys.path.insert(0,'/tmp');import device_relay;device_relay.Relay(18452,'127.0.0.1',8443).serve_forever()")
         start_proxy()

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 param([Parameter(Mandatory=$true)][string]$Python)
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
+$root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $version = (Get-Content "$root/VERSION" -Raw).Trim()
 $githubHeaders = @{
     Accept = 'application/vnd.github+json'

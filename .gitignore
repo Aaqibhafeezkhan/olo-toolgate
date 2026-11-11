@@ -42,6 +42,7 @@ hotfolder/
 HotFolder/
 # The HotFolder example package is code, not a local files area.
 !examples/java-tools/hotfolder/
+!debug/hotfolder/
 !**/src/**/hotfolder/
 logs/
 # Java source packages named logs are code, not local log output.

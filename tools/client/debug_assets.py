@@ -44,7 +44,7 @@ def build_windows_gnu(source):
     relative_source = source.resolve().relative_to(ROOT.resolve()).as_posix()
     registry = ROOT / '.dev/cargo-registry'
     registry.mkdir(parents=True, exist_ok=True)
-    subprocess.run(['docker', 'build', '-f', str(ROOT / 'debug/windows-client.Dockerfile'),
+    subprocess.run(['docker', 'build', '-f', str(ROOT / 'debug/standard/windows-client.Dockerfile'),
                     '-t', BUILD_IMAGE, str(ROOT)], cwd=ROOT, check=True)
     container = ['docker', 'run', '--rm', '-v', f'{ROOT.as_posix()}:/work',
                  '-v', f'{registry.as_posix()}:/usr/local/cargo/registry',

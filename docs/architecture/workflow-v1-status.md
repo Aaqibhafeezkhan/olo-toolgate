@@ -248,6 +248,55 @@ provisioning, executed readiness and runtime qualification. Current management
 stays Super Admin only. No phase or security guarantee is newly accepted; earned
 completion remains **0 / 100 = 0%**. Keep #297 draft.
 
+### Mounted HotFolder debug lab (2026-11-11)
+
+Based on `7a83d6c6`, relocated the existing debug scripts to `debug/standard`
+and added the [mounted HotFolder bring-up](../../debug/hotfolder/README.md).
+Standard Compose project, ports, and data volume are unchanged. The HotFolder
+lab reuses the existing signed inbox trigger/profile and LangGraph example in
+its own `toolgate-hotfolder` project. It builds the endpoint from source, mounts
+`.dev/debug/hotfolder/files` at `/var/lib/olo-toolgate/hotfolder`, and keeps
+its registry, state and credentials separate. The bind-mount helper requires
+root-owned `0700` directories and uses exclusive `0600` file creation. No
+workflow-profile admission, policy, credential validation or schema changes.
+
+Executed evidence:
+
+- The Docker Desktop WSL mount probe failed because this distro's integration
+  service was unavailable. The lab was started on the local WSL Linux engine
+  with Docker Compose v5.6.1 using an isolated CLI configuration. The separate
+  Docker Desktop standard stack remained healthy on port 18090. The lab console
+  answered Windows readiness on port 18092; device and Quickstart were healthy.
+- Built the native debug endpoint and signed HotFolder/inbox-watch packages;
+  `bringup.py start` provisioned the fingerprint-checked local Linux device,
+  installed the signed package and verified governed tool discovery. A missing
+  Compose plugin blocked the initial packaging attempt before stack creation;
+  the configured rerun completed.
+- `bringup.py verify` observed the trigger instance `Running`, dropped one
+  synthetic file through the host mount, and received the readable INTERNAL
+  event over `toolgate.triggers.v1`. The agent reported `read-unconfirmed` after
+  its native read. The file remained in `inbox/` with UID 0 and mode 0600;
+  there was no retry or move. Traversal-shaped and duplicate filenames were
+  refused, and the original bytes were preserved. Left the foreground-style
+  listener running in a local detached process with its private log.
+- Native Linux PATH CI run: 422 tests, 17 skips, no failures. The initial mixed
+  Windows/Linux PATH run failed; Windows debug management/client assets and
+  device creation were verified natively (13 and 7 tests, all passed).
+  Linux focused Docker workspace (3), agent bridge/mimic (19), device image
+  (14) and LangChain example (64) tests passed. The LangChain host test rerun
+  loaded the same `agent_mimic` module alias used in its Docker image.
+  Metadata/preflight, quality, Markdown links and whitespace passed.
+
+Tested `bringup.py` SHA-256:
+`6754ad0e3d488da37bccdd74679caa602ae20a1a77d2971aded280218a08db01`.
+Mount overlay SHA-256:
+`9327654dcdb797559c36467c05f18dc09ad44c17e15beeb1ef4e18f179b0ab11`.
+Device base manifest:
+`sha256:7058e06257d226bd64985fe59eef524063ace774b0607b1e24b406d20d06c0da`.
+Full repository verification and #274 M12 acceptance were not executed.
+This lab does not exercise #295 workflow dispatch admission or qualify #230
+native HotFolder finality. No phase weight changes; #297 stays draft.
+
 ## Delivery ledger
 
 | PR / known revision | Phase | Scope and integration state | Validation actually executed | Limits / next work |

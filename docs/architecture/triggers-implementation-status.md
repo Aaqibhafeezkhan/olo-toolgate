@@ -7,7 +7,7 @@ This is the live progress document for issue #274 (server and client triggers). 
 
 ## Overall progress
 
-Updated: **2026-11-10**.
+Updated: **2026-11-11**.
 
 **Overall: 27% complete; 73% pending.** 4 of 18 modules earned: module 1 (olo-labs/olo-toolgate#281, merge
 `16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`; reviewed as
@@ -22,6 +22,17 @@ The resolution retained main's runtime ID format and passed 14 focused Control
 tests, 2 Quickstart TLS routing tests, 10 LangChain trigger tests, and the
 documentation and source checks. The Compose acceptance run was not repeated
 on the merge result.
+
+Local mounted-folder validation on the #297 integration branch: the
+[HotFolder debug lab](../../debug/hotfolder/README.md) ran in its own WSL Docker
+project. The running Linux device watched `inbox/` under a host bind mount,
+not just an internal named volume. A separate producer wrote a synthetic root-owned
+mode 0600 file through the mount; the signed trigger reached `Running` and the
+event reached the agent over `toolgate.triggers.v1`. Its native read returned
+`read-unconfirmed`; the file stayed in the inbox and was not retried or moved.
+This is local trigger-path evidence, not hosted M12 completion or native business
+finality. The baseline and earned module weights are unchanged. See the
+[integration record](workflow-v1-status.md#mounted-hotfolder-debug-lab-2026-11-11).
 
 | Slice / gate | Needs modules | Status |
 |---|---|---|

@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CONTAINER = 'toolgate-debug-quickstart-1'
 ORIGIN = 'http://127.0.0.1:18090'
 sys.path.insert(0,str(ROOT/'tools/access'))

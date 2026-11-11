@@ -3,7 +3,7 @@
 # Runs the self-contained native installer; certificate setup belongs to the client.
 param([string]$ResultFile = '', [string]$Peer = '')
 $ErrorActionPreference = 'Stop'
-$prepareRoot = Split-Path $PSScriptRoot -Parent
+$prepareRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not $ResultFile) { $ResultFile = Join-Path $prepareRoot '.dev/debug/native-prepare-result.json' }
 $prepareIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $Peer) { $Peer = $prepareIdentity.User.Value }

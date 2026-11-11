@@ -6,6 +6,9 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Move standard debug scripts into `debug/standard` and add a separate
+  `debug/hotfolder` lab with a host-mounted inbox and a real trigger smoke check.
+
 - Configure workflows, workflow groups, models and trigger mappings from a
   dedicated Workflows menu. Agents now has prompts/context and workflow mapping
   pages with links from each agent record. Open tenant profile revisions from a

@@ -1,0 +1,17 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+# Applied after the LangChain base and signed trigger profile overlays.
+services:
+  quickstart:
+    image: olo-toolgate-hotfolder-quickstart:local
+  linux-device:
+    image: olo-toolgate-hotfolder-device:local
+    build:
+      context: ${TOOLGATE_HOTFOLDER_ROOT:?use bringup.py}
+      dockerfile: debug/hotfolder/device.Dockerfile
+    volumes:
+      - type: bind
+        source: ${TOOLGATE_HOTFOLDER_FILES:?use bringup.py}
+        target: /var/lib/olo-toolgate/hotfolder
+        bind:
+          create_host_path: false

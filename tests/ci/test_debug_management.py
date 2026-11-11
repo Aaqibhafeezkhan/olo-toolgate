@@ -24,7 +24,7 @@ class DebugManagementTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         sources = set(version.expected()) | {
             ROOT/'VERSION', ROOT/'packages/contracts/VERSION', ROOT/'CHANGELOG.md',
-            ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'RELEASE-NOTES.md', ROOT/'debug/manage.ps1',
+            ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'RELEASE-NOTES.md', ROOT/'debug/standard/manage.ps1',
             ROOT/'tools/contracts/version.py', ROOT/'tools/contracts/generate.py',
             ROOT/'tools/ci/preflight.py', ROOT/'tools/contracts/fixtures.py',
         }
@@ -45,7 +45,7 @@ class DebugManagementTests(unittest.TestCase):
         # The metadata commands need only the standard library; dependency installs are stubbed.
         subprocess.run([sys.executable, '-m', 'venv', '--without-pip',
                         str(self.root/'.dev/debug/venv')], check=True, timeout=30)
-        (self.root/'debug/python.ps1').write_text('''
+        (self.root/'debug/standard/python.ps1').write_text('''
 $script:originalInvokeChecked = ${function:Invoke-Checked}
 function Find-DebugPython { return $env:TEST_DEBUG_PYTHON }
 function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
@@ -57,7 +57,7 @@ function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
     }
 }
 ''', encoding='utf-8')
-        (self.root/'debug/client-assets.ps1').write_text('param([string]$Python)\n', encoding='utf-8')
+        (self.root/'debug/standard/client-assets.ps1').write_text('param([string]$Python)\n', encoding='utf-8')
         self.harness = self.root/'harness.ps1'
         self.harness.write_text('''
 function docker {
@@ -77,12 +77,12 @@ exit $LASTEXITCODE
 
     def manage(self, operation='restart', validate=False, focused=False):
         log = self.root/'calls.jsonl'
-        env = dict(os.environ, TEST_DEBUG_SCRIPT=str(self.root/'debug/manage.ps1'),
+        env = dict(os.environ, TEST_DEBUG_SCRIPT=str(self.root/'debug/standard/manage.ps1'),
                    TEST_DEBUG_PYTHON=sys.executable, TEST_DEBUG_CALLS=str(log),
                    TEST_DEBUG_OPERATION=operation, TEST_DEBUG_VALIDATE='1' if validate else '0',
                    TEST_DEBUG_FOCUSED='1' if focused else '0')
         result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                                 '-File', str(self.harness)], cwd=self.root/'debug',
+                                 '-File', str(self.harness)], cwd=self.root/'debug/standard',
                                 env=env, capture_output=True, text=True, timeout=30)
         calls = [json.loads(line) for line in log.read_text(encoding='utf-8-sig').splitlines()]
         return result, calls

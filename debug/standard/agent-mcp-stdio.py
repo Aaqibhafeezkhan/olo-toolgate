@@ -9,8 +9,8 @@ import os
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('agent_mimic', ROOT/'debug/agent-mimic.py')
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location('agent_mimic', ROOT/'debug/standard/agent-mimic.py')
 mimic = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mimic)
 PROTOCOLS = ('2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05')

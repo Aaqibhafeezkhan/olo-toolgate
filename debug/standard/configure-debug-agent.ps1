@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments)
 $ErrorActionPreference='Stop'
-$configurationPython=Join-Path (Split-Path $PSScriptRoot -Parent) '.dev/debug/venv/Scripts/python.exe'
+$configurationPython=Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) '.dev/debug/venv/Scripts/python.exe'
 if(-not (Test-Path -LiteralPath $configurationPython)){
     . "$PSScriptRoot/python.ps1"
     $configurationPython=Find-DebugPython
