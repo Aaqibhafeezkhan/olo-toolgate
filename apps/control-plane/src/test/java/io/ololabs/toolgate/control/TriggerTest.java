@@ -279,7 +279,6 @@ final class TriggerTest {
 
             reportRolloutPhase(w, "device-a", "Failed", false);
             assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
-            reportRolloutPhase(w, "device-a", "Running", true);
             assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision(),
                     "a stalled rollout stays stalled until an explicit recovery");
             var assignment = json(w.triggers().get(w.admin(), "inbox").body());
@@ -287,11 +286,12 @@ final class TriggerTest {
             String etag = assignment.path("metadata").path("resourceVersion").asText();
             assertEquals(412, status(() -> w.triggers().rollback(w.admin(), "inbox", "W/\"1\"", "request")));
             assertEquals(200, w.triggers().rollback(w.admin(), "inbox", etag, "request").status());
-            for (String deviceId : List.of("device-a", "device-c")) {
-                var restored = desired(w, deviceId).instances().getFirst();
-                assertEquals(3L, restored.configRevision());
-                assertEquals("inbox", restored.config().get("folder").asText());
-            }
+            var restored = desired(w, "device-a").instances().getFirst();
+            assertEquals(3L, restored.configRevision());
+            assertEquals("inbox", restored.config().get("folder").asText());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(3L, desired(w, "device-c").instances().getFirst().configRevision());
         }
     }
 
@@ -318,6 +318,8 @@ final class TriggerTest {
             assertEquals(1, assignment.path("status").path("conditions").size());
             String etag = assignment.path("metadata").path("resourceVersion").asText();
             assertEquals(200, w.triggers().rollback(w.admin(), "inbox", etag, "request").status());
+            assertEquals("updated", desired(w, "device-c").instances().getFirst().config().get("folder").asText());
+            reportRolloutPhase(w, "device-a", "Running", true);
             assertEquals("inbox", desired(w, "device-c").instances().getFirst().config().get("folder").asText());
         }
     }

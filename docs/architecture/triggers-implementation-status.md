@@ -262,7 +262,13 @@ Java contract tests passed. Preflight verified generated bindings and fixture
 coverage. Tested source SHA-256: `6c29d08639b522626285b04e8b6d8b99f884e977529893849d1ae8566bef708c`
 (changed sources and fixtures concatenated in path order).
 
-Outstanding: budgeted rollback, the Live subscriptions panel, PostgreSQL
+With a rollout strategy configured, rollback now uses the same availability
+budget. It retains the revision each pending device was already assigned.
+An already failed replacement can start recovery without spending a slot
+on a healthy device. All ten focused rollout and Control tests passed.
+Tested Java sources SHA-256: `f2cfb69795af0d88edd326d345404a82278a22b4f9de3b05304c11742826a0af` (concatenated in path order).
+
+Outstanding: the Live subscriptions panel, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 

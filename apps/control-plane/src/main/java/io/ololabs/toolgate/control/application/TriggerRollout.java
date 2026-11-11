@@ -5,22 +5,29 @@ import java.util.List;
 import java.util.Map;
 
 final class TriggerRollout {
-    enum DeviceState { PreviousReady, PreviousUnavailable, UpdatedReady, UpdatedUnavailable, UpdatedFailed }
+    enum DeviceState { PreviousReady, PreviousUnavailable, PreviousFailed, UpdatedReady, UpdatedUnavailable, UpdatedFailed }
 
     record Batch(List<String> devices, boolean stalled) {}
 
     private TriggerRollout() {}
 
     /** Selects a stable batch without spending slots on devices already unavailable. */
-    static Batch select(String maxUnavailable, boolean paused, Map<String, DeviceState> devices) {
+    static Batch select(String maxUnavailable, boolean paused, boolean rollback, Map<String, DeviceState> devices) {
         if (devices.containsValue(DeviceState.UpdatedFailed)) return new Batch(List.of(), true);
         if (paused || devices.isEmpty()) return new Batch(List.of(), false);
 
         int limit = availabilityLimit(maxUnavailable, devices.size());
         long unavailable = devices.values().stream()
-                .filter(state -> state == DeviceState.PreviousUnavailable || state == DeviceState.UpdatedUnavailable)
+                .filter(state -> state == DeviceState.PreviousUnavailable || state == DeviceState.PreviousFailed || state == DeviceState.UpdatedUnavailable)
                 .count();
         long slots = Math.max(0, limit - unavailable);
+        if (rollback) {
+            long inFlight = devices.values().stream().filter(state -> state == DeviceState.UpdatedUnavailable).count();
+            var recovery = devices.entrySet().stream()
+                    .filter(entry -> entry.getValue() == DeviceState.PreviousFailed)
+                    .map(Map.Entry::getKey).sorted().limit(Math.max(0, limit - inFlight)).toList();
+            if (!recovery.isEmpty()) return new Batch(recovery, false);
+        }
         var selected = devices.entrySet().stream()
                 .filter(entry -> entry.getValue() == DeviceState.PreviousReady)
                 .map(Map.Entry::getKey)

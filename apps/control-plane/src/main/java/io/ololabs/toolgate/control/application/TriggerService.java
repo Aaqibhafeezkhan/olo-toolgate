@@ -617,8 +617,22 @@ public final class TriggerService {
             var previous = before.document().path("previousRevision");
             if (previous.isMissingNode()) throw conflict("The assignment has no previous configuration revision");
 
+            var active = before.document().path("rollout");
+            if (active.path("rollback").asBoolean()) throw conflict("A trigger rollback is already in progress");
+            var directory = tx.load();
             var document = before.document().deepCopy();
             document.remove(List.of("rollout", "previousRevision"));
+            if (before.spec().hasNonNull("strategy") && !devices(directory, before).isEmpty()) {
+                var source = before.document().deepCopy();
+                source.remove(List.of("rollout", "previousRevision", "overrides"));
+                document.set("previousRevision", source);
+                var rollout = document.putObject("rollout").put("rollback", true);
+                rollout.set("pending", JSON.valueToTree(devices(directory, before)));
+                if (active.has("pending")) {
+                    rollout.set("retained", active.get("pending").deepCopy());
+                    rollout.set("retainedRevision", previous.deepCopy());
+                }
+            }
             var spec = (ObjectNode) document.path("assignment").path("spec");
             var previousSpec = previous.path("assignment").path("spec");
             for (String field : List.of("trigger", "packageVersion", "config", "globals")) {
@@ -634,7 +648,7 @@ public final class TriggerService {
                     .put("configRevision", next(metadata.path("configRevision").asLong()));
             var row = new TriggerStore.Row(name, revision, codec.json(document));
             var after = new Stored(row, document);
-            var changes = reconcile(tx, tx.load(), before, after, now, false);
+            var changes = reconcile(tx, directory, before, after, now, false);
             tx.triggers().save(ASSIGNMENT, row, before.row().revision());
             tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ROLLBACK", "trigger-assignment:" + name, revision, requestId,
                     DirectoryService.digest(codec.json(changes)));
@@ -799,7 +813,9 @@ public final class TriggerService {
     private Stored revisionFor(Stored stored, String device) {
         var rollout = stored.document().path("rollout");
         if (!strings(rollout.path("pending")).contains(device)) return stored;
-        return new Stored(stored.row(), (ObjectNode) stored.document().get("previousRevision"));
+        var previous = strings(rollout.path("retained")).contains(device)
+                ? rollout.get("retainedRevision") : stored.document().get("previousRevision");
+        return new Stored(stored.row(), (ObjectNode) previous);
     }
 
     private Stored advanceRollout(Store.Session tx, io.ololabs.toolgate.control.domain.Directory directory,
@@ -820,16 +836,17 @@ public final class TriggerService {
             boolean ready = now - instance.path("lastSeenAtUnixMs").asLong(0) <= STALE_MIN_MS
                     && java.util.stream.StreamSupport.stream(view.path("conditions").spliterator(), false)
                         .anyMatch(c -> "Ready".equals(c.path("type").asText()) && "True".equals(c.path("status").asText()));
+            boolean failed = "Failed".equals(view.path("phase").asText());
             if (pending.contains(device)) {
-                states.put(device, ready ? TriggerRollout.DeviceState.PreviousReady : TriggerRollout.DeviceState.PreviousUnavailable);
+                states.put(device, failed ? TriggerRollout.DeviceState.PreviousFailed
+                        : ready ? TriggerRollout.DeviceState.PreviousReady : TriggerRollout.DeviceState.PreviousUnavailable);
             } else {
-                boolean failed = "Failed".equals(view.path("phase").asText());
                 states.put(device, failed ? TriggerRollout.DeviceState.UpdatedFailed
                         : ready ? TriggerRollout.DeviceState.UpdatedReady : TriggerRollout.DeviceState.UpdatedUnavailable);
             }
         }
         var limit = stored.spec().path("strategy").path("rollingUpdate").path("maxUnavailable").asText();
-        var batch = TriggerRollout.select(limit, paused, states);
+        var batch = TriggerRollout.select(limit, paused, rollout.path("rollback").asBoolean(), states);
         var document = stored.document().deepCopy();
         var update = document.withObjectProperty("rollout");
         pending.removeAll(batch.devices());
