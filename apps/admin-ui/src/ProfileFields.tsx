@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-import {useEffect,useId,useRef,useState} from 'react';
+import {useLayoutEffect,useId,useRef,useState} from 'react';
 import profile from '../../../packages/contracts/schemas/v2/profile.schema.json';
 import workflow from '../../../packages/contracts/schemas/v2/workflow.schema.json';
 import identifiers from '../../../packages/contracts/schemas/v2/identifiers.schema.json';
@@ -29,7 +29,7 @@ export function initialField(input:FieldSchema,file?:string):unknown {
 function JsonObject({label,value,change}:{label:string;value:unknown;change:(v:unknown)=>void}){
   const [text,setText]=useState(JSON.stringify(value,null,2)),[invalid,setInvalid]=useState(false);
   const element=useRef<HTMLTextAreaElement>(null);
-  useEffect(()=>{setText(JSON.stringify(value,null,2));setInvalid(false);element.current?.setCustomValidity('');},[value]);
+  useLayoutEffect(()=>{setText(JSON.stringify(value,null,2));setInvalid(false);element.current?.setCustomValidity('');},[value]);
   return <><label>{label}<textarea ref={element} required rows={5} value={text} aria-invalid={invalid} onChange={e=>{setText(e.target.value);try{const parsed:unknown=JSON.parse(e.target.value);if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error();setInvalid(false);e.target.setCustomValidity('');change(parsed);}catch{setInvalid(true);e.target.setCustomValidity('Enter a JSON object.');change(value);}}}/></label>{invalid&&<span role="alert">Enter a JSON object.</span>}</>;
 }
 function SuggestedField({label,value,change,schema,items}:{label:string;value:unknown;change:(value:string)=>void;schema:FieldSchema;items:NonNullable<FieldOption['suggestions']>}){

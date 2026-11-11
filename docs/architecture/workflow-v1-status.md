@@ -111,6 +111,18 @@ A full Java or repository gate was not run for this increment. Next is
 reviewed directory/grant provisioning and resolution of newly created
 subscription and assignment identities. Phase credit remains zero.
 
+## V1.1 profile editor validation follow-up (2026-11-11)
+
+The serial console suite reported 276 passes and an intermittent failure
+in the profile JSON field after revision load. Reset the field and its native
+validity during the layout update when a saved value changes, so a deferred
+reset cannot clear the first edit's invalid-input state. All 12 focused
+WorkflowProfiles and WorkflowManagement tests passed after the change.
+ProfileFields SHA-256:
+`c9f32271925635e751896fe068daa45f53c8d379338800be13028f74d98da5e2`.
+This affects local draft editing only. Reviewed directory and subscription
+provisioning and real readiness evidence remain pending.
+
 ## Admin UI property management slice (2026-11-11)
 
 User-requested delivery into umbrella #297 (`feature/workflow-enhancement`),
