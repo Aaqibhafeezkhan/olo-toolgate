@@ -313,6 +313,17 @@ source quality, Markdown links and whitespace checks passed. Tested runner
 SHA-256 `f9249ce711b46e6fdd9d368a1ebb31f3bce450b7ee333e1a6f66186b9b0717f3`.
 The runner remains connected in the local lab. No phase or finality credit changes.
 
+The Windows LangChain launcher now offers trigger registration and interactive
+Ollama chat. Based on `33ecff00`, Windows batch argument forwarding and console
+menu routing, model selection and chat history were checked with simulated model
+responses. The runner source SHA-256 is
+`1350bfc00c30062c41ce7a9561317463253288694249e678dbab8c7437161305`.
+ToolGate started on Docker Desktop port 18090, and the WSL mounted lab reported
+ready on port 18092 with an accepted device check-in. The previously launched
+listener was stopped for manual startup. No Ollama endpoint responded on the
+default local port. Live inference and confirmed native file completion remain
+unverified.
+
 ## Delivery ledger
 
 | PR / known revision | Phase | Scope and integration state | Validation actually executed | Limits / next work |

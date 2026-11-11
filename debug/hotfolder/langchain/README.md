@@ -1,5 +1,15 @@
 # LangChain HotFolder example
 
+From Windows, open `start.bat` in this directory. Choose **1** to register for
+HotFolder events and listen, or **2** to select an installed Ollama model and
+chat. Type `/back` in chat to return to the menu. Chat sends typed prompts to
+Ollama and keeps conversation history for that chat session.
+
+Ollama must be reachable from WSL at `http://127.0.0.1:11434`, or at the address
+in `OLLAMA_HOST` in the WSL environment. The console lists models from that
+server. The mounted HotFolder lab uses port 18092 and the standard Docker
+Desktop ToolGate console uses port 18090.
+
 Start the [mounted HotFolder lab](../README.md), then run the example from a
 WSL shell at the repository root. Use the Python environment created by the lab.
 
