@@ -7,6 +7,7 @@ import {Failure} from './Failure';
 import {EditorDialog} from './EditorDialog';
 import {ProfileFields,initialField,profileSchema,type FieldOptions} from './ProfileFields';
 import {Table} from './Table';
+import {TriggerAssignments} from './TriggerAssignments';
 
 export const workflowPages={triggers:'Triggers',workflows:'Workflows',workflowGroups:'Workflow groups','workflow-models':'Models','workflow-dispatch':'Trigger mappings','workflow-profiles':'Profiles','agent-configuration':'Models & prompts','agent-workflow-mappings':'Workflow mappings'} as const;
 export type WorkflowPage=keyof typeof workflowPages;
@@ -104,6 +105,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
   return <><div className="page-heading"><div><p className="eyebrow">Workflow configuration</p><h1>{workflowPages[page]}</h1></div><button disabled={busy} onClick={()=>setAttempt(a=>a+1)}>Refresh profiles</button></div>
     <p>Configure the selected profile across these pages, then stage, review and publish its exact revision. Current Super Admin authority is required. Runtime grants remain separate.</p>
     {error!==undefined&&<Failure error={error}/>}<p role="status">{notice}</p>
+    {page==='triggers'&&<TriggerAssignments client={client}/>}
     <section className="guidance"><h2>Working profile</h2>
       <button disabled={busy||w.dirty} onClick={create}>New profile</button>
       {page==='workflow-profiles'&&<><label>Import and stage deployment profile JSON<input type="file" accept=".json,application/json" disabled={busy||w.dirty} onChange={event=>{const file=event.currentTarget.files?.[0];event.currentTarget.value='';if(file)void run(()=>openFile(file));}}/></label>{w.profile&&<button disabled={busy} onClick={saveFile}>Download working profile JSON</button>}</>}

@@ -227,6 +227,13 @@ after completion. All nine focused Gradle tests passed. Tested source
 SHA-256: `b616d2326c8289a26c70576b77d150721d838217ed5d2f898ed2802ef3a6db07` (changed Java and OpenAPI sources in path order).
 Rollback still restores all current devices at once.
 
+The Admin UI Triggers page now lists live Control assignments and opens
+the selected assignment's instance status. Assignment and instance lists
+follow the API's page tokens. The existing workflow-profile editor remains
+available on that page. Admin UI type checking and all nine focused UI
+tests passed. Tested UI source SHA-256: `cd5ac41a80d69c32c812154cb8086be1fed1825c89701c68bd2bcd2f1fc39ef2`
+(changed sources and test concatenated in path order).
+
 Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns

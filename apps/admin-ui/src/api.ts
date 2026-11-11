@@ -154,7 +154,14 @@ export class ControlClient {
     }
   }
 
-  triggerAssignments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{signal});}
+  triggerAssignments(signal?:AbortSignal,pageToken?:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{
+    return this.send(operations.listTriggerAssignments,{signal,query:pageToken?new URLSearchParams({pageToken}):undefined});
+  }
+  triggerInstances(assignment:string,signal?:AbortSignal,pageToken?:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerInstancePage>{
+    const query=new URLSearchParams({assignment});
+    if(pageToken)query.set('pageToken',pageToken);
+    return this.send(operations.listTriggerInstances,{signal,query});
+  }
   triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
   triggerDefinitions(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{return this.send(operations.listTriggerDefinitions,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
