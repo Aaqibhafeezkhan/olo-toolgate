@@ -10601,7 +10601,7 @@ paths:
   /api/control/v1/triggers/assignments/{name}:rollback:
     post:
       operationId: rollbackTriggerAssignment
-      summary: Restore the previous configuration of an active trigger rollout
+      summary: Restore the previous configuration of a trigger assignment
       security:
       - adminAccessToken: []
       parameters:
@@ -10635,7 +10635,7 @@ paths:
         '404':
           description: Unknown, removed or another tenant's resource (identical)
         '409':
-          description: No active rollout or concurrent change conflict
+          description: No previous configuration revision or concurrent change conflict
         '412':
           description: If-Match does not match the current ETag
         '428':

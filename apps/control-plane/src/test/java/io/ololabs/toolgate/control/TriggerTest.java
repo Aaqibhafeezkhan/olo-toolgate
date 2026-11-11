@@ -254,6 +254,33 @@ final class TriggerTest {
         }
     }
 
+    @Test
+    void completedRolloutCanRestorePreviousRevision() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            reportRolloutPhase(w, "device-a", "Running", true);
+            reportRolloutPhase(w, "device-c", "Running", true);
+            w.triggers().patch(w.admin(), "inbox", """
+                    {"spec":{"config":{"folder":"updated"},"strategy":{"rollingUpdate":{"maxUnavailable":"1"}}}}
+                    """, "W/\"1\"", null, false, "request");
+
+            assertEquals(2L, desired(w, "device-a").instances().getFirst().configRevision());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(2L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-c", "Running", true);
+            desired(w, "device-c");
+
+            var assignment = json(w.triggers().get(w.admin(), "inbox").body());
+            assertEquals(1, assignment.path("status").path("conditions").size());
+            String etag = assignment.path("metadata").path("resourceVersion").asText();
+            assertEquals(200, w.triggers().rollback(w.admin(), "inbox", etag, "request").status());
+            assertEquals("inbox", desired(w, "device-c").instances().getFirst().config().get("folder").asText());
+        }
+    }
+
     private void reportRolloutPhase(World w, String deviceId, String phase, boolean ready) {
         var document = desired(w, deviceId);
         var instance = document.instances().getFirst();

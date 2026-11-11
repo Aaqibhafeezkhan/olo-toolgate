@@ -380,6 +380,13 @@ public final class TriggerService {
             assignment.set("spec", spec);
             var document = document(assignment, definition, false);
             if (before.document().has("overrides")) document.set("overrides", before.document().get("overrides").deepCopy());
+            if (configChanged) {
+                var previousRevision = before.document().deepCopy();
+                previousRevision.remove(List.of("previousRevision", "rollout", "overrides"));
+                document.set("previousRevision", previousRevision);
+            } else if (before.document().has("previousRevision")) {
+                document.set("previousRevision", before.document().get("previousRevision").deepCopy());
+            }
             if (before.document().has("rollout")) {
                 if (configChanged || !spec.path("strategy").equals(before.spec().path("strategy"))) {
                     throw conflict("Finish or roll back the current trigger rollout before changing its revision or strategy");
@@ -390,7 +397,6 @@ public final class TriggerService {
                 pending.retainAll(devices(directory, new Stored(before.row(), document)));
                 if (!pending.isEmpty()) {
                     var rollout = document.putObject("rollout");
-                    rollout.set("previous", before.document().deepCopy());
                     rollout.set("pending", JSON.valueToTree(pending));
                 }
             }
@@ -524,7 +530,7 @@ public final class TriggerService {
         });
     }
 
-    /** Restores the previous payload of an active rollout as a new configuration revision. */
+    /** Restores the previous payload of an assignment as a new configuration revision. */
     public Store.Reply rollback(DirectoryService.Actor actor, String name, String ifMatch, String requestId) {
         tenantOf(actor);
         return store.transaction(tenant, true, tx -> {
@@ -532,11 +538,11 @@ public final class TriggerService {
             var before = existing(tx, name);
             requireTargets(tx, actor, before.spec().path("target"), "trigger.manage");
             match(before, ifMatch);
-            var previous = before.document().path("rollout").path("previous");
-            if (previous.isMissingNode()) throw conflict("The assignment has no active rollout to roll back");
+            var previous = before.document().path("previousRevision");
+            if (previous.isMissingNode()) throw conflict("The assignment has no previous configuration revision");
 
             var document = before.document().deepCopy();
-            document.remove("rollout");
+            document.remove(List.of("rollout", "previousRevision"));
             var spec = (ObjectNode) document.path("assignment").path("spec");
             var previousSpec = previous.path("assignment").path("spec");
             for (String field : List.of("trigger", "packageVersion", "config", "globals")) {
@@ -717,7 +723,7 @@ public final class TriggerService {
     private Stored revisionFor(Stored stored, String device) {
         var rollout = stored.document().path("rollout");
         if (!strings(rollout.path("pending")).contains(device)) return stored;
-        return new Stored(stored.row(), (ObjectNode) rollout.get("previous"));
+        return new Stored(stored.row(), (ObjectNode) stored.document().get("previousRevision"));
     }
 
     private Stored advanceRollout(Store.Session tx, io.ololabs.toolgate.control.domain.Directory directory,

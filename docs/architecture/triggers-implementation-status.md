@@ -220,6 +220,13 @@ The two Quickstart direct TLS route tests, preflight, and UI operation
 regeneration also passed. Tested source SHA-256: `c4b71d1af0458edc10f88dd6ed7610894b6b6383a06947bd437452d73569ab3b`
 (changed implementation and test sources concatenated in path order).
 
+Control retains the immediately preceding configuration after a rollout
+completes. The saved revision excludes nested rollout state and overrides.
+A new focused test advances both devices, then restores the prior payload
+after completion. All nine focused Gradle tests passed. Tested source
+SHA-256: `b616d2326c8289a26c70576b77d150721d838217ed5d2f898ed2802ef3a6db07` (changed Java and OpenAPI sources in path order).
+Rollback still restores all current devices at once.
+
 Outstanding: cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
