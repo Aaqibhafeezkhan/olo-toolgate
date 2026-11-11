@@ -14,7 +14,7 @@ import urllib.request
 
 from websockets.sync.client import reconnect
 
-from .trigger_bridge import (DispatchReceipt, ListenerFailure, MAX_FRAME_BYTES, PROTOCOL,
+from .trigger_bridge import (CURSOR, DispatchReceipt, ListenerFailure, MAX_FRAME_BYTES, PROTOCOL,
     Reason, Subscription, TriggerBridge, decode_frame, validate_receipt)
 
 
@@ -99,14 +99,18 @@ class ControlTriggers:
         return ticket
 
     def admit(self, subscription_uid: str, cursor: str, *, timeout_seconds: float):
+        subscription = Subscription("validation", subscription_uid)
+        if not isinstance(cursor, str) or not CURSOR.fullmatch(cursor):
+            raise ValueError("Invalid delivered trigger cursor")
         value = self._request("POST", "/api/control/v1/workflow-dispatches:admit",
                               {"subscriptionUid": subscription_uid, "cursor": cursor}, timeout_seconds=timeout_seconds)
         if set(value) - {"subscriptionUid", "cursor", "admissionId", "disposition", "runId"}:
             raise ListenerFailure(Reason.INVALID_RECEIPT)
-        # A matching subscription object is supplied only for scalar binding validation.
+        if "runId" in value and not isinstance(value["runId"], str):
+            raise ListenerFailure(Reason.INVALID_RECEIPT)
         receipt = DispatchReceipt(value.get("subscriptionUid"), value.get("cursor"), value.get("admissionId"),
                                   value.get("disposition"), value.get("runId"))
-        validate_receipt(receipt, Subscription("validation", subscription_uid), cursor)
+        validate_receipt(receipt, subscription, cursor)
         return receipt
 
     def connect(self, ticket: str):

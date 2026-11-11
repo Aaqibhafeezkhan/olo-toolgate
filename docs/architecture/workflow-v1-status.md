@@ -3,7 +3,7 @@
 
 Issue: [#295](https://github.com/olo-labs/olo-toolgate/issues/295) ·
 Integration: `feature/workflow-enhancement` ·
-Umbrella: [draft PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
+Merged milestone: [PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
 
 Last updated: 2026-11-11. Baseline: **v1-effort-1**, 100 effort points.
 Architecture and acceptance: [runtime plan, section 15](langgraph-runtime-plan.md#15-delivery-phases--minimal-end-to-end-v1).
@@ -56,7 +56,7 @@ fixes and tests, updates this file in the same commit series. The PR description
 links its status change, identifies affected phase(s), lists checks actually
 executed and their results, and states remaining work and limits. Record the PR
 number/link once known by updating that PR's branch; no separate progress-only
-follow-up PR is needed. Keep the umbrella draft PR's summary synchronized.
+follow-up PR is needed. Keep the follow-up PR descriptions synchronized with this status.
 
 For each PR, record:
 
@@ -71,9 +71,24 @@ For each PR, record:
   source digest if the status update is part of the merge. Do not add a commit
   solely to reference itself. Keep pending evidence uncredited until verified.
 
-Use the latest integration head for intermediate branches; merge their reviewed
-PRs into `feature/workflow-enhancement`. Keep #297 in draft until V1.4 passes.
+PR #297 merged into main as a milestone at `aa33a9d3e33cc1be2678ddaf67f4308062891a4f`.
+Follow-up work resumes in phase order on local `feature/workflow-enhancement`.
+The operator will push when ready.
 This process does not change the authoritative #230/#274 delivery rules.
+
+## V1.0 follow-up after the main milestone (2026-11-11)
+
+ADR 063 distinguishes the shipped profile and listener contracts from the
+pending Control run, admission and lease endpoints. The HTTPS adapter now
+rejects malformed admission coordinates before transport and rejects explicit
+null receipt run IDs, which the canonical wire schema does not permit.
+
+Executed 42 standalone runner/listener tests and 14 qualification harness tests
+with the pinned runtime environment. Both passed. Transport SHA-256
+`bd56b611b472a1da55067865c2d0b48f3fd24a23ce5c674b894863b61a7ab2d1`.
+The qualification harness tests use simulated drivers. The live Control
+endpoint inventory still needs reconciliation as those endpoints are
+implemented. No phase weight or live execution qualification is claimed.
 
 ## Admin UI property management slice (2026-11-11)
 

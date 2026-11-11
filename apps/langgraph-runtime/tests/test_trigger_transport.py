@@ -105,12 +105,22 @@ class WireTests(unittest.TestCase):
                    (503, {}, {}), (200, {}, {"subscriptionUid": SUB.uid}),
                    (202, {}, {"subscriptionUid": SUB.uid, "cursor": CURSOR, "admissionId": "d", "disposition": "ADMITTED"}),
                    (202, {}, {"subscriptionUid": SUB.uid, "cursor": CURSOR, "admissionId": "d", "disposition": "REJECTED", "workflowId": "foreign"}),
+                   (202, {}, {"subscriptionUid": SUB.uid, "cursor": CURSOR, "admissionId": "d",
+                              "disposition": "REJECTED", "runId": None}),
                    (200, {}, b'{"disposition":"ADMITTED","disposition":"REJECTED"}'))
         for response in replies:
             with self.subTest(response=response), self.http(lambda *args: response) as (_, origin):
                 with self.assertRaises(ListenerFailure) as failure:
                     self.client(origin).admit(SUB.uid, CURSOR, timeout_seconds=2)
                 self.assertNotIn("secret", str(failure.exception))
+
+    def test_invalid_admission_coordinates_are_refused_before_transport(self):
+        with self.http(lambda *args: (500, {}, {})) as (server, origin):
+            client = self.client(origin)
+            for uid, cursor in (("", CURSOR), (SUB.uid, "not-a-cursor")):
+                with self.subTest(uid=uid, cursor=cursor), self.assertRaises(ValueError):
+                    client.admit(uid, cursor, timeout_seconds=2)
+            self.assertFalse(server.requests)
 
     def test_https_redirect_never_forwards_credentials(self):
         with self.http(lambda *args: (200, {}, {})) as (target, target_origin):

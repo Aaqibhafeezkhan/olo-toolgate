@@ -25,6 +25,20 @@ Paths under application/adapter/domain are relative to
 No workflow run ledger, generic LangGraph application or model-proxy endpoint is
 claimed by these reuse points. Their absence was checked in the source inventory.
 
+## Contract inventory after milestone #297
+
+| Boundary | Current contract | Remaining server work |
+|---|---|---|
+| Profile configuration | DeploymentProfile v2 and the workflow-profile lifecycle operations are published in Control OpenAPI. Profile and workflow version IDs are distinct from the canonical profile digest. | Apply the complete reviewed configuration and collect readiness evidence. |
+| Message submission | The proposed workflow run endpoint derives caller identity and pins the published revision. | Define the request, status and idempotency contract together with the durable Control implementation. |
+| Trigger submission | WorkflowDispatchRequest and WorkflowDispatchReceipt are canonical v2 schemas. The listener sends only subscription UID and cursor. Optional receipt fields are omitted when absent. | Implement and publish the Control endpoint, including durable replay and terminal refusal semantics. |
+| Runner ownership and steps | The standalone graph uses a runtime interface and a simulated adapter in tests. | Define and implement workload-authenticated claim, expiry, step and completion operations without exposing provider credentials. |
+
+An ADMITTED receipt must contain a run ID. REJECTED and FILTERED receipts
+must omit it. DUPLICATE retains the original admission ID and includes a run
+ID only when the original outcome had one. These disposition rules are semantic
+checks in addition to the structural schemas.
+
 ## Decision: canonical fresh profile and publication
 
 Use DeploymentProfile version 2 as the sole fresh use-case profile contract for
