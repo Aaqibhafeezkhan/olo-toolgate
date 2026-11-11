@@ -173,7 +173,12 @@ device and rejection of the removed device’s previous lease. All 7 focused
 Gradle tests passed with this change. Tested Java sources SHA-256:
 `55a081fc0aa2e87362ab716848f5a20b48b40f668b47f330767190a73ed369cb` (concatenated in path order).
 
-Outstanding: Deploy and cross-assignment actions, contracts and
+Control OpenAPI now publishes the assignment lifecycle endpoint and the
+generated UI operation catalog exposes it. Contract binding and UI operation
+regeneration checks pass. Checked sources SHA-256: `3d3b39ea74421073c87de72db2b9d8c6043c660f613b78441844c15d8d7db27d`
+(OpenAPI operation catalog followed by the Control specification).
+
+Outstanding: Deploy and cross-assignment actions, their contracts and
 audit detail, rolling rollout and rollback, the raw Triggers page, PostgreSQL
 and full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.

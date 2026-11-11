@@ -277,6 +277,7 @@ export const operations = {
   getTriggerAssignment: { method: 'GET', path: '/api/control/v1/triggers/assignments/{name}' },
   patchTriggerAssignment: { method: 'PATCH', path: '/api/control/v1/triggers/assignments/{name}' },
   deleteTriggerAssignment: { method: 'DELETE', path: '/api/control/v1/triggers/assignments/{name}' },
+  actOnTriggerAssignment: { method: 'POST', path: '/api/control/v1/triggers/assignments/{name}:action' },
   listTriggerInstances: { method: 'GET', path: '/api/control/v1/triggers/instances' },
   getTriggerDesiredDocument: { method: 'GET', path: '/api/control/v1/endpoint/triggers/desired' },
   listTriggerEvents: { method: 'GET', path: '/api/control/v1/triggers/events' },
