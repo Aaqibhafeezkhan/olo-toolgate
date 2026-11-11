@@ -36,3 +36,25 @@ Use `python debug/hotfolder/langchain/run.py verify` for a one-shot smoke test.
 Stop the foreground listener first because both commands share the example's
 subscription. The [shared example](../../../examples/langchain/README.md#hot-folder-trigger-in-progress-issue-274)
 contains the graph and signed-tool client used by both commands.
+
+
+Edit [profile/deployment-profile.json](profile/deployment-profile.json) before starting
+HotFolder. The launcher stages a root-owned snapshot and mounts it read-only in
+Control. Restart with the launcher to apply changes. Start with `start.bat
+--no-profile` from the parent HotFolder directory to skip injection. Existing
+persisted configuration is retained.
+
+In the console, create a working profile and use **Agents > Models & prompts**
+to select a model group and set the agent prompt. Configure model deployments
+and groups on the same page or under **Workflows > Models**. Use **Tools > Triggers** to configure
+a package's trigger assignments against its signed configuration schema.
+Under **Workflows > Trigger mappings**, select the workflow and enter the
+subscription UID, assignment UID, service agent and event message pointer.
+Stage, review, provision and publish the revision as appropriate. **Workflows >
+Profiles** imports and downloads the same version-2 deployment profile format.
+A mounted file provisions packages at startup; workflow definitions in that file
+still need an explicit import, review and publication.
+
+The signed trigger event reports file data. The reviewed mapping pins the
+workflow ID and version separately. Control does not yet implement workflow
+admission, so the mapping does not start a workflow when an event arrives.

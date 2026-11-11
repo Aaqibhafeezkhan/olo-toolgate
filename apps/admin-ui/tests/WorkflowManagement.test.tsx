@@ -13,6 +13,8 @@ const status={profileId:'support',profileDigest:digest,state:'REVIEWED',generati
 const json=(body:unknown,code=200)=>new Response(JSON.stringify(body),{status:code});
 function rig(initial:WorkflowPage='workflows',publishCode=200){
   const transport=vi.fn<typeof fetch>().mockImplementation(async(url,options)=>{
+    if(String(url).includes('/triggers/definitions'))return json({items:[fixture.TriggerDefinitionRecord]});
+    if(String(url).includes('/triggers/'))return json({items:[]});
     if(String(url).includes('/document'))return json(profile);
     if(String(url).includes('/revisions/'))return json(status);
     if(options?.method==='POST')return json({...status,state:'DRAFT'},String(url).endsWith('/publish')?publishCode:200);
@@ -90,4 +92,45 @@ it('does not display private profile data when exact document loading is denied'
   const {transport}=rig();await screen.findByRole('button',{name:'Open support aaaaaaaaaaaa'});
   transport.mockResolvedValue(json({},403));fireEvent.click(screen.getByRole('button',{name:'Open support aaaaaaaaaaaa'}));
   await screen.findByRole('alert');expect(screen.queryByRole('heading',{name:'Profile lifecycle'})).toBeNull();
+});
+
+it('pins the selected workflow version in a trigger mapping draft',async()=>{
+  const {transport}=rig('workflow-dispatch');await open();
+  const workflow=profile.workflows!.workflows[0];
+  fireEvent.click(screen.getByRole('button',{name:'Add trigger mappings'}));
+  fireEvent.change(screen.getByLabelText('workflowId'),{target:{value:workflow.id}});
+  expect((screen.getByLabelText('workflowVersionId') as HTMLSelectElement).value).toBe(workflow.versionId);
+  fireEvent.change(screen.getByLabelText('subscriptionUid'),{target:{value:'subscription-uid'}});
+  fireEvent.change(screen.getByLabelText('sourceAssignmentUid'),{target:{value:'assignment-uid'}});
+  fireEvent.change(screen.getByLabelText('serviceAgentId'),{target:{value:'listener-agent'}});
+  fireEvent.change(screen.getByLabelText('serviceAgentGroupId'),{target:{value:'listener-group'}});
+  fireEvent.change(screen.getByLabelText('messagePointer'),{target:{value:'/message'}});
+  fireEvent.change(screen.getByLabelText('id'),{target:{value:'hotfolder-route'}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
+  await screen.findByText(/Staged exact profile revision/);
+  const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
+  expect(sent.workflows!.dispatchBindings.at(-1)).toMatchObject({
+    id:'hotfolder-route',workflowId:workflow.id,workflowVersionId:workflow.versionId,messagePointer:'/message',
+  });
+});
+
+it('edits a profile trigger against the installed export schema',async()=>{
+  const {transport}=rig('triggers');await open();
+  const definition=fixture.TriggerDefinitionRecord;
+  await screen.findByText(`${definition.triggerId} (${definition.packageVersion})`);
+  fireEvent.click(screen.getByRole('button',{name:'Add trigger packages'}));
+  fireEvent.change(screen.getByLabelText('packageId'),{target:{value:definition.packageId}});
+  fireEvent.change(screen.getByLabelText('version'),{target:{value:definition.packageVersion}});
+  fireEvent.click(screen.getByRole('button',{name:'Add triggers'}));
+  fireEvent.click(screen.getByRole('button',{name:'Add triggers item'}));
+  fireEvent.change(screen.getByLabelText('assignment'),{target:{value:'inbox'}});
+  fireEvent.change(screen.getByLabelText('triggerId'),{target:{value:definition.triggerId}});
+  expect(screen.getByText('Signed configuration schema')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('config'),{target:{value:'{"folder":"inbox"}'}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
+  await screen.findByText(/Staged exact profile revision/);
+  const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
+  expect(sent.packages[0].triggers).toEqual([{assignment:'inbox',triggerId:definition.triggerId,config:{folder:'inbox'}}]);
 });

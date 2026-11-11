@@ -154,6 +154,9 @@ export class ControlClient {
     }
   }
 
+  triggerAssignments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{signal});}
+  triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
+  triggerDefinitions(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{return this.send(operations.listTriggerDefinitions,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
   serverDeployments(signal?:AbortSignal):Promise<PackageDeploymentPage>{return this.send(operations.listServerPackageDeployments,{signal});}
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */

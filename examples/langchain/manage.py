@@ -63,7 +63,7 @@ def docker(service, arguments, input=None):
     operation = 'read-device-status' if status_read else 'container-command'
     try:
         result = subprocess.run(COMPOSE + ['exec', '-T', service] + arguments,
-                                input=input, capture_output=True, text=True, timeout=5 if status_read else 60, cwd=HERE)
+                                input=input, capture_output=True, text=True, timeout=15 if status_read else 60, cwd=HERE)
     except subprocess.TimeoutExpired:
         raise DockerCommandError(service, operation, 'command-timeout') from None
     if result.returncode:

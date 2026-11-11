@@ -4,6 +4,9 @@
 services:
   quickstart:
     image: olo-toolgate-hotfolder-quickstart:local
+    environment:
+      TOOLGATE_CONTROL_PROFILE_PATH: ""
+      TOOLGATE_TRIGGERS_CONTROL_CORE_ENABLED: "true"
   linux-device:
     image: olo-toolgate-hotfolder-device:local
     build:

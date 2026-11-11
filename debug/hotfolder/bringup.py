@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Start or exercise the isolated, bind-mounted HotFolder example on a Linux Docker host."""
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -16,7 +17,8 @@ EXAMPLE = ROOT / 'examples/langchain'
 PRIVATE = ROOT / '.dev/debug/hotfolder'
 FILES = PRIVATE / 'files'
 STATE = PRIVATE / 'state'
-IMAGE = 'olo-toolgate-quickstart:debug'
+PROFILE = HERE / 'langchain/profile/deployment-profile.json'
+IMAGE = os.environ.get('TOOLGATE_HOTFOLDER_QUICKSTART_IMAGE', 'olo-toolgate-quickstart:debug')
 PROJECT = 'toolgate-hotfolder'
 HTTP = '18092'
 
@@ -81,6 +83,7 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     start = commands.add_parser('start')
     start.add_argument('--prepared', action='store_true', help='Reuse this lab’s previously prepared package and registry inputs')
+    start.add_argument('--no-profile', action='store_true', help='Start without an injected deployment profile')
     for command in ('verify', 'listen', 'status', 'stop'):
         commands.add_parser(command)
     writer = commands.add_parser('drop')
@@ -113,6 +116,21 @@ def main():
     if args.command == 'start':
         run(['docker', 'image', 'inspect', IMAGE], stdout=subprocess.DEVNULL)
         mount_ready()
+        if not args.no_profile and PROFILE.is_file():
+            with PROFILE.open('rb') as source:
+                profile = source.read(262145)
+            if len(profile) > 262144:
+                raise ValueError('Deployment profile exceeds the Control size limit')
+            # Stage a root-owned snapshot to satisfy Control's file ownership check.
+            run(['docker', 'run', '--rm', '-i', '--pull', 'never', '--network', 'none', '--user', '0:0',
+                 '--security-opt', 'no-new-privileges:true', '--mount', f'type=bind,source={PRIVATE},target=/stage',
+                 '--entrypoint', '/opt/quickstart-python/bin/python', IMAGE, '-c',
+                 'import os,sys,tempfile; fd,path=tempfile.mkstemp(dir="/stage"); '
+                 'f=os.fdopen(fd,"wb"); f.write(sys.stdin.buffer.read()); f.close(); '
+                 'os.chmod(path,0o644); os.replace(path,"/stage/deployment-profile.json")'], input=profile)
+            os.environ['TOOLGATE_HOTFOLDER_PROFILE'] = str(PRIVATE/'deployment-profile.json')
+            os.environ['TOOLGATE_HOTFOLDER_PROFILE_SHA256'] = hashlib.sha256(profile).hexdigest()
+            compose.extend(['-f', str(HERE/'compose.profile.yaml')])
         STATE.mkdir(mode=0o700, exist_ok=True)
         if not args.prepared:
             manage.packages.prepare(compose, STATE, os.environ)
