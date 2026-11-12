@@ -87,11 +87,12 @@ class Configuration:
         elif user in saved: self.login(key,user,saved[user])
         else: raise ValueError('Local fixture password was already changed; supply its credential explicitly')
 
-    def api(self, path, body=None, method=None, user='admin', revision=None, with_status=False):
+    def api(self, path, body=None, method=None, user='admin', revision=None, with_status=False, *, etag=None):
         headers = {'Authorization': 'Bearer '+self.tokens[user],
                    'Content-Type': 'application/json', 'X-Request-ID': secrets.token_hex(16)}
         if body is not None or method=='DELETE': headers['Idempotency-Key'] = secrets.token_hex(16)
-        if revision is not None: headers['If-Match'] = '"'+str(revision)+'"'
+        if etag is not None: headers['If-Match'] = etag
+        elif revision is not None: headers['If-Match'] = '"'+str(revision)+'"'
         request = urllib.request.Request(self.origin+path,
             json.dumps(body).encode() if body is not None else None, headers,
             method=method or ('POST' if body is not None else 'GET'))

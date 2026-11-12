@@ -221,6 +221,47 @@ final class TriggerTest {
         }
     }
 
+    /** Control-side state transitions from M12 scenario 10, using signed desired documents. */
+    @Test
+    void overlappingGroupsRespectLifecyclePrecedenceAndNewMembership() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            TestSupport.pool(w.store(), codec, w.tenant(), "spare", "device-b", "device-c");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            String target = """
+                    {"executor":"CLIENT","deviceGroups":["finance","spare"]}
+                    """;
+            w.triggers().create(w.admin(), create("inbox", target, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            lifecycle(w, "Pause", "deviceGroups", "finance", 1);
+            assertDesired(w, "device-a", "Paused");
+            assertDesired(w, "device-b", "Paused");
+            assertDesired(w, "device-c", "Running");
+            lifecycle(w, "Stop", "devices", "device-c", 2);
+            lifecycle(w, "Run", "deviceGroups", "spare", 3);
+            assertDesired(w, "device-c", "Stopped");
+            assertDesired(w, "device-b", "Paused");
+
+            TestSupport.pool(w.store(), codec, w.tenant(), "finance", "device-a", "device-b", "device-d");
+            assertDesired(w, "device-d", "Paused");
+            lifecycle(w, "Remove", "devices", "device-a", 4);
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+            lifecycle(w, "Clear", "deviceGroups", "finance", 5);
+            assertDesired(w, "device-b", "Running");
+            assertDesired(w, "device-d", "Running");
+            assertDesired(w, "device-c", "Stopped");
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+        }
+    }
+
+    private void lifecycle(World w, String action, String scope, String id, long revision) {
+        String body = codec.json(Map.of("action", action, "scope", Map.of(scope, List.of(id)), "reason", "Scenario 10"));
+        assertEquals(200, w.triggers().action(w.admin(), "inbox", body, "W/\"" + revision + "\"", "request").status());
+    }
+
+    private void assertDesired(World w, String deviceId, String state) {
+        assertEquals(state, desired(w, deviceId).instances().getFirst().desiredState().name(), deviceId);
+    }
+
     @Test
     void bulkActionUsesOnlyAuthorizedGroupsAndMatchingTriggers() throws Exception {
         for (var entry : stores()) {

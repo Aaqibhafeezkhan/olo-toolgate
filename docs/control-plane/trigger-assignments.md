@@ -45,3 +45,22 @@ With `trigger.subscribe` on the assignment's targets, choose **Watch** to
 see incoming events over HTTPS. The Live panel shows events that arrive
 after the watch starts and displays the event fields your clearance
 permits. The watch has no stored cursor. Choose **Stop watching** to close it.
+
+To exercise the lifecycle phase transitions from M12 scenario 10, use a
+disposable Quickstart with four approved, running devices. Each device needs
+the same signed client release for `examples.inbox-watch` and an accessible
+`inbox` folder. From the repository root, using the isolated LangChain
+example's connection and credentials:
+
+```sh
+python examples/langchain/trigger_lifecycle_e2e.py --isolated-fixture \
+  --device device-a device-b device-c device-d --package-version 1.0.0 \
+  --checkpoint-service lifecycle-device-b
+```
+
+Use `examples/langchain/compose.trigger-lifecycle.yaml` with the base
+Compose file for separate device state volumes. The optional checkpoint
+probe writes one synthetic marker to the selected D2 container and checks
+its local checkpoint before pause and after resume. The fixture remains
+available for inspection until you remove the disposable stack. The
+failing-package rollout scenario needs a separate fixture.

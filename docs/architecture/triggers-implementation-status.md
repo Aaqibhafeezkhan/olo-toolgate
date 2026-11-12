@@ -275,8 +275,27 @@ Admin UI type checking and 12 focused tests passed. The socket test uses
 a simulated WebSocket and does not count as live-socket acceptance.
 Tested source SHA-256: `d35888cb26f95d7c81cedde92fda116ab5060fdc2efa3df90f8f7b22c5d60852` (changed sources and guide in path order).
 
-Outstanding: PostgreSQL
-and full component verification, and M12 scenarios 10 and 11. Module 6 earns
+The Control-side regression for M12 scenario 10 uses two overlapping
+Device Groups and signed desired documents. It covers group pause,
+device stop, override precedence, a device joining a paused group,
+removal by exclusion, and clearing the group pause. The PostgreSQL and SQLite
+Control gate passed with 818 recorded tests and zero failures, including this
+case in the nine-test `TriggerTest` suite. Tested implementation revision
+`81e4838a` with `TriggerTest.java` SHA-256 `32d2b409b4535c95ea179394340e5a311187c31f962c455ad882b46fb58143c3`.
+This fixture does not exercise a live executor or checkpoint restoration.
+
+The Quickstart scenario 10 runner now includes an optional local checkpoint
+probe using a synthetic file marker. Its CLI and Python compilation passed.
+The Compose overlay passed configuration validation for four distinct device
+hostnames and state volumes. A disposable Quickstart built with Control from
+`81e4838a` enrolled all four devices and provisioned the signed Inbox Watch
+client release after its isolated registry was configured. A live run is
+waiting for all targets to install that release and report Running.
+
+The five Python trigger contract tests passed after adding the maximum-length
+`maxUnavailable` fixture. The full repository gate is running separately.
+
+Outstanding: full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 
 ### Module 1 — Contracts, ADR and model (merged, #281)
