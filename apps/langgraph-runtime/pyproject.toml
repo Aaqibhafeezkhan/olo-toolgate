@@ -1,7 +1,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 [build-system]
-requires = ["setuptools==80.9.0"]
+requires = ["setuptools==84.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
