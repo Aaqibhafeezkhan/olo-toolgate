@@ -68,6 +68,8 @@ public final class TriggerService {
     /** A client lease lasts as long as the desired document, so a device keeps observing offline (plan 7). */
     static final long DESIRED_TTL_MS = 24L * 60 * 60 * 1000;
     static final long STALE_MIN_MS = 5 * 60_000L;
+    /** Observe a package replacement through a runtime heartbeat interval before releasing its slot. */
+    private static final long PACKAGE_READY_WINDOW_MS = 10_000L;
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -827,6 +829,8 @@ public final class TriggerService {
         var targets = devices(directory, stored);
         pending.retainAll(targets);
         var states = new TreeMap<String, TriggerRollout.DeviceState>();
+        boolean packageChanged = !stored.document().path("packageDigest").equals(
+                stored.document().path("previousRevision").path("packageDigest"));
         boolean paused = false;
         for (String device : targets) {
             paused |= desiredState(directory, stored, device).state() == TriggerDesiredState.Paused;
@@ -837,6 +841,10 @@ public final class TriggerService {
                     && java.util.stream.StreamSupport.stream(view.path("conditions").spliterator(), false)
                         .anyMatch(c -> "Ready".equals(c.path("type").asText()) && "True".equals(c.path("status").asText()));
             boolean failed = "Failed".equals(view.path("phase").asText());
+            if (packageChanged && !pending.contains(device)) {
+                ready &= instance.has("runningReadySinceUnixMs")
+                        && instance.path("lastSeenAtUnixMs").asLong() - instance.path("runningReadySinceUnixMs").asLong() >= PACKAGE_READY_WINDOW_MS;
+            }
             if (pending.contains(device)) {
                 states.put(device, failed ? TriggerRollout.DeviceState.PreviousFailed
                         : ready ? TriggerRollout.DeviceState.PreviousReady : TriggerRollout.DeviceState.PreviousUnavailable);
@@ -959,6 +967,9 @@ public final class TriggerService {
         document.set("view", view);
         document.put("updatedAtUnixMs", now);
         if (old.has("lastSeenAtUnixMs")) document.put("lastSeenAtUnixMs", old.path("lastSeenAtUnixMs").asLong());
+        if (!revisionChanged && !removed && old.has("runningReadySinceUnixMs")) {
+            document.set("runningReadySinceUnixMs", old.get("runningReadySinceUnixMs"));
+        }
         if (halted) document.put("haltedByControl", true);
         String text = codec.json(document);
         if (row != null && read(row.document()).path("view").equals(view)) return;

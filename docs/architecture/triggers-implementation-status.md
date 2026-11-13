@@ -302,7 +302,12 @@ The five Python trigger contract tests passed after adding the maximum-length
 environment variable in a Windows PowerShell subprocess launched from WSL.
 Later repository gates were not reached. The full Admin UI run with one
 worker reported 273 passed and 8 failed. A retry with a 20-second test
-timeout is running.
+timeout reported the same totals: 273 passed and 8 failed. The failures
+were in App, Devices and WorkflowManagement; the focused Trigger Live test
+passed. The Node 22 commit hook passed all 18 browser-extension tests and
+the Admin UI type check before its coverage run collided with the serial run.
+At branch baseline `aa33a9d3`, the three affected suites passed all 39 tests
+with Node 22, one worker and a 20-second test timeout.
 
 The scenario 11 runner now checks the availability budget during a signed
 package upgrade, fleet delivery to the selected device, the failed
@@ -317,13 +322,88 @@ The live scenario 10 attempt reached the new-member step but timed out:
 the new device reported Pending after joining a paused group. The supervisor
 now holds an instance with no process in Paused and starts it only on Run.
 The supervisor suite passed, including all 16 lifecycle tests and the
-delivery model test. The Ubuntu device binary also built. The musl binary
-for the Debian-based fixture is building. The failing Inbox Watch 0.1.1
-archive built against the local SDK and its two SDK examples passed. The
-scenario 11 runner is active. Source SHA-256: `e20ec072ccde2290560d4288edd5b5986119f730325f071ab8ba3074216710e4`
+delivery model test. The Ubuntu device binary also built. The failing Inbox Watch 0.1.1 archive built against the local SDK and its
+two SDK examples passed. Scenario 11 timed out waiting for Quickstart
+before starting the rollout. A replacement disposable Quickstart and its
+registry started successfully. The musl debug client did not expose its
+protected IPC socket before the fixture startup deadline, so the four
+devices did not enroll. The standard Debian release build opened IPC, and all four devices enrolled
+and checked in. An initial client-release request returned HTTP 503. A
+retry reported an existing release, which Control accepted for a four-device
+fleet rollout. Scenario 10 passed on the four-device fixture, including a
+new device joining the paused group and a post-resume checkpoint that kept
+the first marker and advanced its outbox sequence by one in the same lease
+epoch. The fixture used Control from `81e4838a` and the Debian release
+client from `7d6c4cc0`. Scenario 11 published the failing package and
+started all three baseline instances. Quickstart returned HTTP 501 on the
+package upgrade because the HTTP console proxy had no PATCH handler. The
+proxy now forwards PATCH through the existing authenticated dispatcher.
+The focused regression passed, covering a missing session, the TLS upstream
+request body and If-Match, and the response ETag. The rebuilt disposable
+Quickstart accepted the upgrade in the replay, and all 55 Quickstart unit
+tests passed. Tested supervisor SHA-256
+`d70322df18022cacd66a08d693e43852f6cc8a845c7d251582675a534460187c`. Source SHA-256: `e20ec072ccde2290560d4288edd5b5986119f730325f071ab8ba3074216710e4`
 (changed sources and guide concatenated in path order).
 
-Outstanding: full component verification, and M12 scenarios 10 and 11. Module 6 earns
+The scenario 11 replay exposed an identity gap: an executor reported the
+new revision Running with the previous binary when both releases shared a
+trigger descriptor, so Control advanced the rollout. The signed fleet
+registration now carries the package archive digest. The client requires an
+exact package and descriptor match from the active fleet release and
+re-resolves on fleet changes. Contract preflight verified all 1,521 generated files.
+The three focused client tests passed, including a replacement that shares
+the descriptor but has a different package digest. A fresh SQLite Quickstart
+with the rebuilt Control and Debian client passed scenario 10 again. Scenario
+11 published the signed failing release and started the canary. The
+runner observed a budget violation after fleet delivery and exited. A later
+snapshot showed the canary on revision 2 and the other two instances
+Running on revision 1. The runner now includes all phases, revisions and
+readiness values from the failing poll to distinguish a transient peer
+failure from a second replacement. The full Python contract suite reported
+183 tests with 2 skipped and no failures using the repository virtual
+environment. The Node 22 commit hook failed in Admin UI coverage while
+the Control and live fixture were running (238 passed, 43 failed).
+
+The diagnostic replay captured a second unready instance still on revision
+1. A later snapshot from an earlier attempt also showed a failed revision-2
+canary after another device had advanced. Control now measures the 10-second
+package replacement readiness window between accepted Running and Ready
+reports, and resets it on restart, unready report or revision change. The
+focused SQLite regression advanced the test clock and proved that a restart
+report arriving after the window still holds the slot. It failed before
+using report timestamps and passed after the correction.
+
+The live replay with the earlier readiness-window build verified baseline
+fleet activation and stable trigger readiness before starting. A revision-1
+peer still went Pending alongside the canary, including after the fixture
+switched off automatic Hotfolder provisioning. The peer stayed on the same
+fleet generation. The Docker recovery code derives ownership from the
+endpoint and runtime state path. The
+Compose devices used the same Docker endpoint and runtime state path, so
+a fleet activation could clean up another device's containers. The example
+now gives each fixture hostname its own Docker socket path to the shared
+daemon, keeping the required protected runtime state path. The earlier
+state-path changes failed startup validation. The socket-path change passed
+Python compilation. The live scenario 11 replay then passed on three devices:
+only the canary failed, Control reported RolloutStalled, and rollback restored
+all three devices to the original package at revision 3. This replay used
+the earlier readiness-window Control image. The overlapping full Control gate reported class-loading
+errors after another Gradle task rebuilt its classes. A serial rerun is
+required.
+
+The final readiness-window Control image also passed live scenario 11. The
+runner completed with the one-device budget and restored all three devices.
+Tested TriggerService SHA-256
+`be47bf8891be65a660f76863f88075dd15d24488e66e33f244fa792bad7440be`.
+
+The serial PostgreSQL, SQLite and enterprise Control gate passed with 819
+recorded tests and zero failures. The full endpoint and supervisor Rust run
+reported 134 passed, zero failures, and two ignored. The Admin UI hook
+reported 276 passed and five failed under concurrent verification. A focused
+rerun of the five affected suites passed all 43 tests with one worker and a
+20-second test timeout.
+
+Outstanding: full component verification. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 
 ### Module 1 — Contracts, ADR and model (merged, #281)

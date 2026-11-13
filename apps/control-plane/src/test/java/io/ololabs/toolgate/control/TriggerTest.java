@@ -84,6 +84,10 @@ final class TriggerTest {
                          EndpointService endpoints, RsaFleetCrypto crypto) {}
 
     private World world(PostgresStore store, String label) throws Exception {
+        return world(store, label, CLOCK);
+    }
+
+    private World world(PostgresStore store, String label, Clock clock) throws Exception {
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id(label);
         var admin = TestSupport.seed(store, codec, tenant, "root");
         TestSupport.pool(store, codec, tenant, "finance", "device-a", "device-b");
@@ -95,10 +99,10 @@ final class TriggerTest {
                 return null;
             });
         }
-        var endpoints = new EndpointService(store, codec, null, CLOCK, true, tenant.value(), "server", "Organization", "https://control.example.test", "https://gateway.example.test");
+        var endpoints = new EndpointService(store, codec, null, clock, true, tenant.value(), "server", "Organization", "https://control.example.test", "https://gateway.example.test");
         var crypto = crypto();
-        var triggers = new TriggerService(store, codec, crypto, endpoints, CLOCK, true, tenant.value());
-        var packages = new ServerPackages(store, codec, null, CLOCK).acceptTriggers(true);
+        var triggers = new TriggerService(store, codec, crypto, endpoints, clock, true, tenant.value());
+        var packages = new ServerPackages(store, codec, null, clock).acceptTriggers(true);
         return new World(store, tenant, admin, triggers, packages, endpoints, crypto);
     }
 
@@ -365,7 +369,39 @@ final class TriggerTest {
         }
     }
 
+    @Test
+    void aBrieflyReadyPackageReplacementKeepsItsRolloutSlot() throws Exception {
+        for (var entry : stores()) {
+            var clock = new TriggerIngestTest.MutableClock();
+            clock.millis = CLOCK.millis();
+            var w = world(entry.getValue(), "tenant-a", clock);
+            for (String version : List.of("1.0.0", "1.0.1")) {
+                w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, version, List.of(descriptor("new-file"))), "request");
+            }
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            reportRolloutPhase(w, "device-a", "Running", true);
+            reportRolloutPhase(w, "device-c", "Running", true);
+            w.triggers().patch(w.admin(), "inbox", """
+                    {"spec":{"packageVersion":"1.0.1","strategy":{"rollingUpdate":{"maxUnavailable":"1"}}}}
+                    """, "W/\"1\"", null, false, "request");
+            assertEquals(2L, desired(w, "device-a").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            clock.millis += 11_000;
+            reportRolloutPhase(w, "device-a", "Running", true, 1);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Failed", false, 2);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            var assignment = json(w.triggers().get(w.admin(), "inbox").body());
+            assertEquals("RolloutStalled", assignment.path("status").path("conditions").path(1).path("reason").asText());
+        }
+    }
+
     private void reportRolloutPhase(World w, String deviceId, String phase, boolean ready) {
+        reportRolloutPhase(w, deviceId, phase, ready, 0);
+    }
+
+    private void reportRolloutPhase(World w, String deviceId, String phase, boolean ready, int restarts) {
         var document = desired(w, deviceId);
         var instance = document.instances().getFirst();
         String snapshot = """
@@ -373,10 +409,10 @@ final class TriggerTest {
                   "snapshotGeneration":1,"snapshotDigest":"sha256:%s","page":1,"pageCount":1,"pageDigest":"sha256:%s","instances":[{
                     "instanceId":"%s","configRevision":%d,"phase":"%s",
                     "conditions":[{"type":"Ready","status":"%s","reason":"TestReport","lastTransitionTime":"2023-11-14T22:13:20Z"}],
-                    "counters":{"emitted":0,"rejected":0,"dropped":0,"restarts":0},"outbox":{"depth":0,"oldestAgeMs":0}
+                    "counters":{"emitted":0,"rejected":0,"dropped":0,"restarts":%d},"outbox":{"depth":0,"oldestAgeMs":0}
                   }]}}
                 """.formatted(document.generation(), "1".repeat(64), "2".repeat(64), instance.instanceId(),
-                instance.configRevision(), phase, ready ? "True" : "False");
+                instance.configRevision(), phase, ready ? "True" : "False", restarts);
         var sync = codec.model(snapshot, io.ololabs.toolgate.contracts.v2.TriggerSync.class);
         var ingest = new io.ololabs.toolgate.control.application.TriggerIngest(w.triggers(), codec);
         w.store().transaction(w.tenant(), true, tx -> ingest.sync(tx, device(w, deviceId), sync, "request"));

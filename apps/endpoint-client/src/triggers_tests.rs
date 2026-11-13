@@ -136,6 +136,7 @@ async fn a_desired_leased_instance_runs_reports_events_truncates_on_ack_and_is_r
         version: "21.0.12+1".into(),
     };
     let registration = FleetTriggerRegistration {
+        package_digest: format!("sha256:{}", "a".repeat(64)),
         trigger_id: "acme.watch/new-file".into(),
         trigger_descriptor_digest: format!("sha256:{}", "d".repeat(64)),
         runtime_id: "jvm".into(),
@@ -161,7 +162,7 @@ async fn a_desired_leased_instance_runs_reports_events_truncates_on_ack_and_is_r
     triggers
         .desired(Desired {
             document: document(3, vec![instance()]),
-            resolved: vec![resolved],
+            resolved: vec![resolved.clone()],
         })
         .await
         .unwrap();
@@ -228,10 +229,29 @@ async fn a_desired_leased_instance_runs_reports_events_truncates_on_ack_and_is_r
         (1, 1, Some("Mg=="))
     );
 
+    // A replacement with the same descriptor must wait for its own package.
+    let mut replacement = resolved;
+    replacement.instance.package_digest = format!("sha256:{}", "c".repeat(64));
+    replacement.instance.config_revision += 1;
+    triggers
+        .desired(Desired {
+            document: document(4, vec![replacement.instance.clone()]),
+            resolved: vec![replacement],
+        })
+        .await
+        .unwrap();
+    let sync = triggers.sync().await.unwrap();
+    let report = &sync.snapshot.as_ref().unwrap().instances[0];
+    assert_eq!(report.phase, TriggerPhase::Pending);
+    assert!(report.conditions.iter().any(|condition| {
+        condition.r#type == TriggerConditionType::Installed
+            && condition.status == TriggerConditionStatus::False
+    }));
+
     // Missing from a newer document: stopped, drained (nothing is left) and its local state deleted.
     triggers
         .desired(Desired {
-            document: document(4, vec![]),
+            document: document(5, vec![]),
             resolved: vec![],
         })
         .await

@@ -22,8 +22,11 @@ def wait(config, assignment, devices, timeout, predicate, budget=None):
         page = config.api(BASE + '/instances?' + urlencode({'assignment': assignment}))
         rows = {row['executorId']: row for row in page['items']}
         if set(rows) == set(devices):
-            if budget is not None and sum(not ready(row) for row in rows.values()) > budget:
-                raise ValueError('Observed more unready instances than the rollout budget')
+            unavailable = [row for row in rows.values() if not ready(row)]
+            if budget is not None and len(unavailable) > budget:
+                phases = {device: (row['configRevision'], row['phase'], ready(row))
+                          for device, row in rows.items()}
+                raise ValueError(f'Observed {len(unavailable)} unready instances with budget {budget}: {phases}')
             if predicate(rows):
                 return rows
         time.sleep(2)
@@ -61,7 +64,20 @@ def run(config, devices, good_version, failing_package, timeout):
             'strategy': {'rollingUpdate': {'maxUnavailable': '1'}},
         },
     })
-    initial = wait(config, assignment, devices, timeout, lambda rows: all(map(ready, rows.values())))
+    # Require a complete baseline across consecutive reports before introducing a replacement.
+    baseline_since = None
+
+    def stable_baseline(rows):
+        nonlocal baseline_since
+        if not all(map(ready, rows.values())):
+            baseline_since = None
+            return False
+        now = time.monotonic()
+        if baseline_since is None:
+            baseline_since = now
+        return now - baseline_since >= 10
+
+    initial = wait(config, assignment, devices, timeout, stable_baseline)
     good_digest = next(iter(initial.values()))['packageDigest']
     if not all(row['packageDigest'] == good_digest for row in initial.values()):
         raise ValueError('Fixture devices began on different package versions')

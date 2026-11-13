@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Opt-in example configuration around the shared real endpoint supervisor."""
 import json
+import socket
 from pathlib import Path
 
 import device_entrypoint
@@ -26,7 +27,11 @@ def configure(path):
     # Manage installs PUBLIC release/deployment trust explicitly. Tools arrive only
     # through signed fleet assignments, and every effect still consumes an mTLS permit.
     settings.pop('tools', None)
-    settings['execution'] = dict(enginePath='/usr/bin/docker', engineEndpoint='unix:///var/run/docker.sock',
+    # Compose devices share the host Docker daemon. Give each recovery scope a distinct socket path.
+    engine_socket = Path('/run/olo-toolgate-' + socket.gethostname() + '-docker.sock')
+    engine_socket.unlink(missing_ok=True)
+    engine_socket.symlink_to('/var/run/docker.sock')
+    settings['execution'] = dict(enginePath='/usr/bin/docker', engineEndpoint='unix://' + str(engine_socket),
         stateDirectory=str(state/'runtimes'), allowFirstUsePull=True, pullTimeoutSeconds=180,
         runtimes=[], tools=[], files=dict(root=str(folder), maxFileBytes=65536,
             maxEntries=256, extensions=['txt', 'md', 'json', 'csv']))

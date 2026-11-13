@@ -1541,6 +1541,7 @@ export interface FleetSignedDocument {
 /** A trigger export of a released package (ADR 058): how a device runs it. The device fetches the full descriptor by digest and checks it against this signed digest and the signed desired document. */
 export interface FleetTriggerRegistration {
   readonly triggerId: string;
+  readonly packageDigest: string;
   readonly triggerDescriptorDigest: string;
   readonly runtimeId: string;
   readonly entryPoint: string;

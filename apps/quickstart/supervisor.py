@@ -960,6 +960,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     do_GET = dispatch
     do_POST = dispatch
     do_PUT = dispatch
+    do_PATCH = dispatch
     do_DELETE = dispatch
 
 

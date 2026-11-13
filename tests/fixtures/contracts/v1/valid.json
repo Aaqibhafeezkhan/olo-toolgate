@@ -2142,6 +2142,7 @@
   },
   "FleetTriggerRegistration": {
     "triggerId": "examples.hotfolder/file-dropped",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "triggerDescriptorDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "runtimeId": "jvm",
     "entryPoint": "/opt/tool/examples.hotfolder/app.jar",

@@ -2660,6 +2660,7 @@ pub struct FleetSignedDocument {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetTriggerRegistration {
     pub trigger_id: String,
+    pub package_digest: String,
     pub trigger_descriptor_digest: String,
     pub runtime_id: String,
     pub entry_point: String,
