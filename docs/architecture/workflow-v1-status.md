@@ -177,6 +177,13 @@ startup evidence above validate this correction.
 
 ### Dedicated workflow, group and agent management (2026-11-11)
 
+PR #296 places the profile trigger editor under **Workflows > Trigger packages**
+(`#workflow-trigger-packages`). The page still requires Super Admin authority
+and queries tenant-wide package exports. All eight WorkflowManagement tests
+and the permission regression passed on merge tree
+`1f179fb54415c9e7e251bfd685d1ff8fb9b31af1` (before the status updates).
+Phase acceptance still requires the live execution checks below.
+
 Delivered directly to umbrella #297 as requested, based on `6a2f03ec`. Workflows
 now has separate Workflows, Workflow groups, Models, Trigger mappings and Profiles
 pages. Agents has Prompts & context and Workflow mappings with links scoped to

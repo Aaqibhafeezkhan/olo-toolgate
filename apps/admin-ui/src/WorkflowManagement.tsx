@@ -7,9 +7,8 @@ import {Failure} from './Failure';
 import {EditorDialog} from './EditorDialog';
 import {ProfileFields,initialField,profileSchema,type FieldOptions} from './ProfileFields';
 import {Table} from './Table';
-import {TriggerAssignments} from './TriggerAssignments';
 
-export const workflowPages={triggers:'Triggers',workflows:'Workflows',workflowGroups:'Workflow groups','workflow-models':'Models','workflow-dispatch':'Trigger mappings','workflow-profiles':'Profiles','agent-configuration':'Models & prompts','agent-workflow-mappings':'Workflow mappings'} as const;
+export const workflowPages={'workflow-trigger-packages':'Trigger packages',workflows:'Workflows',workflowGroups:'Workflow groups','workflow-models':'Models','workflow-dispatch':'Trigger mappings','workflow-profiles':'Profiles','agent-configuration':'Models & prompts','agent-workflow-mappings':'Workflow mappings'} as const;
 export type WorkflowPage=keyof typeof workflowPages;
 export const isWorkflowPage=(route:string):route is WorkflowPage=>Object.hasOwn(workflowPages,route);
 type Workspace={profile?:DeploymentProfile;status?:WorkflowProfileStatus;base?:DeploymentProfile;baseStatus?:WorkflowProfileStatus;dirty:boolean;epoch:number};
@@ -88,7 +87,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
   useEffect(()=>{
     if(page!=='workflow-dispatch')return;
     const abort=new AbortController();
-    void client.triggerAssignments(abort.signal).then(result=>{if(!abort.signal.aborted)setAssignments(result.items??[]);}).catch(()=>{if(!abort.signal.aborted)setAssignments([]);});
+    void client.triggerAssignments(undefined,abort.signal).then(result=>{if(!abort.signal.aborted)setAssignments(result.items??[]);}).catch(()=>{if(!abort.signal.aborted)setAssignments([]);});
     void client.triggerSubscriptions(abort.signal).then(result=>{if(!abort.signal.aborted)setSubscriptions(result.items??[]);}).catch(()=>{if(!abort.signal.aborted)setSubscriptions([]);});
     return()=>abort.abort();
   },[client,page]);
@@ -105,7 +104,6 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
   return <><div className="page-heading"><div><p className="eyebrow">Workflow configuration</p><h1>{workflowPages[page]}</h1></div><button disabled={busy} onClick={()=>setAttempt(a=>a+1)}>Refresh profiles</button></div>
     <p>Configure the selected profile across these pages, then stage, review and publish its exact revision. Current Super Admin authority is required. Runtime grants remain separate.</p>
     {error!==undefined&&<Failure error={error}/>}<p role="status">{notice}</p>
-    {page==='triggers'&&<TriggerAssignments client={client}/>}
     <section className="guidance"><h2>Working profile</h2>
       <button disabled={busy||w.dirty} onClick={create}>New profile</button>
       {page==='workflow-profiles'&&<><label>Import and stage deployment profile JSON<input type="file" accept=".json,application/json" disabled={busy||w.dirty} onChange={event=>{const file=event.currentTarget.files?.[0];event.currentTarget.value='';if(file)void run(()=>openFile(file));}}/></label>{w.profile&&<button disabled={busy} onClick={saveFile}>Download working profile JSON</button>}</>}
@@ -125,7 +123,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
       </>:<p>Stage the working profile before review or publication.</p>}
     </section>}
     {w.profile&&page==='workflow-profiles'&&<section className="guidance"><h2>Profile properties</h2><form id="workflow-profile-fields" className="workflow-profile-editor" onSubmit={e=>{e.preventDefault();void run(stage);}}><fieldset disabled={busy}><ProfileFields key={w.epoch} value={w.profile} change={value=>edit(value as DeploymentProfile)}/></fieldset></form></section>}
-    {w.profile&&page==='triggers'&&<TriggerPackages client={client} busy={busy} packages={w.profile.packages} change={value=>edit({...w.profile!,packages:value as unknown as DeploymentProfile['packages']})}/>}
+    {w.profile&&page==='workflow-trigger-packages'&&<TriggerPackages client={client} busy={busy} packages={w.profile.packages} change={value=>edit({...w.profile!,packages:value as unknown as DeploymentProfile['packages']})}/>}
     {w.profile&&config&&<>
       {page==='workflowGroups'&&<><Collection title="Workflow groups" definition="WorkflowGroupDefinition" items={config.workflowGroups} change={value=>editConfig('workflowGroups',value)} disabled={busy}/><p>Assign workflows to groups using each workflow’s workflowGroupId on the Workflows page.</p></>}
       {page==='workflows'&&<Collection title="Workflows" definition="WorkflowDefinition" items={config.workflows} change={value=>editWorkflows(value as unknown as WorkflowDefinition[])} disabled={busy}/>}
@@ -142,7 +140,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
 
 function TriggerPackages({client,busy,packages,change}:{client:ControlClient;busy:boolean;packages:DeploymentProfile['packages'];change:(value:Item[])=>void}){
   const [definitions,setDefinitions]=useState<readonly TriggerDefinitionRecord[]>([]),[next,setNext]=useState<string>(),[error,setError]=useState<unknown>(),[loading,setLoading]=useState(true);
-  useEffect(()=>{const abort=new AbortController();client.triggerDefinitions(undefined,abort.signal).then(page=>{if(!abort.signal.aborted){setDefinitions(page.items);setNext(page.nextPageToken);}}).catch(e=>{if(!abort.signal.aborted)setError(e);}).finally(()=>{if(!abort.signal.aborted)setLoading(false);});return()=>abort.abort();},[client]);
+  useEffect(()=>{const abort=new AbortController();client.triggerDefinitions({signal:abort.signal}).then(page=>{if(!abort.signal.aborted){setDefinitions(page.items);setNext(page.nextPageToken);}}).catch(e=>{if(!abort.signal.aborted)setError(e);}).finally(()=>{if(!abort.signal.aborted)setLoading(false);});return()=>abort.abort();},[client]);
   const options:FieldOptions=({label,value,root})=>{
     const exports=definitions.filter(entry=>entry.packageId===root.packageId&&entry.packageVersion===root.version&&(!root.packageDigest||entry.packageDigest===root.packageDigest));
     if(label==='triggerId'&&exports.length)return {choices:exports.map(entry=>({value:entry.triggerId,label:entry.triggerId}))};
@@ -156,5 +154,5 @@ function TriggerPackages({client,busy,packages,change}:{client:ControlClient;bus
     {error!==undefined&&<Failure error={error}/>}
     <Collection title="Trigger packages" definition="ProfilePackage" idField="packageId" items={packages} change={change} options={options} disabled={busy}/>
     <section className="guidance"><h2>Installed trigger exports</h2>{loading?<p>Loading trigger exports...</p>:!definitions.length?<p>No installed trigger exports found. Add the package and provision it to load its signed schema.</p>:<ul>{definitions.map(entry=><li key={entry.triggerId+entry.packageDigest}>{entry.triggerId} ({entry.packageVersion})</li>)}</ul>}
-    {next&&<button disabled={loading} onClick={()=>{setLoading(true);setError(undefined);void client.triggerDefinitions(next).then(page=>{setDefinitions(current=>[...current,...page.items]);setNext(page.nextPageToken);}).catch(setError).finally(()=>setLoading(false));}}>More trigger exports</button>}</section></>;
+    {next&&<button disabled={loading} onClick={()=>{setLoading(true);setError(undefined);void client.triggerDefinitions({pageToken:next}).then(page=>{setDefinitions(current=>[...current,...page.items]);setNext(page.nextPageToken);}).catch(setError).finally(()=>setLoading(false));}}>More trigger exports</button>}</section></>;
 }

@@ -616,8 +616,61 @@ final class TriggerTest {
         }
     }
 
+    @Test
+    void ownerCanAssignOnlyTheirDeviceAndCannotWidenToTheSharedGroup() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "upload");
+            limited(w, "visitor", "finance", List.of("trigger.read", "trigger.manage", "trigger.subscribe"), "OWNED");
+            w.store().transaction(w.tenant(), true, tx -> {
+                var before = tx.load();
+                var entries = new HashMap<>(before.entries());
+                TestSupport.put(entries, codec, Ids.Kind.DEVICE, new ControlDevice("device-a", "My device", true, 2L, "visitor"));
+                GroupGraph.setMemberships(entries, codec, Ids.Kind.DEVICE, "device-a", List.of("finance"));
+                tx.save(before, new Directory(before.revision() + 1, entries));
+                return null;
+            });
+            var visitor = new DirectoryService(w.store(), codec, 512, 1048576).portalActor(w.tenant(), "b".repeat(64), "visitor");
+            assertEquals(403, status(() -> w.triggers().definitions(visitor, null, null)));
+            assertEquals(403, status(() -> w.triggers().definitions(visitor, "device-b", null, null)));
+            assertEquals(0, json(w.triggers().definitions(visitor, "device-a", null, null).body()).path("items").size());
+            w.store().transaction(w.tenant(), true, tx -> {
+                var release = new FleetPackageRelease(PACKAGE, "1.0.0", "0".repeat(64),
+                        10L, new FleetSignedDocument("e30.e30.e30"));
+                var snapshot = new FleetDesiredSnapshot("device-a", 1L, List.of(new FleetAssignment(release, true)));
+                tx.fleet().save(FleetStore.Kind.DESIRED, new FleetStore.Row("device-a", 1L, codec.json(snapshot)), 0);
+                return null;
+            });
+            var exports = json(w.triggers().definitions(visitor, "device-a", null, null).body()).path("items");
+            assertEquals(1, exports.size());
+            assertEquals(PACKAGE + "/new-file", exports.get(0).path("triggerId").asText());
+            String own = "{\"executor\":\"CLIENT\",\"devices\":[\"device-a\"]}";
+            String other = "{\"executor\":\"CLIENT\",\"devices\":[\"device-b\"]}";
+            String group = "{\"executor\":\"CLIENT\",\"deviceGroups\":[\"finance\"]}";
+            assertEquals(201, w.triggers().create(visitor, create("my-folder", own, "{\"folder\":\"orders\"}", "Running"), null, false, "create").status());
+            assertEquals(403, status(() -> w.triggers().create(visitor, create("other-folder", other, "{\"folder\":\"orders\"}", "Running"), null, false, "other")));
+            assertEquals(403, status(() -> w.triggers().create(visitor, create("whole-group", group, "{\"folder\":\"orders\"}", "Running"), null, false, "group")));
+            assertEquals(403, status(() -> w.triggers().patch(visitor, "my-folder", "{\"spec\":{\"target\":" + other + "}}", "W/\"1\"", null, false, "widen")));
+            assertEquals(200, w.triggers().get(visitor, "my-folder").status());
+            var subscriptions = new TriggerSubscriptions(w.store(), codec, w.triggers(), CLOCK, w.tenant().value());
+            assertEquals(201, subscriptions.create(visitor, "{\"name\":\"my-folder-agent\",\"spec\":{\"sources\":{\"assignments\":[\"my-folder\"]},\"expiresAtUnixMs\":1700003600000}}", null, "subscribe").status());
+            // Ownership changes revoke reading and subscription authority immediately.
+            w.store().transaction(w.tenant(), true, tx -> {
+                var before = tx.load(); var entries = new HashMap<>(before.entries());
+                TestSupport.put(entries, codec, Ids.Kind.DEVICE, new ControlDevice("device-a", "Transferred device", true, 3L, "root"));
+                tx.save(before, new Directory(before.revision() + 1, entries)); return null;
+            });
+            assertEquals(403, status(() -> w.triggers().get(visitor, "my-folder")));
+            assertEquals(403, status(() -> subscriptions.create(visitor, "{\"name\":\"after-transfer\",\"spec\":{\"sources\":{\"assignments\":[\"my-folder\"]},\"expiresAtUnixMs\":1700003600000}}", null, "subscribe")));
+        }
+    }
+
     /** A portal administrator whose only management rule grants these actions on one Device Group. */
     private void limited(World w, String user, String group, List<String> actions) {
+        limited(w, user, group, actions, null);
+    }
+
+    private void limited(World w, String user, String group, List<String> actions, String deviceScope) {
         w.store().transaction(w.tenant(), true, tx -> {
             var before = tx.load();
             var entries = new HashMap<>(before.entries());
@@ -627,7 +680,7 @@ final class TriggerTest {
             var only = new GroupSelection(List.of(group), false);
             var conditions = new EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null);
             var ceiling = new EnterpriseScope(none, only, List.of(), false, List.of(), conditions);
-            var rule = new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, only, List.of(ceiling), conditions, null);
+            var rule = new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, only, List.of(ceiling), conditions, deviceScope);
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("trigger-operator", "Trigger operator", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, List.of(rule)));
             TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("trigger-operators", "Trigger operators", true, 1L, List.of(user), List.of("trigger-operator"),null));
             tx.save(before, new Directory(before.revision() + 1, entries));

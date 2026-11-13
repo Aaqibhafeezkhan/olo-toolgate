@@ -5,9 +5,34 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Device-scoped trigger management
+
+The console discovers client trigger exports from packages assigned to the
+selected device. The SDK exports the trigger annotation description and the
+configuration record's schema in the signed package descriptor. The console
+uses that schema for field labels, help, and defaults. Control validates each
+assignment and checks the caller's permissions on its targets.
+
+The focused UI test exercises an unrelated package schema. SDK annotation and
+SQLite Control tests cover exported metadata, device-scoped discovery, and
+denial of access to another device or a shared group. This change claims no
+additional module weight.
+
+The PR #296 merge resolution keeps device-scoped management under **Devices >
+Triggers**. Workflow profile trigger packages have a dedicated route. The API
+client supports both tenant-wide and device-scoped export queries.
+
+On merge tree `1f179fb54415c9e7e251bfd685d1ff8fb9b31af1` (before this
+status update), the UI build and generated contracts, UI operation bindings,
+and permission catalog checks passed. The serial UI run passed 29 of 30
+tests across App, Permissions, Triggers, and WorkflowManagement. The About
+navigation test passed in isolation with an explicit hash change. The initial
+full UI suite was stopped after timeouts. Live Demo 3 validation with rebuilt
+images remains pending.
+
 ## Overall progress
 
-Updated: **2026-11-11**.
+Updated: **2026-11-13**.
 
 **Overall: 27% complete; 73% pending.** 4 of 18 modules earned: module 1 (olo-labs/olo-toolgate#281, merge
 `16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`; reviewed as
@@ -43,7 +68,7 @@ finality. The baseline and earned module weights are unchanged. See the
 | Release-ready (99%) | 1–17 | ⏳ Pending |
 | Gate G-STATE (TLC model, stateful property tests, deterministic simulation) | 1, 3, 17 | 🔵 Item 1 (TLC) passes at the bounds in *Baseline changes*. Item 2 is delivered for the supervisor crate (module 3) and for Control ingest (module 5, a seeded-random stateful JUnit test instead of jqwik; see *Baseline changes*). Item 3 pending |
 | Gate G-IFC (conformance and adversarial corpus, security sign-off) | 11, 16 | ⏳ Not run |
-| M12 end-to-end scenarios | all | 0 of 58 passing in CI. Scenarios 16 and 31 pass at the protocol level in `TriggerDeliveryTest` (not over a live socket) |
+| M12 end-to-end scenarios | all | 0 of 58 passing in CI. Module 6 scenarios 10 and 11 passed locally. Scenarios 16 and 31 pass at the protocol level in `TriggerDeliveryTest` (not over a live socket) |
 
 ### CI hot-folder delivery fix (2026-11-09)
 
@@ -93,7 +118,7 @@ evidence. No module weight or baseline denominator changes; earned progress stay
 | 3 | Supervisor crate | C | 8% | ✅ Merged (via #285) | 8% | #283, #285 |
 | 4 | Control core for client triggers | D | 8% | ✅ Merged (via #285) | 8% | #284, #285 |
 | 5 | ★ Client integration and ingest | E | 8% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
-| 6 | Lifecycle, rollout and raw page | D | 6% | 🔵 In progress locally | 0% | — |
+| 6 | Lifecycle, rollout and raw page | D | 6% | 🔵 In this PR | 0% | This PR |
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
 | 8 | ★ Server triggers on the Tool Host | E | 8% | ⏳ Pending | 0% | — |
 | 9 | Python SDK parity | B | 4% | ⏳ Pending | 0% | — |
@@ -410,8 +435,26 @@ create its Docker socket alias under /run. The test now creates both aliases
 in a temporary directory and verifies their distinct endpoints, shared
 socket target, and required runtime state path. The focused fixture test passed.
 
-Outstanding: full component verification. Module 6 earns
-no weight until its acceptance criteria are met and it merges.
+Integration with main b713b2ae keeps device-scoped Trigger management
+under **Devices > Triggers**. The same route also exposes package upload,
+fleet assignment lifecycle controls, status and live events to Super Admin.
+The UI client shares the assignment list and creation bindings across both
+views. The integrated source tree 3aad9012209f77cd03aa674666f2d235228cf9af
+passed UI type checking and 30 focused UI tests across five suites.
+A clean Gradle build with an isolated PostgreSQL instance passed all 15
+focused Control tests, including SQLite and PostgreSQL assignment coverage,
+device-owner scope, cross-tenant denial, lifecycle precedence and rollout.
+The Java SDK annotation processor suite also passed. On integrated revision
+7952bd39 the commit gate passed 283 Admin UI tests and nine browser checks.
+Two accessibility tests reached the default five-second timeout under load
+on the first attempt. The serial rerun used a 20-second timeout and passed.
+
+On cb2f4f6a the workspace Rust format, tests and Clippy gate passed.
+The full check passed the Java build plus the published-contract build and
+its negative resolution proof. The full command and hosted CI remain
+outstanding at this checkpoint.
+
+Module 6 earns no weight until its acceptance criteria are met and it merges.
 
 ### Module 1 — Contracts, ADR and model (merged, #281)
 

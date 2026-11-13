@@ -143,12 +143,30 @@ public final class TriggerService {
     }
 
     public Store.Reply definitions(DirectoryService.Actor actor, String pageToken, Integer pageSize) {
+        return definitions(actor, null, pageToken, pageSize);
+    }
+
+    public Store.Reply definitions(DirectoryService.Actor actor, String deviceId, String pageToken, Integer pageSize) {
         tenantOf(actor);
         int size = pageSize(pageSize);
         String after = after(pageToken);
         return store.transaction(tenant, false, tx -> {
-            new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "trigger.read", clock.millis());
+            var access = new ManagementAccess(codec);
             var all = definitions(tx);
+            if (deviceId == null) {
+                access.requireAll(tx.load(), actor.userId(), "trigger.read", clock.millis());
+            } else {
+                var device = tx.load().entries().get(Ids.Kind.DEVICE.id(Ids.valid(deviceId)));
+                access.requireEntry(tx.load(), actor.userId(), "trigger.read", device, clock.millis());
+                var row = tx.fleet().get(FleetStore.Kind.DESIRED, deviceId);
+                var assigned = row == null ? Set.<String>of()
+                        : codec.model(row.document(), io.ololabs.toolgate.contracts.FleetDesiredSnapshot.class)
+                            .assignments().stream().filter(a -> a.desiredPresence())
+                            .map(a -> a.release().packageId() + "@" + a.release().version())
+                            .collect(java.util.stream.Collectors.toSet());
+                all = all.stream().filter(d -> assigned.contains(d.packageId() + "@" + d.version())
+                        && strings(d.descriptor().path("executors")).contains("CLIENT")).toList();
+            }
             var previous = new HashMap<String, Definition>();
             var records = new TreeMap<String, ObjectNode>();
             for (var d : all) {

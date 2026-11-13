@@ -28,7 +28,7 @@ export function TriggerAssignments({client}:{client:ControlClient}){
     const abort=new AbortController();
     setPage(undefined);
     setError(undefined);
-    void client.triggerAssignments(abort.signal,token).then(result=>{
+    void client.triggerAssignments(token,abort.signal).then(result=>{
       if(!abort.signal.aborted)setPage(result);
     }).catch(error=>{if(!abort.signal.aborted)setError(error);});
     return()=>abort.abort();
