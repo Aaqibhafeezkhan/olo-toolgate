@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 
 ROOT=Path(__file__).resolve().parents[2]
-spec=importlib.util.spec_from_file_location('agent_mcp_stdio',ROOT/'debug/agent-mcp-stdio.py')
+spec=importlib.util.spec_from_file_location('agent_mcp_stdio',ROOT/'debug/standard/agent-mcp-stdio.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 

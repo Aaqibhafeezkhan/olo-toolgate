@@ -331,6 +331,11 @@ summary {
   cursor:pointer;
   color:var(--muted);
   font-size:13px}
+.workflow-profile-editor { overflow-wrap:anywhere; }
+.workflow-profile-editor fieldset { min-width:0; display:grid; gap:12px; margin-block:12px; }
+.workflow-profile-editor label { display:grid; gap:6px; min-width:0; }
+.workflow-profile-editor input:not([type=checkbox]), .workflow-profile-editor textarea, .workflow-profile-editor select { width:100%; min-width:0; box-sizing:border-box; }
+.workflow-profile-editor label.checkbox { display:flex; }
 .user-form {
   display:grid;
   gap:8px;

@@ -8,6 +8,9 @@ ROOT=Path(__file__).resolve().parents[2]
 START='-- BEGIN TENANT CAPACITY\n'
 END='-- END TENANT CAPACITY\n'
 TRACKED={
+ 'control_workflow_profile_revisions':(['document'],None),
+ 'control_workflow_profile_heads':(['profile_id','digest'],None),
+ 'control_workflow_profile_owners':(['resource_kind','resource_id','profile_id','definition_digest'],None),
  'control_kill_gateways':(['gateway_id'],None),
  'control_kill_breakglass_requests':(['request_id','request_digest','event_id','certificate_sha256'],None),
  'control_kill_proposals':(['document'],None),

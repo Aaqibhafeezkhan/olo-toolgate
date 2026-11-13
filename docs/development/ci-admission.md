@@ -44,5 +44,5 @@ and publishes without tests, scans or CI verification; compilation and packaging
 checks still apply. Main CI never invokes its publisher.
 
 These changes take effect on branches containing the updated workflow files. Existing runs are not
-stopped. Local `debug/start.bat` remains usable while CI is paused and does not
+stopped. Local `debug/standard/start.bat` remains usable while CI is paused and does not
 commit or push.

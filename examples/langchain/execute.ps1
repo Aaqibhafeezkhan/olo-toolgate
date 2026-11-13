@@ -27,7 +27,7 @@ try {
     }
     # Restarts a stopped stack without rebuilding; a running stack is left as is.
     Invoke-ExampleCommand 'docker' @('compose','up','-d','--no-build','--wait','--wait-timeout','180','quickstart','linux-device')
-    . (Join-Path $PSScriptRoot '../../debug/python.ps1')
+    . (Join-Path $PSScriptRoot '../../debug/standard/python.ps1')
     $Python = Find-DebugPython
     Invoke-ExampleCommand $Python @('manage.py','verify-deployment','--target',$Target)
     Invoke-ExampleCommand $Python @('manage.py','sync-deployment')

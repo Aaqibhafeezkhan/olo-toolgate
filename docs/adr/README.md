@@ -114,3 +114,5 @@ Use `000-template.md`.
 - [ADR 061: Tenant audit hash chains](061-tenant-audit-hash-chains.md)
 
 - [ADR 062: Signed external audit anchors](062-signed-audit-anchors.md)
+
+- [ADR 063: Profile-driven external workflow execution](063-profile-driven-workflow-execution.md)

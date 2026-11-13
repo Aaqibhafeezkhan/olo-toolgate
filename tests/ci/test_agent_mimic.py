@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, Mock
 ROOT=Path(__file__).resolve().parents[2]
-spec=importlib.util.spec_from_file_location('agent_mimic',ROOT/'debug/agent-mimic.py')
+spec=importlib.util.spec_from_file_location('agent_mimic',ROOT/'debug/standard/agent-mimic.py')
 mimic=importlib.util.module_from_spec(spec);spec.loader.exec_module(mimic)
 
 class ScriptTests(unittest.TestCase):

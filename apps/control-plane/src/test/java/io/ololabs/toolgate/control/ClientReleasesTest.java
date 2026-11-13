@@ -322,7 +322,7 @@ final class ClientReleasesTest {
         PackageProvisioning.CoreArtifacts core = (id, version) -> id.equals("acme.greet") && version.equals("1.0.0") ? new PackageProvisioning.Core(rig.digest, rig::bytes) : null;
         return new PackageProvisioning(rig.store, rig.codec, new ServerPackages(rig.store, rig.codec, null, java.time.Clock.systemUTC()), null, core, rig.releases, tenantId -> rig.fleet, java.time.Clock.systemUTC());
     }
-    private static final String DEVICE_PROFILE = "{\"profileVersion\":1,\"profileId\":\"lab\",\"packages\":[{\"packageId\":\"acme.greet\",\"source\":\"PREBUILT_CORE\",\"version\":\"1.0.0\","
+    private static final String DEVICE_PROFILE = "{\"profileVersion\":2,\"profileId\":\"lab\",\"packages\":[{\"packageId\":\"acme.greet\",\"source\":\"PREBUILT_CORE\",\"version\":\"1.0.0\","
         + "\"required\":true,\"deviceGroupIds\":[\"lab\"],\"tools\":[{\"toolId\":\"acme.greet/client_greet\",\"toolGroupId\":\"lab-tools\"}],\"bindingIds\":[\"lab-binding\"]}]}";
     private static void join(Rig rig, String device) {
         rig.store.transaction(rig.tenant, true, tx -> { var before = tx.load(); var entries = new HashMap<>(before.entries());

@@ -34,7 +34,7 @@ function formShape(template:unknown,value:unknown):boolean {
 }
 const extra=(record:DirectoryRecords[Kind])=>Object.fromEntries(Object.entries(record).filter(([k])=>!['id','name','enabled','revision'].includes(k)));
 /** All permission edits target group records, typed Roles, grants or bindings. */
-export function DirectoryEditor({client,kind,record,close,saved,readOnly=false}:{client:ControlClient;kind:Kind;record?:DirectoryRecords[Kind];close:()=>void;saved:()=>void;readOnly?:boolean}) {
+export function DirectoryEditor({client,kind,record,close,saved,readOnly=false,workflowManagement=false}:{client:ControlClient;kind:Kind;record?:DirectoryRecords[Kind];close:()=>void;saved:()=>void;readOnly?:boolean;workflowManagement?:boolean}) {
   const [current,setCurrent]=useState(record);const [id,setId]=useState(record?.id??''),[name,setName]=useState(record?.name??''),[enabled,setEnabled]=useState(record?.enabled??false);
   const [config,setConfig]=useState(JSON.stringify(record?extra(record):defaults[kind],null,2));
   const [error,setError]=useState<unknown>(),[busy,setBusy]=useState(false),[confirm,setConfirm]=useState(false);
@@ -54,6 +54,7 @@ export function DirectoryEditor({client,kind,record,close,saved,readOnly=false}:
   return <EditorDialog title={current?`Edit ${title}`:`Add ${title}`} close={close} busy={busy}><section aria-label={`${title} editor`}>
     {error!==undefined&&<Failure error={error}/>}
     {readOnly&&<p role="status">View only. Your role cannot edit this record.</p>}
+    {kind==='agents'&&workflowManagement&&<p><a href={`#agent-configuration${current?`?agentId=${encodeURIComponent(current.id)}`:''}`} onClick={close}>Manage prompts, models and context</a> · <a href={`#agent-workflow-mappings${current?`?agentId=${encodeURIComponent(current.id)}`:''}`} onClick={close}>Manage workflow mappings</a></p>}
     <form className="user-form" onSubmit={save}><fieldset disabled={readOnly}>
       <label>Identifier<input required maxLength={128} disabled={busy||!!current} value={id} onChange={e=>setId(e.target.value)}/></label>
       <label>Display name<input required maxLength={128} disabled={busy} value={name} onChange={e=>setName(e.target.value)}/></label>

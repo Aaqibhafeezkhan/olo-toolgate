@@ -17,6 +17,7 @@ it('separates import and deployment controls using current server decisions',asy
  vi.mocked(ControlClient.prototype.can).mockImplementation(permission=>permission==='package.read'||permission==='package.import');
  const fetcher=vi.fn(async(_url:string,_init?:RequestInit)=>json({items:[version]}));vi.stubGlobal('fetch',profiled(fetcher));
  render(<ServerPackages client={new ControlClient('token',vi.fn())}/>);await screen.findByText('acme.orders/greet');
+ expect(screen.queryByText('Manage workflow profile')).toBeNull();
  fireEvent.change(screen.getByLabelText('Version'),{target:{value:digest}});
  expect((screen.getByRole('button',{name:'Deploy'}) as HTMLButtonElement).disabled).toBe(true);
  expect((screen.getByLabelText('Package file (.tgpkg)') as HTMLInputElement).disabled).toBe(false);

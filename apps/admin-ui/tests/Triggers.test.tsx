@@ -40,7 +40,7 @@ test('uses the selected package export, version and configuration schema',async(
   fireEvent.change(screen.getByLabelText('Assignment name'),{target:{value:'threshold'}});
   fireEvent.change(screen.getByLabelText('Device'),{target:{value:'my-device'}});
   const option=await screen.findByRole<HTMLOptionElement>('option',{name:'examples.temperature/threshold (2.3.4)'});
-  expect(discover).toHaveBeenCalledWith('my-device',undefined,expect.anything());
+  expect(discover).toHaveBeenCalledWith({deviceId:'my-device',pageToken:undefined,signal:expect.any(AbortSignal)});
   fireEvent.change(screen.getByLabelText('Package trigger'),{target:{value:option.value}});
   expect(screen.getByText('Enter the sensor identifier.')).toBeTruthy();
   expect(screen.getByDisplayValue('40')).toBeTruthy();

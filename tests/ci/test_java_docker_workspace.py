@@ -13,7 +13,7 @@ class JavaDockerWorkspaceTests(unittest.TestCase):
         members = re.findall(r'project\("[^"]+"\)\.projectDir = file\("([^"]+)"\)',
                              (ROOT/'settings.gradle.kts').read_text())
         candidates = [*ROOT.glob('apps/*/Dockerfile'), *ROOT.glob('examples/**/*.Dockerfile'),
-                      *ROOT.glob('debug/*.Dockerfile')]
+                      *ROOT.glob('debug/*/*.Dockerfile')]
         builders = [path for path in candidates if re.search(
             r'^COPY [^\n]*\bsettings\.gradle\.kts\b[^\n]*$', path.read_text(), re.MULTILINE)]
         self.assertTrue(builders, 'At least one root Gradle Docker build must be checked')

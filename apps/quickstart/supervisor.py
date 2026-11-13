@@ -204,8 +204,11 @@ def identity_audit(operation, generation, request_id, user='admin'):
     with Database() as db:
         # ADR 061: one serialized, chained append to Control's per-tenant audit chain.
         db.execute('BEGIN IMMEDIATE')
-        audit_chain.append(db,TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),operation,'local-identity:'+user,generation,request_id,
-                           hashlib.sha256((operation+'\n'+str(generation)).encode()).hexdigest(),postgres=db.pg)
+        # The operation, target and revision are bound separately by the row digest.
+        # This request digest fingerprints only the random audit correlation ID.
+        request_digest = hashlib.sha256(b'toolgate/local-identity-audit/v1\n' + request_id.encode('ascii')).hexdigest()
+        audit_chain.append(db,TENANT,hashlib.sha256((ISSUER+'\n'+user).encode()).hexdigest(),
+                           operation,'local-identity:'+user,generation,request_id,request_digest,postgres=db.pg)
         db.commit()
 
 

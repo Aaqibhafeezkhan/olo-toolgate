@@ -1,0 +1,14 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+services:
+  quickstart:
+    environment:
+      TOOLGATE_CONTROL_PROFILE_PATH: /opt/toolgate/example/deployment-profile.json
+      TOOLGATE_HOTFOLDER_PROFILE_SHA256: ${TOOLGATE_HOTFOLDER_PROFILE_SHA256:?use bringup.py}
+    volumes:
+      - type: bind
+        source: ${TOOLGATE_HOTFOLDER_PROFILE:?use bringup.py}
+        target: /opt/toolgate/example/deployment-profile.json
+        read_only: true
+        bind:
+          create_host_path: false

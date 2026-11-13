@@ -45,7 +45,7 @@ export function Triggers({client}:{client:ControlClient}){
         let cursor:string|undefined;
         const seen=new Set<string>();
         do{
-          const page=await client.triggerDefinitions(device,cursor,abort.signal);
+          const page=await client.triggerDefinitions({deviceId:device,pageToken:cursor,signal:abort.signal});
           items.push(...page.items);cursor=page.nextPageToken;
           if(cursor&&seen.has(cursor))throw new Error('Repeated page cursor');
           if(cursor)seen.add(cursor);

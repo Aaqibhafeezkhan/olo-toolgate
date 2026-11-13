@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[2]
-spec=importlib.util.spec_from_file_location('configuration',ROOT/'debug/configure-debug-agent.py')
+spec=importlib.util.spec_from_file_location('configuration',ROOT/'debug/standard/configure-debug-agent.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
 class InitialConfigurationTests(unittest.TestCase):

@@ -36,7 +36,7 @@ final class PackageProvisioningTest {
         return new Rig(store, codec, tenant, admin, packages, new PackageProvisioning(store, codec, packages, null, core, null, null, java.time.Clock.systemUTC()), digest);
     }
 
-    private static String profile(String packages) { return "{\"profileVersion\":1,\"profileId\":\"orders\",\"packages\":[" + packages + "]}"; }
+    private static String profile(String packages) { return "{\"profileVersion\":2,\"profileId\":\"orders\",\"packages\":[" + packages + "]}"; }
     private static final String ORDERS = "{\"packageId\":\"acme.orders\",\"source\":\"PREBUILT_CORE\",\"version\":\"0.1.0\",\"required\":true,\"hostIds\":[\"host-1\"],"
         + "\"globals\":{\"ItemsApiHost\":\"items.example.com\"},\"tools\":[{\"toolId\":\"acme.orders/items.get\",\"toolGroupId\":\"orders-tools\"}],\"bindingIds\":[\"orders-binding\"]}";
     private static JsonNode node(Store.Reply reply) throws Exception { return JSON.readTree(reply.body()); }
@@ -56,7 +56,7 @@ final class PackageProvisioningTest {
                 profile("{\"packageId\":\"acme.orders\",\"source\":\"PREBUILT_CORE\",\"version\":\"0.1.0\",\"packageDigest\":\"sha256:" + "0".repeat(64) + "\",\"required\":true}"),
                 profile(ORDERS.replace("acme.orders/items.get", "acme.other/items.get")),
                 profile(ORDERS.replace("\"hostIds\":[\"host-1\"],", "")),
-                "{\"profileVersion\":2,\"profileId\":\"orders\",\"packages\":[]}"))
+                "{\"profileVersion\":1,\"profileId\":\"orders\",\"packages\":[]}"))
             assertEquals(400, assertThrows(Failure.class, () -> rig.provisioning.apply(rig.admin, invalid), invalid).status(), invalid);
         assertTrue(rig.store.transaction(rig.tenant, false, tx -> tx.packages().versions(10)).isEmpty());
         assertEquals(404, assertThrows(Failure.class, () -> rig.provisioning.status(rig.admin, "orders")).status());

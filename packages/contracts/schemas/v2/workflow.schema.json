@@ -1,0 +1,515 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/workflow.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Workflow configuration",
+  "description": "Profile workflow catalog declarations. Structural validation does not confer authority or readiness; Control must validate reference closure, tenant scope, grants and dependencies.",
+  "$ref": "#/$defs/WorkflowConfiguration",
+  "$defs": {
+    "WorkflowContextSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "toolId": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        },
+        "arguments": {
+          "type": "object",
+          "maxProperties": 32
+        }
+      },
+      "required": [
+        "toolId",
+        "arguments"
+      ],
+      "description": "Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowExecutionLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maxHandoffs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "maxDurationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        }
+      },
+      "required": [
+        "maxSteps",
+        "maxHandoffs",
+        "maxDurationSeconds"
+      ],
+      "description": "Profile declaration for WorkflowExecutionLimits; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowGroupDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "id",
+        "displayName"
+      ],
+      "description": "Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowModelGroupDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deploymentIds": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Identifier"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "id",
+        "deploymentIds"
+      ],
+      "description": "Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowAgentDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "modelGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "systemPrompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "contextSources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowContextSource"
+          },
+          "minItems": 0,
+          "maxItems": 16
+        },
+        "outputSchema": {
+          "type": "object",
+          "maxProperties": 64
+        }
+      },
+      "required": [
+        "agentId",
+        "modelGroupId",
+        "systemPrompt",
+        "contextSources",
+        "outputSchema"
+      ],
+      "description": "Profile declaration for WorkflowAgentDefinition; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowAgentBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "agentGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "entryEligible": {
+          "type": "boolean"
+        },
+        "delegationAllowed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "agentId",
+        "agentGroupId",
+        "entryEligible",
+        "delegationAllowed"
+      ],
+      "description": "Profile declaration for WorkflowAgentBinding; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "versionId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "workflowGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "modelGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "systemPrompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "contextSources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowContextSource"
+          },
+          "minItems": 0,
+          "maxItems": 16
+        },
+        "parameterSchema": {
+          "type": "object",
+          "maxProperties": 64
+        },
+        "resultSchema": {
+          "type": "object",
+          "maxProperties": 64
+        },
+        "limits": {
+          "$ref": "#/$defs/WorkflowExecutionLimits"
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowAgentBinding"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "id",
+        "versionId",
+        "workflowGroupId",
+        "modelGroupId",
+        "systemPrompt",
+        "contextSources",
+        "parameterSchema",
+        "resultSchema",
+        "limits",
+        "agents"
+      ],
+      "description": "Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowRemediationMode": {
+      "type": "string",
+      "enum": [
+        "PREPARE",
+        "APPLY"
+      ],
+      "description": "Profile declaration for WorkflowRemediationMode; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowDispatchBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "subscriptionUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "sourceAssignmentUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "workflowId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "workflowVersionId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "serviceAgentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "serviceAgentGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "messagePointer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?:/(?:[^~/]|~[01])*)+$"
+        },
+        "remediationMode": {
+          "$ref": "#/$defs/WorkflowRemediationMode"
+        }
+      },
+      "required": [
+        "id",
+        "subscriptionUid",
+        "sourceAssignmentUid",
+        "workflowId",
+        "workflowVersionId",
+        "serviceAgentId",
+        "serviceAgentGroupId",
+        "messagePointer",
+        "remediationMode"
+      ],
+      "description": "Profile declaration for WorkflowDispatchBinding; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowConfiguration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workflowGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowGroupDefinition"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "modelGroups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowModelGroupDefinition"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "agentDefinitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowAgentDefinition"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "workflows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowDefinition"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "dispatchBindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowDispatchBinding"
+          },
+          "minItems": 0,
+          "maxItems": 64
+        },
+        "modelDeployments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorkflowModelDeployment"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "workflowGroups",
+        "modelGroups",
+        "agentDefinitions",
+        "workflows",
+        "dispatchBindings",
+        "modelDeployments"
+      ],
+      "description": "Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority."
+    },
+    "WorkflowDispatchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A delivered subscription cursor for server-side workflow admission. Caller/event fields cannot select tenant, workflow, version, identity or prompts.",
+      "properties": {
+        "subscriptionUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        }
+      },
+      "required": [
+        "subscriptionUid",
+        "cursor"
+      ]
+    },
+    "WorkflowDispatchDisposition": {
+      "type": "string",
+      "enum": [
+        "ADMITTED",
+        "DUPLICATE",
+        "REJECTED",
+        "FILTERED"
+      ],
+      "description": "A durably recorded dispatch outcome. An HTTP/auth/transport failure without a matching receipt never permits acknowledgement."
+    },
+    "WorkflowDispatchReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Durable admission evidence bound to this subscription UID and delivered cursor. ADMITTED requires runId; DUPLICATE returns its original durable outcome reference and runId when one exists. Terminal rejection/filtering is recorded, never inferred locally.",
+      "properties": {
+        "subscriptionUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "cursor": {
+          "$ref": "trigger.schema.json#/$defs/TriggerCursor"
+        },
+        "admissionId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "disposition": {
+          "$ref": "#/$defs/WorkflowDispatchDisposition"
+        },
+        "runId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "subscriptionUid",
+        "cursor",
+        "admissionId",
+        "disposition"
+      ]
+    },
+    "WorkflowProfileReviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "profileDigest"
+      ],
+      "description": "Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness."
+    },
+    "WorkflowProfilePublishRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740990
+        }
+      },
+      "required": [
+        "profileDigest",
+        "expectedGeneration"
+      ],
+      "description": "Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness."
+    },
+    "WorkflowProfileStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "state": {
+          "$ref": "#/$defs/WorkflowProfileState"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dependenciesReady": {
+          "type": "boolean"
+        },
+        "reviewedBy": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "profileId",
+        "profileDigest",
+        "state",
+        "generation",
+        "dependenciesReady"
+      ],
+      "description": "Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness."
+    },
+    "WorkflowProfileState": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "REVIEWED",
+        "PUBLISHED"
+      ],
+      "description": "DRAFT and REVIEWED revisions are unavailable to runs; PUBLISHED identifies the activated revision, not cached runtime authority."
+    },
+    "WorkflowModelDeployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner.",
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 2048
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "secretName": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "deviceGroupId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "id",
+        "origin",
+        "modelId",
+        "secretName",
+        "toolGroupId",
+        "deviceGroupId"
+      ]
+    }
+  }
+}

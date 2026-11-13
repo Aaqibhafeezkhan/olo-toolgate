@@ -139,6 +139,60 @@ and checksums in `build/ui/`. `make check` includes unit, drift and browser gate
 See [authentication and operations](../../docs/control-plane/admin-ui.md),
 [ADR 004](../../docs/adr/004-embedded-admin-console.md) and
 [approval architecture](../../docs/adr/006-ask-approvals.md).
+## Workflow profile management
+
+Current Super Admin users open **Workflows > Workflows** or **Workflows > Workflow
+groups** to configure those records. Select a staged, reviewed or published
+revision in **Working profile**, or create a version-2 profile. The revision
+catalog is tenant-scoped and paged. Profile documents are loaded only when a
+specific revision is opened.
+For a new profile, add a workflow group, model deployment and model group, agent
+definition, and a workflow with an entry agent before staging. Trigger mappings
+are optional. Control checks directory, package and vault references before
+publication.
+
+Under **Agents**, **Prompts & context** edits each profile agent’s model group,
+system prompt, context sources and output schema. **Workflow mappings** edits the
+agent group, entry eligibility and delegation eligibility for each workflow.
+The agent directory editor links directly to both pages for the selected agent.
+Directory ownership, group membership, tool grants and runtime authority remain
+separate from workflow configuration.
+
+**Workflows > Models** manages deployments and model groups; **Trigger packages**
+configures trigger assignments in a profile; **Trigger mappings** manages dispatch
+bindings; **Profiles** exposes the complete profile, including
+package provisioning and readiness cases. These pages share one working draft
+while navigating. Apply a record edit to the draft, then stage the whole profile.
+Discard unsaved edits before selecting another revision; disconnect clears the
+working copy. The Workflows and Workflow mappings pages assign a new version
+when changing a staged workflow and update dispatch bindings pinned to its prior
+version in that draft. When editing the entire profile directly, update any
+changed workflow version and its dispatch references together.
+
+**Devices > Triggers** shows visible assignments and lets users configure package
+triggers on approved devices where they have trigger management permission.
+
+**Tools > Server packages** links to the dedicated pages and also keeps the full
+editor for opening an exact revision by identifier and digest.
+
+The editor exposes every canonical profile property: packages and their targets,
+globals, activations and triggers; readiness calls; workflow groups; model
+deployments and vault secret references; model groups; agent definitions, prompts,
+context sources and output schemas; workflows, supervisor settings, parameter and
+result schemas, limits and agent bindings; and trigger dispatch bindings.
+Use Add/Remove for optional sections and collection entries. Open JSON objects
+(arguments, schemas, globals and trigger configuration) have JSON object editors.
+No provider secret value is requested or saved in browser storage.
+
+Stage creates an immutable draft. Review applies to its exact digest; provisioning
+applies reviewed packages, and publication uses the displayed generation and
+requires ready dependencies. Editing any field clears the lifecycle controls
+until the changed document is staged again. Refresh lifecycle status after a
+conflict before retrying publication. Control remains authoritative for current
+permissions, reference validation, dependency readiness and publication. These
+controls do not complete directory/grant/subscription provisioning or enable the
+unfinished workflow execution path.
+
 ## Custom tools
 
 The **Tool builder** route authors bounded code/schema/AI metadata, displays

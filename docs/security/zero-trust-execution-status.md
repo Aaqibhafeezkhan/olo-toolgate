@@ -3819,6 +3819,22 @@ SHA-256 (sorted paths, NUL, full bytes): b9d0dbbe67009da90cf8bf3211919b7f66daf26
 No stage weight changes: 56.0% complete / 44.0% pending, 21/33 stages, 0/7 full
 phases accepted. S22 remains the next complete implementation stage.
 
+#### Quickstart CodeQL follow-up — 2026-11-11
+
+The S22 qualification relay now accepts only origin-form API targets on its
+fixed loopback TLS upstream, validates header names and values in both
+directions, and rebuilds HTTP framing. The local identity audit request digest
+now fingerprints a domain-separated random correlation ID; the audit chain
+continues to bind the operation, identity target and revision separately. The
+password verifier and existing audit rows are unchanged. This addresses CodeQL
+alerts #40–#43 in source. Three fixture and two audit-chain unit tests passed;
+hosted CodeQL reevaluation and full S22 acceptance remain outstanding.
+
+Tested SHA-256: relay
+`c840906e27e3396d92247a4ebb77ee6a9bd037dbfb5c86e735e95983ee2d6f28`;
+supervisor
+`c9eebaf2a480fdc1c9841eb3175785847c912ca55d84d48a821f5c0a71f7b1d1`.
+
 #### S22 scoped revocation and authenticated dispatch — in progress, 2026-11-06
 
 Main advanced to bb3b078d0988769fe677e03ae478854fcd196ec9 after PR #279 merged.
