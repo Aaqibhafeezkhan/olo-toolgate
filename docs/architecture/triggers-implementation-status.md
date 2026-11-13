@@ -403,6 +403,13 @@ reported 276 passed and five failed under concurrent verification. A focused
 rerun of the five affected suites passed all 43 tests with one worker and a
 20-second test timeout.
 
+The commit hook for `6dc08d3e` passed all 281 Admin UI tests and three browser
+download checks. The full repository check stopped after 422 CI tests with
+one error and 17 skips. The unprivileged device fixture test attempted to
+create its Docker socket alias under /run. The test now creates both aliases
+in a temporary directory and verifies their distinct endpoints, shared
+socket target, and required runtime state path. The focused fixture test passed.
+
 Outstanding: full component verification. Module 6 earns
 no weight until its acceptance criteria are met and it merges.
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import device_entrypoint
 
 FIXTURES = Path('/opt/toolgate/fixtures')
+SOCKET_DIRECTORY = Path('/run')
 
 def configure(path):
     settings = json.loads(path.read_text())
@@ -28,7 +29,7 @@ def configure(path):
     # through signed fleet assignments, and every effect still consumes an mTLS permit.
     settings.pop('tools', None)
     # Compose devices share the host Docker daemon. Give each recovery scope a distinct socket path.
-    engine_socket = Path('/run/olo-toolgate-' + socket.gethostname() + '-docker.sock')
+    engine_socket = SOCKET_DIRECTORY / f'olo-toolgate-{socket.gethostname()}-docker.sock'
     engine_socket.unlink(missing_ok=True)
     engine_socket.symlink_to('/var/run/docker.sock')
     settings['execution'] = dict(enginePath='/usr/bin/docker', engineEndpoint='unix://' + str(engine_socket),
