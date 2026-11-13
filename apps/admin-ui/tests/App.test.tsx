@@ -46,7 +46,9 @@ describe('Management shell states', () => {
   it('shows the version and build number on the About page', async () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
-    fireEvent.click(screen.getByRole('link',{name:'About'})); window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(screen.getByRole('link',{name:'About'}).getAttribute('href')).toBe('#about');
+    window.location.hash = '#about';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
     expect(await screen.findByRole('heading',{name:'About ToolGate'})).toBeTruthy();
     expect(screen.getByText('Build').nextElementSibling?.textContent).toBe('local');
   });

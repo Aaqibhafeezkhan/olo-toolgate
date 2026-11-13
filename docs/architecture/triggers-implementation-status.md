@@ -5,6 +5,31 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Device-scoped trigger management
+
+The console discovers client trigger exports from packages assigned to the
+selected device. The SDK exports the trigger annotation description and the
+configuration record's schema in the signed package descriptor. The console
+uses that schema for field labels, help, and defaults. Control validates each
+assignment and checks the caller's permissions on its targets.
+
+The focused UI test exercises an unrelated package schema. SDK annotation and
+SQLite Control tests cover exported metadata, device-scoped discovery, and
+denial of access to another device or a shared group. This change claims no
+additional module weight.
+
+The PR #296 merge resolution keeps device-scoped management under **Devices >
+Triggers**. Workflow profile trigger packages have a dedicated route. The API
+client supports both tenant-wide and device-scoped export queries.
+
+On merge tree `1f179fb54415c9e7e251bfd685d1ff8fb9b31af1` (before this
+status update), the UI build and generated contracts, UI operation bindings,
+and permission catalog checks passed. The serial UI run passed 29 of 30
+tests across App, Permissions, Triggers, and WorkflowManagement. The About
+navigation test passed in isolation with an explicit hash change. The initial
+full UI suite was stopped after timeouts. Live Demo 3 validation with rebuilt
+images remains pending.
+
 ## Overall progress
 
 Updated: **2026-11-11**.

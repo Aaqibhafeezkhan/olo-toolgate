@@ -23,6 +23,15 @@ it('uses server capabilities, refreshes revocations, and never infers access fro
  transport.mockResolvedValue(new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:[]})));
  await client.adminSession();await screen.findByText('Access unavailable');view.unmount();
 });
+it('uses device capabilities for Triggers and Super Admin authority for workflow trigger packages',async()=>{
+ const {client}=fixture(['trigger.manage']);await client.adminSession();
+ const view=render(<FeatureAccess client={client} route="triggers"><h1>Device triggers</h1></FeatureAccess>);
+ expect(screen.getByRole('heading',{name:'Device triggers'})).toBeTruthy();
+ view.rerender(<FeatureAccess client={client} route="workflow-trigger-packages"><h1>Trigger packages</h1></FeatureAccess>);
+ expect(screen.getByRole('heading',{name:'Access unavailable'})).toBeTruthy();
+ view.rerender(<FeatureAccess client={client} route="workflow-trigger-packages" superAdmin><h1>Trigger packages</h1></FeatureAccess>);
+ expect(screen.getByRole('heading',{name:'Trigger packages'})).toBeTruthy();
+});
 it('view-only enrollment cannot claim a code or start Chrome Connect',async()=>{
  const {client,transport}=fixture(['device.read']);await client.adminSession();window.location.hash='#enroll?code=ABCDEF0123456789';
  render(<Enrollment client={client}/>);

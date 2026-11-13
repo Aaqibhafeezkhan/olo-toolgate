@@ -172,7 +172,8 @@ final class Triggers {
                 || !types.isSameType(((DeclaredType) returned).getTypeArguments().get(0), event)) {
             throw new Problem(method, "a POLL trigger returns PollResult<" + simple(event) + ">, the declared event type");
         }
-        Map<String, Object> configSchema = new Schemas(env).output(config, method);
+        Map<String, Object> configSchema = new LinkedHashMap<>(new Schemas(env).output(config, method));
+        configSchema.putIfAbsent("description", t.description());
         Map<String, Object> eventSchema = new Schemas(env).output(event, method);
         if (Jcs.bytes(configSchema).length > MAX_SCHEMA_BYTES) throw new Problem(method, what + " configSchema is over " + MAX_SCHEMA_BYTES + " bytes");
         if (Jcs.bytes(eventSchema).length > MAX_SCHEMA_BYTES) throw new Problem(method, what + " eventSchema is over " + MAX_SCHEMA_BYTES + " bytes");

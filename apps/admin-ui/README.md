@@ -158,8 +158,9 @@ The agent directory editor links directly to both pages for the selected agent.
 Directory ownership, group membership, tool grants and runtime authority remain
 separate from workflow configuration.
 
-**Workflows > Models** manages deployments and model groups; **Trigger mappings**
-manages dispatch bindings; **Profiles** exposes the complete profile, including
+**Workflows > Models** manages deployments and model groups; **Trigger packages**
+configures trigger assignments in a profile; **Trigger mappings** manages dispatch
+bindings; **Profiles** exposes the complete profile, including
 package provisioning and readiness cases. These pages share one working draft
 while navigating. Apply a record edit to the draft, then stage the whole profile.
 Discard unsaved edits before selecting another revision; disconnect clears the
@@ -167,6 +168,9 @@ working copy. The Workflows and Workflow mappings pages assign a new version
 when changing a staged workflow and update dispatch bindings pinned to its prior
 version in that draft. When editing the entire profile directly, update any
 changed workflow version and its dispatch references together.
+
+**Devices > Triggers** shows visible assignments and lets users configure package
+triggers on approved devices where they have trigger management permission.
 
 **Tools > Server packages** links to the dedicated pages and also keeps the full
 editor for opening an exact revision by identifier and digest.

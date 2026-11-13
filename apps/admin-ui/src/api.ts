@@ -154,9 +154,7 @@ export class ControlClient {
     }
   }
 
-  triggerAssignments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{signal});}
   triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
-  triggerDefinitions(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{return this.send(operations.listTriggerDefinitions,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
   serverDeployments(signal?:AbortSignal):Promise<PackageDeploymentPage>{return this.send(operations.listServerPackageDeployments,{signal});}
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */
@@ -281,6 +279,14 @@ export class ControlClient {
   }
   pendingEnrollments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointEnrollmentPage>{return this.send(operations.listEndpointEnrollments,{signal});}
   managedDevices(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointManagedDevicePage>{return this.send(operations.listEndpointDevices,{signal});}
+  triggerDefinitions({deviceId,pageToken,signal}:{deviceId?:string;pageToken?:string;signal?:AbortSignal}={}):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerDefinitionPage>{
+    const query = new URLSearchParams();
+    if(deviceId)query.set('deviceId',deviceId);
+    if(pageToken)query.set('pageToken',pageToken);
+    return this.send(operations.listTriggerDefinitions,{query:query.size?query:undefined,signal});
+  }
+  triggerAssignments(pageToken?:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentPage>{return this.send(operations.listTriggerAssignments,{query:pageToken?new URLSearchParams({pageToken}):undefined,signal});}
+  createTriggerAssignment(body:import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentCreate,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerAssignmentResult>{return this.send(operations.createTriggerAssignment,{body,key});}
   managedDeviceDeployments(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts').EndpointManagedDeviceDeploymentPage>{return this.send(operations.listEndpointDevices,{signal,query:new URLSearchParams({deployment:'true'})});}
   setDeviceApproval(id:string,body:import('@olo-labs/toolgate-contracts').EndpointApprovalRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.setEndpointApproval,{id,body,key});}
   requestDeviceApproval(id:string,body:import('@olo-labs/toolgate-contracts').EndpointRevokeRequest,key:string):Promise<import('@olo-labs/toolgate-contracts').EndpointDeviceRecord>{return this.send(operations.requestEndpointDeviceApproval,{id,body,key});}
