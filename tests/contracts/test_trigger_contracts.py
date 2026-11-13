@@ -38,6 +38,7 @@ LONGEST = {
     'TriggerDesiredJws': 'a' * (4 * 1024 * 1024 - 4) + '.a.a',
     'resourceVersion': 'W/"' + '9' * 16 + '"',
     'TriggerDesiredStateSource': 'Group:' + 'a' * 128,
+    'maxUnavailable': '100%',
     'SemanticVersion': '1.0.0-' + 'a' * 122,
     'PackageId': '.'.join(['a' * 31] * 4),
     'ToolId': 'a' * 31 + '.' + 'a' * 31 + '.' + 'a' * 31 + '/' + 'a' * 32,

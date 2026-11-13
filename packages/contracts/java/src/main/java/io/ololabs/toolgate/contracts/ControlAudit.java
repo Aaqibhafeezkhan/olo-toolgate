@@ -15,6 +15,7 @@ package io.ololabs.toolgate.contracts;
  * @param occurredAt canonical occurredAt value
  * @param requestDigest canonical requestDigest value
  * @param evidence canonical evidence value
+ * @param triggerLifecycleEvidence canonical triggerLifecycleEvidence value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record ControlAudit(
@@ -27,7 +28,8 @@ public record ControlAudit(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "requestId", required = true) String requestId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "occurredAt", required = true) String occurredAt,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "requestDigest", required = true) String requestDigest,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "evidence", required = false) ControlAuditEvidence evidence
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "evidence", required = false) ControlAuditEvidence evidence,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "triggerLifecycleEvidence", required = false) ControlTriggerLifecycleEvidence triggerLifecycleEvidence
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -41,6 +43,7 @@ public record ControlAudit(
      * @param occurredAt canonical occurredAt value
      * @param requestDigest canonical requestDigest value
      * @param evidence canonical evidence value
+     * @param triggerLifecycleEvidence canonical triggerLifecycleEvidence value
      */
     public ControlAudit {
         java.util.Objects.requireNonNull(sequence, "sequence");

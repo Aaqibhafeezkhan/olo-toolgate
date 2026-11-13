@@ -9,11 +9,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.ololabs.toolgate.contracts.EndpointDeviceRecord;
 import io.ololabs.toolgate.contracts.v2.TriggerCheckpointLevel;
 import io.ololabs.toolgate.contracts.v2.TriggerCheckpointReport;
+import io.ololabs.toolgate.contracts.v2.TriggerConditionStatus;
+import io.ololabs.toolgate.contracts.v2.TriggerConditionType;
 import io.ololabs.toolgate.contracts.v2.TriggerDisposition;
 import io.ololabs.toolgate.contracts.v2.TriggerDispositionKind;
 import io.ololabs.toolgate.contracts.v2.TriggerInstanceReport;
 import io.ololabs.toolgate.contracts.v2.TriggerOutboxAck;
 import io.ololabs.toolgate.contracts.v2.TriggerOutboxRecord;
+import io.ololabs.toolgate.contracts.v2.TriggerPhase;
 import io.ololabs.toolgate.contracts.v2.TriggerRejection;
 import io.ololabs.toolgate.contracts.v2.TriggerRejectionReason;
 import io.ololabs.toolgate.contracts.v2.TriggerRetryLater;
@@ -87,7 +90,9 @@ public final class TriggerIngest {
         if (sync.snapshot() != null) {
             for (var report : sync.snapshot().instances()) {
                 var instance = resolved.get(report.instanceId());
-                if (instance != null) report(tx, instance, report, now);
+                if (instance != null && report.configRevision().equals(instance.desired().configRevision())) {
+                    report(tx, instance, report, now);
+                }
             }
             pages.add(new TriggerSnapshotPageAck(sync.snapshot().snapshotGeneration(), sync.snapshot().page()));
         }
@@ -304,10 +309,19 @@ public final class TriggerIngest {
             if (!"Stale".equals(condition.type().name())) conditions.add(TriggerService.read(codec.json(condition)));
         }
         view.set("conditions", conditions);
+        long previousRestarts = view.path("counters").path("restarts").asLong();
         view.set("counters", TriggerService.read(codec.json(report.counters())));
         view.set("outbox", TriggerService.read(codec.json(report.outbox())));
         if (report.lastEventAt() != null) view.put("lastEventAt", report.lastEventAt());
         if (report.lastReconcileAt() != null) view.put("lastReconcileAt", report.lastReconcileAt());
+        boolean ready = report.phase() == TriggerPhase.Running
+                && report.conditions().stream().anyMatch(condition -> condition.type() == TriggerConditionType.Ready
+                        && condition.status() == TriggerConditionStatus.True);
+        if (!ready || document.path("haltedByControl").asBoolean()) document.remove("runningReadySinceUnixMs");
+        else if (!document.has("runningReadySinceUnixMs")
+                || previousRestarts != report.counters().restarts()) {
+            document.put("runningReadySinceUnixMs", now);
+        }
         document.put("lastSeenAtUnixMs", now);
         saveInstance(tx, instance, document);
     }

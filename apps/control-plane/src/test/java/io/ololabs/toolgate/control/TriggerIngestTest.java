@@ -283,10 +283,22 @@ final class TriggerIngestTest {
             assertEquals(2, view.path("counters").path("emitted").asInt());
             assertEquals(T0, view.path("lastSeenAtUnixMs").asLong());
             assertEquals("False", condition(view, "Stale"));
+            String wrongRevision = report.replace("\"configRevision\":1", "\"configRevision\":2").replace("\"Running\"", "\"Failed\"");
+            var outdated = codec.model("{\"observedGeneration\":1,\"snapshot\":" + wrongRevision + ",\"pending\":0}", TriggerSync.class);
+            w.store().transaction(w.tenant(), true, tx -> w.ingest().sync(tx, device(w, "device-a"), outdated, "request"));
+            view = JSON.readTree(w.triggers().instances(w.admin(), "inbox", null, null, null).body()).path("items").path(0);
+            assertEquals("Running", view.path("phase").asText(), "a different config revision cannot update readiness");
             w.clock().millis += 5 * 60_000 + 1;
             view = JSON.readTree(w.triggers().instances(w.admin(), "inbox", null, null, null).body()).path("items").path(0);
             assertEquals("True", condition(view, "Stale"), "after 5 minutes without a check-in");
             assertEquals("Running", view.path("phase").asText(), "Stale changes what is shown, not the phase or the lease");
+            w.triggers().patch(w.admin(), "inbox", "{\"spec\":{\"globals\":{\"revision\":2}}}",
+                    "W/\"1\"", null, false, "request");
+            w.store().transaction(w.tenant(), true, tx -> w.ingest().sync(tx, device(w, "device-a"), sync, "request"));
+            view = JSON.readTree(w.triggers().instances(w.admin(), "inbox", null, null, null).body()).path("items").path(0);
+            assertEquals(2, view.path("configRevision").asInt());
+            assertEquals("Pending", view.path("phase").asText(), "an old revision cannot restore readiness");
+            assertNull(condition(view, "Ready"));
         }
     }
 

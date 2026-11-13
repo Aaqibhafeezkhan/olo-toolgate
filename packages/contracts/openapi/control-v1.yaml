@@ -10480,6 +10480,257 @@ paths:
           description: If-Match is required
         '503':
           description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers:action:
+    post:
+      operationId: actOnTriggerAssignments
+      summary: Apply a lifecycle action across matching trigger assignments
+      description: Applies the action atomically to the intersection of authorized Device Groups and matching trigger exports.
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, selector, reason]
+              properties:
+                action:
+                  type: string
+                  enum: [Run, Pause, Stop, Clear]
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1024
+                selector:
+                  type: object
+                  additionalProperties: false
+                  required: [deviceGroups, triggers]
+                  properties:
+                    deviceGroups:
+                      type: array
+                      minItems: 1
+                      maxItems: 256
+                      uniqueItems: true
+                      items:
+                        type: string
+                        minLength: 1
+                        maxLength: 257
+                    triggers:
+                      type: array
+                      minItems: 1
+                      maxItems: 256
+                      uniqueItems: true
+                      items:
+                        type: string
+                        maxLength: 257
+                        pattern: '^[a-zA-Z0-9][a-zA-Z0-9._-]*/(?:[a-zA-Z0-9][a-zA-Z0-9._-]*|[*])$'
+      responses:
+        '200':
+          description: Assignment revisions and affected instances
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [assignments]
+                properties:
+                  assignments:
+                    type: array
+                    maxItems: 256
+                    items:
+                      type: object
+                      required: [name, resourceVersion, changes]
+                      properties:
+                        name:
+                          type: string
+                        resourceVersion:
+                          type: string
+                        changes:
+                          type: array
+                          maxItems: 4096
+                          items:
+                            $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerInstanceChange
+        '400':
+          description: Invalid action, selector or Device Group
+        '401':
+          description: Direct TLS and an authenticated actor required
+        '403':
+          description: The actor lacks trigger.manage on a selected Device Group
+        '404':
+          description: Unknown tenant
+        '409':
+          description: Concurrent change conflict
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/assignments/{name}:action:
+    post:
+      operationId: actOnTriggerAssignment
+      summary: Apply a scoped trigger lifecycle action
+      description: Validates the entire scope before updating one assignment. Remove revokes the affected leases.
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 63
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, scope, reason]
+              if:
+                properties:
+                  action:
+                    const: Deploy
+              then:
+                required: [desiredState]
+                properties:
+                  scope:
+                    not:
+                      required: [instances]
+              else:
+                not:
+                  required: [desiredState]
+              properties:
+                action:
+                  type: string
+                  enum: [Deploy, Run, Pause, Stop, Clear, Remove]
+                desiredState:
+                  $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerDesiredState
+                scope:
+                  type: object
+                  minProperties: 1
+                  maxProperties: 1
+                  oneOf:
+                  - required: [deviceGroups]
+                    properties:
+                      deviceGroups:
+                        type: array
+                        minItems: 1
+                        maxItems: 4096
+                        uniqueItems: true
+                        items:
+                          type: string
+                          minLength: 1
+                  - required: [devices]
+                    properties:
+                      devices:
+                        type: array
+                        minItems: 1
+                        maxItems: 4096
+                        uniqueItems: true
+                        items:
+                          type: string
+                          minLength: 1
+                  - required: [instances]
+                    properties:
+                      instances:
+                        type: array
+                        minItems: 1
+                        maxItems: 4096
+                        uniqueItems: true
+                        items:
+                          type: string
+                          minLength: 1
+                reason:
+                  type: string
+                  minLength: 1
+                  maxLength: 1024
+      responses:
+        '200':
+          description: Updated resource version and affected instances
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [resourceVersion, changes]
+                properties:
+                  resourceVersion:
+                    type: string
+                  changes:
+                    type: array
+                    maxItems: 4096
+                    items:
+                      $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerInstanceChange
+        '400':
+          description: Invalid action or scope
+        '401':
+          description: Direct TLS and an authenticated actor required
+        '403':
+          description: The actor lacks trigger.manage on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '409':
+          description: Capacity or concurrent change conflict
+        '412':
+          description: If-Match does not match the current ETag
+        '428':
+          description: If-Match is required
+        '503':
+          description: Triggers are off or a dependency is unavailable
+  /api/control/v1/triggers/assignments/{name}:rollback:
+    post:
+      operationId: rollbackTriggerAssignment
+      summary: Restore the previous configuration of a trigger assignment
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 63
+      - name: If-Match
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 20
+      responses:
+        '200':
+          description: Restored assignment and affected instances
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/trigger.schema.json#/$defs/TriggerAssignmentResult
+        '401':
+          description: Direct TLS and an authenticated actor required
+        '403':
+          description: The actor lacks trigger.manage on a target
+        '404':
+          description: Unknown, removed or another tenant's resource (identical)
+        '409':
+          description: No previous configuration revision or concurrent change conflict
+        '412':
+          description: If-Match does not match the current ETag
+        '428':
+          description: If-Match is required
+        '503':
+          description: Triggers are off or a dependency is unavailable
   /api/control/v1/triggers/instances:
     get:
       operationId: listTriggerInstances

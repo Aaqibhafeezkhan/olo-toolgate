@@ -17,12 +17,13 @@ final readonly class ControlAudit implements \JsonSerializable {
         public string $requestId,
         public string $occurredAt,
         public string $requestDigest,
-        public ?ControlAuditEvidence $evidence = null
+        public ?ControlAuditEvidence $evidence = null,
+        public ?ControlTriggerLifecycleEvidence $triggerLifecycleEvidence = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest', 'evidence']) || array_diff(['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest', 'evidence', 'triggerLifecycleEvidence']) || array_diff(['sequence', 'tenantId', 'actorId', 'operation', 'target', 'revision', 'requestId', 'occurredAt', 'requestDigest'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -35,7 +36,8 @@ final readonly class ControlAudit implements \JsonSerializable {
             $data['requestId'],
             $data['occurredAt'],
             $data['requestDigest'],
-            array_key_exists('evidence', $data) ? ControlAuditEvidence::fromArray($data['evidence']) : null
+            array_key_exists('evidence', $data) ? ControlAuditEvidence::fromArray($data['evidence']) : null,
+            array_key_exists('triggerLifecycleEvidence', $data) ? ControlTriggerLifecycleEvidence::fromArray($data['triggerLifecycleEvidence']) : null
         );
     }
 

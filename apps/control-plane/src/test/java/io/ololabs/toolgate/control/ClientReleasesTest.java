@@ -382,6 +382,7 @@ final class ClientReleasesTest {
         var document = rig.fleet.document(rig.admin, "acme.greet", "1.0.0");
         var registration = document.triggers().getFirst();
         assertEquals("acme.greet/new-file", registration.triggerId());
+        assertEquals(applied.path("packages").get(0).path("packageDigest").asText(), registration.packageDigest());
         assertEquals("READ", registration.fileAccess().name());
         assertEquals("acme.greet/jvm", registration.runtimeId());
         assertEquals(document.runtimes().getFirst().id(), registration.runtimeId());

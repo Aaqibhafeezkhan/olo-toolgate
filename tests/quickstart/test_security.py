@@ -3,6 +3,7 @@
 """Real local identity primitives and offline custody/integrity tests; run in Linux image."""
 import importlib.util
 import http.cookiejar
+import io
 import json
 import os
 from pathlib import Path
@@ -180,6 +181,45 @@ class SecurityTests(unittest.TestCase):
             finally:server.shutdown();thread.join();server.server_close()
         with patch.dict(os.environ,{'TOOLGATE_DISABLE_ADMIN_PASSWORD':'yes'}):
             with self.assertRaises(ValueError):quickstart.password_disabled()
+    def test_trigger_assignment_patch_forwards_precondition_and_requires_session(self):
+        path = '/api/control/v1/triggers/assignments/inbox'
+        body = b'{"spec":{"packageVersion":"0.1.1"}}'
+        ready = threading.Event()
+        server = quickstart.BoundedServer(('127.0.0.1', 0), quickstart.Handler, ready)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            url = f'http://127.0.0.1:{server.server_port}{path}'
+            with patch.object(quickstart, 'session', side_effect=PermissionError):
+                with self.assertRaises(urllib.error.HTTPError) as denied:
+                    urllib.request.urlopen(urllib.request.Request(url, body, method='PATCH'))
+                self.assertEqual(denied.exception.code, 401)
+            headers = {'Authorization': 'Bearer test-session', 'If-Match': '"3"',
+                       'Content-Type': 'application/merge-patch+json'}
+            with patch.object(quickstart, 'session') as session, \
+                 patch.object(quickstart.ssl, 'create_default_context'), \
+                 patch.object(quickstart.http.client, 'HTTPSConnection') as connection:
+                client = connection.return_value
+                response = client.getresponse.return_value
+                response.status = 200
+                response.read.return_value = b'{}'
+                response.getheader.return_value = 'application/json'
+                response.getheaders.return_value = [('ETag', '"4"')]
+                request = quickstart.Handler.__new__(quickstart.Handler)
+                request.command = 'PATCH'
+                request.path = path
+                request.headers = {'Host': '127.0.0.1', 'Content-Length': str(len(body)), **headers}
+                request.rfile = io.BytesIO(body)
+                with patch.object(request, 'reply') as reply:
+                    request.do_PATCH()
+                    reply.assert_called_once_with(200, b'{}', 'application/json', {'ETag': '"4"'})
+                session.assert_called_once_with(headers['Authorization'])
+                client.request.assert_called_once_with('PATCH', path, body, headers)
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+
     def test_machine_identity_cannot_be_used_as_a_human_session(self):
         token=quickstart.jwt(['toolgate-relay-gateway'],'runtime',directory_bound=False)
         with self.assertRaises(PermissionError):quickstart.session('Bearer '+token)

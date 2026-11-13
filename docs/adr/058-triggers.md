@@ -82,3 +82,13 @@ module 4 adds them in place:
   under the #230 effect path (plan section 14).
 - Open item for module 4: how Tool Hosts obtain the deployment-key verification key for the desired document
   (tenant discovery or the Tool Host registration).
+
+## Amendment (triggers module 6)
+
+The signed fleet trigger registration includes the package archive digest.
+The client resolves a trigger only when the active fleet release matches both
+the package and descriptor digests named by the signed desired instance.
+Recheck resolution after fleet activation changes even if the trigger desired
+generation stays the same. This makes a pending upgrade wait for delivery
+of its exact package and prevents a previous binary with the same descriptor
+from satisfying readiness for a replacement.

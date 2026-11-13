@@ -118,6 +118,23 @@ fn emit_ack(frames: &[Inbound]) -> Option<(TriggerEmitStatus, Option<String>, Op
 }
 
 #[test]
+fn initially_paused_instance_keeps_lease_without_starting_until_run() {
+    let mut rig = Rig::new(config(SKIP, 64));
+    rig.sup.pause(T0);
+    rig.sup.grant_lease(
+        Lease {
+            epoch: 1,
+            renew_deadline_ms: u64::MAX,
+        },
+        T0,
+    );
+    assert_eq!(rig.sup.phase(), Phase::Paused);
+    assert!(!rig.spawned());
+    rig.sup.run(T0);
+    assert!(rig.spawned());
+}
+
+#[test]
 fn the_start_frame_carries_the_lease_epoch_and_the_local_checkpoint() {
     let mut rig = Rig::new(config(SKIP, 64));
     rig.sup.run(rig.now);

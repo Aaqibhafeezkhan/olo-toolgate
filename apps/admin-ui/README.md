@@ -171,6 +171,9 @@ changed workflow version and its dispatch references together.
 
 **Devices > Triggers** shows visible assignments and lets users configure package
 triggers on approved devices where they have trigger management permission.
+Super Admins can also upload signed trigger packages, create fleet assignments,
+inspect instance state and live events, apply scoped lifecycle actions, and
+roll back assignment revisions.
 
 **Tools > Server packages** links to the dedicated pages and also keeps the full
 editor for opening an exact revision by identifier and digest.

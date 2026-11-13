@@ -399,6 +399,8 @@ fn v2_fixture_round_trips() {
         TriggerRetryLater,
         TriggerRevocation,
         TriggerRevocationReason,
+        TriggerRollingUpdate,
+        TriggerRolloutStrategy,
         TriggerSchedule,
         TriggerSettings,
         TriggerSnapshotCapacity,

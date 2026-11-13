@@ -56,7 +56,7 @@ DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', 
 
 
 def direct_tls(path):
-    return path.startswith(DIRECT_TLS_PREFIXES)
+    return path == "/api/control/v1/triggers:action" or path.startswith(DIRECT_TLS_PREFIXES)
 
 
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
@@ -397,7 +397,7 @@ DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', 
 
 
 def direct_tls(path):
-    return path.startswith(DIRECT_TLS_PREFIXES)
+    return path == "/api/control/v1/triggers:action" or path.startswith(DIRECT_TLS_PREFIXES)
 
 
 def origin_target(value):
@@ -960,6 +960,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     do_GET = dispatch
     do_POST = dispatch
     do_PUT = dispatch
+    do_PATCH = dispatch
     do_DELETE = dispatch
 
 

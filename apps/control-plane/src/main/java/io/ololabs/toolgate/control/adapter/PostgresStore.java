@@ -568,7 +568,11 @@ public class PostgresStore implements Store {
                         "target", rows.getString(4), "revision", rows.getLong(5), "requestId", rows.getString(6), "requestDigest", rows.getString(7),
                         "occurredAt", SqliteState.local(connection) ? rows.getString(8) : rows.getObject(8, java.time.OffsetDateTime.class).toInstant().toString()));
                     String evidence = rows.getString(9);
-                    if (evidence != null) item.put("evidence", codec.value(evidence));
+                    if (evidence != null) {
+                        String field = "TRIGGER_ASSIGNMENT_ACTION".equals(rows.getString(3))
+                                ? "triggerLifecycleEvidence" : "evidence";
+                        item.put(field, codec.value(evidence));
+                    }
                     items.add(item);
                 }
                 return codec.json(more ? Map.of("items", items, "nextCursor", Long.toString(sequence)) : Map.of("items", items));

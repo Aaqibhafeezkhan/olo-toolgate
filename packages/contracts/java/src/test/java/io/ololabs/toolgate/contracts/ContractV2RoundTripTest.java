@@ -397,6 +397,8 @@ final class ContractV2RoundTripTest {
         "TriggerRetryLater",
         "TriggerRevocation",
         "TriggerRevocationReason",
+        "TriggerRollingUpdate",
+        "TriggerRolloutStrategy",
         "TriggerSchedule",
         "TriggerSettings",
         "TriggerSnapshotCapacity",

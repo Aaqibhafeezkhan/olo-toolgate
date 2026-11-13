@@ -66,6 +66,7 @@ pub struct ClientService {
     triggers: Option<crate::triggers::Triggers>,
     /// Control acknowledged a triggers block, so check-ins carry Trigger Sync.
     triggers_supported: bool,
+    trigger_fleet_state: Option<(u64, bool)>,
     store: ProtectedStore,
     _lease: ServiceLease,
     key: Arc<DeviceKey>,
@@ -262,6 +263,7 @@ impl ClientService {
             execution,
             triggers: None,
             triggers_supported: false,
+            trigger_fleet_state: None,
             store,
             _lease: lease,
             key,
@@ -1280,7 +1282,8 @@ impl ClientService {
         runner
             .context(self.execution.as_ref().map(|m| m.trigger_context()))
             .await?;
-        if generation <= runner.observed().await? {
+        let fleet_state = (self.deployment.status.generation, self.deployment.activated);
+        if self.trigger_fleet_state == Some(fleet_state) && generation <= runner.observed().await? {
             return Ok(());
         }
         let settings = self.config.deployment.clone().ok_or(Failure::Unsupported)?;
@@ -1303,7 +1306,7 @@ impl ClientService {
             return Err(Failure::Unauthorized);
         }
         let base = self.config.execution.clone().ok_or(Failure::Unsupported)?;
-        let candidate = if self.deployment.desired.is_some() {
+        let candidate = if self.deployment.activated {
             self.deployment.candidate(&settings, &base)?.0
         } else {
             base
@@ -1331,6 +1334,7 @@ impl ClientService {
                 .iter()
                 .find(|r| {
                     r.trigger_id == instance.trigger_id
+                        && r.package_digest == instance.package_digest
                         && r.trigger_descriptor_digest == instance.trigger_descriptor_digest
                 })
                 .cloned();
@@ -1350,7 +1354,9 @@ impl ClientService {
         }
         runner
             .desired(crate::triggers::Desired { document, resolved })
-            .await
+            .await?;
+        self.trigger_fleet_state = Some(fleet_state);
+        Ok(())
     }
     /// True when this gateway's last acknowledged report matches the owner's switch.
     fn power_reported(&self) -> bool {

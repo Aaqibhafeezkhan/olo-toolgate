@@ -160,7 +160,7 @@ public final class ClientReleases {
                 var d = trigger.path("descriptor");
                 boolean reads = false;
                 for (var permission : d.path("permissions")) reads |= permission.asText().equals("DEVICE_FILES_READ");
-                registrations.addObject().put("triggerId", d.path("triggerId").asText())
+                registrations.addObject().put("triggerId", d.path("triggerId").asText()).put("packageDigest", digest)
                     .put("triggerDescriptorDigest", trigger.path("triggerDescriptorDigest").asText()).put("runtimeId", deviceRuntime)
                     .put("entryPoint", "/opt/tool/" + packageId + "/" + filename).put("fileAccess", reads ? "READ" : "NONE");
             }
