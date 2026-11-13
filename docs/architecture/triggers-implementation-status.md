@@ -289,11 +289,39 @@ probe using a synthetic file marker. Its CLI and Python compilation passed.
 The Compose overlay passed configuration validation for four distinct device
 hostnames and state volumes. A disposable Quickstart built with Control from
 `81e4838a` enrolled all four devices and provisioned the signed Inbox Watch
-client release after its isolated registry was configured. A live run is
-waiting for all targets to install that release and report Running.
+client release after its isolated registry was configured. All four devices
+reported the package READY. One live attempt ended with HTTP 401 during
+phase polling. Another produced a synthetic marker in the local checkpoint,
+but the probe expected a top-level state field. The on-disk checkpoint wraps
+state under `value`. The reader now checks the instance ID and reads that
+field. Python compilation passed and the corrected live run is in progress.
 
 The five Python trigger contract tests passed after adding the maximum-length
-`maxUnavailable` fixture. The full repository gate is running separately.
+`maxUnavailable` fixture. The full repository gate stopped in the CI suite (422 tests,
+6 failures, 9 errors, 4 skips). One observed failure was a missing fixture
+environment variable in a Windows PowerShell subprocess launched from WSL.
+Later repository gates were not reached. The full Admin UI run with one
+worker reported 273 passed and 8 failed. A retry with a 20-second test
+timeout is running.
+
+The scenario 11 runner now checks the availability budget during a signed
+package upgrade, fleet delivery to the selected device, the failed
+replacement, and rollback. Both acceptance scripts compile. The failing
+package initially failed to build against an older SDK cache. Publishing
+the SDK from the M6 worktree passed, and the fixture package build is
+running with that SDK. The scenario 10 runner now also requires a fresh
+post-resume checkpoint that retains the first marker and advances its
+outbox sequence by one in the same lease epoch.
+
+The live scenario 10 attempt reached the new-member step but timed out:
+the new device reported Pending after joining a paused group. The supervisor
+now holds an instance with no process in Paused and starts it only on Run.
+The supervisor suite passed, including all 16 lifecycle tests and the
+delivery model test. The Ubuntu device binary also built. The musl binary
+for the Debian-based fixture is building. The failing Inbox Watch 0.1.1
+archive built against the local SDK and its two SDK examples passed. The
+scenario 11 runner is active. Source SHA-256: `e20ec072ccde2290560d4288edd5b5986119f730325f071ab8ba3074216710e4`
+(changed sources and guide concatenated in path order).
 
 Outstanding: full component verification, and M12 scenarios 10 and 11. Module 6 earns
 no weight until its acceptance criteria are met and it merges.

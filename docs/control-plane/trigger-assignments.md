@@ -61,6 +61,12 @@ python examples/langchain/trigger_lifecycle_e2e.py --isolated-fixture \
 Use `examples/langchain/compose.trigger-lifecycle.yaml` with the base
 Compose file for separate device state volumes. The optional checkpoint
 probe writes one synthetic marker to the selected D2 container and checks
-its local checkpoint before pause and after resume. The fixture remains
-available for inspection until you remove the disposable stack. The
-failing-package rollout scenario needs a separate fixture.
+its local checkpoint before pause and after resume. The post-resume
+checkpoint must retain the first marker and advance the same lease epoch
+by exactly one outbox record for the new marker. The fixture remains
+available for inspection until you remove the disposable stack. For the failing-package rollout scenario, provide a distinct Inbox Watch
+`.tgpkg` whose poll process exits on the fixture configuration. Use three
+devices already running the known-good package and pass the failing archive
+to `examples/langchain/trigger_rollout_e2e.py`. The runner assigns the bad
+fleet release only to the device selected by the trigger rollout and
+restores the good release to that device after requesting rollback.

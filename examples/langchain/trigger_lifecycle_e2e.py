@@ -37,26 +37,37 @@ def action(config, assignment, operation, scope, target):
     }, etag=revision)
 
 
-def checkpoint_probe(config, assignment, device, service, timeout, subject=None):
+def checkpoint_probe(config, assignment, device, service, timeout, previous=None):
     """Read only the synthetic marker's local checkpoint on the disposable fixture."""
     rows = config.api(BASE + '/instances?' + urlencode({'assignment': assignment, 'executorId': device}))['items']
     instance = next(row['instanceId'] for row in rows if row['executorId'] == device)
     if not re.fullmatch(r'ti-[a-f0-9]{32}', instance):
         raise ValueError('Unexpected trigger instance identifier')
-    if subject is None:
-        subject = 'inbox/m12-' + secrets.token_hex(8) + '.txt'
-        manage.docker(service, ['python', '-c',
-            "import os,sys; from pathlib import Path; os.umask(0o077);"
-            "p=Path('/var/lib/olo-toolgate/hotfolder')/sys.argv[1];"
-            "with_file=p.open('x');with_file.write('synthetic checkpoint marker');with_file.close()", subject])
+    subject = 'inbox/m12-' + secrets.token_hex(8) + '.txt'
+    manage.docker(service, ['python', '-c',
+        "import os,sys; from pathlib import Path; os.umask(0o077);"
+        "p=Path('/var/lib/olo-toolgate/hotfolder')/sys.argv[1];"
+        "with_file=p.open('x');with_file.write('synthetic checkpoint marker');with_file.close()", subject])
     deadline = time.monotonic() + timeout
     path = '/var/lib/olo-toolgate/triggers/' + instance + '/checkpoint-local.json'
     while time.monotonic() < deadline:
         try:
             checkpoint = json.loads(manage.docker(service, ['cat', path]))
-            state = json.loads(base64.b64decode(checkpoint['state'], validate=True))
-            if subject in state.get('reported', {}):
-                return subject
+            if checkpoint['instanceId'] != instance:
+                raise ValueError('Checkpoint belongs to a different trigger instance')
+            value = checkpoint['value']
+            state = json.loads(base64.b64decode(value['state'], validate=True))
+            reported = state.get('reported', {})
+            if subject in reported:
+                sequence = value['afterOutboxSeq']
+                epoch = value['leaseEpoch']
+                if previous is not None:
+                    old_subject, old_sequence, old_epoch = previous
+                    if old_subject not in reported:
+                        raise RuntimeError('The first marker disappeared from the post-resume checkpoint')
+                    if epoch != old_epoch or sequence != old_sequence + 1:
+                        raise RuntimeError('Resume changed the lease epoch or emitted more than the new marker')
+                return subject, sequence, epoch
         except (ValueError, KeyError):
             pass
         time.sleep(2)
@@ -109,7 +120,7 @@ def run(config, devices, package_version, timeout, checkpoint_service=None):
     expect({d1: 'Removed', d2: 'Running', d3: 'Stopped', d4: 'Running'})
     if marker:
         checkpoint_probe(config, assignment, d2, checkpoint_service, timeout, marker)
-        print('Verified the synthetic marker remained in the checkpoint after resume', flush=True)
+        print('Verified a new checkpoint after resume retained the first synthetic marker', flush=True)
     print('PASS: live executor phases for M12 scenario 10', flush=True)
 
 
