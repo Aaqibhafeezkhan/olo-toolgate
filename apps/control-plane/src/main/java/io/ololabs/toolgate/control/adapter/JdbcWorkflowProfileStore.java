@@ -56,6 +56,16 @@ final class JdbcWorkflowProfileStore implements WorkflowProfileStore {
             return rows.next() ? new Publication(profileId, rows.getString(1), rows.getLong(2)) : null;
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    public java.util.List<Publication> publications(String afterProfileId, int limit) {
+        try (var statement = statement("SELECT profile_id,digest,generation FROM control_workflow_profile_heads WHERE tenant_id=? AND profile_id>? ORDER BY profile_id LIMIT ?", afterProfileId)) {
+            statement.setInt(3, limit);
+            try (var rows = statement.executeQuery()) {
+                var result = new java.util.ArrayList<Publication>();
+                while (rows.next()) result.add(new Publication(rows.getString(1), rows.getString(2), rows.getLong(3)));
+                return java.util.List.copyOf(result);
+            }
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
     public void publish(Publication publication, long expectedGeneration) {
         if (publication.generation() != expectedGeneration + 1) throw Failure.conflict();
         String sql = expectedGeneration == 0

@@ -11,6 +11,7 @@ public interface WorkflowProfileStore {
     void insert(Revision revision);
     void review(String profileId, String digest, String reviewer);
     Publication publication(String profileId);
+    java.util.List<Publication> publications(String afterProfileId, int limit);
     void publish(Publication publication, long expectedGeneration);
     /** A resource can be owned by one profile for its lifetime; omission never releases ownership. */
     record Ownership(String profileId, String definitionDigest) {}

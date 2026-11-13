@@ -82,6 +82,14 @@ async function readBody(response: Response): Promise<unknown> {
  */
 export class ConfigurationPending extends Error {constructor(readonly changeId:string){super('Draft created. Review its impact, submit it for independent approval, then apply the reviewed change.');}}
 export class ControlClient {
+  publishedWorkflows(after?: string, signal?: AbortSignal): Promise<readonly {profileId:string;digest:string;generation:number}[]> {
+    const query = new URLSearchParams({limit:'50'});
+    if(after) query.set('afterProfileId',after);
+    return this.send(operations.listPublishedWorkflows,{query,signal});
+  }
+  publishedWorkflow(profileId:string,digest:string,signal?:AbortSignal):Promise<Record<string,unknown[]>> {
+    return this.send(operations.getPublishedWorkflow,{params:{profileId,digest},signal});
+  }
   async workflowProfiles(after?:Pick<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus,'profileId'|'profileDigest'>,signal?:AbortSignal):Promise<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus[]>{const query=new URLSearchParams({limit:'50'});if(after){query.set('afterProfileId',after.profileId);query.set('afterDigest',after.profileDigest);}const page=await this.send<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus[]>(operations.listWorkflowProfiles,{query,signal});if(!Array.isArray(page))throw new ApiError(502,'INVALID_RESPONSE');return page;}
   stageWorkflowProfile(body:import('@olo-labs/toolgate-contracts/v2').DeploymentProfile):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.stageWorkflowProfile,{body});}
   workflowProfileDocument(profileId:string,digest:string):Promise<import('@olo-labs/toolgate-contracts/v2').DeploymentProfile>{return this.send(operations.getWorkflowProfileDocument,{params:{profileId,digest}});}

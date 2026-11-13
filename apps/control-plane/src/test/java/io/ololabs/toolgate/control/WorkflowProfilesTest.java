@@ -118,6 +118,8 @@ final class WorkflowProfilesTest {
         String document = profile().toString();
         var staged = node(service.upload(rig.admin, document, "stage")); String digest = staged.path("profileDigest").asText();
         assertEquals("DRAFT", staged.path("state").asText()); assertFalse(staged.path("dependenciesReady").asBoolean());
+        assertTrue(node(service.listPublished(rig.admin, null, 50)).isEmpty());
+        assertEquals(404, assertThrows(Failure.class, () -> service.publishedConfiguration(rig.admin, "support", digest)).status());
         assertEquals(200, service.upload(rig.admin, document, "repeat").status());
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "early")).status());
         assertNull(rig.store.transaction(rig.tenant, false, tx -> tx.workflowProfiles().publication("support")));
@@ -129,6 +131,21 @@ final class WorkflowProfilesTest {
         ready.set(true);
         var activated = node(service.publish(rig.admin, "support", publish(digest, 0), "publish"));
         assertEquals("PUBLISHED", activated.path("state").asText()); assertEquals(1, activated.path("generation").asLong());
+        assertEquals(digest, node(service.listPublished(rig.admin, null, 50)).get(0).path("digest").asText());
+        assertTrue(node(service.listPublished(rig.admin, "support", 50)).isEmpty());
+        var view = node(service.publishedConfiguration(rig.admin, "support", digest));
+        assertFalse(view.path("agentDefinitions").isEmpty());
+        assertFalse(view.toString().contains("systemPrompt"));
+        assertFalse(view.toString().contains("secretName"));
+        assertFalse(view.toString().contains("arguments"));
+        var reader = workflowReader(rig);
+        assertEquals(200, service.listPublished(reader, null, 50).status());
+        assertEquals(view, node(service.publishedConfiguration(reader, "support", digest)));
+        assertEquals(403, assertThrows(Failure.class, () -> service.document(reader, "support", digest, false)).status());
+        assertEquals(403, assertThrows(Failure.class, () -> service.review(reader, "support", review(digest), "reader-review")).status());
+        var outsider = new DirectoryService.Actor(rig.tenant, DirectoryService.digest("forged"), true, true, "intruder");
+        assertEquals(403, assertThrows(Failure.class, () -> service.listPublished(outsider, null, 50)).status());
+        assertEquals(403, assertThrows(Failure.class, () -> service.publishedConfiguration(outsider, "support", digest)).status());
         service.publish(rig.admin, "support", publish(digest, 0), "publish-repeat");
         assertEquals(1, node(service.get(rig.admin, "support", digest)).path("generation").asLong());
         var changed = profile(); ((ObjectNode)changed.path("workflows").path("workflows").get(0)).put("versionId", "revision-2").put("systemPrompt", "Changed supervisor");
@@ -138,6 +155,7 @@ final class WorkflowProfilesTest {
         service.review(rig.admin, "support", review(next), "next-review");
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(next, 0), "stale")).status());
         assertEquals(2, node(service.publish(rig.admin, "support", publish(next, 1), "next-publish")).path("generation").asLong());
+        assertEquals(404, assertThrows(Failure.class, () -> service.publishedConfiguration(rig.admin, "support", digest)).status());
         assertEquals("REVIEWED", node(service.get(rig.admin, "support", digest)).path("state").asText());
         ready.set(false);
         assertFalse(node(service.get(rig.admin, "support", next)).path("dependenciesReady").asBoolean());
@@ -154,6 +172,23 @@ final class WorkflowProfilesTest {
         if (postgres) try (var connection = rig.data.getConnection(); var statement = connection.createStatement(); var rows = statement.executeQuery("SELECT count(*) FROM control_workflow_profile_revisions")) {
             assertTrue(rows.next()); assertEquals(0, rows.getInt(1), "no tenant context exposes no revisions");
         }
+    }
+    private DirectoryService.Actor workflowReader(Rig rig) {
+        rig.store.transaction(rig.tenant, true, tx -> {
+            var before = tx.load(); var entries = new HashMap<>(before.entries());
+            var all = new io.ololabs.toolgate.contracts.GroupSelection(List.of(), true);
+            var conditions = new io.ololabs.toolgate.contracts.EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null);
+            var rules = Arrays.stream(io.ololabs.toolgate.contracts.EnterpriseGroupType.values()).map(group ->
+                new io.ololabs.toolgate.contracts.EnterpriseManagementRule(List.of("agent.read", "agent_group.read"), group, all, List.of(), conditions, null)).toList();
+            TestSupport.put(entries, codec, Ids.Kind.USER, new io.ololabs.toolgate.contracts.ControlUser("reader", "Reader", true, 1L, null, null, null));
+            TestSupport.put(entries, codec, Ids.Kind.ROLE, new io.ololabs.toolgate.contracts.ControlRole("workflow-reader", "Workflow reader", true, 1L,
+                io.ololabs.toolgate.contracts.UserRole.BASIC, io.ololabs.toolgate.contracts.EnterpriseRoleType.MANAGEMENT, rules));
+            TestSupport.put(entries, codec, Ids.Kind.TEAM, new io.ololabs.toolgate.contracts.ControlTeam("workflow-readers", "Workflow readers", true, 1L,
+                List.of("reader"), List.of("workflow-reader"), null));
+            tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries));
+            return null;
+        });
+        return new DirectoryService.Actor(rig.tenant, DirectoryService.digest("reader"), false, false, "reader");
     }
     @Test void ownershipAndVersionConflictsRollBackWithoutPublishing() throws Exception {
         var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
