@@ -18,15 +18,18 @@ describe('Management shell states', () => {
     let active=0, peak=0, count=0;
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>{
       const url=new URL(String(input),'http://localhost');
+      const workflows=url.pathname.endsWith('/workflow-profiles/published');
       if(url.searchParams.get('limit')==='50'){
         count++;active++;peak=Math.max(peak,active);
         await new Promise(resolve=>setTimeout(resolve,20));
         active--;
       }
+      if(workflows)return new Response('[]');
       return response();
     }));
     render(<App/>);await connect();
     await waitFor(()=>expect(document.querySelectorAll('.stat').length).toBe(18));
+    await screen.findByText('No workflow profiles have been published.');
     expect(count).toBeGreaterThanOrEqual(18);
     expect(peak).toBeGreaterThan(0);
     // The shell also loads its current-user directory record independently.
@@ -95,7 +98,9 @@ describe('Management shell states', () => {
     localStorage.clear();
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
-    expect([...document.querySelectorAll<HTMLDetailsElement>('nav details')].map(group=>group.open)).toEqual([false,false,false,false,false,false]);
+    const groups=[...document.querySelectorAll<HTMLDetailsElement>('nav details')];
+    expect(groups.map(group=>group.querySelector('summary')?.textContent)).toEqual(['Audit','Tools','Devices','Users','Agents','Workflows','Administration']);
+    expect(groups.every(group=>!group.open)).toBe(true);
     const resize = screen.getByRole('separator',{name:'Resize navigation'});
     expect(screen.getByRole('region',{name:'Navigation controls'}).contains(resize)).toBe(true);
     fireEvent.keyDown(resize,{key:'End'}); expect(resize.getAttribute('aria-valuenow')).toBe('420');
