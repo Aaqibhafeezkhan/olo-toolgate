@@ -3,11 +3,27 @@
 """Claim and execute ToolGate workflows using a mounted workload credential."""
 import argparse
 import json
+import os
 from pathlib import Path
+import re
 import time
 
 from .run_transport import ControlRuns, GatewayRuntime, RunTransportError, WorkflowGateway
 from .runner import CompletionUnconfirmed, Denied, OwnershipLost, Runner
+
+
+def log_result(directory, lease, outcome):
+    """Explicit opt-in private content logging, after the server acknowledges completion."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", lease.run_id):
+        raise ValueError("Invalid result filename")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    target = directory / (lease.run_id + ".json")
+    with open(target, "x", encoding="utf-8", opener=lambda path, flags: os.open(path, flags, 0o600)) as stream:
+        json.dump({"runId": lease.run_id, "workflowId": lease.workflow_id, "state": outcome.state,
+                   "result": outcome.result, "code": outcome.code}, stream, allow_nan=False, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 class ExecutionEvidence:
@@ -54,6 +70,7 @@ def main(argv=None):
     parser.add_argument("--control-ca-file")
     parser.add_argument("--gateway-ca-file")
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--result-directory", type=Path, help="Explicitly log private terminal results in this directory")
     args = parser.parse_args(argv)
 
     def credential():
@@ -69,6 +86,8 @@ def main(argv=None):
                 evidence = ExecutionEvidence(WorkflowGateway(control, gateway))
                 runner = Runner(evidence)
                 outcome = runner.execute(lease)
+                if args.result_directory is not None:
+                    log_result(args.result_directory, lease, outcome)
                 print(json.dumps({"runId": lease.run_id, "workflowId": lease.workflow_id,
                                   "state": outcome.state, "code": outcome.code,
                                   "execution": evidence.summary()}), flush=True)

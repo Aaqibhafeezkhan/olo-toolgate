@@ -20,6 +20,18 @@ final class WorkflowConfigurationsTest {
         var path = Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
         return (ObjectNode) JSON.readTree(Files.readString(path)).get("WorkflowConfiguration");
     }
+    @Test void contextBindingsAreBoundedDataAndCannotOverrideStaticArguments() throws Exception {
+        var node = config();
+        var context = (ObjectNode) node.path("agentDefinitions").get(0).path("contextSources").get(0);
+        context.putObject("arguments");
+        context.putObject("argumentBindings").put("path", "/message");
+        assertNotNull(VALIDATOR.validate(node.toString(), reference -> true));
+        context.withObject("/arguments").put("path", "other");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), reference -> true));
+        context.putObject("arguments");
+        context.withObject("/argumentBindings").put("path", "/secrets/key");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), reference -> true));
+    }
     @Test void validConfigurationCollectsExternalDependenciesWithoutPublishing() throws Exception {
         var references = new HashSet<WorkflowConfigurations.Reference>();
         var result = VALIDATOR.validate(config().toString(), r -> { references.add(r); return true; });

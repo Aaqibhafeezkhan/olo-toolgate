@@ -9,6 +9,36 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /api/control/v1/workflow-runs/{runId}:
+    parameters:
+    - {name: runId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getWorkflowRunResult
+      description: Tenant-scoped private run metadata and decrypted terminal outcome. Requires a current Super Admin. Results remain encrypted at rest; unavailable custody fails closed.
+      responses:
+        '200':
+          description: Pinned workflow identity, run state and terminal outcome, or null outcome while unfinished
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [runId, workflowId, workflowVersionId, profileDigest, state, outcome]
+                properties:
+                  runId: {type: string}
+                  workflowId: {type: string}
+                  workflowVersionId: {type: string}
+                  profileDigest: {type: string}
+                  state: {type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, AWAITING_APPROVAL, CANCELLED, EXPIRED]}
+                  outcome:
+                    type: [object, 'null']
+                    properties:
+                      result: {}
+                      code: {type: [string, 'null']}
+                    additionalProperties: false
+                    required: [result, code]
+        '403': {description: Current Super Admin authority required}
+        '404': {description: Run unavailable in this tenant}
   /api/control/v1/workflow-profiles/published:
     get:
       operationId: listPublishedWorkflows

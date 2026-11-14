@@ -89,6 +89,32 @@ class Gate:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_context_bindings_use_the_pinned_message_before_agent_inference(self):
+        run = lease(mode='PREPARE')
+        source = ContextSource('support/context', {}, {'path': '/message'})
+        run = replace(run, message='inbox/issue-123.txt', agents=(replace(run.agents[0], context_sources=(source,)),))
+        gate = Gate(run)
+        gate.decisions['support'] = deque([
+            {'kind': 'delegate', 'agentId': 'support-investigator', 'input': 'untrusted model-selected path'},
+            {'kind': 'finish', 'result': {'issueId': '123'}}])
+        gate.decisions['support-investigator'] = deque([{'kind': 'finish', 'result': {'issueId': '123'}}])
+        outcome = Runner(gate).execute(run)
+        self.assertEqual('SUCCEEDED', outcome.state)
+        self.assertEqual([('support-investigator', 'support/context', {'path': 'inbox/issue-123.txt'})], gate.calls)
+        agent_inference = next(item for item in gate.inferences if item[0] == 'support-investigator')
+        self.assertTrue(any(message['role'] == 'tool' for message in agent_inference[3]))
+        self.assertEqual({}, source.arguments)
+
+    def test_context_bindings_reject_secret_paths_and_static_argument_collisions(self):
+        for source in (ContextSource('support/context', {}, {'path': '/secrets/key'}),
+                       ContextSource('support/context', {'path': 'other'}, {'path': '/message'})):
+            run = lease()
+            run = replace(run, agents=(replace(run.agents[0], context_sources=(source,)),))
+            result, gate = self.execute(run)
+            self.assertEqual('INVALID_CONTEXT', result.code)
+            self.assertEqual([], gate.calls)
+            self.assertEqual([], gate.authorizations)
+
     def execute(self, run=None, customize=None, **kwargs):
         run = run or lease()
         gate = Gate(run)

@@ -28,6 +28,7 @@ public final class WorkflowLeases {
     private final WorkflowProfiles profiles;
     private final WorkflowRunInputs inputs;
     private final WorkflowServiceAccess access;
+    private final WorkflowRunResults results;
     private final SecureRandom random = new SecureRandom();
 
     public WorkflowLeases(Store store, Codec codec, Clock clock, WorkflowProfiles profiles, TenantVaultKeys keys) {
@@ -37,6 +38,7 @@ public final class WorkflowLeases {
         this.profiles = profiles;
         this.inputs = new WorkflowRunInputs(codec, keys);
         this.access = new WorkflowServiceAccess(codec);
+        this.results = new WorkflowRunResults(codec, keys);
     }
 
     private record AgentSnapshot(String agentId, String modelGroupId, String systemPrompt,
@@ -85,19 +87,50 @@ public final class WorkflowLeases {
         });
     }
 
-    public Store.Reply finish(DirectoryService.Actor worker, String runId, String leaseId, String leaseToken, String state, String requestId) {
+    public Store.Reply finish(DirectoryService.Actor worker, String runId, String leaseId, String leaseToken, String state,
+                              com.fasterxml.jackson.databind.JsonNode result, String code, String requestId) {
         Ids.valid(runId);
         Ids.valid(leaseId);
         Ids.valid(requestId);
         if (leaseToken == null || !leaseToken.matches("[A-Za-z0-9_-]{43}")) throw ManagementAccess.denied();
+        if (result == null || code != null && !code.matches("[A-Z][A-Z0-9_]{0,63}")
+                || "SUCCEEDED".equals(state) && code != null) throw Failure.validation();
         return store.transaction(worker.tenant(), true, tx -> {
             var runs = tx.workflowRuns();
             long now = clock.millis();
             var lease = requireLease(runs, worker, runId, leaseId, leaseToken, now);
             if ("SUCCEEDED".equals(state) && runs.activeStep(runId) == null) throw ManagementAccess.denied();
+            var run = runs.running(runId);
+            if (run == null) throw ManagementAccess.denied();
+            if ("SUCCEEDED".equals(state)) {
+                var config = profiles.runnableRevision(tx, worker.tenant(), run.profileId(), run.profileDigest()).workflows();
+                var workflow = config.workflows().stream().filter(item -> item.id().equals(run.workflowId())
+                    && item.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
+                access.require(tx.load(), run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
+                if (tx.kills().effective().stream().anyMatch(kill -> "TENANT".equals(kill.scope()))) throw ManagementAccess.denied();
+                if (TriggerConfigs.validate((com.fasterxml.jackson.databind.JsonNode) codec.value(codec.json(workflow.resultSchema())), result) != null)
+                    throw Failure.validation();
+            }
+            results.save(tx, worker.tenant(), run, state, result, code);
             runs.finish(lease, state, now);
             tx.audit(worker.id(), "WORKFLOW_RUN_FINISH", "workflow-run:" + runId, 2, requestId, DirectoryService.digest(state));
             return new Store.Reply(200, codec.json(Map.of("runId", runId, "leaseId", leaseId, "state", state)), 0);
+        });
+    }
+
+    public Store.Reply result(DirectoryService.Actor actor, String runId) {
+        Ids.valid(runId);
+        return store.transaction(actor.tenant(), false, tx -> {
+            actor.requireAdmin();
+            if (!new ManagementAccess(codec).superAdministrator(tx.load(), actor.userId())) throw ManagementAccess.denied();
+            var run = tx.workflowRuns().get(runId);
+            if (run == null) throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.NOT_FOUND, 404, "Workflow run unavailable");
+            String state = tx.workflowRuns().state(runId);
+            var response = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+            response.put("runId", run.id()).put("workflowId", run.workflowId()).put("workflowVersionId", run.workflowVersionId())
+                .put("profileDigest", run.profileDigest()).put("state", state);
+            response.set("outcome", results.open(tx, actor.tenant(), run, state));
+            return new Store.Reply(200, codec.json(response), 0);
         });
     }
 

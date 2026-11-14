@@ -4965,6 +4965,8 @@ pub struct WorkflowConfiguration {
 pub struct WorkflowContextSource {
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub argument_bindings: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

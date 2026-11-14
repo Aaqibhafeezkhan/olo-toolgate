@@ -46,7 +46,7 @@ class RunTransportTests(unittest.TestCase):
         self.assertEqual([
             ("https://control.example/internal/v1/runtime/claim", "Bearer workload.credential", {}, 10),
             ("https://control.example/internal/v1/runtime/runs/run-1/finish", "Bearer workload.credential",
-             {"leaseId": "lease-1", "leaseToken": "x" * 43, "state": "SUCCEEDED"}, 5),
+             {"leaseId": "lease-1", "leaseToken": "x" * 43, "state": "SUCCEEDED", "result": None, "code": None}, 5),
         ], self.requests)
 
     def test_empty_queue_and_unexpected_snapshot(self):

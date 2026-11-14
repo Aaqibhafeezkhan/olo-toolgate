@@ -29,8 +29,10 @@ def _contexts(values):
         raise ValueError("Invalid context sources")
     contexts = []
     for value in values:
-        source = _record(value, "toolId arguments")
-        contexts.append(ContextSource(source["toolId"], source["arguments"]))
+        if (not isinstance(value, dict) or not {"toolId", "arguments"} <= set(value)
+                or set(value) - {"toolId", "arguments", "argumentBindings"}):
+            raise ValueError("Invalid context source")
+        contexts.append(ContextSource(value["toolId"], value["arguments"], value.get("argumentBindings", {})))
     return tuple(contexts)
 
 
@@ -118,7 +120,8 @@ class ControlRuns(ControlTriggers):
 
     def finish(self, lease, outcome, *, timeout_seconds):
         value = self._runtime_request(self._run_path(lease, "finish"),
-                                      {"leaseId": lease.lease_id, "leaseToken": lease.lease_token, "state": outcome.state},
+                                      {"leaseId": lease.lease_id, "leaseToken": lease.lease_token, "state": outcome.state,
+                                       "result": outcome.result, "code": outcome.code},
                                       timeout_seconds=timeout_seconds)
         try:
             ack = _record(value, "runId leaseId state")
@@ -135,7 +138,7 @@ class GatewayRuntime(ControlTriggers):
 
     def infer(self, lease, grant, *, system_prompt, messages, tools, candidates, timeout_seconds):
         decisions = ['{"kind":"finish","result":{...}}']
-        if grant.subject_kind == "WORKFLOW":
+        if grant.subject_kind == "WORKFLOW" and candidates:
             decisions.append('{"kind":"delegate","agentId":"<available agent>","input":"..."}')
         elif tools:
             decisions.append('{"kind":"tool","toolId":"<available tool>","arguments":{...}}')

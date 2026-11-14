@@ -19,6 +19,8 @@ public interface WorkflowRunStore {
     void enqueue(QueuedRun run);
     QueuedRun queued(String id);
     QueuedRun running(String id);
+    QueuedRun get(String id);
+    String state(String id);
     QueuedRun nextQueued();
     void claim(Lease lease);
     Lease activeLease(String runId);

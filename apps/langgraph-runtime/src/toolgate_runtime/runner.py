@@ -45,6 +45,7 @@ class Limits:
 class ContextSource:
     tool_id: str
     arguments: dict = field(repr=False)
+    argument_bindings: dict = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
@@ -201,6 +202,10 @@ def _validate(lease: RunLease) -> None:
         for source in contexts:
             if not isinstance(source.tool_id, str) or not source.tool_id or not isinstance(source.arguments, dict):
                 raise _Stop("INVALID_CONTEXT")
+            if (not isinstance(source.argument_bindings, dict) or len(source.argument_bindings) > 32
+                    or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key)
+                           or value != "/message" or key in source.arguments for key, value in source.argument_bindings.items())):
+                raise _Stop("INVALID_CONTEXT")
             _json(source.arguments)
 
 
@@ -294,7 +299,10 @@ class _Execution:
     def context(self, agent: Agent | None, messages: list[dict]) -> list[dict]:
         messages = deepcopy(messages)
         for source in agent.context_sources if agent else self.lease.context_sources:
-            value = self.call(agent, source.tool_id, source.arguments, context=True)
+            arguments = deepcopy(source.arguments)
+            for name in source.argument_bindings:
+                arguments[name] = self.lease.message
+            value = self.call(agent, source.tool_id, arguments, context=True)
             messages.append({"role": "tool", "toolId": source.tool_id, "content": value})
         _json(messages)
         return messages

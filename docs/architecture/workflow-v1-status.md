@@ -1,6 +1,84 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Live issue-log demo — 2026-11-14
+
+The bounded one-trigger/one-agent demo now executes end to end on the isolated
+`toolgate-workflow-demo` stack. A real signed device trigger admits the published
+`hotfolder-intake` / `issue-triage-v1` workflow. Its configured
+`langchain-linux-agent` reads the admitted file path using
+`examples.hotfolder/read_text`, then infers through Gateway and the local TLS
+model. The supervisor returns the configured five-field result. Control validates
+the pinned result schema and current service authority, encrypts the result under
+tenant custody and commits it with completion. The worker explicitly writes a
+private result file after acknowledgement. Default stdout remains content-free.
+
+Executed evidence on base `1d7271c7`, with implementation/test/example source
+manifest digest `bbfdd0a40151cb0a9513e3403683f1a39eb9402efdbc4c550c509ac066b5b082`:
+
+- Acceptance run `run-b2591041-7cae-4614-824a-0d9ed944dfa1` succeeded for
+  `TG-DEMO-fe85fd5a`. Duplicate admission returned the original admission/run.
+  Worker observations include supervisor → configured agent → supervisor model
+  calls and one confirmed configured `read_text`. The result's issue ID and exact
+  source path matched the actual file; Control and the private result file agreed.
+- A second file, submitted after the driver exited, completed through the
+  continuous listener/worker as `run-a0527243-e708-4329-b096-c87f94a93360`,
+  returning `CHECKOUT-1042`, priority `HIGH`, and a connection-pool investigation
+  action. The fixture credential helper refreshes mounted short-lived tokens;
+  replacement is atomic and local result directories use private permissions.
+- The actual managed Java containers were observed with non-root `65532:65532`,
+  no mounts/network, read-only root, dropped capabilities, no-new-privileges,
+  seccomp, 512 MiB memory and 64 PIDs. A current native agent read succeeded;
+  the actual tool returned `exists=false` and empty text for parent traversal to
+  an existing outside-root fictional sentinel. This is bounded observation,
+  not independent executor posture attestation.
+- Focused Control tests passed: 38 ordinary and 28 enterprise tests, including
+  fresh SQLite/PostgreSQL admission-pin, finalization and recovery regressions.
+  Runtime gate: 54 tests passed; the additional mounted-token rotation test and
+  existing transport suite passed all 14 tests. Qualification gate: 13 tests
+  discovered with the Windows symlink case skipped; three fixture tests passed.
+  Generated bindings (1,521 files), UI operation generation and fixture corpus
+  checks passed. UI type checking and TypeScript contract checks/build/tests passed.
+
+The final focused rerun passed 46 ordinary and 28 enterprise tests with no skips,
+including context-binding checks and added result size/tenant assertions. The
+full ordinary Control suite passed 370 tests with eight skips; the Java contract
+suite passed all four tests. Linux reruns passed all six knowledge qualification
+tests and the device socket-symlink regression. Source/license/secret checks passed.
+
+The first two live runs exposed a supervisor omitting mandatory `issueId`.
+Control refused completion and those runs expired; no tool effects were retried.
+The corrected immutable workflow version makes all five required fields explicit.
+Malformed model results still fail closed; model correctness is not guaranteed.
+The listener encountered transient disconnects and recovered using the durable
+cursor; separate idle socket and subscribed-socket checks each stayed connected
+for 65 seconds. Continuous acceptance above confirms recovery without lost work.
+
+The full Windows repository check stopped in the 424-test CI suite: one
+PowerShell timeout (the focused four-test rerun passed) and the existing socket
+symlink privilege refusal. The 183-test contract suite also encountered two
+Windows symlink privilege errors and a scorecard observation failure. The full
+Java gate's enterprise suite reports 449 tests with one Windows unsupported
+operator TLS fixture failure. These are not recorded as passing component gates.
+
+Images actually used: Quickstart overlay
+`sha256:707c61b72a61ee340c4322d422779335ccf7d01dc05eeb9d2b79cc12b0f56fc2`,
+worker `sha256:381093c8812d8b958a704b3ebd8b6db82ea97fbe3779171fe886316bccd15ea5`,
+device `sha256:b86e2aecdfeb33ede704f1d317dcea988a711d9f7e431ccdac7c72c714113c91`.
+The local Quickstart image has no validated public client download bundle; this
+demo uses the existing native device image. Release publication is wired but no
+release image publication was performed by this demo.
+
+Limitations/next work: operator-qualified Linux Java broker-only reads are
+explicitly enabled for one device/group/image; the default and file mutations
+remain unqualified (ADR 064). This supplies no general native runtime security,
+replay authority or production IdP lifecycle. Local enrollment approval expires
+after 24 hours. Complete applicable Linux component gates, full V1.4 acceptance
+and the outstanding weighted phases remain required. Weights and earned phase
+credit are unchanged. PRs #297 and #309 are already merged; this follow-up targets
+`feature/workflow-enhancement`. Their merged state does not earn additional
+V1.4 acceptance credit or establish completion of the original draft criterion.
+
 ## One-trigger, one-agent production slice (2026-11-14)
 
 The [delivery plan](../plans/langgraph-workflow-execution-plan.md) narrows the

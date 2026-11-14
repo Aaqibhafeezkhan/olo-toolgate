@@ -16,6 +16,13 @@
         "arguments": {
           "type": "object",
           "maxProperties": 32
+        },
+        "argumentBindings": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {"pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"},
+          "additionalProperties": {"type": "string", "enum": ["/message"]},
+          "description": "Maps tool argument names to the immutable admitted run message. Bound names must not also occur in arguments; no executable expressions are supported."
         }
       },
       "required": [

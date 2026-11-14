@@ -499,11 +499,17 @@ final class TriggerDeliveryTest {
                 assertEquals(403, status(() -> models.resolve(tx, w.tenant(), runId, grant.path("token").asText())));
                 return null;
             });
-            assertEquals(403, status(() -> leases.finish(w.admin(), runId, leaseId, token, "SUCCEEDED", "foreign-finish")));
-            assertEquals(403, status(() -> leases.finish(worker, runId, leaseId, "x".repeat(43), "SUCCEEDED", "forged-finish")));
-            assertEquals(200, leases.finish(worker, runId, leaseId, token, "SUCCEEDED", "finish").status());
+            var result = JSON.createObjectNode().put("issueId", "issue-123").put("summary", "Timeout investigated");
+            assertEquals(403, status(() -> leases.finish(w.admin(), runId, leaseId, token, "SUCCEEDED", result, null, "foreign-finish")));
+            assertEquals(403, status(() -> leases.finish(worker, runId, leaseId, "x".repeat(43), "SUCCEEDED", result, null, "forged-finish")));
+            assertEquals(400, status(() -> leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, "DENIED", "bad-result")));
+            assertEquals(200, leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, null, "finish").status());
+            var saved = JSON.readTree(leases.result(w.admin(), runId).body());
+            assertEquals(result, saved.path("outcome").path("result"));
+            assertEquals("SUCCEEDED", saved.path("state").asText());
+            assertEquals(403, status(() -> leases.result(worker, runId)));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "models")));
-            assertEquals(403, status(() -> leases.finish(worker, runId, leaseId, token, "SUCCEEDED", "repeat-finish")));
+            assertEquals(403, status(() -> leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, null, "repeat-finish")));
         }
     }
 

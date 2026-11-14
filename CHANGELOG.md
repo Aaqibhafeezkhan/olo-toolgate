@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Bind configured workflow context-tool arguments to the admitted message, store
+  encrypted workflow results for current tenant administrators, and optionally
+  write private worker result files. The hot-folder demo uses a configured
+  agent to read and triage issue logs, with explicit device/group/image pins for
+  the bounded Java broker-only read tier; writes remain unqualified.
+
 - Include `olo-toolgate-langgraph-runtime` in container release builds, image
   verification, SBOM/provenance and Docker Hub/GHCR publication.
 

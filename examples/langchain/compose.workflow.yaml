@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 services:
   quickstart:
+    env_file:
+      - path: ${TOOLGATE_LANGCHAIN_STATE:-.state}/workflow/qualified-readers.env
+        required: false
     environment:
       TOOLGATE_WORKFLOW_MODEL_ORIGINS: https://workflow-model:8443
       TOOLGATE_WORKFLOW_MODEL_CA_FILE: /run/model-ca.crt
@@ -27,7 +30,20 @@ services:
     build:
       context: ../../apps/langgraph-runtime
     network_mode: service:registry
-    command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-18451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-18451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --once]
+    command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-18451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-18451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --result-directory, /results]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ${TOOLGATE_LANGCHAIN_STATE:-.state}/workflow/worker:/custody:ro
+      - ${TOOLGATE_LANGCHAIN_STATE:-.state}/workflow/results:/results
+  workflow-listener:
+    image: toolgate-langgraph-runtime:local
+    network_mode: service:registry
+    entrypoint: [/opt/toolgate-runtime/bin/python, -m, toolgate_runtime.trigger_listener]
+    command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-18451}', --subscription, hotfolder-workflow-agent, --subscription-uid, '${TOOLGATE_WORKFLOW_SUBSCRIPTION_UID:-unconfigured}', --token-file, /custody/listener.token, --ca-file, /custody/gateway-ca.crt]
+    restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

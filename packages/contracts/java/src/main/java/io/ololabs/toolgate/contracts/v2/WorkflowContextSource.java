@@ -7,20 +7,24 @@ package io.ololabs.toolgate.contracts.v2;
  *
  * @param toolId canonical toolId value
  * @param arguments canonical arguments value
+ * @param argumentBindings canonical argumentBindings value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record WorkflowContextSource(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "toolId", required = true) String toolId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "arguments", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> arguments
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "arguments", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> arguments,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "argumentBindings", required = false) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> argumentBindings
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
      * @param toolId canonical toolId value
      * @param arguments canonical arguments value
+     * @param argumentBindings canonical argumentBindings value
      */
     public WorkflowContextSource {
         java.util.Objects.requireNonNull(toolId, "toolId");
         java.util.Objects.requireNonNull(arguments, "arguments");
         arguments = arguments == null ? null : java.util.Map.copyOf(arguments);
+        argumentBindings = argumentBindings == null ? null : java.util.Map.copyOf(argumentBindings);
     }
 }

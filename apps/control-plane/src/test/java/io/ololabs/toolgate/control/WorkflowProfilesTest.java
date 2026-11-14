@@ -93,9 +93,30 @@ final class WorkflowProfilesTest {
             assertEquals(admission, tx.workflowRuns().admission(admission.subscriptionUid(), admission.cursor()));
             return null;
         });
+        var results = new WorkflowRunResults(codec, vault);
+        var completed = JSON.createObjectNode().put("issueId", "private-issue").put("summary", "Private triage result");
+        assertThrows(Failure.class, () -> rig.store.transaction(rig.tenant, true, tx -> {
+            results.save(tx, rig.tenant, tx.workflowRuns().get("run-1"), "SUCCEEDED", completed, null);
+            throw Failure.conflict();
+        }));
+        rig.store.transaction(rig.tenant, true, tx -> {
+            var run = tx.workflowRuns().get("run-1");
+            assertTrue(results.open(tx, rig.tenant, run, "SUCCEEDED").isNull());
+            assertThrows(Failure.class, () -> results.save(tx, rig.tenant, run, "SUCCEEDED",
+                JSON.getNodeFactory().textNode("x".repeat(32768)), null));
+            assertTrue(results.open(tx, rig.tenant, run, "SUCCEEDED").isNull());
+            results.save(tx, rig.tenant, run, "SUCCEEDED", completed, null);
+            assertEquals(completed, results.open(tx, rig.tenant, run, "SUCCEEDED").path("result"));
+            String key = Canonical.digest(JSON.valueToTree(List.of("workflow-run-result/v1", "run-1")));
+            assertFalse(tx.packages().document(key).contains("Private triage result"));
+            assertThrows(Failure.class, () -> results.open(tx, rig.tenant, run, "FAILED"));
+            assertThrows(Failure.class, () -> results.save(tx, rig.tenant, run, "SUCCEEDED", completed, null));
+            return null;
+        });
         var foreignTenant = Tenants.id("other");
         TestSupport.seed(rig.store, codec, foreignTenant, "root");
         rig.store.transaction(foreignTenant, false, tx -> {
+            assertNull(tx.workflowRuns().get("run-1"));
             assertNull(tx.workflowRuns().queued("run-1"));
             assertNull(tx.workflowRuns().admission(admission.subscriptionUid(), admission.cursor()));
             return null;

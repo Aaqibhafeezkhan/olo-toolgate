@@ -2650,6 +2650,7 @@ export interface WorkflowConfiguration {
 export interface WorkflowContextSource {
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
+  readonly argumentBindings?: Record<string, unknown>;
 }
 /** Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority. */
 export interface WorkflowDefinition {

@@ -3,6 +3,7 @@
 // GENERATED FILE — DO NOT EDIT; python tools/ui/generate.py
 import type { ControlAccessGrant, ControlAccessGrantPage, ControlAgent, ControlAgentDelegation, ControlAgentDelegationPage, ControlAgentGroup, ControlAgentGroupPage, ControlAgentPage, ControlDelegation, ControlDelegationPage, ControlDevice, ControlDeviceEvidence, ControlDeviceEvidencePage, ControlDeviceGroup, ControlDeviceGroupPage, ControlDevicePage, ControlExecutionBinding, ControlExecutionBindingPage, ControlIdentityBinding, ControlIdentityBindingPage, ControlPolicy, ControlPolicyPage, ControlResourceExtractor, ControlResourceExtractorPage, ControlRole, ControlRolePage, ControlTeam, ControlTeamPage, ControlTool, ControlToolGroup, ControlToolGroupPage, ControlToolPage, ControlUser, ControlUserPage, ControlWorkloadBinding, ControlWorkloadBindingPage } from '@olo-labs/toolgate-contracts';
 export const operations = {
+  getWorkflowRunResult: { method: 'GET', path: '/api/control/v1/workflow-runs/{runId}' },
   listPublishedWorkflows: { method: 'GET', path: '/api/control/v1/workflow-profiles/published' },
   getPublishedWorkflow: { method: 'GET', path: '/api/control/v1/workflow-profiles/published/{profileId}/{digest}' },
   listWorkflowProfiles: { method: 'GET', path: '/api/control/v1/workflow-profiles' },
