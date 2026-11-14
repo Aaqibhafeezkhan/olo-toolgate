@@ -17,14 +17,14 @@ export function usePermissions(client?:ControlClient){
  const view=(route:string)=>route==='about'||route==='overview'||(requirements[route]??[]).some(can);
  const resource=(route:string)=>requirements[route]?.[0]?.split('.')[0];
  const edit=(route:string)=>{const feature=resource(route);return Boolean(feature&&managementCatalog.resources.some(r=>r.id===feature&&r.actions.some(action=>!safeActions.has(action)&&can(`${feature}.${action}`))));};
- const workflowRead=(route?:string)=>route!=='workflow-trigger-packages'&&can('agent.read')&&can('agent_group.read');
+ const workflowRead=(route?:string)=>route!=='workflow-trigger-packages'&&(client?.canReadPublishedWorkflows()??false);
  return {can,view,resource,edit,workflowRead};
 }
 
 /** Shared read-only presentation for feature screens; directory dialogs guard individual actions. */
 export function FeatureAccess({client,route,children,superAdmin=false}:{client:ControlClient;route:string;children:ReactNode;superAdmin?:boolean}){
  const permissions=usePermissions(client);
- if(isWorkflowPage(route))return superAdmin||permissions.workflowRead(route)?<>{children}</>:<section><h1>Access unavailable</h1><p>Current Super Admin authority is required to manage workflow profiles.</p></section>;
+ if(isWorkflowPage(route))return superAdmin||permissions.workflowRead(route)?<>{children}</>:<section><h1>Access unavailable</h1><p>Your role does not grant access to this workflow page.</p></section>;
  if(!permissions.view(route))return <section><h1>Access unavailable</h1><p>Your role does not grant access to this feature.</p></section>;
  const directory=(managementCatalog.directoryRoutes as readonly string[]).includes(route);
  if(directory||permissions.edit(route)||route==='about'||route==='overview'||route==='analytics'||route==='builder'||route==='server-packages'||route==='kill-events')return <>{children}</>;

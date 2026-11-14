@@ -185,3 +185,13 @@ management authorization, catalog persistence and readiness are delivered. Do
 not add these fields to a deployed version-1 profile or interpret successful
 structural validation as READY or execution permission. See the
 [live workflow status](../architecture/workflow-v1-status.md) for remaining work.
+
+## Published workflows in the console
+
+The Overview, Workflows and Agents configuration pages show published workflow
+and agent properties to users with tenant-wide agent and agent-group read access.
+Control returns this decision as `canReadPublishedWorkflows` in the admin
+session and checks it again for every published configuration request.
+Group-scoped readers keep their existing directory access. Super Admins manage
+drafts and publication. Use **Devices / Triggers** for device trigger management
+and **Workflows / Trigger packages** to configure packages in a workflow profile.

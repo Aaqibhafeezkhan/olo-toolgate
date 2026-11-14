@@ -30,11 +30,23 @@ class LangChainDeviceTests(unittest.TestCase):
             config.write_text(json.dumps(dict(stateDirectory=str(state),serverUrl='https://localhost:18451',
                 tenantId='tenant-fixture',deployment={'releaseKeys':['public']},tools={'retired':'configuration'})))
             module.FIXTURES = fixtures
-            module.configure(config)
+            module.SOCKET_DIRECTORY = Path(folder)
+            with patch.object(module.socket, 'gethostname', return_value='fixture-a'):
+                module.configure(config)
+                module.configure(config)
+            with patch.object(module.socket, 'gethostname', return_value='fixture-b'):
+                second_config = config.with_name('second-client.json')
+                second_config.write_text(config.read_text())
+                module.configure(second_config)
             value = json.loads(config.read_text())
             self.assertEqual(value['tenantId'],'tenant-fixture')
             self.assertEqual(value['deployment'],{'releaseKeys':['public']})
             self.assertNotIn('tools',value)
+            for hostname, settings in [('fixture-a', value), ('fixture-b', json.loads(second_config.read_text()))]:
+                endpoint = Path(folder) / f'olo-toolgate-{hostname}-docker.sock'
+                self.assertEqual(settings['execution']['engineEndpoint'], 'unix://' + str(endpoint))
+                self.assertEqual(endpoint.readlink(), Path('/var/run/docker.sock'))
+                self.assertEqual(settings['execution']['stateDirectory'], str(state / 'runtimes'))
             self.assertEqual(value['execution']['tools'],[])
             self.assertEqual(value['execution']['runtimes'],[])
             self.assertEqual(value['execution']['files']['root'],str(files))

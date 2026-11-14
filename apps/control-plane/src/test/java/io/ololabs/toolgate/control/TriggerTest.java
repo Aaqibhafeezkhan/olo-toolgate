@@ -84,6 +84,10 @@ final class TriggerTest {
                          EndpointService endpoints, RsaFleetCrypto crypto) {}
 
     private World world(PostgresStore store, String label) throws Exception {
+        return world(store, label, CLOCK);
+    }
+
+    private World world(PostgresStore store, String label, Clock clock) throws Exception {
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id(label);
         var admin = TestSupport.seed(store, codec, tenant, "root");
         TestSupport.pool(store, codec, tenant, "finance", "device-a", "device-b");
@@ -95,10 +99,10 @@ final class TriggerTest {
                 return null;
             });
         }
-        var endpoints = new EndpointService(store, codec, null, CLOCK, true, tenant.value(), "server", "Organization", "https://control.example.test", "https://gateway.example.test");
+        var endpoints = new EndpointService(store, codec, null, clock, true, tenant.value(), "server", "Organization", "https://control.example.test", "https://gateway.example.test");
         var crypto = crypto();
-        var triggers = new TriggerService(store, codec, crypto, endpoints, CLOCK, true, tenant.value());
-        var packages = new ServerPackages(store, codec, null, CLOCK).acceptTriggers(true);
+        var triggers = new TriggerService(store, codec, crypto, endpoints, clock, true, tenant.value());
+        var packages = new ServerPackages(store, codec, null, clock).acceptTriggers(true);
         return new World(store, tenant, admin, triggers, packages, endpoints, crypto);
     }
 
@@ -166,6 +170,252 @@ final class TriggerTest {
             var rest = json(w.triggers().definitions(w.admin(), one.path("nextPageToken").asText(), 1).body());
             assertNotEquals(one.path("items").path(0).path("packageDigest"), rest.path("items").path(0).path("packageDigest"));
         }
+    }
+
+    @Test
+    void scopedActionChangesOnlyTheTargetedDesiredDocument() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            var unaffected = desired(w, "device-c");
+            String pause = """
+                    {"action":"Pause","scope":{"deviceGroups":["finance"]},"reason":"Maintenance"}
+                    """;
+            assertEquals(404, status(() -> w.triggers().action(w.admin(), "inbox",
+                    pause.replace("\"finance\"", "\"finance\",\"unknown\""), "W/\"1\"", "request")));
+            assertEquals("Running", desired(w, "device-a").instances().getFirst().desiredState().name());
+
+            var result = json(w.triggers().action(w.admin(), "inbox", pause, "W/\"1\"", "request").body());
+            assertEquals(1, result.path("changes").size());
+            assertEquals("Paused", desired(w, "device-a").instances().getFirst().desiredState().name());
+            assertEquals(unaffected.generation(), desired(w, "device-c").generation());
+            String stop = """
+                    {"action":"Stop","scope":{"devices":["device-a"]},"reason":"Maintenance"}
+                    """;
+            w.triggers().action(w.admin(), "inbox", stop, "W/\"2\"", "request");
+            assertEquals("Stopped", desired(w, "device-a").instances().getFirst().desiredState().name());
+            w.triggers().patch(w.admin(), "inbox", "{\"spec\":{\"config\":{\"folder\":\"other\"}}}",
+                    "W/\"3\"", null, false, "request");
+            assertEquals("Stopped", desired(w, "device-a").instances().getFirst().desiredState().name());
+            w.triggers().action(w.admin(), "inbox", stop.replace("Stop", "Clear"), "W/\"4\"", "request");
+            assertEquals("Paused", desired(w, "device-a").instances().getFirst().desiredState().name());
+            assertEquals(412, status(() -> w.triggers().action(w.admin(), "inbox", pause, "W/\"1\"", "request")));
+            w.triggers().action(w.admin(), "inbox", pause.replace("Pause", "Clear"), "W/\"5\"", "request");
+            assertEquals("Running", desired(w, "device-a").instances().getFirst().desiredState().name());
+            var lease = leases(w, "device-a").leases().getFirst();
+            assertTrue(valid(w, "device-a", lease.instanceId(), lease.leaseEpoch(), lease.leaseToken()));
+            var removed = json(w.triggers().action(w.admin(), "inbox", stop.replace("Stop", "Remove"),
+                    "W/\"6\"", "request").body());
+            assertEquals("Removed", removed.path("changes").path(0).path("change").asText());
+            assertFalse(valid(w, "device-a", lease.instanceId(), lease.leaseEpoch(), lease.leaseToken()));
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+            assertEquals(1, desired(w, "device-c").instances().size());
+            String deploy = """
+                    {"action":"Deploy","scope":{"devices":["device-a"]},"reason":"Maintenance complete","desiredState":"Paused"}
+                    """;
+            assertEquals(400, status(() -> w.triggers().action(w.admin(), "inbox",
+                    deploy.replace(",\"desiredState\":\"Paused\"", ""), "W/\"7\"", "request")));
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+            var deployed = json(w.triggers().action(w.admin(), "inbox", deploy, "W/\"7\"", "request").body());
+            assertEquals("Added", deployed.path("changes").path(0).path("change").asText());
+            assertEquals("Paused", desired(w, "device-a").instances().getFirst().desiredState().name());
+            var newLease = leases(w, "device-a").leases().getFirst();
+            assertTrue(newLease.leaseEpoch() > lease.leaseEpoch());
+        }
+    }
+
+    /** Control-side state transitions from M12 scenario 10, using signed desired documents. */
+    @Test
+    void overlappingGroupsRespectLifecyclePrecedenceAndNewMembership() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            TestSupport.pool(w.store(), codec, w.tenant(), "spare", "device-b", "device-c");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            String target = """
+                    {"executor":"CLIENT","deviceGroups":["finance","spare"]}
+                    """;
+            w.triggers().create(w.admin(), create("inbox", target, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            lifecycle(w, "Pause", "deviceGroups", "finance", 1);
+            assertDesired(w, "device-a", "Paused");
+            assertDesired(w, "device-b", "Paused");
+            assertDesired(w, "device-c", "Running");
+            lifecycle(w, "Stop", "devices", "device-c", 2);
+            lifecycle(w, "Run", "deviceGroups", "spare", 3);
+            assertDesired(w, "device-c", "Stopped");
+            assertDesired(w, "device-b", "Paused");
+
+            TestSupport.pool(w.store(), codec, w.tenant(), "finance", "device-a", "device-b", "device-d");
+            assertDesired(w, "device-d", "Paused");
+            lifecycle(w, "Remove", "devices", "device-a", 4);
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+            lifecycle(w, "Clear", "deviceGroups", "finance", 5);
+            assertDesired(w, "device-b", "Running");
+            assertDesired(w, "device-d", "Running");
+            assertDesired(w, "device-c", "Stopped");
+            assertTrue(desired(w, "device-a").instances().isEmpty());
+        }
+    }
+
+    private void lifecycle(World w, String action, String scope, String id, long revision) {
+        String body = codec.json(Map.of("action", action, "scope", Map.of(scope, List.of(id)), "reason", "Scenario 10"));
+        assertEquals(200, w.triggers().action(w.admin(), "inbox", body, "W/\"" + revision + "\"", "request").status());
+    }
+
+    private void assertDesired(World w, String deviceId, String state) {
+        assertEquals(state, desired(w, deviceId).instances().getFirst().desiredState().name(), deviceId);
+    }
+
+    @Test
+    void bulkActionUsesOnlyAuthorizedGroupsAndMatchingTriggers() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            for (String name : List.of("one", "two")) {
+                w.triggers().create(w.admin(), create(name, TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            }
+            limited(w, "limited", "finance", List.of("trigger.manage"));
+            var actor = new DirectoryService(w.store(), codec, 512, 1048576).portalActor(w.tenant(), "b".repeat(64), "limited");
+            String stop = """
+                    {"action":"Stop","selector":{"deviceGroups":["finance"],"triggers":["acme.watch/*"]},"reason":"Maintenance"}
+                    """;
+            assertEquals(403, status(() -> w.triggers().bulkAction(actor,
+                    stop.replace("\"finance\"", "\"finance\",\"spare\""), "request")));
+            assertTrue(desired(w, "device-a").instances().stream().allMatch(i -> i.desiredState().name().equals("Running")));
+
+            var other = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
+            var outsider = TestSupport.seed(w.store(), codec, other, "root");
+            assertEquals(404, status(() -> w.triggers().bulkAction(outsider, stop, "request")));
+            assertEquals(0, json(w.triggers().bulkAction(actor, stop.replace("acme.watch/*", "unrelated/*"), "request").body())
+                    .path("assignments").size());
+            assertEquals(2, json(w.triggers().bulkAction(actor, stop, "request").body()).path("assignments").size());
+            assertEquals(2, desired(w, "device-a").instances().stream().filter(i -> i.desiredState().name().equals("Stopped")).count());
+            assertEquals(2, desired(w, "device-c").instances().stream().filter(i -> i.desiredState().name().equals("Running")).count());
+            var audit = json(w.store().transaction(w.tenant(), false, tx -> tx.auditPage(0, 100)));
+            int audited = 0;
+            for (var item : audit.path("items")) {
+                if (!"TRIGGER_ASSIGNMENT_ACTION".equals(item.path("operation").asText())) continue;
+                var evidence = item.path("triggerLifecycleEvidence");
+                assertEquals("Stop", evidence.path("action").asText());
+                assertEquals("deviceGroups", evidence.path("scopeKind").asText());
+                assertEquals("finance", evidence.path("scopeIds").path(0).asText());
+                assertEquals("Maintenance", evidence.path("reason").asText());
+                assertEquals("Stopped", evidence.path("changes").path(0).path("newDesiredState").asText());
+                audited++;
+            }
+            assertEquals(2, audited);
+        }
+    }
+
+    @Test
+    void rollingUpdateWaitsForReadinessAndStallsOnFailure() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            reportRolloutPhase(w, "device-a", "Running", true);
+            reportRolloutPhase(w, "device-c", "Running", true);
+
+            w.triggers().patch(w.admin(), "inbox", """
+                    {"spec":{"config":{"folder":"updated"},"strategy":{"rollingUpdate":{"maxUnavailable":"1"}}}}
+                    """, "W/\"1\"", null, false, "request");
+            assertEquals(2L, desired(w, "device-a").instances().getFirst().configRevision());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+
+            reportRolloutPhase(w, "device-a", "Failed", false);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision(),
+                    "a stalled rollout stays stalled until an explicit recovery");
+            var assignment = json(w.triggers().get(w.admin(), "inbox").body());
+            assertEquals("RolloutStalled", assignment.path("status").path("conditions").path(1).path("reason").asText());
+            String etag = assignment.path("metadata").path("resourceVersion").asText();
+            assertEquals(412, status(() -> w.triggers().rollback(w.admin(), "inbox", "W/\"1\"", "request")));
+            assertEquals(200, w.triggers().rollback(w.admin(), "inbox", etag, "request").status());
+            var restored = desired(w, "device-a").instances().getFirst();
+            assertEquals(3L, restored.configRevision());
+            assertEquals("inbox", restored.config().get("folder").asText());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(3L, desired(w, "device-c").instances().getFirst().configRevision());
+        }
+    }
+
+    @Test
+    void completedRolloutCanRestorePreviousRevision() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            reportRolloutPhase(w, "device-a", "Running", true);
+            reportRolloutPhase(w, "device-c", "Running", true);
+            w.triggers().patch(w.admin(), "inbox", """
+                    {"spec":{"config":{"folder":"updated"},"strategy":{"rollingUpdate":{"maxUnavailable":"1"}}}}
+                    """, "W/\"1\"", null, false, "request");
+
+            assertEquals(2L, desired(w, "device-a").instances().getFirst().configRevision());
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(2L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-c", "Running", true);
+            desired(w, "device-c");
+
+            var assignment = json(w.triggers().get(w.admin(), "inbox").body());
+            assertEquals(1, assignment.path("status").path("conditions").size());
+            String etag = assignment.path("metadata").path("resourceVersion").asText();
+            assertEquals(200, w.triggers().rollback(w.admin(), "inbox", etag, "request").status());
+            assertEquals("updated", desired(w, "device-c").instances().getFirst().config().get("folder").asText());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals("inbox", desired(w, "device-c").instances().getFirst().config().get("folder").asText());
+        }
+    }
+
+    @Test
+    void aBrieflyReadyPackageReplacementKeepsItsRolloutSlot() throws Exception {
+        for (var entry : stores()) {
+            var clock = new TriggerIngestTest.MutableClock();
+            clock.millis = CLOCK.millis();
+            var w = world(entry.getValue(), "tenant-a", clock);
+            for (String version : List.of("1.0.0", "1.0.1")) {
+                w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, version, List.of(descriptor("new-file"))), "request");
+            }
+            w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
+            reportRolloutPhase(w, "device-a", "Running", true);
+            reportRolloutPhase(w, "device-c", "Running", true);
+            w.triggers().patch(w.admin(), "inbox", """
+                    {"spec":{"packageVersion":"1.0.1","strategy":{"rollingUpdate":{"maxUnavailable":"1"}}}}
+                    """, "W/\"1\"", null, false, "request");
+            assertEquals(2L, desired(w, "device-a").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Running", true);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            clock.millis += 11_000;
+            reportRolloutPhase(w, "device-a", "Running", true, 1);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            reportRolloutPhase(w, "device-a", "Failed", false, 2);
+            assertEquals(1L, desired(w, "device-c").instances().getFirst().configRevision());
+            var assignment = json(w.triggers().get(w.admin(), "inbox").body());
+            assertEquals("RolloutStalled", assignment.path("status").path("conditions").path(1).path("reason").asText());
+        }
+    }
+
+    private void reportRolloutPhase(World w, String deviceId, String phase, boolean ready) {
+        reportRolloutPhase(w, deviceId, phase, ready, 0);
+    }
+
+    private void reportRolloutPhase(World w, String deviceId, String phase, boolean ready, int restarts) {
+        var document = desired(w, deviceId);
+        var instance = document.instances().getFirst();
+        String snapshot = """
+                {"observedGeneration":%d,"pending":0,"snapshot":{
+                  "snapshotGeneration":1,"snapshotDigest":"sha256:%s","page":1,"pageCount":1,"pageDigest":"sha256:%s","instances":[{
+                    "instanceId":"%s","configRevision":%d,"phase":"%s",
+                    "conditions":[{"type":"Ready","status":"%s","reason":"TestReport","lastTransitionTime":"2023-11-14T22:13:20Z"}],
+                    "counters":{"emitted":0,"rejected":0,"dropped":0,"restarts":%d},"outbox":{"depth":0,"oldestAgeMs":0}
+                  }]}}
+                """.formatted(document.generation(), "1".repeat(64), "2".repeat(64), instance.instanceId(),
+                instance.configRevision(), phase, ready ? "True" : "False", restarts);
+        var sync = codec.model(snapshot, io.ololabs.toolgate.contracts.v2.TriggerSync.class);
+        var ingest = new io.ololabs.toolgate.control.application.TriggerIngest(w.triggers(), codec);
+        w.store().transaction(w.tenant(), true, tx -> ingest.sync(tx, device(w, deviceId), sync, "request"));
     }
 
     @Test
@@ -366,8 +616,61 @@ final class TriggerTest {
         }
     }
 
+    @Test
+    void ownerCanAssignOnlyTheirDeviceAndCannotWidenToTheSharedGroup() throws Exception {
+        for (var entry : stores()) {
+            var w = world(entry.getValue(), "tenant-a");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "upload");
+            limited(w, "visitor", "finance", List.of("trigger.read", "trigger.manage", "trigger.subscribe"), "OWNED");
+            w.store().transaction(w.tenant(), true, tx -> {
+                var before = tx.load();
+                var entries = new HashMap<>(before.entries());
+                TestSupport.put(entries, codec, Ids.Kind.DEVICE, new ControlDevice("device-a", "My device", true, 2L, "visitor"));
+                GroupGraph.setMemberships(entries, codec, Ids.Kind.DEVICE, "device-a", List.of("finance"));
+                tx.save(before, new Directory(before.revision() + 1, entries));
+                return null;
+            });
+            var visitor = new DirectoryService(w.store(), codec, 512, 1048576).portalActor(w.tenant(), "b".repeat(64), "visitor");
+            assertEquals(403, status(() -> w.triggers().definitions(visitor, null, null)));
+            assertEquals(403, status(() -> w.triggers().definitions(visitor, "device-b", null, null)));
+            assertEquals(0, json(w.triggers().definitions(visitor, "device-a", null, null).body()).path("items").size());
+            w.store().transaction(w.tenant(), true, tx -> {
+                var release = new FleetPackageRelease(PACKAGE, "1.0.0", "0".repeat(64),
+                        10L, new FleetSignedDocument("e30.e30.e30"));
+                var snapshot = new FleetDesiredSnapshot("device-a", 1L, List.of(new FleetAssignment(release, true)));
+                tx.fleet().save(FleetStore.Kind.DESIRED, new FleetStore.Row("device-a", 1L, codec.json(snapshot)), 0);
+                return null;
+            });
+            var exports = json(w.triggers().definitions(visitor, "device-a", null, null).body()).path("items");
+            assertEquals(1, exports.size());
+            assertEquals(PACKAGE + "/new-file", exports.get(0).path("triggerId").asText());
+            String own = "{\"executor\":\"CLIENT\",\"devices\":[\"device-a\"]}";
+            String other = "{\"executor\":\"CLIENT\",\"devices\":[\"device-b\"]}";
+            String group = "{\"executor\":\"CLIENT\",\"deviceGroups\":[\"finance\"]}";
+            assertEquals(201, w.triggers().create(visitor, create("my-folder", own, "{\"folder\":\"orders\"}", "Running"), null, false, "create").status());
+            assertEquals(403, status(() -> w.triggers().create(visitor, create("other-folder", other, "{\"folder\":\"orders\"}", "Running"), null, false, "other")));
+            assertEquals(403, status(() -> w.triggers().create(visitor, create("whole-group", group, "{\"folder\":\"orders\"}", "Running"), null, false, "group")));
+            assertEquals(403, status(() -> w.triggers().patch(visitor, "my-folder", "{\"spec\":{\"target\":" + other + "}}", "W/\"1\"", null, false, "widen")));
+            assertEquals(200, w.triggers().get(visitor, "my-folder").status());
+            var subscriptions = new TriggerSubscriptions(w.store(), codec, w.triggers(), CLOCK, w.tenant().value());
+            assertEquals(201, subscriptions.create(visitor, "{\"name\":\"my-folder-agent\",\"spec\":{\"sources\":{\"assignments\":[\"my-folder\"]},\"expiresAtUnixMs\":1700003600000}}", null, "subscribe").status());
+            // Ownership changes revoke reading and subscription authority immediately.
+            w.store().transaction(w.tenant(), true, tx -> {
+                var before = tx.load(); var entries = new HashMap<>(before.entries());
+                TestSupport.put(entries, codec, Ids.Kind.DEVICE, new ControlDevice("device-a", "Transferred device", true, 3L, "root"));
+                tx.save(before, new Directory(before.revision() + 1, entries)); return null;
+            });
+            assertEquals(403, status(() -> w.triggers().get(visitor, "my-folder")));
+            assertEquals(403, status(() -> subscriptions.create(visitor, "{\"name\":\"after-transfer\",\"spec\":{\"sources\":{\"assignments\":[\"my-folder\"]},\"expiresAtUnixMs\":1700003600000}}", null, "subscribe")));
+        }
+    }
+
     /** A portal administrator whose only management rule grants these actions on one Device Group. */
     private void limited(World w, String user, String group, List<String> actions) {
+        limited(w, user, group, actions, null);
+    }
+
+    private void limited(World w, String user, String group, List<String> actions, String deviceScope) {
         w.store().transaction(w.tenant(), true, tx -> {
             var before = tx.load();
             var entries = new HashMap<>(before.entries());
@@ -377,7 +680,7 @@ final class TriggerTest {
             var only = new GroupSelection(List.of(group), false);
             var conditions = new EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null);
             var ceiling = new EnterpriseScope(none, only, List.of(), false, List.of(), conditions);
-            var rule = new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, only, List.of(ceiling), conditions, null);
+            var rule = new EnterpriseManagementRule(actions, EnterpriseGroupType.DEVICE_GROUP, only, List.of(ceiling), conditions, deviceScope);
             TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("trigger-operator", "Trigger operator", true, 1L, UserRole.ADMINISTRATOR, EnterpriseRoleType.MANAGEMENT, List.of(rule)));
             TestSupport.put(entries, codec, Ids.Kind.TEAM, new ControlTeam("trigger-operators", "Trigger operators", true, 1L, List.of(user), List.of("trigger-operator"),null));
             tx.save(before, new Directory(before.revision() + 1, entries));

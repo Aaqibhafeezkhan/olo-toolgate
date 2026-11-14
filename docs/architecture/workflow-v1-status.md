@@ -16,6 +16,19 @@ build and type check passed, and the focused SQLite workflow profile tests passe
 for published reads, redaction, replacement and reader authorization. PostgreSQL
 and packaged-console smoke checks are separate from this evidence.
 
+PR #307 combines the published configuration views with the device trigger
+management and workflow trigger package routes from main. The admin session
+and published API use the same tenant-wide read decision. A group-scoped
+reader can still use the scoped directory, while the published routes stay
+hidden and Control denies direct requests.
+
+Verification after integrating main at b25f59c5: Admin UI type check and
+285 tests, three workflow browser tests, and all 13 WorkflowProfilesTest
+cases on SQLite and disposable PostgreSQL passed. Generated contract and UI
+operation checks passed. Diff against main excluding this status file:
+SHA-256 135c2ff5d41648da0719b69f2f13ef4b8afe9abb17467786cb33fb6e7df4623e.
+Full CI and V1.4 live workflow qualification remain outstanding.
+
 Issue: [#295](https://github.com/olo-labs/olo-toolgate/issues/295) ·
 Integration: `feature/workflow-enhancement` ·
 Merged milestone: [PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
@@ -260,6 +273,13 @@ known failing parallel precommit UI suite; the actual Docker UI compilation and
 startup evidence above validate this correction.
 
 ### Dedicated workflow, group and agent management (2026-11-11)
+
+PR #296 places the profile trigger editor under **Workflows > Trigger packages**
+(`#workflow-trigger-packages`). The page still requires Super Admin authority
+and queries tenant-wide package exports. All eight WorkflowManagement tests
+and the permission regression passed on merge tree
+`1f179fb54415c9e7e251bfd685d1ff8fb9b31af1` (before the status updates).
+Phase acceptance still requires the live execution checks below.
 
 Delivered directly to umbrella #297 as requested, based on `6a2f03ec`. Workflows
 now has separate Workflows, Workflow groups, Models, Trigger mappings and Profiles

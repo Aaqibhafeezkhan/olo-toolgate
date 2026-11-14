@@ -19,6 +19,8 @@ pub struct AdminSession {
     pub tenant_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tenant_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub can_read_published_workflows: Option<bool>,
 }
 /// Immutable artifact identity; digest must be verified by consumers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -453,6 +455,8 @@ pub struct ControlAudit {
     pub request_digest: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence: Option<ControlAuditEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_lifecycle_evidence: Option<ControlTriggerLifecycleEvidence>,
 }
 /// Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -946,6 +950,16 @@ pub struct ControlToolPage {
     pub items: Vec<ControlTool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_cursor: Option<String>,
+}
+/// Scope, reason and resolved state changes for a trigger assignment lifecycle action.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ControlTriggerLifecycleEvidence {
+    pub action: v2::TriggerLifecycleAction,
+    pub scope_kind: String,
+    pub scope_ids: Vec<String>,
+    pub reason: String,
+    pub changes: Vec<v2::TriggerInstanceChange>,
 }
 /// Tenant-scoped users configuration record. Not a runtime credential or policy grant.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2648,6 +2662,7 @@ pub struct FleetSignedDocument {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FleetTriggerRegistration {
     pub trigger_id: String,
+    pub package_digest: String,
     pub trigger_descriptor_digest: String,
     pub runtime_id: String,
     pub entry_point: String,

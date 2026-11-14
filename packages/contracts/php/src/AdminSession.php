@@ -12,12 +12,13 @@ final readonly class AdminSession implements \JsonSerializable {
         public ?array $permissions = null,
         public ?string $bootstrapAdminUserId = null,
         public ?string $tenantId = null,
-        public ?string $tenantName = null
+        public ?string $tenantName = null,
+        public ?bool $canReadPublishedWorkflows = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['permissions', 'role', 'bootstrapAdminUserId', 'tenantId', 'tenantName']) || array_diff(['role'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['permissions', 'role', 'bootstrapAdminUserId', 'tenantId', 'tenantName', 'canReadPublishedWorkflows']) || array_diff(['role'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -25,7 +26,8 @@ final readonly class AdminSession implements \JsonSerializable {
             array_key_exists('permissions', $data) ? array_map(static fn ($item) => $item, $data['permissions']) : null,
             array_key_exists('bootstrapAdminUserId', $data) ? $data['bootstrapAdminUserId'] : null,
             array_key_exists('tenantId', $data) ? $data['tenantId'] : null,
-            array_key_exists('tenantName', $data) ? $data['tenantName'] : null
+            array_key_exists('tenantName', $data) ? $data['tenantName'] : null,
+            array_key_exists('canReadPublishedWorkflows', $data) ? $data['canReadPublishedWorkflows'] : null
         );
     }
 

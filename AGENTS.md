@@ -32,10 +32,11 @@ For work implementing issue #274 (server and client triggers):
   Modules on independent tracks (plan section 24.5) may have PRs open at the same time. Exception (plan 24.6):
   modules 5, 10, 11 and 12 and an end-to-end demo are delivered in one PR, each module still meeting its own
   *Done when*.
-- Within a module, iterate on small changes and focused tests without intermediate commits. When the module meets
-  its *Done when*, run its full verification (module tests on SQLite and PostgreSQL where relevant, cross-tenant
-  negatives, contract regeneration checks, the component gates from `CONTRIBUTING.md`, and the M12 scenarios it
-  owns), fix failures, then make one commit with code, tests, docs and the progress update, and open the PR.
+- Within a module, keep committing progress locally in small, focused changes. Include the relevant tests,
+  docs and status update with the implementation. When the module meets its *Done when*, run its full
+  verification (module tests on SQLite and PostgreSQL where relevant, cross-tenant negatives, contract
+  regeneration checks, the component gates from `CONTRIBUTING.md`, and the M12 scenarios it owns). Fix failures
+  and commit those fixes locally, then push the completed module once and open its PR.
 - Every PR description contains the module progress table from the status document, with this module shown as
   "In this PR" and the overall percentage before and after merge. A module earns its weight only when merged.
 - Record only checks actually run, with their results. Record scope or weight changes explicitly under *Baseline

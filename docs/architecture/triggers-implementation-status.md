@@ -5,9 +5,34 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Device-scoped trigger management
+
+The console discovers client trigger exports from packages assigned to the
+selected device. The SDK exports the trigger annotation description and the
+configuration record's schema in the signed package descriptor. The console
+uses that schema for field labels, help, and defaults. Control validates each
+assignment and checks the caller's permissions on its targets.
+
+The focused UI test exercises an unrelated package schema. SDK annotation and
+SQLite Control tests cover exported metadata, device-scoped discovery, and
+denial of access to another device or a shared group. This change claims no
+additional module weight.
+
+The PR #296 merge resolution keeps device-scoped management under **Devices >
+Triggers**. Workflow profile trigger packages have a dedicated route. The API
+client supports both tenant-wide and device-scoped export queries.
+
+On merge tree `1f179fb54415c9e7e251bfd685d1ff8fb9b31af1` (before this
+status update), the UI build and generated contracts, UI operation bindings,
+and permission catalog checks passed. The serial UI run passed 29 of 30
+tests across App, Permissions, Triggers, and WorkflowManagement. The About
+navigation test passed in isolation with an explicit hash change. The initial
+full UI suite was stopped after timeouts. Live Demo 3 validation with rebuilt
+images remains pending.
+
 ## Overall progress
 
-Updated: **2026-11-11**.
+Updated: **2026-11-13**.
 
 **Overall: 27% complete; 73% pending.** 4 of 18 modules earned: module 1 (olo-labs/olo-toolgate#281, merge
 `16d0fd36`), and modules 2, 3 and 4 through the integration PR olo-labs/olo-toolgate#285 (merge `abc72788`; reviewed as
@@ -43,7 +68,7 @@ finality. The baseline and earned module weights are unchanged. See the
 | Release-ready (99%) | 1–17 | ⏳ Pending |
 | Gate G-STATE (TLC model, stateful property tests, deterministic simulation) | 1, 3, 17 | 🔵 Item 1 (TLC) passes at the bounds in *Baseline changes*. Item 2 is delivered for the supervisor crate (module 3) and for Control ingest (module 5, a seeded-random stateful JUnit test instead of jqwik; see *Baseline changes*). Item 3 pending |
 | Gate G-IFC (conformance and adversarial corpus, security sign-off) | 11, 16 | ⏳ Not run |
-| M12 end-to-end scenarios | all | 0 of 58 passing in CI. Scenarios 16 and 31 pass at the protocol level in `TriggerDeliveryTest` (not over a live socket) |
+| M12 end-to-end scenarios | all | 0 of 58 passing in CI. Module 6 scenarios 10 and 11 passed locally. Scenarios 16 and 31 pass at the protocol level in `TriggerDeliveryTest` (not over a live socket) |
 
 ### CI hot-folder delivery fix (2026-11-09)
 
@@ -93,7 +118,7 @@ evidence. No module weight or baseline denominator changes; earned progress stay
 | 3 | Supervisor crate | C | 8% | ✅ Merged (via #285) | 8% | #283, #285 |
 | 4 | Control core for client triggers | D | 8% | ✅ Merged (via #285) | 8% | #284, #285 |
 | 5 | ★ Client integration and ingest | E | 8% | 🔵 Merged (#286) without evidence; end-to-end fixes in the PR from `fix/triggers-desired-404` | 0% | #286 |
-| 6 | Lifecycle, rollout and raw page | D | 6% | ⏳ Pending | 0% | — |
+| 6 | Lifecycle, rollout and raw page | D | 6% | 🔵 In this PR | 0% | This PR |
 | 7 | PUSH mode and file watching | B/E | 7% | ⏳ Pending | 0% | — |
 | 8 | ★ Server triggers on the Tool Host | E | 8% | ⏳ Pending | 0% | — |
 | 9 | Python SDK parity | B | 4% | ⏳ Pending | 0% | — |
@@ -152,6 +177,284 @@ their reasons.
 Each merged module records: delivered scope against its *Done when*, the checks actually run with their results
 (including skips and failures), the M12 scenarios that now pass, shared-file changes, #230 coordination, and known
 limits. Results are never invented; a check that was not run is listed as not run.
+
+### Module 6 — Lifecycle, rollout and raw page (in progress)
+
+The local branch `feature/triggers-m06-lifecycle` starts from `aa33a9d3`.
+Control applies instance, device and targeted-group overrides to signed desired
+state and instance views. Scoped Run, Pause, Stop and Clear actions validate
+their entire scope and ETag before writing. Assignment edits preserve overrides.
+
+Focused Gradle tests (`TriggerTest` and `TriggerLifecycleTest`, 7 tests)
+passed using Java 21 and Node 24. They cover override precedence, rejection of
+an invalid mixed scope, unaffected desired generations, and persistence across
+a config edit. Tested Java sources SHA-256: `7575c5bbea173e10b9dffb6bf5ec8bf0213b394accab73f7f968fe70f1fdb16e` (concatenated in path order).
+
+Scoped Remove now drops direct targets or groups and excludes a removed
+device when group targeting remains. The existing reconciliation revokes
+the lease and omits the removed instance from signed desired state. The
+focused test now checks group-targeted removal and preservation of a second
+device and rejection of the removed device’s previous lease. All 7 focused
+Gradle tests passed with this change. Tested Java sources SHA-256:
+`55a081fc0aa2e87362ab716848f5a20b48b40f668b47f330767190a73ed369cb` (concatenated in path order).
+
+Control OpenAPI now publishes the assignment lifecycle endpoint and the
+generated UI operation catalog exposes it. Contract binding and UI operation
+regeneration checks pass. Checked sources SHA-256: `3d3b39ea74421073c87de72db2b9d8c6043c660f613b78441844c15d8d7db27d`
+(OpenAPI operation catalog followed by the Control specification).
+
+Scoped Deploy now adds devices or Device Groups to an existing assignment
+with an explicit initial desired state. Deploying an excluded device clears
+its exclusion. The endpoint contract requires the initial state for Deploy.
+All 7 focused Gradle tests passed, including redeployment, a fresh lease
+epoch and rejection of a missing initial state. Tested source SHA-256:
+`9ab9732e60644e604ae513afc3c169ea3aa2c9bbe3840c801dcbde3f95b9a1ed` (changed Java and OpenAPI sources concatenated in path order).
+
+Control now checks the configuration revision of each instance snapshot
+before applying its reported status. A new assigned revision clears readiness
+from the previous revision. All 6 focused Gradle tests passed, including
+replay of an old snapshot after a config edit. Tested Java sources SHA-256:
+`f230c583731aa3c6a89be58cc61895ca1c18fcce8ab8a74827d3a52d570a13d2` (changed Java sources concatenated in path order).
+
+The assignment contract defines `strategy.rollingUpdate.maxUnavailable`.
+The design's count and percentage forms are both encoded as strings, for
+example `"1"` and `"25%"`, because the generated bindings cannot represent
+an integer-or-string union. This wire representation differs from the
+plan's numeric count example and leaves module scope and weights unchanged.
+Generated binding and fixture checks, Java v2 round-trip tests, and a direct
+pattern boundary check passed. The Python trigger contract suite could not
+start with the system Python because `referencing` was missing. Tested schema
+SHA-256: `6230d9966e4d4d734e4dce19af60904ab7efdf1b599f673723aa60294509a22b`.
+
+The rollout selector counts existing unavailability against the configured
+limit. It selects devices in ID order, waits when no slots remain, and stops
+selecting replacements on failure or pause. Both selector unit tests passed.
+For assignments with a rollout strategy, Control now persists the previous
+revision and pending devices on a config edit. Device check-ins advance the
+rollout, and pending devices continue to receive the previous revision with
+current lifecycle overrides. The integration test covers a two-device rollout
+with one slot and a failed replacement. That test passed before the rollback
+change. Assignment status now shows `Progressing` and `RolloutStalled`.
+The rollback endpoint checks the ETag and target permissions, then restores
+the previous payload as a new config revision for the current targets.
+Rollback applies to an active rollout, including a stalled one, and publishes
+the restoration to all its devices. Post-completion revision history and
+budgeted rollback are outstanding. All 8 focused Gradle tests passed,
+including stale-ETag rejection and restoration after a stalled replacement.
+The two Quickstart direct TLS route tests, preflight, and UI operation
+regeneration also passed. Tested source SHA-256: `c4b71d1af0458edc10f88dd6ed7610894b6b6383a06947bd437452d73569ab3b`
+(changed implementation and test sources concatenated in path order).
+
+Control retains the immediately preceding configuration after a rollout
+completes. The saved revision excludes nested rollout state and overrides.
+A new focused test advances both devices, then restores the prior payload
+after completion. All nine focused Gradle tests passed. Tested source
+SHA-256: `b616d2326c8289a26c70576b77d150721d838217ed5d2f898ed2802ef3a6db07` (changed Java and OpenAPI sources in path order).
+Rollback still restores all current devices at once.
+
+The Admin UI Triggers page now lists live Control assignments and opens
+the selected assignment's instance status. Assignment and instance lists
+follow the API's page tokens. The existing workflow-profile editor remains
+available on that page. Admin UI type checking and all nine focused UI
+tests passed. Tested UI source SHA-256: `cd5ac41a80d69c32c812154cb8086be1fed1825c89701c68bd2bcd2f1fc39ef2`
+(changed sources and test concatenated in path order).
+
+Operators with `trigger.manage` can apply scoped lifecycle actions or
+roll back an assignment from the console. Requests carry the exact ETag
+shown by the list. Admin UI type checking and all ten focused UI tests
+passed, including the scoped Pause request and its ETag. Tested UI source
+SHA-256: `139118470e629cb64a9e7e879ae72a91c739bbb1f89e76d7504cdb2114e5bf59` (changed sources and test in path order).
+
+The Triggers page supports signed package upload with `package.import`
+and raw assignment creation with `trigger.manage`. It sends the selected
+package bytes directly to Control and keeps the idempotency key for an exact
+create retry. Admin UI type checking and all three focused assignment UI
+tests passed. See the [operator guide](../control-plane/trigger-assignments.md).
+Tested source SHA-256: `09300fb805bce058c6c1461c7860733f29a3f9e3a1a8d0f5c41d2c5724ea4377` (changed sources, test and guide in path order).
+
+The cross-assignment lifecycle endpoint applies Run, Pause, Stop or Clear
+to selected Device Groups and trigger exports in one tenant transaction.
+Quickstart forwards the exact endpoint over direct TLS. Both focused TLS
+routing tests passed. All 8 focused Control tests passed, including an
+unauthorized mixed scope, cross-tenant denial and a wildcard match. Tested
+source SHA-256: `e63fd8d1bbf81b954628a8ff47f1d983be7970e1cc49146b00a876346a857ae0` (changed sources in path order).
+
+Lifecycle audit entries now carry the authorized scope, reason, and
+affected instance state changes as structured evidence. The existing audit
+chain covers those evidence bytes, and the tenant audit page exposes them
+separately from invocation evidence. Eight focused Control tests and four
+Java contract tests passed. Preflight verified generated bindings and fixture
+coverage. Tested source SHA-256: `6c29d08639b522626285b04e8b6d8b99f884e977529893849d1ae8566bef708c`
+(changed sources and fixtures concatenated in path order).
+
+With a rollout strategy configured, rollback now uses the same availability
+budget. It retains the revision each pending device was already assigned.
+An already failed replacement can start recovery without spending a slot
+on a healthy device. All ten focused rollout and Control tests passed.
+Tested Java sources SHA-256: `f2cfb69795af0d88edd326d345404a82278a22b4f9de3b05304c11742826a0af` (concatenated in path order).
+
+The Live panel opens an ephemeral watch for the selected assignment over
+`toolgate.triggers.v1`. It sends the ticket as a subprotocol, replenishes
+credit, keeps at most 100 events in memory, and clears events on revocation.
+Admin UI type checking and 12 focused tests passed. The socket test uses
+a simulated WebSocket and does not count as live-socket acceptance.
+Tested source SHA-256: `d35888cb26f95d7c81cedde92fda116ab5060fdc2efa3df90f8f7b22c5d60852` (changed sources and guide in path order).
+
+The Control-side regression for M12 scenario 10 uses two overlapping
+Device Groups and signed desired documents. It covers group pause,
+device stop, override precedence, a device joining a paused group,
+removal by exclusion, and clearing the group pause. The PostgreSQL and SQLite
+Control gate passed with 818 recorded tests and zero failures, including this
+case in the nine-test `TriggerTest` suite. Tested implementation revision
+`81e4838a` with `TriggerTest.java` SHA-256 `32d2b409b4535c95ea179394340e5a311187c31f962c455ad882b46fb58143c3`.
+This fixture does not exercise a live executor or checkpoint restoration.
+
+The Quickstart scenario 10 runner now includes an optional local checkpoint
+probe using a synthetic file marker. Its CLI and Python compilation passed.
+The Compose overlay passed configuration validation for four distinct device
+hostnames and state volumes. A disposable Quickstart built with Control from
+`81e4838a` enrolled all four devices and provisioned the signed Inbox Watch
+client release after its isolated registry was configured. All four devices
+reported the package READY. One live attempt ended with HTTP 401 during
+phase polling. Another produced a synthetic marker in the local checkpoint,
+but the probe expected a top-level state field. The on-disk checkpoint wraps
+state under `value`. The reader now checks the instance ID and reads that
+field. Python compilation passed and the corrected live run is in progress.
+
+The five Python trigger contract tests passed after adding the maximum-length
+`maxUnavailable` fixture. The full repository gate stopped in the CI suite (422 tests,
+6 failures, 9 errors, 4 skips). One observed failure was a missing fixture
+environment variable in a Windows PowerShell subprocess launched from WSL.
+Later repository gates were not reached. The full Admin UI run with one
+worker reported 273 passed and 8 failed. A retry with a 20-second test
+timeout reported the same totals: 273 passed and 8 failed. The failures
+were in App, Devices and WorkflowManagement; the focused Trigger Live test
+passed. The Node 22 commit hook passed all 18 browser-extension tests and
+the Admin UI type check before its coverage run collided with the serial run.
+At branch baseline `aa33a9d3`, the three affected suites passed all 39 tests
+with Node 22, one worker and a 20-second test timeout.
+
+The scenario 11 runner now checks the availability budget during a signed
+package upgrade, fleet delivery to the selected device, the failed
+replacement, and rollback. Both acceptance scripts compile. The failing
+package initially failed to build against an older SDK cache. Publishing
+the SDK from the M6 worktree passed, and the fixture package build is
+running with that SDK. The scenario 10 runner now also requires a fresh
+post-resume checkpoint that retains the first marker and advances its
+outbox sequence by one in the same lease epoch.
+
+The live scenario 10 attempt reached the new-member step but timed out:
+the new device reported Pending after joining a paused group. The supervisor
+now holds an instance with no process in Paused and starts it only on Run.
+The supervisor suite passed, including all 16 lifecycle tests and the
+delivery model test. The Ubuntu device binary also built. The failing Inbox Watch 0.1.1 archive built against the local SDK and its
+two SDK examples passed. Scenario 11 timed out waiting for Quickstart
+before starting the rollout. A replacement disposable Quickstart and its
+registry started successfully. The musl debug client did not expose its
+protected IPC socket before the fixture startup deadline, so the four
+devices did not enroll. The standard Debian release build opened IPC, and all four devices enrolled
+and checked in. An initial client-release request returned HTTP 503. A
+retry reported an existing release, which Control accepted for a four-device
+fleet rollout. Scenario 10 passed on the four-device fixture, including a
+new device joining the paused group and a post-resume checkpoint that kept
+the first marker and advanced its outbox sequence by one in the same lease
+epoch. The fixture used Control from `81e4838a` and the Debian release
+client from `7d6c4cc0`. Scenario 11 published the failing package and
+started all three baseline instances. Quickstart returned HTTP 501 on the
+package upgrade because the HTTP console proxy had no PATCH handler. The
+proxy now forwards PATCH through the existing authenticated dispatcher.
+The focused regression passed, covering a missing session, the TLS upstream
+request body and If-Match, and the response ETag. The rebuilt disposable
+Quickstart accepted the upgrade in the replay, and all 55 Quickstart unit
+tests passed. Tested supervisor SHA-256
+`d70322df18022cacd66a08d693e43852f6cc8a845c7d251582675a534460187c`. Source SHA-256: `e20ec072ccde2290560d4288edd5b5986119f730325f071ab8ba3074216710e4`
+(changed sources and guide concatenated in path order).
+
+The scenario 11 replay exposed an identity gap: an executor reported the
+new revision Running with the previous binary when both releases shared a
+trigger descriptor, so Control advanced the rollout. The signed fleet
+registration now carries the package archive digest. The client requires an
+exact package and descriptor match from the active fleet release and
+re-resolves on fleet changes. Contract preflight verified all 1,521 generated files.
+The three focused client tests passed, including a replacement that shares
+the descriptor but has a different package digest. A fresh SQLite Quickstart
+with the rebuilt Control and Debian client passed scenario 10 again. Scenario
+11 published the signed failing release and started the canary. The
+runner observed a budget violation after fleet delivery and exited. A later
+snapshot showed the canary on revision 2 and the other two instances
+Running on revision 1. The runner now includes all phases, revisions and
+readiness values from the failing poll to distinguish a transient peer
+failure from a second replacement. The full Python contract suite reported
+183 tests with 2 skipped and no failures using the repository virtual
+environment. The Node 22 commit hook failed in Admin UI coverage while
+the Control and live fixture were running (238 passed, 43 failed).
+
+The diagnostic replay captured a second unready instance still on revision
+1. A later snapshot from an earlier attempt also showed a failed revision-2
+canary after another device had advanced. Control now measures the 10-second
+package replacement readiness window between accepted Running and Ready
+reports, and resets it on restart, unready report or revision change. The
+focused SQLite regression advanced the test clock and proved that a restart
+report arriving after the window still holds the slot. It failed before
+using report timestamps and passed after the correction.
+
+The live replay with the earlier readiness-window build verified baseline
+fleet activation and stable trigger readiness before starting. A revision-1
+peer still went Pending alongside the canary, including after the fixture
+switched off automatic Hotfolder provisioning. The peer stayed on the same
+fleet generation. The Docker recovery code derives ownership from the
+endpoint and runtime state path. The
+Compose devices used the same Docker endpoint and runtime state path, so
+a fleet activation could clean up another device's containers. The example
+now gives each fixture hostname its own Docker socket path to the shared
+daemon, keeping the required protected runtime state path. The earlier
+state-path changes failed startup validation. The socket-path change passed
+Python compilation. The live scenario 11 replay then passed on three devices:
+only the canary failed, Control reported RolloutStalled, and rollback restored
+all three devices to the original package at revision 3. This replay used
+the earlier readiness-window Control image. The overlapping full Control gate reported class-loading
+errors after another Gradle task rebuilt its classes. A serial rerun is
+required.
+
+The final readiness-window Control image also passed live scenario 11. The
+runner completed with the one-device budget and restored all three devices.
+Tested TriggerService SHA-256
+`be47bf8891be65a660f76863f88075dd15d24488e66e33f244fa792bad7440be`.
+
+The serial PostgreSQL, SQLite and enterprise Control gate passed with 819
+recorded tests and zero failures. The full endpoint and supervisor Rust run
+reported 134 passed, zero failures, and two ignored. The Admin UI hook
+reported 276 passed and five failed under concurrent verification. A focused
+rerun of the five affected suites passed all 43 tests with one worker and a
+20-second test timeout.
+
+The commit hook for `6dc08d3e` passed all 281 Admin UI tests and three browser
+download checks. The full repository check stopped after 422 CI tests with
+one error and 17 skips. The unprivileged device fixture test attempted to
+create its Docker socket alias under /run. The test now creates both aliases
+in a temporary directory and verifies their distinct endpoints, shared
+socket target, and required runtime state path. The focused fixture test passed.
+
+Integration with main b713b2ae keeps device-scoped Trigger management
+under **Devices > Triggers**. The same route also exposes package upload,
+fleet assignment lifecycle controls, status and live events to Super Admin.
+The UI client shares the assignment list and creation bindings across both
+views. The integrated source tree 3aad9012209f77cd03aa674666f2d235228cf9af
+passed UI type checking and 30 focused UI tests across five suites.
+A clean Gradle build with an isolated PostgreSQL instance passed all 15
+focused Control tests, including SQLite and PostgreSQL assignment coverage,
+device-owner scope, cross-tenant denial, lifecycle precedence and rollout.
+The Java SDK annotation processor suite also passed. On integrated revision
+7952bd39 the commit gate passed 283 Admin UI tests and nine browser checks.
+Two accessibility tests reached the default five-second timeout under load
+on the first attempt. The serial rerun used a 20-second timeout and passed.
+
+On cb2f4f6a the workspace Rust format, tests and Clippy gate passed.
+The full check passed the Java build plus the published-contract build and
+its negative resolution proof. The full command and hosted CI remain
+outstanding at this checkpoint.
+
+Module 6 earns no weight until its acceptance criteria are met and it merges.
 
 ### Module 1 — Contracts, ADR and model (merged, #281)
 

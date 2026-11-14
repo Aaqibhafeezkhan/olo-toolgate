@@ -14,7 +14,7 @@ async function connect(page:Page,role:string){
   await page.route('**/api/control/v1/**',async route=>{
     const path=new URL(route.request().url()).pathname;
     let body:unknown={items:[]};
-    if(path.endsWith('/admin-session'))body={role,permissions:['agent.read','package.read']};
+    if(path.endsWith('/admin-session'))body={role,permissions:['agent.read','agent_group.read','package.read']};
     if(path.endsWith('/workflow-profiles')){catalogRequests++;body=[status];}
     if(path.includes('/revisions/'))body=path.endsWith('/document')?profile:status;
     await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
@@ -38,7 +38,7 @@ test('dedicated workflow, group and agent pages share the selected revision and 
   await expect(page.getByRole('heading',{name:'Workflows',level:1})).toBeVisible();
   await expect(page.getByText('Unsaved profile draft',{exact:false})).toBeVisible();
   await page.locator('nav summary').filter({hasText:/^Agents$/}).click();
-  await page.getByRole('link',{name:'Prompts & context',exact:true}).click();
+  await page.getByRole('link',{name:'Models & prompts',exact:true}).click();
   await page.getByRole('button',{name:`Edit ${configuration.agentDefinitions[0].agentId}`,exact:true}).click();
   const agent=page.getByRole('dialog',{name:'Configure agent prompts and context'});
   await expect(agent.getByLabel('systemPrompt')).toBeVisible();await expect(agent.getByLabel('modelGroupId')).toBeVisible();

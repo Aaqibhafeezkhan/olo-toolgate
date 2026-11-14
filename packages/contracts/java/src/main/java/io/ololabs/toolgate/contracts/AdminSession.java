@@ -10,6 +10,7 @@ package io.ololabs.toolgate.contracts;
  * @param bootstrapAdminUserId canonical bootstrapAdminUserId value
  * @param tenantId canonical tenantId value
  * @param tenantName canonical tenantName value
+ * @param canReadPublishedWorkflows canonical canReadPublishedWorkflows value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record AdminSession(
@@ -17,7 +18,8 @@ public record AdminSession(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "role", required = true) UserRole role,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "bootstrapAdminUserId", required = false) String bootstrapAdminUserId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "tenantId", required = false) String tenantId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "tenantName", required = false) String tenantName
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "tenantName", required = false) String tenantName,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "canReadPublishedWorkflows", required = false) Boolean canReadPublishedWorkflows
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -26,6 +28,7 @@ public record AdminSession(
      * @param bootstrapAdminUserId canonical bootstrapAdminUserId value
      * @param tenantId canonical tenantId value
      * @param tenantName canonical tenantName value
+     * @param canReadPublishedWorkflows canonical canReadPublishedWorkflows value
      */
     public AdminSession {
         permissions = permissions == null ? null : java.util.List.copyOf(permissions);

@@ -116,7 +116,7 @@ it('pins the selected workflow version in a trigger mapping draft',async()=>{
 });
 
 it('edits a profile trigger against the installed export schema',async()=>{
-  const {transport}=rig('triggers');await open();
+  const {transport}=rig('workflow-trigger-packages');await open();
   const definition=fixture.TriggerDefinitionRecord;
   await screen.findByText(`${definition.triggerId} (${definition.packageVersion})`);
   fireEvent.click(screen.getByRole('button',{name:'Add trigger packages'}));

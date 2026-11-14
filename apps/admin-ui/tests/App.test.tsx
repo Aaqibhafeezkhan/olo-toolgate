@@ -9,8 +9,8 @@ import axe from 'axe-core';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); window.location.hash = ''; localStorage.clear(); });
 function response(items: unknown[] = []) { return new Response(JSON.stringify({items})); }
-async function connect() {
-  const transport=globalThis.fetch;vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).endsWith('/admin-session')?Promise.resolve(new Response(JSON.stringify({role:'ADMINISTRATOR',permissions:allPermissions}))):transport(input,init)));
+async function connect(canReadPublishedWorkflows = true, role = 'ADMINISTRATOR') {
+  const transport=globalThis.fetch;vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,init?:RequestInit)=>String(input).endsWith('/admin-session')?Promise.resolve(new Response(JSON.stringify({role,permissions:allPermissions,canReadPublishedWorkflows}))):transport(input,init)));
   fireEvent.change(screen.getByLabelText('Access token'),{target:{value:'test-only-secret'}}); fireEvent.click(screen.getByRole('button',{name:'Connect to workspace'})); await screen.findByRole('navigation'); }
 
 describe('Management shell states', () => {
@@ -35,6 +35,29 @@ describe('Management shell states', () => {
     // The shell also loads its current-user directory record independently.
     expect(peak).toBeLessThanOrEqual(5);
   });
+  it('hides published workflow pages when the session only grants scoped agent reads', async () => {
+    const transport=vi.fn(async(_input:RequestInfo|URL)=>response());
+    vi.stubGlobal('fetch',transport);
+    window.location.hash='#workflows';
+    render(<App/>);await connect(false);
+    expect(await screen.findByRole('heading',{name:'Access unavailable'})).toBeTruthy();
+    expect(document.querySelector('nav a[href="#workflows"]')).toBeNull();
+    window.location.hash='#overview';fireEvent(window,new HashChangeEvent('hashchange'));
+    await screen.findByRole('heading',{name:'Your organization, at a glance'});
+    expect(screen.queryByRole('heading',{name:'Published workflows and agents'})).toBeNull();
+    expect(transport.mock.calls.flat().some(input=>String(input).includes('/workflow-profiles/published'))).toBe(false);
+  });
+
+  it('keeps device trigger management and the workflow trigger packages route available', async () => {
+    vi.stubGlobal('fetch',vi.fn(async()=>response()));
+    window.location.hash='#triggers';
+    render(<App/>);await connect(true,'SUPER_ADMIN');
+    expect(await screen.findByRole('heading',{name:'Triggers',level:1})).toBeTruthy();
+    expect(await screen.findByRole('heading',{name:'Trigger assignments'})).toBeTruthy();
+    window.location.hash='#workflow-trigger-packages';fireEvent(window,new HashChangeEvent('hashchange'));
+    expect(await screen.findByRole('heading',{name:'Trigger packages',level:1})).toBeTruthy();
+  });
+
   it('shows the tenant display name and UUID separately', async () => {
     const tenantId='10000000-0000-4000-8000-000000000001';
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/admin-session')
@@ -49,7 +72,9 @@ describe('Management shell states', () => {
   it('shows the version and build number on the About page', async () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
-    fireEvent.click(screen.getByRole('link',{name:'About'})); window.dispatchEvent(new HashChangeEvent('hashchange'));
+    expect(screen.getByRole('link',{name:'About'}).getAttribute('href')).toBe('#about');
+    window.location.hash = '#about';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
     expect(await screen.findByRole('heading',{name:'About ToolGate'})).toBeTruthy();
     expect(screen.getByText('Build').nextElementSibling?.textContent).toBe('local');
   });

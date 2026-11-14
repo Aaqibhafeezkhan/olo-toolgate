@@ -630,6 +630,9 @@ impl<S: Store> Supervisor<S> {
     /// The instance's desired state is `Running`.
     pub fn run(&mut self, now_ms: u64) {
         self.desired_running = true;
+        if self.process.is_none() && self.phase == Phase::Paused {
+            self.phase = Phase::Pending;
+        }
         self.tick(now_ms);
     }
 
@@ -680,16 +683,31 @@ impl<S: Store> Supervisor<S> {
     pub fn stop(&mut self, reason: &str, now_ms: u64) {
         self.desired_running = false;
         self.stop_process(reason, None, now_ms);
-        if self.process.is_none() && matches!(self.phase, Phase::Pending | Phase::Backoff { .. }) {
+        if self.process.is_none()
+            && matches!(
+                self.phase,
+                Phase::Pending | Phase::Paused | Phase::Backoff { .. }
+            )
+        {
             self.phase = Phase::Stopped;
         }
         self.refresh(now_ms);
     }
 
     pub fn pause(&mut self, now_ms: u64) {
+        self.desired_running = false;
         if let Some(process) = self.process.as_mut().filter(|p| p.stopping.is_none()) {
-            process.paused = true;
-            self.actions.push(Action::Send(Inbound::pause()));
+            if !process.paused {
+                process.paused = true;
+                self.actions.push(Action::Send(Inbound::pause()));
+            }
+            self.phase = Phase::Paused;
+        } else if self.process.is_none()
+            && matches!(
+                self.phase,
+                Phase::Pending | Phase::Stopped | Phase::Backoff { .. }
+            )
+        {
             self.phase = Phase::Paused;
         }
         self.refresh(now_ms);

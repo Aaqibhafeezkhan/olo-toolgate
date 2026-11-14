@@ -138,11 +138,23 @@ final class WorkflowProfilesTest {
         assertFalse(view.toString().contains("systemPrompt"));
         assertFalse(view.toString().contains("secretName"));
         assertFalse(view.toString().contains("arguments"));
-        var reader = workflowReader(rig);
+        var reader = workflowReader(rig, "reader", true);
         assertEquals(200, service.listPublished(reader, null, 50).status());
         assertEquals(view, node(service.publishedConfiguration(reader, "support", digest)));
         assertEquals(403, assertThrows(Failure.class, () -> service.document(reader, "support", digest, false)).status());
         assertEquals(403, assertThrows(Failure.class, () -> service.review(reader, "support", review(digest), "reader-review")).status());
+        var scopedReader = workflowReader(rig, "scoped-reader", false);
+        rig.store.transaction(rig.tenant, false, tx -> {
+            var access = new ManagementAccess(codec);
+            var directory = tx.load();
+            long now = System.currentTimeMillis();
+            assertTrue(access.capabilities(directory, scopedReader.userId(), now).containsAll(List.of("agent.read", "agent_group.read")));
+            assertFalse(access.canReadPublishedWorkflows(directory, scopedReader.userId(), now));
+            assertTrue(access.canReadPublishedWorkflows(directory, reader.userId(), now));
+            return null;
+        });
+        assertEquals(403, assertThrows(Failure.class, () -> service.listPublished(scopedReader, null, 50)).status());
+        assertEquals(403, assertThrows(Failure.class, () -> service.publishedConfiguration(scopedReader, "support", digest)).status());
         var outsider = new DirectoryService.Actor(rig.tenant, DirectoryService.digest("forged"), true, true, "intruder");
         assertEquals(403, assertThrows(Failure.class, () -> service.listPublished(outsider, null, 50)).status());
         assertEquals(403, assertThrows(Failure.class, () -> service.publishedConfiguration(outsider, "support", digest)).status());
@@ -173,22 +185,25 @@ final class WorkflowProfilesTest {
             assertTrue(rows.next()); assertEquals(0, rows.getInt(1), "no tenant context exposes no revisions");
         }
     }
-    private DirectoryService.Actor workflowReader(Rig rig) {
+    private DirectoryService.Actor workflowReader(Rig rig, String user, boolean tenantWide) {
         rig.store.transaction(rig.tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
-            var all = new io.ololabs.toolgate.contracts.GroupSelection(List.of(), true);
             var conditions = new io.ololabs.toolgate.contracts.EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null);
-            var rules = Arrays.stream(io.ololabs.toolgate.contracts.EnterpriseGroupType.values()).map(group ->
-                new io.ololabs.toolgate.contracts.EnterpriseManagementRule(List.of("agent.read", "agent_group.read"), group, all, List.of(), conditions, null)).toList();
-            TestSupport.put(entries, codec, Ids.Kind.USER, new io.ololabs.toolgate.contracts.ControlUser("reader", "Reader", true, 1L, null, null, null));
-            TestSupport.put(entries, codec, Ids.Kind.ROLE, new io.ololabs.toolgate.contracts.ControlRole("workflow-reader", "Workflow reader", true, 1L,
+            var rules = Arrays.stream(io.ololabs.toolgate.contracts.EnterpriseGroupType.values()).map(group -> {
+                var groups = new io.ololabs.toolgate.contracts.GroupSelection(
+                    tenantWide ? List.of() : List.of(GroupGraph.DEFAULTS.get(Ids.Kind.valueOf(group.name()))), tenantWide);
+                return new io.ololabs.toolgate.contracts.EnterpriseManagementRule(
+                    List.of("agent.read", "agent_group.read"), group, groups, List.of(), conditions, null);
+            }).toList();
+            TestSupport.put(entries, codec, Ids.Kind.USER, new io.ololabs.toolgate.contracts.ControlUser(user, user, true, 1L, null, null, null));
+            TestSupport.put(entries, codec, Ids.Kind.ROLE, new io.ololabs.toolgate.contracts.ControlRole(user + "-role", "Workflow reader", true, 1L,
                 io.ololabs.toolgate.contracts.UserRole.BASIC, io.ololabs.toolgate.contracts.EnterpriseRoleType.MANAGEMENT, rules));
-            TestSupport.put(entries, codec, Ids.Kind.TEAM, new io.ololabs.toolgate.contracts.ControlTeam("workflow-readers", "Workflow readers", true, 1L,
-                List.of("reader"), List.of("workflow-reader"), null));
+            TestSupport.put(entries, codec, Ids.Kind.TEAM, new io.ololabs.toolgate.contracts.ControlTeam(user + "-team", "Workflow readers", true, 1L,
+                List.of(user), List.of(user + "-role"), null));
             tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries));
             return null;
         });
-        return new DirectoryService.Actor(rig.tenant, DirectoryService.digest("reader"), false, false, "reader");
+        return new DirectoryService.Actor(rig.tenant, DirectoryService.digest(user), false, false, user);
     }
     @Test void ownershipAndVersionConflictsRollBackWithoutPublishing() throws Exception {
         var rig = rig(false); var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());

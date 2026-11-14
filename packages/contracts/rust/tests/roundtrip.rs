@@ -102,6 +102,7 @@ fn shared_fixture_round_trips() {
         ControlToolGroup,
         ControlToolGroupPage,
         ControlToolPage,
+        ControlTriggerLifecycleEvidence,
         ControlUser,
         ControlUserPage,
         ControlVisitorPool,

@@ -177,11 +177,8 @@ public final class WorkflowProfiles {
         });
     }
     private void requirePublishedRead(Store.Session tx, DirectoryService.Actor actor) {
-        var access = new ManagementAccess(codec);
-        var directory = tx.load();
-        long now = System.currentTimeMillis();
-        access.requireAll(directory, actor.userId(), "agent.read", now);
-        access.requireAll(directory, actor.userId(), "agent_group.read", now);
+        if (!new ManagementAccess(codec).canReadPublishedWorkflows(tx.load(), actor.userId(), System.currentTimeMillis()))
+            throw ManagementAccess.denied();
     }
     private static void redactContext(JsonNode entries) {
         for (var entry : entries) ((com.fasterxml.jackson.databind.node.ObjectNode)entry).remove("arguments");

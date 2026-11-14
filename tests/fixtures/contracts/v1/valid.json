@@ -784,6 +784,15 @@
       }
     ]
   },
+  "ControlTriggerLifecycleEvidence": {
+    "action": "Pause",
+    "scopeKind": "deviceGroups",
+    "scopeIds": [
+      "finance"
+    ],
+    "reason": "Scheduled maintenance",
+    "changes": []
+  },
   "ControlUser": {
     "id": "example",
     "name": "example",
@@ -2133,6 +2142,7 @@
   },
   "FleetTriggerRegistration": {
     "triggerId": "examples.hotfolder/file-dropped",
+    "packageDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "triggerDescriptorDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
     "runtimeId": "jvm",
     "entryPoint": "/opt/tool/examples.hotfolder/app.jar",

@@ -9,6 +9,7 @@ namespace OloLabs\ToolGate\Contracts;
 final readonly class FleetTriggerRegistration implements \JsonSerializable {
     public function __construct(
         public string $triggerId,
+        public string $packageDigest,
         public string $triggerDescriptorDigest,
         public string $runtimeId,
         public string $entryPoint,
@@ -17,11 +18,12 @@ final readonly class FleetTriggerRegistration implements \JsonSerializable {
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['triggerId', 'triggerDescriptorDigest', 'runtimeId', 'entryPoint', 'fileAccess']) || array_diff(['triggerId', 'triggerDescriptorDigest', 'runtimeId', 'entryPoint', 'fileAccess'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['triggerId', 'packageDigest', 'triggerDescriptorDigest', 'runtimeId', 'entryPoint', 'fileAccess']) || array_diff(['triggerId', 'packageDigest', 'triggerDescriptorDigest', 'runtimeId', 'entryPoint', 'fileAccess'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['triggerId'],
+            $data['packageDigest'],
             $data['triggerDescriptorDigest'],
             $data['runtimeId'],
             $data['entryPoint'],

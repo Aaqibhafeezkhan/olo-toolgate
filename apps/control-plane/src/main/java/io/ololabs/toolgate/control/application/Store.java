@@ -47,7 +47,7 @@ public interface Store {
         default void audit(String actor, String operation, String target, long revision, String requestId, String digest) {
             audit(actor, operation, target, revision, requestId, digest, null);
         }
-        /** {@code evidence}: canonical {@code ControlAuditEvidence} JSON of an invocation event, or null (M4.4). */
+        /** {@code evidence}: canonical operation-specific audit evidence JSON, or null. */
         void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence);
         String auditPage(long after, int limit);
         /** ADR 061: the tenant's committed chain head; {@link AuditChain.Head#EMPTY} before the first row. */

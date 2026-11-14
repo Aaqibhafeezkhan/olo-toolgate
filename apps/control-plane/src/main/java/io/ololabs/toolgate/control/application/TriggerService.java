@@ -31,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -69,6 +68,8 @@ public final class TriggerService {
     /** A client lease lasts as long as the desired document, so a device keeps observing offline (plan 7). */
     static final long DESIRED_TTL_MS = 24L * 60 * 60 * 1000;
     static final long STALE_MIN_MS = 5 * 60_000L;
+    /** Observe a package replacement through a runtime heartbeat interval before releasing its slot. */
+    private static final long PACKAGE_READY_WINDOW_MS = 10_000L;
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -142,12 +143,30 @@ public final class TriggerService {
     }
 
     public Store.Reply definitions(DirectoryService.Actor actor, String pageToken, Integer pageSize) {
+        return definitions(actor, null, pageToken, pageSize);
+    }
+
+    public Store.Reply definitions(DirectoryService.Actor actor, String deviceId, String pageToken, Integer pageSize) {
         tenantOf(actor);
         int size = pageSize(pageSize);
         String after = after(pageToken);
         return store.transaction(tenant, false, tx -> {
-            new ManagementAccess(codec).requireAll(tx.load(), actor.userId(), "trigger.read", clock.millis());
+            var access = new ManagementAccess(codec);
             var all = definitions(tx);
+            if (deviceId == null) {
+                access.requireAll(tx.load(), actor.userId(), "trigger.read", clock.millis());
+            } else {
+                var device = tx.load().entries().get(Ids.Kind.DEVICE.id(Ids.valid(deviceId)));
+                access.requireEntry(tx.load(), actor.userId(), "trigger.read", device, clock.millis());
+                var row = tx.fleet().get(FleetStore.Kind.DESIRED, deviceId);
+                var assigned = row == null ? Set.<String>of()
+                        : codec.model(row.document(), io.ololabs.toolgate.contracts.FleetDesiredSnapshot.class)
+                            .assignments().stream().filter(a -> a.desiredPresence())
+                            .map(a -> a.release().packageId() + "@" + a.release().version())
+                            .collect(java.util.stream.Collectors.toSet());
+                all = all.stream().filter(d -> assigned.contains(d.packageId() + "@" + d.version())
+                        && strings(d.descriptor().path("executors")).contains("CLIENT")).toList();
+            }
             var previous = new HashMap<String, Definition>();
             var records = new TreeMap<String, ObjectNode>();
             for (var d : all) {
@@ -380,6 +399,27 @@ public final class TriggerService {
             assignment.set("metadata", meta);
             assignment.set("spec", spec);
             var document = document(assignment, definition, false);
+            if (before.document().has("overrides")) document.set("overrides", before.document().get("overrides").deepCopy());
+            if (configChanged) {
+                var previousRevision = before.document().deepCopy();
+                previousRevision.remove(List.of("previousRevision", "rollout", "overrides"));
+                document.set("previousRevision", previousRevision);
+            } else if (before.document().has("previousRevision")) {
+                document.set("previousRevision", before.document().get("previousRevision").deepCopy());
+            }
+            if (before.document().has("rollout")) {
+                if (configChanged || !spec.path("strategy").equals(before.spec().path("strategy"))) {
+                    throw conflict("Finish or roll back the current trigger rollout before changing its revision or strategy");
+                }
+                document.set("rollout", before.document().get("rollout").deepCopy());
+            } else if (configChanged && spec.hasNonNull("strategy")) {
+                var pending = devices(directory, before);
+                pending.retainAll(devices(directory, new Stored(before.row(), document)));
+                if (!pending.isEmpty()) {
+                    var rollout = document.putObject("rollout");
+                    rollout.set("pending", JSON.valueToTree(pending));
+                }
+            }
             var row = new TriggerStore.Row(name, revision, codec.json(document));
             var changes = reconcile(tx, directory, before, new Stored(row, document), now, dryRun);
             if (!dryRun) {
@@ -389,6 +429,250 @@ public final class TriggerService {
             var result = result(tx, new Stored(row, document), dryRun, changes, 200);
             if (!dryRun && key != null) tx.remember(actor.id(), key, digest, result);
             return result;
+        });
+    }
+
+    /** Sets or clears lifecycle overrides for one assignment and one scope atomically. */
+    public Store.Reply action(DirectoryService.Actor actor, String name, String body, String ifMatch, String requestId) {
+        tenantOf(actor);
+        String text = body(body);
+        var request = read(text);
+        var scope = request.path("scope");
+        var reason = request.path("reason");
+        boolean deploy = "Deploy".equals(request.path("action").asText());
+        if (!request.isObject() || request.size() != (deploy ? 4 : 3) || !scope.isObject() || scope.size() != 1
+                || !reason.isTextual() || reason.asText().isBlank() || reason.asText().length() > 1024) {
+            throw invalid("Specify an action, one scope and a reason of at most 1024 characters");
+        }
+        boolean remove = "Remove".equals(request.path("action").asText());
+        var state = switch (request.path("action").asText()) {
+            case "Run" -> TriggerDesiredState.Running;
+            case "Pause" -> TriggerDesiredState.Paused;
+            case "Stop" -> TriggerDesiredState.Stopped;
+            case "Deploy" -> switch (request.path("desiredState").asText()) {
+                case "Running" -> TriggerDesiredState.Running;
+                case "Paused" -> TriggerDesiredState.Paused;
+                case "Stopped" -> TriggerDesiredState.Stopped;
+                default -> throw invalid("Deploy requires a desiredState of Running, Paused or Stopped");
+            };
+            case "Clear", "Remove" -> null;
+            default -> throw invalid("Expected Deploy, Run, Pause, Stop, Clear or Remove");
+        };
+        String kind = scope.fieldNames().next();
+        var targets = scope.path(kind);
+        if (!List.of("deviceGroups", "devices", "instances").contains(kind)
+                || !targets.isArray() || targets.isEmpty() || targets.size() > MAX_INSTANCES_PER_ASSIGNMENT) {
+            throw invalid("Scope must list deviceGroups, devices or instances");
+        }
+        if (deploy && "instances".equals(kind)) throw invalid("Deploy requires devices or Device Groups");
+        var ids = new LinkedHashSet<String>();
+        for (var target : targets) {
+            if (!target.isTextual() || target.asText().isBlank() || target.asText().length() > 257 || !ids.add(target.asText())) throw invalid("Scope entries must be distinct IDs");
+        }
+        return store.transaction(tenant, true, tx -> {
+            long now = now(tx);
+            var directory = tx.load();
+            var before = existing(tx, name);
+            var authorized = JSON.createObjectNode();
+            if (deploy) {
+                authorized.set(kind, JSON.valueToTree(ids));
+            } else if ("deviceGroups".equals(kind)) {
+                if (!strings(before.spec().path("target").path(kind)).containsAll(ids)) throw notFound();
+                authorized.set("deviceGroups", JSON.valueToTree(ids));
+            } else {
+                var matched = new ArrayList<String>();
+                for (String device : devices(directory, before)) {
+                    String id = "instances".equals(kind) ? instanceId(before.uid(), device) : device;
+                    if (ids.contains(id)) matched.add(device);
+                }
+                if (matched.size() != ids.size()) throw notFound();
+                authorized.set("devices", JSON.valueToTree(matched));
+            }
+            requireTargets(tx, actor, authorized, "trigger.manage");
+            match(before, ifMatch);
+            var document = before.document().deepCopy();
+            var overrides = document.withObjectProperty("overrides");
+            long revision = before.row().revision() + 1;
+            var metadata = (ObjectNode) document.path("assignment").path("metadata");
+            if (remove) {
+                var target = (ObjectNode) document.path("assignment").path("spec").path("target");
+                if ("deviceGroups".equals(kind)) {
+                    var groups = new ArrayList<>(strings(target.path("deviceGroups")));
+                    groups.removeAll(ids);
+                    target.set("deviceGroups", JSON.valueToTree(groups));
+                    overrides.withObjectProperty("deviceGroups").remove(ids);
+                } else {
+                    var removedDevices = strings(authorized.path("devices"));
+                    var explicit = new ArrayList<>(strings(target.path("devices")));
+                    explicit.removeAll(removedDevices);
+                    var exclusions = new TreeSet<>(strings(target.path("excludeDevices")));
+                    if (!strings(target.path("deviceGroups")).isEmpty()) exclusions.addAll(removedDevices);
+                    if (exclusions.size() > 256) throw conflict("An assignment supports at most 256 excluded devices");
+                    target.set("devices", JSON.valueToTree(explicit));
+                    target.set("excludeDevices", JSON.valueToTree(exclusions));
+                    overrides.withObjectProperty("devices").remove(removedDevices);
+                    for (String device : removedDevices) overrides.withObjectProperty("instances").remove(instanceId(before.uid(), device));
+                }
+                if (strings(target.path("devices")).isEmpty() && strings(target.path("deviceGroups")).isEmpty()) document.put("removed", true);
+                metadata.put("generation", next(metadata.path("generation").asLong()));
+            } else {
+                if (deploy) {
+                    var target = (ObjectNode) document.path("assignment").path("spec").path("target");
+                    var expanded = new LinkedHashSet<>(strings(target.path(kind)));
+                    expanded.addAll(ids);
+                    target.set(kind, JSON.valueToTree(expanded));
+                    if ("devices".equals(kind)) {
+                        var excluded = new ArrayList<>(strings(target.path("excludeDevices")));
+                        excluded.removeAll(ids);
+                        target.set("excludeDevices", JSON.valueToTree(excluded));
+                    }
+                    codec.model(codec.json(Map.of("name", name, "spec", document.path("assignment").path("spec"))),
+                            TriggerAssignmentCreate.class);
+                    metadata.put("generation", next(metadata.path("generation").asLong()));
+                }
+                var scoped = overrides.withObjectProperty(kind);
+                for (String id : ids) {
+                    if (state == null) scoped.remove(id);
+                    else scoped.put(id, state.name());
+                }
+            }
+            var result = saveAction(tx, directory, actor, before, document, now, requestId, text, kind, ids);
+            result.remove("name");
+            return new Store.Reply(200, codec.json(result), revision);
+        });
+    }
+
+    /** Applies a lifecycle override to matching assignments in a single tenant transaction. */
+    public Store.Reply bulkAction(DirectoryService.Actor actor, String body, String requestId) {
+        tenantOf(actor);
+        String text = body(body);
+        var request = read(text);
+        var selector = request.path("selector");
+        var reason = request.path("reason");
+        if (!request.isObject() || request.size() != 3 || !selector.isObject() || selector.size() != 2
+                || !reason.isTextual() || reason.asText().isBlank() || reason.asText().length() > 1024) {
+            throw invalid("Specify an action, a selector and a reason of at most 1024 characters");
+        }
+        var state = switch (request.path("action").asText()) {
+            case "Run" -> TriggerDesiredState.Running;
+            case "Pause" -> TriggerDesiredState.Paused;
+            case "Stop" -> TriggerDesiredState.Stopped;
+            case "Clear" -> null;
+            default -> throw invalid("A bulk action must be Run, Pause, Stop or Clear");
+        };
+        var groups = selectorIds(selector.path("deviceGroups"));
+        var triggers = selectorIds(selector.path("triggers"));
+        for (String trigger : triggers) {
+            if (!trigger.matches("[a-zA-Z0-9][a-zA-Z0-9._-]*/(?:[a-zA-Z0-9][a-zA-Z0-9._-]*|[*])")) {
+                throw invalid("Trigger selectors must use package/trigger or package/*");
+            }
+        }
+        return store.transaction(tenant, true, tx -> {
+            long now = now(tx);
+            var authorized = JSON.createObjectNode();
+            authorized.set("deviceGroups", JSON.valueToTree(groups));
+            requireTargets(tx, actor, authorized, "trigger.manage");
+            var directory = tx.load();
+            var affected = JSON.createArrayNode();
+            for (var before : assignments(tx, null)) {
+                String trigger = before.spec().path("trigger").asText();
+                if (!triggers.contains(trigger) && !triggers.contains(trigger.substring(0, trigger.indexOf('/') + 1) + "*")) continue;
+                var matched = new TreeSet<>(strings(before.spec().path("target").path("deviceGroups")));
+                matched.retainAll(groups);
+                if (matched.isEmpty()) continue;
+                var document = before.document().deepCopy();
+                var overrides = document.withObjectProperty("overrides").withObjectProperty("deviceGroups");
+                for (String group : matched) {
+                    if (state == null) overrides.remove(group);
+                    else overrides.put(group, state.name());
+                }
+                affected.add(saveAction(tx, directory, actor, before, document, now, requestId, text, "deviceGroups", matched));
+            }
+            return new Store.Reply(200, codec.json(JSON.createObjectNode().set("assignments", affected)), 0);
+        });
+    }
+
+    private static Set<String> selectorIds(JsonNode values) {
+        if (!values.isArray() || values.isEmpty() || values.size() > 256) throw invalid("Selector must list between 1 and 256 IDs");
+        var ids = new LinkedHashSet<String>();
+        for (var value : values) {
+            if (!value.isTextual() || value.asText().isBlank() || value.asText().length() > 257 || !ids.add(value.asText())) {
+                throw invalid("Selector entries must be distinct bounded IDs");
+            }
+        }
+        return ids;
+    }
+
+    private ObjectNode saveAction(Store.Session tx, io.ololabs.toolgate.control.domain.Directory directory,
+                                  DirectoryService.Actor actor, Stored before, ObjectNode document, long now,
+                                  String requestId, String request, String kind, Set<String> scopeIds) {
+        long revision = next(before.row().revision());
+        var metadata = (ObjectNode) document.path("assignment").path("metadata");
+        metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
+        var row = new TriggerStore.Row(before.name(), revision, codec.json(document));
+        var after = new Stored(row, document);
+        var changes = reconcile(tx, directory, before, after, now, false);
+        tx.triggers().save(ASSIGNMENT, row, before.row().revision());
+        var result = JSON.createObjectNode().put("name", before.name()).put("resourceVersion", etag(revision));
+        var affected = result.putArray("changes");
+        changes.stream().filter(change -> !"Unchanged".equals(change.path("change").asText())).forEach(affected::add);
+        var input = read(request);
+        var evidence = JSON.createObjectNode().put("action", input.path("action").asText())
+                .put("scopeKind", kind).put("reason", input.path("reason").asText());
+        evidence.set("scopeIds", JSON.valueToTree(scopeIds));
+        evidence.set("changes", affected);
+        tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ACTION", "trigger-assignment:" + before.name(), revision, requestId,
+                DirectoryService.digest(request), codec.json(evidence));
+        return result;
+    }
+
+    /** Restores the previous payload of an assignment as a new configuration revision. */
+    public Store.Reply rollback(DirectoryService.Actor actor, String name, String ifMatch, String requestId) {
+        tenantOf(actor);
+        return store.transaction(tenant, true, tx -> {
+            long now = now(tx);
+            var before = existing(tx, name);
+            requireTargets(tx, actor, before.spec().path("target"), "trigger.manage");
+            match(before, ifMatch);
+            var previous = before.document().path("previousRevision");
+            if (previous.isMissingNode()) throw conflict("The assignment has no previous configuration revision");
+
+            var active = before.document().path("rollout");
+            if (active.path("rollback").asBoolean()) throw conflict("A trigger rollback is already in progress");
+            var directory = tx.load();
+            var document = before.document().deepCopy();
+            document.remove(List.of("rollout", "previousRevision"));
+            if (before.spec().hasNonNull("strategy") && !devices(directory, before).isEmpty()) {
+                var source = before.document().deepCopy();
+                source.remove(List.of("rollout", "previousRevision", "overrides"));
+                document.set("previousRevision", source);
+                var rollout = document.putObject("rollout").put("rollback", true);
+                rollout.set("pending", JSON.valueToTree(devices(directory, before)));
+                if (active.has("pending")) {
+                    rollout.set("retained", active.get("pending").deepCopy());
+                    rollout.set("retainedRevision", previous.deepCopy());
+                }
+            }
+            var spec = (ObjectNode) document.path("assignment").path("spec");
+            var previousSpec = previous.path("assignment").path("spec");
+            for (String field : List.of("trigger", "packageVersion", "config", "globals")) {
+                spec.set(field, previousSpec.path(field).deepCopy());
+            }
+            var definition = validateSpec(tx, spec);
+            document.put("packageDigest", definition.packageDigest());
+            document.put("triggerDescriptorDigest", definition.descriptorDigest());
+            long revision = next(before.row().revision());
+            var metadata = (ObjectNode) document.path("assignment").path("metadata");
+            metadata.put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now)
+                    .put("generation", next(metadata.path("generation").asLong()))
+                    .put("configRevision", next(metadata.path("configRevision").asLong()));
+            var row = new TriggerStore.Row(name, revision, codec.json(document));
+            var after = new Stored(row, document);
+            var changes = reconcile(tx, directory, before, after, now, false);
+            tx.triggers().save(ASSIGNMENT, row, before.row().revision());
+            tx.audit(actor.id(), "TRIGGER_ASSIGNMENT_ROLLBACK", "trigger-assignment:" + name, revision, requestId,
+                    DirectoryService.digest(codec.json(changes)));
+            return result(tx, after, false, changes, 200);
         });
     }
 
@@ -524,8 +808,92 @@ public final class TriggerService {
         return out;
     }
 
+    private TriggerLifecycle.Desired desiredState(io.ololabs.toolgate.control.domain.Directory directory, Stored stored, String device) {
+        var overrides = stored.document().path("overrides");
+        var memberships = new ArrayList<String>();
+        var groups = new HashMap<String, TriggerDesiredState>();
+        for (String group : strings(stored.spec().path("target").path("deviceGroups"))) {
+            var state = overrideState(overrides.path("deviceGroups").path(group));
+            if (state == null) continue;
+            var entry = directory.entries().get(Ids.Kind.DEVICE_GROUP.id(group));
+            if (entry == null || !entry.enabled() || !GroupGraph.members(entry, codec).contains(device)) continue;
+            memberships.add(group);
+            groups.put(group, state);
+        }
+        return TriggerLifecycle.resolve(TriggerDesiredState.valueOf(stored.spec().path("desiredState").asText()),
+                overrideState(overrides.path("instances").path(instanceId(stored.uid(), device))),
+                overrideState(overrides.path("devices").path(device)), memberships, groups);
+    }
+
+    private static TriggerDesiredState overrideState(JsonNode value) {
+        return value.isMissingNode() ? null : TriggerDesiredState.valueOf(value.asText());
+    }
+
+    /** Pending devices still run the previous configuration with the current lifecycle overrides. */
+    private Stored revisionFor(Stored stored, String device) {
+        var rollout = stored.document().path("rollout");
+        if (!strings(rollout.path("pending")).contains(device)) return stored;
+        var previous = strings(rollout.path("retained")).contains(device)
+                ? rollout.get("retainedRevision") : stored.document().get("previousRevision");
+        return new Stored(stored.row(), (ObjectNode) previous);
+    }
+
+    private Stored advanceRollout(Store.Session tx, io.ololabs.toolgate.control.domain.Directory directory,
+                                  Stored stored, long now) {
+        var rollout = stored.document().path("rollout");
+        if (rollout.isMissingNode() || rollout.path("stalled").asBoolean()) return stored;
+
+        var pending = new TreeSet<>(strings(rollout.path("pending")));
+        var targets = devices(directory, stored);
+        pending.retainAll(targets);
+        var states = new TreeMap<String, TriggerRollout.DeviceState>();
+        boolean packageChanged = !stored.document().path("packageDigest").equals(
+                stored.document().path("previousRevision").path("packageDigest"));
+        boolean paused = false;
+        for (String device : targets) {
+            paused |= desiredState(directory, stored, device).state() == TriggerDesiredState.Paused;
+            var row = tx.triggers().get(INSTANCE, stored.uid() + "/" + device);
+            var instance = row == null ? JSON.createObjectNode() : read(row.document());
+            var view = instance.path("view");
+            boolean ready = now - instance.path("lastSeenAtUnixMs").asLong(0) <= STALE_MIN_MS
+                    && java.util.stream.StreamSupport.stream(view.path("conditions").spliterator(), false)
+                        .anyMatch(c -> "Ready".equals(c.path("type").asText()) && "True".equals(c.path("status").asText()));
+            boolean failed = "Failed".equals(view.path("phase").asText());
+            if (packageChanged && !pending.contains(device)) {
+                ready &= instance.has("runningReadySinceUnixMs")
+                        && instance.path("lastSeenAtUnixMs").asLong() - instance.path("runningReadySinceUnixMs").asLong() >= PACKAGE_READY_WINDOW_MS;
+            }
+            if (pending.contains(device)) {
+                states.put(device, failed ? TriggerRollout.DeviceState.PreviousFailed
+                        : ready ? TriggerRollout.DeviceState.PreviousReady : TriggerRollout.DeviceState.PreviousUnavailable);
+            } else {
+                states.put(device, failed ? TriggerRollout.DeviceState.UpdatedFailed
+                        : ready ? TriggerRollout.DeviceState.UpdatedReady : TriggerRollout.DeviceState.UpdatedUnavailable);
+            }
+        }
+        var limit = stored.spec().path("strategy").path("rollingUpdate").path("maxUnavailable").asText();
+        var batch = TriggerRollout.select(limit, paused, rollout.path("rollback").asBoolean(), states);
+        var document = stored.document().deepCopy();
+        var update = document.withObjectProperty("rollout");
+        pending.removeAll(batch.devices());
+        update.set("pending", JSON.valueToTree(pending));
+        if (batch.stalled()) update.put("stalled", true);
+        if (states.values().stream().allMatch(state -> state == TriggerRollout.DeviceState.UpdatedReady)) {
+            document.remove("rollout");
+        }
+        if (document.equals(stored.document())) return stored;
+        long revision = next(stored.row().revision());
+        ((ObjectNode) document.path("assignment").path("metadata")).put("resourceVersion", etag(revision)).put("updatedAtUnixMs", now);
+        var row = new TriggerStore.Row(stored.name(), revision, codec.json(document));
+        var after = new Stored(row, document);
+        reconcile(tx, directory, stored, after, now, false);
+        tx.triggers().save(ASSIGNMENT, row, stored.row().revision());
+        return after;
+    }
+
     /** The resolved instance of one assignment on one device, as the desired document carries it. */
-    private ObjectNode desiredInstance(Stored stored, String device) {
+    private ObjectNode desiredInstance(Stored stored, String device, TriggerLifecycle.Desired desired) {
+        stored = revisionFor(stored, device);
         var spec = stored.spec();
         var instance = JSON.createObjectNode();
         instance.put("instanceId", instanceId(stored.uid(), device));
@@ -535,8 +903,7 @@ public final class TriggerService {
         instance.put("configRevision", stored.assignment().path("metadata").path("configRevision").asLong());
         instance.set("config", spec.path("config"));
         instance.put("bindingDigest", "sha256:" + DirectoryService.digest(codec.json(Map.of("globals", spec.path("globals")))));
-        // Overrides at group, device or instance scope arrive with lifecycle actions; until then the assignment decides.
-        instance.put("desiredState", spec.path("desiredState").asText());
+        instance.put("desiredState", desired.state().name());
         return instance;
     }
 
@@ -544,7 +911,7 @@ public final class TriggerService {
     private List<ObjectNode> resolved(io.ololabs.toolgate.control.domain.Directory directory, List<Stored> all, String device) {
         var out = new TreeMap<String, ObjectNode>();
         for (var stored : all) if (devices(directory, stored).contains(device)) {
-            var instance = desiredInstance(stored, device);
+            var instance = desiredInstance(stored, device, desiredState(directory, stored, device));
             out.put(instance.path("instanceId").asText(), instance);
         }
         return new ArrayList<>(out.values());
@@ -568,17 +935,19 @@ public final class TriggerService {
             var instances = resolved(directory, all, device);
             if (instances.size() > MAX_INSTANCES_PER_CLIENT) throw conflict("Device " + device + " would hold more than " + MAX_INSTANCES_PER_CLIENT + " trigger instances");
             String id = instanceId(uid, device);
-            String oldState = oldDevices.contains(device) && before != null ? before.spec().path("desiredState").asText() : null;
-            String newState = newDevices.contains(device) ? after.spec().path("desiredState").asText() : null;
+            var oldDesired = oldDevices.contains(device) ? desiredState(directory, before, device) : null;
+            var newDesired = newDevices.contains(device) ? desiredState(directory, after, device) : null;
+            String oldState = oldDesired == null ? null : oldDesired.state().name();
+            String newState = newDesired == null ? null : newDesired.state().name();
             var change = JSON.createObjectNode().put("instanceId", id).put("executorId", device);
             if (oldState == null) change.put("change", "Added");
             else if (newState == null) change.put("change", "Removed");
-            else change.put("change", Objects.equals(desiredDigest(before, device), desiredDigest(after, device)) ? "Unchanged" : "Updated");
+            else change.put("change", oldDesired.equals(newDesired) && desiredInstance(before, device, oldDesired).equals(desiredInstance(after, device, newDesired)) ? "Unchanged" : "Updated");
             if (oldState != null) change.put("oldDesiredState", oldState);
             if (newState != null) change.put("newDesiredState", newState);
             changes.put(id, change);
             if (dryRun) continue;
-            writeInstance(tx, after, device, newState == null, now);
+            writeInstance(tx, after, device, newDesired == null ? oldDesired : newDesired, newDesired == null, now);
             refreshDesired(tx, device, instances);
             if (newState == null) revoke(tx, device, id, TriggerRevocationReason.AssignmentRemoved);
             else if (newState.equals("Stopped")) revoke(tx, device, id, TriggerRevocationReason.AssignmentStopped);
@@ -586,11 +955,8 @@ public final class TriggerService {
         return new ArrayList<>(changes.values());
     }
 
-    private String desiredDigest(Stored stored, String device) {
-        return stored == null || stored.removed() ? null : DirectoryService.digest(codec.json(desiredInstance(stored, device)));
-    }
-
-    private void writeInstance(Store.Session tx, Stored stored, String device, boolean removed, long now) {
+    private void writeInstance(Store.Session tx, Stored stored, String device, TriggerLifecycle.Desired desired, boolean removed, long now) {
+        stored = revisionFor(stored, device);
         String recordId = stored.uid() + "/" + device;
         var row = tx.triggers().get(INSTANCE, recordId);
         var view = JSON.createObjectNode();
@@ -600,20 +966,29 @@ public final class TriggerService {
                 .put("packageDigest", stored.document().path("packageDigest").asText())
                 .put("triggerDescriptorDigest", stored.document().path("triggerDescriptorDigest").asText())
                 .put("configRevision", stored.assignment().path("metadata").path("configRevision").asLong())
-                .put("desiredState", spec.path("desiredState").asText()).put("desiredStateSource", "Assignment");
-        // Executors report phases from check-in ingest (module 5); until then an instance waits for its executor.
-        String phase = removed ? "Removed" : row == null ? "Pending" : read(row.document()).path("view").path("phase").asText("Pending");
+                .put("desiredState", desired.state().name()).put("desiredStateSource", desired.source());
+        var old = row == null ? JSON.createObjectNode() : read(row.document());
+        var oldView = old.path("view");
+        boolean revisionChanged = view.path("configRevision").asLong() != oldView.path("configRevision").asLong();
+        boolean halted = !removed && old.path("haltedByControl").asBoolean();
+        String phase = removed ? "Removed" : halted ? "Failed"
+                : revisionChanged ? "Pending" : oldView.path("phase").asText("Pending");
         if (!removed && "Removed".equals(phase)) phase = "Pending";
         view.put("phase", phase);
-        view.set("conditions", row == null ? JSON.createArrayNode() : read(row.document()).path("view").path("conditions").deepCopy());
-        // What the executor last reported (module 5 ingest) survives a change of the assignment.
-        var old = row == null ? JSON.createObjectNode() : read(row.document());
-        for (String reported : List.of("counters", "outbox", "lastEventAt", "lastReconcileAt")) if (!removed && old.path("view").has(reported)) view.set(reported, old.path("view").get(reported).deepCopy());
+        // A report of readiness belongs to the exact assigned configuration revision.
+        view.set("conditions", row == null || revisionChanged && !halted
+                ? JSON.createArrayNode() : oldView.path("conditions").deepCopy());
+        for (String reported : List.of("counters", "outbox", "lastEventAt", "lastReconcileAt")) {
+            if (!removed && oldView.has(reported)) view.set(reported, oldView.get(reported).deepCopy());
+        }
         var document = JSON.createObjectNode();
         document.set("view", view);
         document.put("updatedAtUnixMs", now);
         if (old.has("lastSeenAtUnixMs")) document.put("lastSeenAtUnixMs", old.path("lastSeenAtUnixMs").asLong());
-        if (!removed && old.path("haltedByControl").asBoolean()) document.put("haltedByControl", true);
+        if (!revisionChanged && !removed && old.has("runningReadySinceUnixMs")) {
+            document.set("runningReadySinceUnixMs", old.get("runningReadySinceUnixMs"));
+        }
+        if (halted) document.put("haltedByControl", true);
         String text = codec.json(document);
         if (row != null && read(row.document()).path("view").equals(view)) return;
         tx.triggers().save(INSTANCE, new TriggerStore.Row(recordId, row == null ? 1 : row.revision() + 1, text), row == null ? 0 : row.revision());
@@ -702,9 +1077,13 @@ public final class TriggerService {
     TriggerDesiredDocument desiredDocument(Store.Session tx, EndpointDeviceRecord device, long now) {
         var directory = tx.load();
         var all = assignments(tx, null);
+        for (int i = 0; i < all.size(); i++) {
+            var assignment = all.get(i);
+            if (devices(directory, assignment).contains(device.deviceId())) all.set(i, advanceRollout(tx, directory, assignment, now));
+        }
         var instances = resolved(directory, all, device.deviceId());
         if (instances.size() > MAX_INSTANCES_PER_CLIENT) throw Failure.conflict();
-        for (var stored : all) if (devices(directory, stored).contains(device.deviceId())) writeInstance(tx, stored, device.deviceId(), false, now);
+        for (var stored : all) if (devices(directory, stored).contains(device.deviceId())) writeInstance(tx, stored, device.deviceId(), desiredState(directory, stored, device.deviceId()), false, now);
         long generation = refreshDesired(tx, device.deviceId(), instances);
         var desired = new ArrayList<TriggerDesiredInstance>();
         for (var instance : instances) desired.add(codec.model(codec.json(instance), TriggerDesiredInstance.class));
@@ -942,6 +1321,13 @@ public final class TriggerService {
         String reason = stored.removed() ? "AssignmentRemoved" : desired == 0 ? "NoTargets" : running == desired ? "AllInstancesRunning" : "InstancesPending";
         status.putArray("conditions").addObject().put("type", "Available").put("status", !stored.removed() && desired > 0 && running == desired ? "True" : "False")
                 .put("reason", reason).put("lastTransitionTime", Instant.ofEpochMilli(assignment.path("metadata").path("updatedAtUnixMs").asLong()).toString());
+        var rollout = stored.document().path("rollout");
+        if (!rollout.isMissingNode()) {
+            boolean stalled = rollout.path("stalled").asBoolean();
+            status.withArray("conditions").addObject().put("type", "Progressing").put("status", stalled ? "False" : "True")
+                    .put("reason", stalled ? "RolloutStalled" : "RollingUpdate")
+                    .put("lastTransitionTime", Instant.ofEpochMilli(assignment.path("metadata").path("updatedAtUnixMs").asLong()).toString());
+        }
         assignment.set("status", status);
         return assignment;
     }

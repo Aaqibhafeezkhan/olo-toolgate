@@ -9,6 +9,7 @@ export interface AdminSession {
   readonly bootstrapAdminUserId?: string;
   readonly tenantId?: string;
   readonly tenantName?: string;
+  readonly canReadPublishedWorkflows?: boolean;
 }
 /** Immutable artifact identity; digest must be verified by consumers. */
 export interface ArtifactDescriptor {
@@ -286,6 +287,7 @@ export interface ControlAudit {
   readonly occurredAt: string;
   readonly requestDigest: string;
   readonly evidence?: ControlAuditEvidence;
+  readonly triggerLifecycleEvidence?: ControlTriggerLifecycleEvidence;
 }
 /** Authorization facts of an invocation event as separate fields (OLO M4.4). Never arguments, payloads or credentials. */
 export interface ControlAuditEvidence {
@@ -579,6 +581,14 @@ export interface ControlToolGroupPage {
 export interface ControlToolPage {
   readonly items: ReadonlyArray<ControlTool>;
   readonly nextCursor?: string;
+}
+/** Scope, reason and resolved state changes for a trigger assignment lifecycle action. */
+export interface ControlTriggerLifecycleEvidence {
+  readonly action: V2.TriggerLifecycleAction;
+  readonly scopeKind: string;
+  readonly scopeIds: ReadonlyArray<string>;
+  readonly reason: string;
+  readonly changes: ReadonlyArray<V2.TriggerInstanceChange>;
 }
 /** Tenant-scoped users configuration record. Not a runtime credential or policy grant. */
 export interface ControlUser {
@@ -1532,6 +1542,7 @@ export interface FleetSignedDocument {
 /** A trigger export of a released package (ADR 058): how a device runs it. The device fetches the full descriptor by digest and checks it against this signed digest and the signed desired document. */
 export interface FleetTriggerRegistration {
   readonly triggerId: string;
+  readonly packageDigest: string;
   readonly triggerDescriptorDigest: string;
   readonly runtimeId: string;
   readonly entryPoint: string;

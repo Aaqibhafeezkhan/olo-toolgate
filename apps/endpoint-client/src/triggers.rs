@@ -43,7 +43,7 @@ const INLINE_CHECKPOINT_BYTES: usize = 4096;
 pub struct Resolved {
     pub instance: TriggerDesiredInstance,
     pub descriptor: TriggerDescriptor,
-    /// The signed release's registration with the same trigger and descriptor digest; `None` means not installed.
+    /// The active release's registration matching the trigger, package, and descriptor digests.
     pub registration: Option<FleetTriggerRegistration>,
     pub runtime: Option<ManagedRuntime>,
 }
@@ -299,7 +299,10 @@ impl Runner {
     }
 
     fn installed(&self, resolved: &Resolved) -> bool {
-        resolved.registration.is_some() && resolved.runtime.is_some() && self.context.is_some()
+        resolved.registration.as_ref().is_some_and(|registration| {
+            registration.package_digest == resolved.instance.package_digest
+        }) && resolved.runtime.is_some()
+            && self.context.is_some()
     }
 
     fn apply_state(&mut self, id: &str, at: u64) {
@@ -313,7 +316,11 @@ impl Runner {
                 instance.supervisor.resume(at);
                 instance.supervisor.run(at);
             }
-            TriggerDesiredState::Running => {}
+            TriggerDesiredState::Running => instance.supervisor.stop("PackageNotInstalled", at),
+            TriggerDesiredState::Paused if !installed => {
+                instance.supervisor.stop("PackageNotInstalled", at);
+                instance.supervisor.pause(at);
+            }
             TriggerDesiredState::Paused => instance.supervisor.pause(at),
             TriggerDesiredState::Stopped => instance.supervisor.stop("AssignmentStopped", at),
         }

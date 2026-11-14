@@ -3736,6 +3736,8 @@ pub struct TriggerAssignmentSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub globals: Option<std::collections::BTreeMap<String, serde_json::Value>>,
     pub desired_state: TriggerDesiredState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<TriggerRolloutStrategy>,
 }
 /// Observed assignment status.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4559,6 +4561,18 @@ pub enum TriggerRevocationReason {
     Compromised,
     #[serde(rename = "Reassigned")]
     Reassigned,
+}
+/// Availability limit for a rolling trigger update.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerRollingUpdate {
+    pub max_unavailable: String,
+}
+/// Client package and configuration rollout strategy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TriggerRolloutStrategy {
+    pub rolling_update: TriggerRollingUpdate,
 }
 /// POLL interval or PUSH resync interval.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -3817,6 +3817,14 @@
       "device-7"
     ]
   },
+  "TriggerRollingUpdate": {
+    "maxUnavailable": "1"
+  },
+  "TriggerRolloutStrategy": {
+    "rollingUpdate": {
+      "maxUnavailable": "25%"
+    }
+  },
   "TriggerAssignmentSpec": {
     "trigger": "examples.inbox-watch/new-file",
     "packageVersion": "1.0.0",
