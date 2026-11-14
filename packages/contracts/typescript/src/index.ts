@@ -9,6 +9,7 @@ export interface AdminSession {
   readonly bootstrapAdminUserId?: string;
   readonly tenantId?: string;
   readonly tenantName?: string;
+  readonly canReadPublishedWorkflows?: boolean;
 }
 /** Immutable artifact identity; digest must be verified by consumers. */
 export interface ArtifactDescriptor {

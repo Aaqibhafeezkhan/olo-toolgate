@@ -13,7 +13,7 @@ import java.util.Objects;
 
 /** Immutable staged profile revisions. Publication is separate from package provisioning and live authority. */
 public final class WorkflowProfiles {
-    @FunctionalInterface public interface Readiness { boolean ready(Store.Session tx, DeploymentProfile profile); }
+    @FunctionalInterface public interface Readiness { boolean ready(Store.Session tx, DeploymentProfile profile, String profileDigest); }
     private final Store store;
     private final Codec codec;
     private final Readiness readiness;
@@ -32,16 +32,6 @@ public final class WorkflowProfiles {
         if (document == null || document.getBytes(StandardCharsets.UTF_8).length > 262144) throw Failure.validation();
         var profile = codec.model(document, DeploymentProfile.class);
         if (profile.workflows() == null) throw Failure.validation();
-        var packageIds = new java.util.HashSet<String>();
-        var assignments = new java.util.HashSet<String>();
-        for (var entry : profile.packages()) {
-            if (!packageIds.add(entry.packageId())) throw Failure.validation();
-            if (entry.source() == ProfilePackageSource.MARKETPLACE && entry.packageDigest() == null) throw Failure.validation();
-            if (entry.triggers() != null) for (var trigger : entry.triggers())
-                if (!assignments.add(trigger.assignment()) || !trigger.triggerId().startsWith(entry.packageId() + "/")) throw Failure.validation();
-            if (entry.tools() != null) for (var tool : entry.tools())
-                if (!tool.toolId().startsWith(entry.packageId() + "/")) throw Failure.validation();
-        }
         // Drafts may have unavailable external dependencies; they are never executable.
         new WorkflowConfigurations(codec).validate(codec.json(profile.workflows()), reference -> true);
         return profile;
@@ -87,7 +77,7 @@ public final class WorkflowProfiles {
     private WorkflowProfileStatus status(Store.Session tx, Ids.TenantId tenant, WorkflowProfileStore.Revision revision) {
         var head = tx.workflowProfiles().publication(revision.profileId());
         boolean published = head != null && head.digest().equals(revision.digest());
-        boolean ready = revision.state().equals("REVIEWED") && readiness.ready(tx, profile(documents.open(tx, tenant, revision)));
+        boolean ready = revision.state().equals("REVIEWED") && readiness.ready(tx, profile(documents.open(tx, tenant, revision)), revision.digest());
         return new WorkflowProfileStatus(revision.profileId(), revision.digest(),
             published ? WorkflowProfileState.PUBLISHED : WorkflowProfileState.valueOf(revision.state()),
             head == null ? 0L : head.generation(), ready, revision.reviewedBy());
@@ -100,9 +90,19 @@ public final class WorkflowProfiles {
         Ids.valid(requestId);
         // Authenticate before parsing profile data or disclosing any reference information.
         return store.transaction(actor.tenant(), true, tx -> {
-            require(tx, actor); var profile = profile(document);
-            String canonical = new String(Canonical.bytes((JsonNode)codec.value(document)), StandardCharsets.UTF_8);
-            String digest = Canonical.sha256(canonical.getBytes(StandardCharsets.UTF_8));
+            require(tx, actor);
+            // Check the input format first, then validate and use the exact document we seal.
+            profile(document);
+            byte[] canonicalBytes;
+            try {
+                canonicalBytes = Canonical.bytes((JsonNode)codec.value(document));
+            } catch (IllegalArgumentException invalid) {
+                throw Failure.validation();
+            }
+            String canonical = new String(canonicalBytes, StandardCharsets.UTF_8);
+            var profile = profile(canonical);
+            PackageProvisioning.validateDeclarations(profile);
+            String digest = Canonical.sha256(canonicalBytes);
             var old = tx.workflowProfiles().revision(profile.profileId(), digest);
             if (old != null) return reply(tx, actor.tenant(), revision(tx, actor.tenant(), profile.profileId(), digest), 200);
             for (var resource : owned(profile)) {
@@ -140,6 +140,49 @@ public final class WorkflowProfiles {
             return new Store.Reply(200, documents.open(tx, actor.tenant(), revision), 0);
         });
     }
+    /** Published configuration is readable by tenant-wide agent and agent-group readers. */
+    public Store.Reply listPublished(DirectoryService.Actor actor, String after, int limit) {
+        if (limit < 1 || limit > 50) throw Failure.validation();
+        if (after != null) Ids.valid(after);
+        return store.transaction(actor.tenant(), false, tx -> {
+            requirePublishedRead(tx, actor);
+            var result = tx.workflowProfiles().publications(after == null ? "" : after, limit);
+            return new Store.Reply(200, codec.json(result), 0);
+        });
+    }
+    public Store.Reply publishedConfiguration(DirectoryService.Actor actor, String id, String digest) {
+        return store.transaction(actor.tenant(), false, tx -> {
+            requirePublishedRead(tx, actor);
+            Ids.valid(id); digest(digest);
+            var head = tx.workflowProfiles().publication(id);
+            if (head == null || !head.digest().equals(digest))
+                throw new Failure(ErrorCode.NOT_FOUND, 404, "Published workflow profile unavailable");
+            var revision = revision(tx, actor.tenant(), id, digest);
+            var document = ((JsonNode)codec.value(documents.open(tx, actor.tenant(), revision))).deepCopy();
+            var workflows = document.path("workflows");
+            // Prompts, arguments and schemas can contain arbitrary operator-supplied text.
+            for (var entry : workflows.path("workflows")) {
+                var workflow = (com.fasterxml.jackson.databind.node.ObjectNode)entry;
+                workflow.remove(java.util.List.of("systemPrompt", "parameterSchema", "resultSchema"));
+                redactContext(workflow.path("contextSources"));
+            }
+            for (var entry : workflows.path("agentDefinitions")) {
+                var agent = (com.fasterxml.jackson.databind.node.ObjectNode)entry;
+                agent.remove(java.util.List.of("systemPrompt", "outputSchema"));
+                redactContext(agent.path("contextSources"));
+            }
+            for (var entry : workflows.path("modelDeployments"))
+                ((com.fasterxml.jackson.databind.node.ObjectNode)entry).remove(java.util.List.of("secretName", "origin"));
+            return new Store.Reply(200, codec.json(workflows), head.generation());
+        });
+    }
+    private void requirePublishedRead(Store.Session tx, DirectoryService.Actor actor) {
+        if (!new ManagementAccess(codec).canReadPublishedWorkflows(tx.load(), actor.userId(), System.currentTimeMillis()))
+            throw ManagementAccess.denied();
+    }
+    private static void redactContext(JsonNode entries) {
+        for (var entry : entries) ((com.fasterxml.jackson.databind.node.ObjectNode)entry).remove("arguments");
+    }
     public Store.Reply review(DirectoryService.Actor actor, String id, String document, String requestId) {
         Ids.valid(requestId);
         return store.transaction(actor.tenant(), true, tx -> {
@@ -164,7 +207,7 @@ public final class WorkflowProfiles {
             if (head != null && head.digest().equals(revision.digest())) return reply(tx, actor.tenant(), revision, 200);
             if (request.expectedGeneration() != generation) throw Failure.conflict();
             var profile = profile(documents.open(tx, actor.tenant(), revision));
-            if (!readiness.ready(tx, profile)) throw new Failure(ErrorCode.CONFLICT, 409, "Workflow profile dependencies are not ready");
+            if (!readiness.ready(tx, profile, revision.digest())) throw new Failure(ErrorCode.CONFLICT, 409, "Workflow profile dependencies are not ready");
             tx.workflowProfiles().publish(new WorkflowProfileStore.Publication(id, revision.digest(), generation + 1), generation);
             tx.audit(actor.id(), "WORKFLOW_PROFILE_PUBLISH", "profile:" + id, generation + 1, requestId, revision.digest().substring(7));
             return reply(tx, actor.tenant(), revision, 200);
@@ -177,7 +220,7 @@ public final class WorkflowProfiles {
         var revision = revision(tx, tenant, id, head.digest());
         if (!revision.state().equals("REVIEWED")) throw Failure.unavailable();
         var profile = profile(documents.open(tx, tenant, revision));
-        if (!readiness.ready(tx, profile)) throw ManagementAccess.denied();
+        if (!readiness.ready(tx, profile, revision.digest())) throw ManagementAccess.denied();
         return profile;
     }
 }

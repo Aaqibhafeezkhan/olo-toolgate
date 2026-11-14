@@ -138,6 +138,11 @@ public final class ManagementAccess {
         for(var group:GroupGraph.DEFAULTS.keySet())if(groupRules(directory,user).noneMatch(r->r.groupType().name().equals(group.name())&&r.groups().all()&&r.actions().contains(action)&&current(r.conditions(),now)))return false;
         return true;
     }
+    public boolean canReadPublishedWorkflows(Directory directory, String user, long now) {
+        return globallyAllowed(directory, user, "agent.read", now)
+            && globallyAllowed(directory, user, "agent_group.read", now);
+    }
+
     public void requireAll(Directory directory,String user,String action,long now) {
         if(!globallyAllowed(directory,user,action,now))throw denied();
     }

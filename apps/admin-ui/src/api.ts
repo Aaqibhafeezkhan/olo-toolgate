@@ -82,6 +82,14 @@ async function readBody(response: Response): Promise<unknown> {
  */
 export class ConfigurationPending extends Error {constructor(readonly changeId:string){super('Draft created. Review its impact, submit it for independent approval, then apply the reviewed change.');}}
 export class ControlClient {
+  publishedWorkflows(after?: string, signal?: AbortSignal): Promise<readonly {profileId:string;digest:string;generation:number}[]> {
+    const query = new URLSearchParams({limit:'50'});
+    if(after) query.set('afterProfileId',after);
+    return this.send(operations.listPublishedWorkflows,{query,signal});
+  }
+  publishedWorkflow(profileId:string,digest:string,signal?:AbortSignal):Promise<Record<string,unknown[]>> {
+    return this.send(operations.getPublishedWorkflow,{params:{profileId,digest},signal});
+  }
   async workflowProfiles(after?:Pick<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus,'profileId'|'profileDigest'>,signal?:AbortSignal):Promise<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus[]>{const query=new URLSearchParams({limit:'50'});if(after){query.set('afterProfileId',after.profileId);query.set('afterDigest',after.profileDigest);}const page=await this.send<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus[]>(operations.listWorkflowProfiles,{query,signal});if(!Array.isArray(page))throw new ApiError(502,'INVALID_RESPONSE');return page;}
   stageWorkflowProfile(body:import('@olo-labs/toolgate-contracts/v2').DeploymentProfile):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.stageWorkflowProfile,{body});}
   workflowProfileDocument(profileId:string,digest:string):Promise<import('@olo-labs/toolgate-contracts/v2').DeploymentProfile>{return this.send(operations.getWorkflowProfileDocument,{params:{profileId,digest}});}
@@ -230,12 +238,14 @@ export class ControlClient {
   }
   bootstrapAdminUserId?:string;
   private permissionSet=new Set<string>();
+  private publishedWorkflowRead=false;
+  canReadPublishedWorkflows():boolean{return this.publishedWorkflowRead;}
   private permissionVersion=0;
   private permissionListeners=new Set<()=>void>();
   can(permission:string):boolean{return this.permissionSet.has(permission);}
   permissionSnapshot=()=>this.permissionVersion;
   subscribePermissions=(listener:()=>void)=>{this.permissionListeners.add(listener);return()=>{this.permissionListeners.delete(listener);};};
-  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;this.permissionSet=new Set(session.permissions??[]);this.permissionVersion++;this.permissionListeners.forEach(listener=>listener());return session;}
+  async adminSession():Promise<AdminSession>{const session=await this.send<AdminSession>(operations.getAdminSession);this.bootstrapAdminUserId=session.bootstrapAdminUserId;this.permissionSet=new Set(session.permissions??[]);this.publishedWorkflowRead=session.canReadPublishedWorkflows===true;this.permissionVersion++;this.permissionListeners.forEach(listener=>listener());return session;}
   analytics(from:number,to:number,signal?:AbortSignal,tool?:string,after?:string):Promise<TenantAnalyticsOverview>{
     const query=new URLSearchParams({from:String(from),to:String(to)});
     if(tool)query.set('tool',tool);if(after)query.set('after',after);

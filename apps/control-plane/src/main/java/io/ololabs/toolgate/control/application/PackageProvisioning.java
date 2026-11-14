@@ -57,17 +57,12 @@ public final class PackageProvisioning {
     private static String bounded(String reason) { return reason == null ? "Provisioning failed" : reason.length() > 256 ? reason.substring(0, 256) : reason; }
     private static Failure refused(String reason) { return new Failure(io.ololabs.toolgate.contracts.ErrorCode.VALIDATION, 400, reason); }
 
-    /** Structural and semantic checks of the complete profile, before any mutation. */
-    private void validate(DeploymentProfile profile) {
+    /** Validate package declarations without consulting the installation or changing state. */
+    static void validateDeclarations(DeploymentProfile profile) {
         var ids = new HashSet<String>(); var assignments = new HashSet<String>();
         for (var p : profile.packages()) {
             if (!ids.add(p.packageId())) throw refused("The profile names " + p.packageId() + " twice");
             if (p.source() == ProfilePackageSource.MARKETPLACE && p.packageDigest() == null) throw refused(p.packageId() + " needs an exact Marketplace package digest");
-            if (p.source() == ProfilePackageSource.PREBUILT_CORE) {
-                var sealed = core == null ? null : core.core(p.packageId(), p.version());
-                if (sealed == null) throw refused(p.packageId() + " " + p.version() + " is not in the sealed core package lock");
-                if (p.packageDigest() != null && !p.packageDigest().equals(sealed.packageDigest())) throw refused(p.packageId() + " differs from the sealed core package lock");
-            }
             var hosts = p.hostIds() == null ? List.<String>of() : p.hostIds();
             if (new HashSet<>(hosts).size() != hosts.size()) throw refused(p.packageId() + " names a Tool Host twice");
             var groups = p.deviceGroupIds() == null ? List.<String>of() : p.deviceGroupIds();
@@ -82,6 +77,17 @@ public final class PackageProvisioning {
                 if (!t.triggerId().startsWith(p.packageId() + "/")) throw refused(t.triggerId() + " is not an export of " + p.packageId());
                 if (!assignments.add(t.assignment())) throw refused("The profile declares trigger assignment " + t.assignment() + " twice");
                 if (groups.isEmpty()) throw refused(p.packageId() + " declares trigger assignments without a device group");
+            }
+        }
+    }
+
+    private void validate(DeploymentProfile profile) {
+        validateDeclarations(profile);
+        for (var p : profile.packages()) {
+            if (p.source() == ProfilePackageSource.PREBUILT_CORE) {
+                var sealed = core == null ? null : core.core(p.packageId(), p.version());
+                if (sealed == null) throw refused(p.packageId() + " " + p.version() + " is not in the sealed core package lock");
+                if (p.packageDigest() != null && !p.packageDigest().equals(sealed.packageDigest())) throw refused(p.packageId() + " differs from the sealed core package lock");
             }
         }
     }

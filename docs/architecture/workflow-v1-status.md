@@ -1,9 +1,37 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Published configuration in the console
+
+The Control API exposes tenant-scoped, read-only published workflow and agent
+configuration to users with tenant-wide agent and agent-group read permissions.
+Overview and the corresponding Workflows and Agents pages use that API. Drafts,
+superseded revisions, prompts, schemas, context arguments, provider origins and
+vault references are excluded from the reader response. Super Admin lifecycle
+permissions remain unchanged. This adds configuration visibility within V1.1.
+It does not change workflow execution or phase weights.
+
+Verification on base `b25f59c5` with this change applied: the Admin UI production
+build and type check passed, and the focused SQLite workflow profile tests passed
+for published reads, redaction, replacement and reader authorization. PostgreSQL
+and packaged-console smoke checks are separate from this evidence.
+
+PR #307 combines the published configuration views with the device trigger
+management and workflow trigger package routes from main. The admin session
+and published API use the same tenant-wide read decision. A group-scoped
+reader can still use the scoped directory, while the published routes stay
+hidden and Control denies direct requests.
+
+Verification after integrating main at b25f59c5: Admin UI type check and
+285 tests, three workflow browser tests, and all 13 WorkflowProfilesTest
+cases on SQLite and disposable PostgreSQL passed. Generated contract and UI
+operation checks passed. Diff against main excluding this status file:
+SHA-256 135c2ff5d41648da0719b69f2f13ef4b8afe9abb17467786cb33fb6e7df4623e.
+Full CI and V1.4 live workflow qualification remain outstanding.
+
 Issue: [#295](https://github.com/olo-labs/olo-toolgate/issues/295) ·
 Integration: `feature/workflow-enhancement` ·
-Umbrella: [draft PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
+Merged milestone: [PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
 
 Last updated: 2026-11-11. Baseline: **v1-effort-1**, 100 effort points.
 Architecture and acceptance: [runtime plan, section 15](langgraph-runtime-plan.md#15-delivery-phases--minimal-end-to-end-v1).
@@ -56,7 +84,7 @@ fixes and tests, updates this file in the same commit series. The PR description
 links its status change, identifies affected phase(s), lists checks actually
 executed and their results, and states remaining work and limits. Record the PR
 number/link once known by updating that PR's branch; no separate progress-only
-follow-up PR is needed. Keep the umbrella draft PR's summary synchronized.
+follow-up PR is needed. Keep the follow-up PR descriptions synchronized with this status.
 
 For each PR, record:
 
@@ -71,9 +99,78 @@ For each PR, record:
   source digest if the status update is part of the merge. Do not add a commit
   solely to reference itself. Keep pending evidence uncredited until verified.
 
-Use the latest integration head for intermediate branches; merge their reviewed
-PRs into `feature/workflow-enhancement`. Keep #297 in draft until V1.4 passes.
+PR #297 merged into main as a milestone at `aa33a9d3e33cc1be2678ddaf67f4308062891a4f`.
+Follow-up work resumes in phase order on local `feature/workflow-enhancement`.
+The operator will push when ready.
 This process does not change the authoritative #230/#274 delivery rules.
+
+## V1.0 follow-up after the main milestone (2026-11-11)
+
+ADR 063 distinguishes the shipped profile and listener contracts from the
+pending Control run, admission and lease endpoints. The HTTPS adapter now
+rejects malformed admission coordinates before transport and rejects explicit
+null receipt run IDs, which the canonical wire schema does not permit.
+
+Executed 42 standalone runner/listener tests and 14 qualification harness tests
+with the pinned runtime environment. Both passed. Transport SHA-256
+`bd56b611b472a1da55067865c2d0b48f3fd24a23ce5c674b894863b61a7ab2d1`.
+The qualification harness tests use simulated drivers. The live Control
+endpoint inventory still needs reconciliation as those endpoints are
+implemented. No phase weight or live execution qualification is claimed.
+
+## V1.1 package declaration preflight (2026-11-11)
+
+Workflow staging and package provisioning share declaration validation.
+Duplicate targets or exports and assignments without device groups are
+rejected before a new draft is written. Sealed inventory and live dependency
+checks still run at provisioning. Existing stored drafts can be inspected.
+
+Executed `./gradlew :control-plane:test --tests '*WorkflowProfilesTest'
+--tests '*PackageProvisioningTest' --max-workers=2` with the isolated
+PostgreSQL fixture. All 18 tests passed, including SQLite/PostgreSQL lifecycle
+coverage and a regression proving an invalid upload creates no revision.
+The v2 schema suite (7 tests), metadata and generated-binding preflight
+also passed. Source SHA-256 values:
+
+- PackageProvisioning: `533c2e8a684471df15e3ef1ec4288eff9351d802d97052076cb7fe8785cc9189`.
+- WorkflowProfiles: `d7b4632c40e516773999eb04a58d82b8a31bb5aaadac95f222fcd3d20932e716`.
+
+A full Java or repository gate was not run for this increment. Next is
+reviewed directory/grant provisioning and resolution of newly created
+subscription and assignment identities. Phase credit remains zero.
+
+## V1.1 reviewed revision and package readiness binding (2026-11-11)
+
+Stage validation now checks the canonical document before sealing it or
+reserving ownership. A canonicalization conflict returns a validation error
+and leaves no revision or ownership behind. Status, publication and internal
+published-profile resolution use the stored revision digest when checking
+package provisioning readiness.
+
+The isolated Control gate passed all 19 tests in WorkflowProfilesTest and
+PackageProvisioningTest, including SQLite and PostgreSQL lifecycle cases,
+normalization collision rollback and refusal of READY evidence for another
+revision. The stale-digest test seeds package status directly and does not
+exercise a live package installation. Tested source SHA-256:
+
+- WorkflowProfiles: `3ff6175d47a531a10c7346f6eb39b6602d6e01037bdff200ee592b621c75dcf9`.
+- WorkflowProfileDependencies: `ad976373e58000d964e67870c8ea3673e74171179f3c94dd9ace80e363e63511`.
+
+Phase credit is unchanged. One-upload directory, grant and subscription
+provisioning and executed tool readiness evidence still precede live run
+admission and end-to-end qualification.
+
+## V1.1 profile editor validation follow-up (2026-11-11)
+
+The serial console suite reported 276 passes and an intermittent failure
+in the profile JSON field after revision load. Reset the field and its native
+validity during the layout update when a saved value changes, so a deferred
+reset cannot clear the first edit's invalid-input state. All 12 focused
+WorkflowProfiles and WorkflowManagement tests passed after the change.
+ProfileFields SHA-256:
+`c9f32271925635e751896fe068daa45f53c8d379338800be13028f74d98da5e2`.
+This affects local draft editing only. Reviewed directory and subscription
+provisioning and real readiness evidence remain pending.
 
 ## Admin UI property management slice (2026-11-11)
 

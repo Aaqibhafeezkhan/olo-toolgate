@@ -990,6 +990,10 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256
+        },
+        "canReadPublishedWorkflows": {
+          "type": "boolean",
+          "description": "Whether the current user has tenant-wide access to published workflow and agent configuration."
         }
       },
       "required": [

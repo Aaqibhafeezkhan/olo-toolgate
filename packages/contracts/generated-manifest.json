@@ -4,7 +4,7 @@
     "packages/contracts/schemas/v1/bundle.schema.json": "4056c803153e58fbc7b220c70423d288fbc547f4f02f93e8432e2c846ee720a4",
     "packages/contracts/schemas/v1/client.schema.json": "7f90eba0d390d4df0a485c4c84df5fa20606bde6646d6baebe16fca3844478fb",
     "packages/contracts/schemas/v1/common.schema.json": "dbc3c58d35e4fa7919db172f340a4cf460b601d65e83debdbf11cb21672df313",
-    "packages/contracts/schemas/v1/control.schema.json": "ee67e59204467bc4f3b57f2ea9da3412df971487d639bb5fcd3ad94b7e295cdb",
+    "packages/contracts/schemas/v1/control.schema.json": "afb1fe6351a8e592c51e216bb702f0a81da1a54739cedfaa641e62fe283e210b",
     "packages/contracts/schemas/v1/deployment.schema.json": "cd3bbc59d25050b3fd820cb2a635a73a9959f8260eda06a408646a5d52e4c7f1",
     "packages/contracts/schemas/v1/endpoint.schema.json": "41c0a52ed322855bb3017dc2a01526d88cd262617d797b72f55b72d6834f0f24",
     "packages/contracts/schemas/v1/enterprise.schema.json": "57da0f58bc8c13217e66de3b8e7312af3361591a715e7145e8298fd3ed7b4aaf",

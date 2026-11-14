@@ -56,6 +56,10 @@ Workflow profiles use these authenticated Control APIs:
 | `POST /api/control/v1/workflow-profiles/{id}/provision` with the same digest request | Provision the reviewed revision's packages through the existing package service; return its ordinary provisioning status. |
 | `POST /api/control/v1/workflow-profiles/{id}/publish` with `{"profileDigest":"sha256:…","expectedGeneration":0}` | Atomically activate a reviewed, dependency-ready revision. Use the latest generation for a replacement. Stale generations or unready dependencies return 409. |
 
+Workflow staging rejects invalid package declarations such as duplicate target
+groups and trigger assignments without a target group. The sealed package
+inventory and installation dependencies are checked when provisioning.
+
 This initial management boundary requires a **current Super Admin** for every
 operation, including document/status reads. Cached actor flags and token roles
 cannot grant access. Scoped workflow management roles and user-filtered runtime
@@ -181,3 +185,13 @@ management authorization, catalog persistence and readiness are delivered. Do
 not add these fields to a deployed version-1 profile or interpret successful
 structural validation as READY or execution permission. See the
 [live workflow status](../architecture/workflow-v1-status.md) for remaining work.
+
+## Published workflows in the console
+
+The Overview, Workflows and Agents configuration pages show published workflow
+and agent properties to users with tenant-wide agent and agent-group read access.
+Control returns this decision as `canReadPublishedWorkflows` in the admin
+session and checks it again for every published configuration request.
+Group-scoped readers keep their existing directory access. Super Admins manage
+drafts and publication. Use **Devices / Triggers** for device trigger management
+and **Workflows / Trigger packages** to configure packages in a workflow profile.
