@@ -140,6 +140,52 @@ public final class WorkflowProfiles {
             return new Store.Reply(200, documents.open(tx, actor.tenant(), revision), 0);
         });
     }
+    /** Published configuration is readable by tenant-wide agent and agent-group readers. */
+    public Store.Reply listPublished(DirectoryService.Actor actor, String after, int limit) {
+        if (limit < 1 || limit > 50) throw Failure.validation();
+        if (after != null) Ids.valid(after);
+        return store.transaction(actor.tenant(), false, tx -> {
+            requirePublishedRead(tx, actor);
+            var result = tx.workflowProfiles().publications(after == null ? "" : after, limit);
+            return new Store.Reply(200, codec.json(result), 0);
+        });
+    }
+    public Store.Reply publishedConfiguration(DirectoryService.Actor actor, String id, String digest) {
+        return store.transaction(actor.tenant(), false, tx -> {
+            requirePublishedRead(tx, actor);
+            Ids.valid(id); digest(digest);
+            var head = tx.workflowProfiles().publication(id);
+            if (head == null || !head.digest().equals(digest))
+                throw new Failure(ErrorCode.NOT_FOUND, 404, "Published workflow profile unavailable");
+            var revision = revision(tx, actor.tenant(), id, digest);
+            var document = ((JsonNode)codec.value(documents.open(tx, actor.tenant(), revision))).deepCopy();
+            var workflows = document.path("workflows");
+            // Prompts, arguments and schemas can contain arbitrary operator-supplied text.
+            for (var entry : workflows.path("workflows")) {
+                var workflow = (com.fasterxml.jackson.databind.node.ObjectNode)entry;
+                workflow.remove(java.util.List.of("systemPrompt", "parameterSchema", "resultSchema"));
+                redactContext(workflow.path("contextSources"));
+            }
+            for (var entry : workflows.path("agentDefinitions")) {
+                var agent = (com.fasterxml.jackson.databind.node.ObjectNode)entry;
+                agent.remove(java.util.List.of("systemPrompt", "outputSchema"));
+                redactContext(agent.path("contextSources"));
+            }
+            for (var entry : workflows.path("modelDeployments"))
+                ((com.fasterxml.jackson.databind.node.ObjectNode)entry).remove(java.util.List.of("secretName", "origin"));
+            return new Store.Reply(200, codec.json(workflows), head.generation());
+        });
+    }
+    private void requirePublishedRead(Store.Session tx, DirectoryService.Actor actor) {
+        var access = new ManagementAccess(codec);
+        var directory = tx.load();
+        long now = System.currentTimeMillis();
+        access.requireAll(directory, actor.userId(), "agent.read", now);
+        access.requireAll(directory, actor.userId(), "agent_group.read", now);
+    }
+    private static void redactContext(JsonNode entries) {
+        for (var entry : entries) ((com.fasterxml.jackson.databind.node.ObjectNode)entry).remove("arguments");
+    }
     public Store.Reply review(DirectoryService.Actor actor, String id, String document, String requestId) {
         Ids.valid(requestId);
         return store.transaction(actor.tenant(), true, tx -> {

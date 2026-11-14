@@ -9,6 +9,52 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /api/control/v1/workflow-profiles/published:
+    get:
+      operationId: listPublishedWorkflows
+      description: Current published profile pointers for the authenticated tenant. Requires tenant-wide agent and agent-group read access.
+      parameters:
+      - name: afterProfileId
+        in: query
+        schema: {type: string}
+      - name: limit
+        in: query
+        schema: {type: integer, minimum: 1, maximum: 50, default: 50}
+      responses:
+        '200':
+          description: Published profile pointers ordered by profile ID
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [profileId, digest, generation]
+                  properties:
+                    profileId: {type: string}
+                    digest: {type: string}
+                    generation: {type: integer}
+        '403':
+          description: Tenant-wide read access required
+  /api/control/v1/workflow-profiles/published/{profileId}/{digest}:
+    parameters:
+    - {name: profileId, in: path, required: true, schema: {type: string}}
+    - {name: digest, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getPublishedWorkflow
+      description: Read-only configuration of the current published revision. Private prompts, schemas, context arguments, provider origins and vault references are omitted.
+      responses:
+        '200':
+          description: Read-only workflow configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {type: array, items: {type: object}}
+        '403':
+          description: Tenant-wide read access required
+        '404':
+          description: Revision is not currently published in this tenant
   /api/control/v1/workflow-profiles:
     get:
       operationId: listWorkflowProfiles

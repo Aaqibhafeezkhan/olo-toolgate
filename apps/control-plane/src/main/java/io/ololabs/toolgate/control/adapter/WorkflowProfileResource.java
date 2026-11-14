@@ -46,6 +46,14 @@ public class WorkflowProfileResource {
     public Response get(@PathParam("profileId") String id, @PathParam("digest") String digest) {
         var actor = actors.management(); return reply(service(actor).get(actor, id, digest));
     }
+    @GET @Path("published")
+    public Response published(@QueryParam("afterProfileId") String after, @QueryParam("limit") @DefaultValue("50") int limit) {
+        var actor = actors.management(); return reply(service(actor).listPublished(actor, after, limit));
+    }
+    @GET @Path("published/{profileId}/{digest}")
+    public Response publishedConfiguration(@PathParam("profileId") String id, @PathParam("digest") String digest) {
+        var actor = actors.management(); return reply(service(actor).publishedConfiguration(actor, id, digest));
+    }
     @GET @Path("{profileId}/revisions/{digest}/document")
     public Response document(@PathParam("profileId") String id, @PathParam("digest") String digest) {
         var actor = actors.management(); return reply(service(actor).document(actor, id, digest, false));

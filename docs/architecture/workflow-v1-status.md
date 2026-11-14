@@ -1,6 +1,21 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Published configuration in the console
+
+The Control API exposes tenant-scoped, read-only published workflow and agent
+configuration to users with tenant-wide agent and agent-group read permissions.
+Overview and the corresponding Workflows and Agents pages use that API. Drafts,
+superseded revisions, prompts, schemas, context arguments, provider origins and
+vault references are excluded from the reader response. Super Admin lifecycle
+permissions remain unchanged. This adds configuration visibility within V1.1.
+It does not change workflow execution or phase weights.
+
+Verification on base `b25f59c5` with this change applied: the Admin UI production
+build and type check passed, and the focused SQLite workflow profile tests passed
+for published reads, redaction, replacement and reader authorization. PostgreSQL
+and packaged-console smoke checks are separate from this evidence.
+
 Issue: [#295](https://github.com/olo-labs/olo-toolgate/issues/295) ·
 Integration: `feature/workflow-enhancement` ·
 Merged milestone: [PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
