@@ -15,14 +15,21 @@ import sys
 import time
 
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[2]
 sys.path.insert(0,str(HERE/'scripts'))
 import configuration
 import lifecycle
+import image_assets
 
 
 def run(arguments, **options):
-    return subprocess.run(arguments,cwd=ROOT,check=True,**options)
+    return subprocess.run(arguments,cwd=options.pop('cwd',HERE),check=True,**options)
+
+
+def source_root():
+    candidate=HERE.parents[2] if len(HERE.parents)>2 else HERE
+    if not (candidate/'tools/quickstart/check.py').is_file():
+        raise ValueError('Source image builds require the repository checkout; select published images in the profile')
+    return candidate
 
 
 def default_configuration():
@@ -96,10 +103,11 @@ def environment(selection=None):
     return settings,state,compose
 
 
-def modules(state,compose):
+def modules(state,compose,assets=None):
     # Reuse the existing operator setup and signed package APIs, not the example's graph or prompts.
-    spec=importlib.util.spec_from_file_location('configured_stack_operator',ROOT/'examples/langchain/manage.py')
-    sys.path.insert(0,str(ROOT/'examples/langchain'))
+    operator_root=(assets or image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state))/'operator'
+    spec=importlib.util.spec_from_file_location('configured_stack_operator',operator_root/'examples/langchain/manage.py')
+    sys.path.insert(0,str(operator_root/'examples/langchain'))
     operator=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(operator)
     operator.STATE=state
@@ -165,9 +173,14 @@ def qualify_reader(operator,config,state):
     operator.shared.private_file(destination,'TOOLGATE_CONTROL_QUALIFIED_DEVICE_FILE_READERS='+pin+'\n')
 
 
-def prepare_packages(operator,state,compose):
+def prepare_packages(operator,state,compose,assets=None):
     if not (state/'agents/linux.json').exists():
-        operator.packages.prepare(compose,state,os.environ)
+        assets=assets or image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state)
+        (state/'package').mkdir(mode=0o700,exist_ok=True)
+        for name in ('hotfolder.tgpkg','inbox-watch.tgpkg'):
+            shutil.copyfile(assets/'packages'/name,state/'package'/name)
+        operator.packages.core_lock(state/'package','inbox-watch.tgpkg','examples.inbox-watch')
+        operator.packages.registry(compose,state,os.environ)
         return
     # Recovery uses the sealed current deployment, never a rebuild under an
     # already published package version. Refuse incomplete/altered custody.
@@ -272,18 +285,23 @@ def profile(operator,settings,state):
 
 def deploy(settings,state,compose,build):
     state.mkdir(mode=0o700,parents=True,exist_ok=True)
-    operator=modules(state,compose)
-    model_custody(operator,state)
     if build:
-        run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',os.environ['TOOLGATE_QUICKSTART_IMAGE']])
-        run(['docker','build','-t',os.environ['TOOLGATE_RUNTIME_IMAGE'],'apps/langgraph-runtime'])
-    prepare_packages(operator,state,compose)
+        run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',os.environ['TOOLGATE_QUICKSTART_IMAGE']],cwd=source_root())
+        run(['docker','build','-t',os.environ['TOOLGATE_RUNTIME_IMAGE'],'apps/langgraph-runtime'],cwd=source_root())
+    assets=image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state)
+    operator=modules(state,compose,assets)
+    model_custody(operator,state)
+    prepare_packages(operator,state,compose,assets)
     bootstrap_profile(settings,state)
     if os.environ.get('TOOLGATE_MONITORING','false').lower()=='true':
         run(compose+['up','-d','insights-collector','prometheus','tempo','grafana'])
-    run(compose+['up','-d','--build','--wait','--wait-timeout','240','quickstart','linux-device','workflow-model'])
+    run(compose+['up','-d','--force-recreate','--wait','--wait-timeout','240','quickstart','linux-device','workflow-model'])
     if (state/'agents/linux.json').exists():
-        operator.verify_deployment('linux')
+        try:operator.verify_deployment('linux')
+        except ValueError:
+            raise ValueError('Saved deployment credentials do not match the current Gateway. '
+                'Run stop.bat --configuration '+settings['id']+' to remove its generated storage, '
+                'then start.bat --configuration '+settings['id']+'. This deletes that configuration state/data.') from None
     else:
         operator.provision(argparse.Namespace(bootstrap_local=True,approve_linux_device=True,target='linux',device_id=None))
     config=profile(operator,settings,state)
@@ -301,7 +319,7 @@ def deploy(settings,state,compose,build):
     operator.wait_device(config,device,seen_after=reconnected_after,timeout=360)
     wait_trigger(config,settings)
     started=int(time.time())
-    run(compose+['up','-d','--build','--force-recreate','identity'])
+    run(compose+['up','-d','--force-recreate','identity'])
     deadline=time.monotonic()+90
     while (not (state/'workflow/reader/result.token').is_file()
             or not (state/'workflow/identity-ready').is_file()
@@ -314,6 +332,7 @@ def deploy(settings,state,compose,build):
     print('Console: http://127.0.0.1:'+os.environ['TOOLGATE_HTTP_PORT']+'/console/')
     print('Drop .txt files in: '+str(exchange/settings['fileAgent']['inbox']))
     print('Outputs: '+str(exchange/settings['fileAgent']['output']))
+    print('Admin credentials: '+str(state/'credentials/admin'))
 
 
 def ensure_start_images():
@@ -321,12 +340,12 @@ def ensure_start_images():
         reference=os.environ[variable]
         if subprocess.run(['docker','image','inspect',reference],capture_output=True).returncode==0:
             continue
-        if '@sha256:' in reference:
+        if '@sha256:' in reference or '/' in reference:
             run(['docker','pull',reference])
         elif component=='quickstart':
-            run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',reference])
+            run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',reference],cwd=source_root())
         else:
-            run(['docker','build','-t',reference,'apps/langgraph-runtime'])
+            run(['docker','build','-t',reference,'apps/langgraph-runtime'],cwd=source_root())
 
 
 def main():

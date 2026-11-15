@@ -24,9 +24,10 @@ def replace(path, text):
 
 def refresh():
     root = Path('/state')
-    password = json.loads((root/'console-passwords.json').read_text())['admin']
+    username=(root/'credentials/admin/username.txt').read_text(encoding='utf-8').strip()
+    password=(root/'credentials/admin/password.txt').read_text(encoding='utf-8').strip()
     request = urllib.request.Request('http://127.0.0.1:8080/api/quickstart/v1/login',
-        json.dumps(dict(username='admin', password=password)).encode(), {'Content-Type':'application/json'}, method='POST')
+        json.dumps(dict(username=username, password=password)).encode(), {'Content-Type':'application/json'}, method='POST')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     with opener.open(request, timeout=20) as response:
         operator = json.load(response)['accessToken']

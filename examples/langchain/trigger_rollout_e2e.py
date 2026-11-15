@@ -119,7 +119,7 @@ def main():
     if args.timeout < 1:
         parser.error('--timeout must be positive')
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'credentials/admin/password.txt').is_file())
     run(config, args.device, args.good_version, args.failing_package, args.timeout)
 
 

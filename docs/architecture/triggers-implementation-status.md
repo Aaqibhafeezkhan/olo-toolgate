@@ -5,6 +5,17 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Packaged image deployment integration — 2026-11-15
+
+The common published-image build now seals inbox-watch/HotFolder artifacts at
+image-build time; deployment selects the profile and provisions the current
+signed trigger interfaces without a per-configuration package/image build.
+Fresh triage and portable two-agent summary runs passed through existing durable
+admission, with actual checks/limits in the
+[workflow checkpoint](workflow-v1-status.md#packaged-deployment-exposed-console-and-credential-folders--2026-11-15).
+This changes no trigger interface/module scope and earns no additional M12 or
+merged-module weight. Overall earned progress remains **27%**.
+
 ## Selectable workflow integration — 2026-11-15
 
 The local [WorkflowStack deployment](../../deploy/compose/WorkflowStack/README.md)

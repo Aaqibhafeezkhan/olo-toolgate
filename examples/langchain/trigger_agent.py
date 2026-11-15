@@ -268,7 +268,7 @@ def main():
     # After `manage.py setup --bootstrap-local` the rotated local passwords are in .state; otherwise .env supplies them.
     mimic = _load('agent_mimic', ROOT / 'debug/standard/agent-mimic.py')
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'credentials/admin/password.txt').is_file())
     directory = manage.STATE / 'agents'
     descriptor = json.loads((directory / (args.target + '.json')).read_text(encoding='utf-8'))
     gateway = mimic.Agent(descriptor['gateway'], directory / (args.target + '.token'), directory / 'gateway-ca.crt')

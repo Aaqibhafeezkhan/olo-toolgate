@@ -63,11 +63,16 @@ COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
 COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/
 COPY tool-sdk/python-sdk/ tool-sdk/python-sdk/
 COPY core-mcp/ core-mcp/
+COPY examples/java-tools/ examples/java-tools/
+COPY deploy/compose/WorkflowStack/scripts/seal_assets.py /workspace/seal-workflow-assets.py
 COPY --from=package-cli /usr/local/bin/toolgate /usr/local/bin/toolgate
 ARG QUARKUS_PROFILE=prod
 RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && \
     ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild :sdk-json:installDist && \
-    python3 core-mcp/build.py --cli /usr/local/bin/toolgate
+    python3 core-mcp/build.py --cli /usr/local/bin/toolgate && \
+    chmod +x examples/java-tools/gradlew && \
+    cd examples/java-tools && ./gradlew --no-daemon -PtoolgateSdkRepo=/workspace/build/sdk-repo :hotfolder:toolgatePackage :inbox-watch:toolgatePackage && \
+    cd /workspace && python3 seal-workflow-assets.py examples/java-tools build/workflow-stack-packages
 
 # Builder compiles canonical SDK projects; its fixed toolchain requires javac.
 FROM eclipse-temurin:21-jdk-noble@sha256:70898f0f893a6b772a0f29834d8b022e3ac20b6a0c33a922973cf66342ef56be
@@ -93,6 +98,7 @@ ENV TOOLGATE_CLIENT_DOWNLOADS_DIRECTORY=$CLIENT_DOWNLOADS_DIRECTORY
 COPY --from=build --chown=65532:65532 /workspace/apps/control-plane/build/quarkus-app/ /app/
 COPY --from=build /workspace/tool-sdk/json-sdk/build/install/toolgate-json-sdk/ /opt/toolgate/json-sdk/
 COPY --from=build /workspace/build/core-mcp/ /opt/toolgate/core-mcp/
+COPY --from=build /workspace/build/workflow-stack-packages/ /opt/toolgate/workflow-stack/packages/
 COPY --from=package-cli /usr/local/bin/toolgate /usr/local/bin/toolgate
 COPY --from=package-cli /licenses /usr/share/licenses/olo-toolgate/package-cli/
 COPY LICENSE apps/control-plane/NOTICE.md /usr/share/licenses/olo-toolgate/

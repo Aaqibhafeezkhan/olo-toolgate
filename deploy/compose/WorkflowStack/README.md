@@ -26,7 +26,8 @@ There is no separate use-case configuration file or model setting in `.env`.
 On Windows, run `start.bat`. It lists every configuration with a serial number
 and asks which one to start. Press Enter to use the displayed `.env` default.
 Invalid numbers are rejected; cancelling does not start a deployment. Missing
-source images are built automatically, while digest-pinned images are pulled.
+local source-image tags are built automatically if missing; registry-qualified
+image references are pulled if missing.
 The model file and prerequisites below must be available.
 
 ```bat
@@ -37,8 +38,9 @@ start.bat --build
 
 The explicit `--configuration` form skips the menu for unattended startup.
 
-Use Docker's Linux engine with Compose, Git, and Python 3.12 or newer. The helper
-builds Java/Rust inside Docker and needs this source checkout. Install its TLS
+Use Docker's Linux engine with Compose and Python 3.12 or newer. Published-image
+deployment needs this WorkflowStack directory, its selected profile and model;
+it does not need Git, Java, Rust or the rest of the source checkout. Install its TLS
 certificate dependency if absent:
 
 ```powershell
@@ -61,16 +63,40 @@ python manage.py status
 Windows may use `manage.bat`; POSIX hosts may use `sh manage.sh`.
 `--build` builds the images named by the profile from this checkout. Later starts
 use `python manage.py deploy`. Source-build profiles use tag references; compatible
-reviewed release-image profiles can use prebuilt images without `--build`.
+reviewed release-image profiles use prebuilt images without `--build`. Set the
+profile's `deployment.platform.quickstartImage`, `deviceImage` and
+`deployment.runtime.image` to the corresponding published references (prefer
+immutable digests). Quickstart contains the common native packages, bootstrap
+initializer and provisioning operator. Startup extracts these from that exact
+image and mounts derived bootstrap data read-only; Compose has no image builds.
+Switching the mounted profile changes the selected workflow and its dependencies,
+without a profile-specific Dockerfile or image. Explicit source builds still
+require this checkout. Signed native-package provisioning can build reviewed client
+tool images inside Control; that is separate from rebuilding the deployment images.
 This change does not itself publish release images to a public registry.
 
 Text summary exposes the console at http://127.0.0.1:48091/console/; issue triage
-uses http://127.0.0.1:58091/console/ and can run alongside it.
+uses http://127.0.0.1:58091/console/ and can run alongside it. The Admin UI HTTP
+port is published on `0.0.0.0`, so another machine can use
+`http://<docker-host-ip>:48091/console/` (summary) or port `58091` (triage), subject
+to the host firewall. The TLS and private registry ports remain loopback-bound.
 Ports and service images are declared in each workflow's `deployment.platform`.
 The helper enrolls the device, reviews/provisions packages, creates identities and
 grants, resolves trigger UIDs, and reviews/publishes the effective workflow profile.
 It waits for a fresh device check-in and current available trigger before starting
 the listener/worker. Generated credentials are private and are not printed.
+
+Admin login files are under `state/<selection>/credentials/admin/`:
+`username.txt` contains the login name and `password.txt` the generated password.
+The separate `reviewer-1/` and `reviewer-2/` folders contain their own login files.
+Do not copy these into profiles, `.env`, Git or logs. Machine tokens, TLS keys and
+workflow secret custody remain in their narrowly mounted private state folders.
+
+If Docker volumes have been replaced while host state remains, startup refuses
+the changed Gateway trust. Preserve needed files first, then use
+`stop.bat --configuration <selection>` and `start.bat --configuration <selection>`
+for a fresh deployment. That reset deletes the selected generated state/data.
+Startup never silently adopts a replacement Gateway or converts old stores.
 
 Use the selected profile's README to drop an example file and inspect its output.
 The continuous listener and worker process subsequent files without a demo driver.

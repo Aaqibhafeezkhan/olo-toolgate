@@ -68,7 +68,8 @@ presets remain unchanged. The
 installation owner's audited Super Admin path is used for these explicit local
 management changes; execution authorization is not bypassed.
 
-Fresh local passwords are retained privately in `.state/console-passwords.json`.
+Fresh local logins are retained privately in
+`.state/credentials/<username>/username.txt` and `password.txt`.
 For an existing installation, provide its current credentials in `.env`.
 Preparation never reads private signing keys or manufactures tool profiles.
 Existing enrollment and files remain in named volumes. A recreated container

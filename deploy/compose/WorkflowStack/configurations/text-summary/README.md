@@ -19,8 +19,11 @@ writing files. Folder paths come from the workflow profile's `deployment.fileAge
 The adapter performs delivery writes; this does not qualify native mutation tools.
 
 From `deploy/compose/WorkflowStack`, stop the previous configuration, select
-`CONFIGURATION=text-summary` in `.env`, then run `python manage.py deploy`.
-Use `--build` if the current source images have not been built.
+`CONFIGURATION=text-summary` in `.env`, then run `start.bat` and choose text-summary.
+`start.bat --configuration text-summary` skips the menu. Published images need
+no source build; see the [stack guide](../../README.md) for prerequisites.
+The Admin UI is at `http://<docker-host-ip>:48091/console/`, with login files in
+`state/text-summary/credentials/admin/username.txt` and `password.txt`.
 
 Place a complete UTF-8 `.txt` file into `data/text-summary/inbox/`:
 

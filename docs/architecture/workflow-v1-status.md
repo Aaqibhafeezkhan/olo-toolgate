@@ -1,6 +1,81 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Packaged deployment, exposed console and credential folders — 2026-11-15
+
+The Admin UI HTTP port is published on all host interfaces (triage 58091,
+summary 48091); TLS/private-registry ports remain loopback-bound. Fresh local
+human credentials are stored separately as
+`state/<selection>/credentials/<username>/username.txt` and `password.txt`.
+The identity refresher reads that custody; startup prints its folder, never the
+password. Old credential stores are not converted or silently adopted.
+
+The common Quickstart image contains the provisioning operator, bootstrap
+initializer and sealed HotFolder/inbox-watch packages. Control builds those
+packages during image publication. Compose contains no build directives or
+profile-specific derived image. Startup extracts assets from the selected
+immutable local image identity, validates package digests and initializes
+root-owned bootstrap data mounted read-only by Control. Registry-qualified
+missing images are pulled; explicit source builds remain available from a
+checkout. Model/engine/agent/trigger/folder choices still come from the selected
+workflow profile. Signed client-tool image provisioning inside Control remains
+part of setup, separate from rebuilding deployment images. No public registry
+publication was performed or claimed.
+
+The reported Gateway-trust failure was stale host credentials after Docker
+volume replacement. Previous issue-triage state/data were preserved under
+`prior-demo/gateway-reset-issue-triage-20261115-204414`, followed by a selected
+fresh reset and successful start. A subsequent start reused the new credentials
+successfully. Other old summary artifacts and the portable-image test evidence
+are also preserved under `prior-demo/`. Trust changes are refused with this
+stack's explicit reset command; no effects are automatically replayed.
+
+Executed evidence:
+
+- Fresh issue run `run-d927491a-9f35-461b-9a53-a1967be2dec8` completed with a
+  confirmed configured-agent read and inference, CHECKOUT-1042/HIGH, and
+  `acceptance-10c4e524a7-bf1cb6ec2371.result.json`; original retained.
+- Portable text-summary run `run-eb17596a-106e-4f16-804a-2870491b066e` completed
+  using a copied bundle and cached registry-qualified prebuilt image tags, with
+  no repository operator/package build. It confirmed file-agent read, inference
+  only by `text-summarizer`, exact-byte archival and
+  `acceptance-4fedc083c4-6f5c69f97fa7.summary.txt`. This tests local image reuse,
+  not remote registry credentials/download/publication. Fixture storage was
+  archived and its owned Docker resources removed afterwards.
+- A fresh text-summary start in the main WorkflowStack directory then completed
+  `run-d2dcea17-a490-4ed3-8976-85ca0dec53c1`, confirming the two configured
+  agents, exact-byte archive and
+  `data/text-summary/summaries/acceptance-155269e9e9-53c4ffda9c29.summary.txt`.
+  Both supplied configurations are running in the main bundle with their own
+  credential folders and UI ports; the portable fixture is no longer running.
+- Quickstart/Control source image builds pass. Both image-only Compose profiles
+  validate; the live Admin UI responds HTTP 200 and Docker publishes
+  `0.0.0.0:58091`. Admin/reviewer username/password files are verified present.
+- 12 profile/delivery, 11 Windows lifecycle, 36 operator, 5 package and 10
+  documentation tests pass. Image-asset tests: Windows 3 discovered/1 Linux-root
+  skip, Linux 3 pass, including altered digests, writable/linked bootstrap
+  custody and unknown-store refusal. Ten trigger-agent tests pass in the
+  existing runtime container; the host lacks its LangGraph dependency.
+- Full Windows CI-Python discovery: 450 tests, 10 errors and 11 skips. Eight
+  release-note errors were Windows default-encoding failures; all 21 affected
+  release suites pass with PYTHONUTF8=1. All four debug-manager cases pass on
+  rerun after an initial 30-second timeout. The device Unix-socket symlink case
+  still requires Windows symlink privileges. This is not a green full gate.
+- Source/license/secret/dependency scans pass with Docker tooling and
+  PYTHONUTF8=1. Initial scan attempts lacked host Cargo and then hit Windows
+  decoding; those failed attempts are not accepted. Documentation links pass
+  after excluding the private generated image cache, with an explicit test
+  retaining checks of authored configuration READMEs. Prior full Java/Rust/UI
+  evidence and limitations below remain applicable; they were not rerun here.
+
+Known tested base `e62cfc60`; normalized source manifest SHA-256
+`c8a646b966871803c213a8c7b421d27ec4737945d680256b515bdd5cc991f7d3` (18 existing changed public non-Markdown files;
+sorted path + NUL + file SHA-256 after CRLF-to-LF normalization + newline).
+Baseline `v1-effort-1` stays 100 points with **0/100 earned**. No phase weights
+or security/trigger qualification credits change. Full Linux/distributed V1.4,
+production identity, native mutation qualification and authorized release-image
+publication remain outstanding; PR #311 remains draft.
+
 ## Windows stack lifecycle — 2026-11-15
 
 `WorkflowStack/start.bat` lists configuration folders with serial numbers, asks

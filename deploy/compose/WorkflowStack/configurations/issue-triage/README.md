@@ -9,9 +9,12 @@ The workflow pins one `MODEL` agent stage, so a supervisor cannot skip the
 configured agent or invent a result before its configured file read.
 
 From `deploy/compose/WorkflowStack`, select `CONFIGURATION=issue-triage` in `.env` and run
-`python manage.py deploy` (add `--build` on first deployment).
+`start.bat --configuration issue-triage`. Published images require no source build;
+see the [stack guide](../../README.md) for image selection and prerequisites.
 Its profile declares console port 58091 (https/API 58451, registry 58552), so
 it can also run beside text-summary using `--configuration issue-triage`.
+Admin login files are `state/issue-triage/credentials/admin/username.txt` and
+`password.txt`. The UI is also accessible at `http://<docker-host-ip>:58091/console/`.
 
 Drop a UTF-8 `.txt` issue log containing an `ISSUE-ID`, service, symptoms and
 observations into `data/issue-triage/inbox/`. For example:

@@ -7,21 +7,16 @@ services:
       REGISTRY_HTTP_ADDR: 0.0.0.0:${TOOLGATE_REGISTRY_PORT:-48552}
     ports:
       - "127.0.0.1:${TOOLGATE_REGISTRY_PORT:-48552}:${TOOLGATE_REGISTRY_PORT:-48552}"
-      - "127.0.0.1:${TOOLGATE_HTTP_PORT:-48091}:8080"
+      - "0.0.0.0:${TOOLGATE_HTTP_PORT:-48091}:8080"
       - "127.0.0.1:${TOOLGATE_TLS_PORT:-48451}:8443"
     volumes: [registry-data:/var/lib/registry]
     restart: unless-stopped
   quickstart:
-    image: toolgate-configured-quickstart:${CONFIGURATION:-issue-triage}
-    build:
-      context: ../../..
-      dockerfile: deploy/compose/WorkflowStack/scripts/quickstart.Dockerfile
-      args:
-        QUICKSTART_IMAGE: ${TOOLGATE_QUICKSTART_IMAGE:-olo-toolgate-quickstart:profile-stack}
-      additional_contexts:
-        package: ./state/${CONFIGURATION:-issue-triage}/package
+    image: ${TOOLGATE_QUICKSTART_IMAGE:?Selected by workflow profile}
     network_mode: service:registry
-    depends_on: [registry]
+    depends_on:
+      registry: {condition: service_started}
+      bootstrap-init: {condition: service_completed_successfully}
     env_file:
       - path: ./state/${CONFIGURATION:-issue-triage}/client-images.env
         required: false
@@ -36,9 +31,12 @@ services:
       TOOLGATE_CONTROL_ENDPOINT_CONSOLE_URL: http://127.0.0.1:${TOOLGATE_HTTP_PORT:-48091}
       TOOLGATE_WORKFLOW_MODEL_ORIGINS: ${TOOLGATE_WORKFLOW_MODEL_ORIGINS:?Derived from workflow profile}
       TOOLGATE_WORKFLOW_MODEL_CA_FILE: /run/model-ca.crt
+      TOOLGATE_CONTROL_PROFILE_PATH: /bootstrap/profile/trigger.json
+      TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: /bootstrap/core/core-packages.lock.json
       TOOLGATE_INSIGHTS_MODE: ${TOOLGATE_INSIGHTS_MODE:-NONE}
     volumes:
       - quickstart-data:/data
+      - bootstrap-config:/bootstrap:ro
       - ./configurations/${CONFIGURATION:-issue-triage}:/configuration:ro
       - ./state/${CONFIGURATION:-issue-triage}/workflow/model-ca.crt:/run/model-ca.crt:ro
     tmpfs: ['/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532']
@@ -56,6 +54,17 @@ services:
     volumes:
       - ./scripts/init_files.py:/deployment/init_files.py:ro
       - hotfolder-data:/device-files
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  bootstrap-init:
+    image: ${TOOLGATE_QUICKSTART_IMAGE:?Selected by workflow profile}
+    user: '0:0'
+    entrypoint: [/opt/quickstart-python/bin/python, /opt/toolgate/workflow-stack/bootstrap.py]
+    network_mode: none
+    volumes:
+      - bootstrap-config:/bootstrap
+      - ./state/${CONFIGURATION:-issue-triage}/package/workflow-bootstrap.json:/input/profile.json:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -103,7 +112,6 @@ services:
       retries: 36
   workflow-worker:
     image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
-    build: {context: ../../../apps/langgraph-runtime}
     network_mode: service:registry
     command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --result-directory, /results]
     volumes:
@@ -128,11 +136,9 @@ services:
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
   identity:
-    image: toolgate-compose-identity:local
-    build:
-      context: ../../..
-      dockerfile: deploy/compose/WorkflowStack/scripts/identity.Dockerfile
-      args: {QUICKSTART_IMAGE: '${TOOLGATE_QUICKSTART_IMAGE:-olo-toolgate-quickstart:profile-stack}'}
+    image: ${TOOLGATE_QUICKSTART_IMAGE:?Selected by workflow profile}
+    user: '0:0'
+    entrypoint: [/opt/quickstart-python/bin/python, -u, /opt/toolgate/workflow-stack/identity.py]
     network_mode: service:registry
     environment:
       QUICKSTART_CONTAINER: toolgate-workflow-${CONFIGURATION:-issue-triage}-quickstart-1
@@ -169,6 +175,7 @@ services:
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
 volumes:
+  bootstrap-config: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
   registry-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
   quickstart-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
   device-config: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
