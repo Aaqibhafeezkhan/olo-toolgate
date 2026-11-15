@@ -20,6 +20,42 @@ final class WorkflowConfigurationsTest {
         var path = Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
         return (ObjectNode) JSON.readTree(Files.readString(path)).get("WorkflowConfiguration");
     }
+    @Test void modelGenerationIsExplicitAndBounded() throws Exception {
+        var node = config();
+        var deployment = (ObjectNode) node.path("modelDeployments").get(0);
+        deployment.remove("generation");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        var generation = deployment.putObject("generation").put("temperature", 0.25).put("maxOutputTokens", 256);
+        assertNotNull(VALIDATOR.validate(node.toString(), r -> true));
+        generation.put("maxOutputTokens", 4097);
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+    }
+    @Test void orderedStagesCloseAgentReferencesAndRequireConfirmedContextSources() throws Exception {
+        var node = config();
+        var workflow = (ObjectNode) node.path("workflows").get(0);
+        String agent = node.path("agentDefinitions").get(0).path("agentId").asText();
+        var stages = workflow.putArray("agentStages");
+        stages.addObject().put("agentId", agent).put("resultMode", "CONTEXT");
+        assertEquals(1, VALIDATOR.validate(node.toString(), r -> true).workflows().getFirst().agentStages().size());
+        ((ObjectNode) stages.get(0)).put("agentId", "foreign");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        ((ObjectNode) stages.get(0)).put("agentId", agent);
+        stages.add(stages.get(0).deepCopy());
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        stages.remove(1);
+        ((ObjectNode) node.path("agentDefinitions").get(0)).putArray("contextSources");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+    }
+    @Test void stageModesAndHandoffBudgetsAreBounded() throws Exception {
+        var node = config();
+        var workflow = (ObjectNode) node.path("workflows").get(0);
+        var stage = workflow.putArray("agentStages").addObject().put("agentId", node.path("agentDefinitions").get(0).path("agentId").asText());
+        stage.put("resultMode", "EXECUTE");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        stage.put("resultMode", "MODEL");
+        ((ObjectNode) workflow.path("limits")).put("maxHandoffs", 0);
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+    }
     @Test void contextBindingsAreBoundedDataAndCannotOverrideStaticArguments() throws Exception {
         var node = config();
         var context = (ObjectNode) node.path("agentDefinitions").get(0).path("contextSources").get(0);

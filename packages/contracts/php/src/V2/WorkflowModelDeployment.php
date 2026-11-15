@@ -13,12 +13,13 @@ final readonly class WorkflowModelDeployment implements \JsonSerializable {
         public string $modelId,
         public string $secretName,
         public string $toolGroupId,
-        public string $deviceGroupId
+        public string $deviceGroupId,
+        public WorkflowModelGeneration $generation
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'origin', 'modelId', 'secretName', 'toolGroupId', 'deviceGroupId']) || array_diff(['id', 'origin', 'modelId', 'secretName', 'toolGroupId', 'deviceGroupId'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'origin', 'modelId', 'secretName', 'toolGroupId', 'deviceGroupId', 'generation']) || array_diff(['id', 'origin', 'modelId', 'secretName', 'toolGroupId', 'deviceGroupId', 'generation'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -27,7 +28,8 @@ final readonly class WorkflowModelDeployment implements \JsonSerializable {
             $data['modelId'],
             $data['secretName'],
             $data['toolGroupId'],
-            $data['deviceGroupId']
+            $data['deviceGroupId'],
+            WorkflowModelGeneration::fromArray($data['generation'])
         );
     }
 

@@ -1,0 +1,6 @@
+ISSUE-ID: CHECKOUT-1042
+Service: checkout-api
+Severity: HIGH
+Error: payment requests time out after 30 seconds.
+Impact: customers cannot complete checkout.
+Observation: the database connection pool is exhausted during the incident.

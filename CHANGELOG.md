@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Bundle a selectable complete workflow deployment in `deploy/compose/WorkflowStack`,
+  with issue triage and separate file/summarization agents, confirmed summary
+  delivery and input archiving, and configuration-specific operating instructions.
+  Pin ordered context/model agent stages so supervisor output cannot skip the
+  configured agents. Recheck each active agent's own grants and constrain/validate
+  model decisions with a canonical JSON schema. Include optional local monitoring and documented
+  Langfuse/LangSmith OTLP configuration without default content tracing.
+
 - Bind configured workflow context-tool arguments to the admitted message, store
   encrypted workflow results for current tenant administrators, and optionally
   write private worker result files. The hot-folder demo uses a configured

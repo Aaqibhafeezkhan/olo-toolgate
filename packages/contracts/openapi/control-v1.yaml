@@ -23,12 +23,13 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [runId, workflowId, workflowVersionId, profileDigest, state, outcome]
+                required: [runId, workflowId, workflowVersionId, profileDigest, state, message, outcome]
                 properties:
                   runId: {type: string}
                   workflowId: {type: string}
                   workflowVersionId: {type: string}
                   profileDigest: {type: string}
+                  message: {type: string, description: Original admitted message, decrypted for the current tenant Super Admin only}
                   state: {type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, AWAITING_APPROVAL, CANCELLED, EXPIRED]}
                   outcome:
                     type: [object, 'null']

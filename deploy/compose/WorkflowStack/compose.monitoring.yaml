@@ -1,0 +1,64 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+# Optional local monitoring, reusing the repository's Operator Insights collector/dashboards.
+services:
+  quickstart:
+    environment:
+      TOOLGATE_INSIGHTS_MODE: ${TOOLGATE_INSIGHTS_MODE}
+      TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO: ${TOOLGATE_INSIGHTS_SPAN_SAMPLE_RATIO}
+      TOOLGATE_INSIGHTS_OTLP_ENDPOINT: http://insights-collector:4318
+      TOOLGATE_INSIGHTS_OTLP_SERVICE_NAME: toolgate-configured-workflows
+      TOOLGATE_INSIGHTS_OTLP_ENVIRONMENT: local-compose
+  insights-collector:
+    image: ${INSIGHTS_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.120.0}
+    command: [--config=/etc/otelcol/config.yaml]
+    env_file:
+      - path: ./monitoring/credentials.env
+        required: false
+        format: raw
+    volumes:
+      - ./state/${CONFIGURATION}/workflow/monitoring/collector.json:/etc/otelcol/config.yaml:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.2.1}
+    command: [--config.file=/etc/prometheus/prometheus.yaml, --storage.tsdb.path=/prometheus]
+    volumes:
+      - ./monitoring/local/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    ports: ['127.0.0.1:${PROMETHEUS_PORT:-49090}:9090']
+    restart: unless-stopped
+  tempo:
+    image: ${TEMPO_IMAGE:-grafana/tempo:2.7.2}
+    command: [-config.file=/etc/tempo.yaml]
+    user: '10001:10001'
+    volumes:
+      - ./monitoring/local/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.1.0}
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set a private Grafana password in .env}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+    volumes:
+      - ./monitoring/local/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/local/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ['127.0.0.1:${GRAFANA_PORT:-49000}:3000']
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  prometheus-data:
+  grafana-data:
+  tempo-data:

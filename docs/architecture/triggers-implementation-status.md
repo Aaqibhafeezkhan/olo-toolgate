@@ -5,6 +5,21 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Selectable workflow integration — 2026-11-15
+
+The local [WorkflowStack deployment](../../deploy/compose/WorkflowStack/README.md)
+reuses the existing signed `inbox-watch` assignment, authenticated subscription
+stream, durable dispatch admission and listener cursor/ack rules. The selected
+configuration supplies the published workflow binding. Issue triage and the
+two-agent text-summary/archive use cases use the same listener/worker code.
+Actual runs, source checkpoint, tested gates and platform limitations are in the
+[workflow status](workflow-v1-status.md#selectable-workflowstack-deployment--2026-11-15).
+The folder adapter's projection/archive is explicitly trusted operator delivery;
+it does not qualify native mutation finality. No trigger interface or module
+baseline is changed, and no additional M12/merged module credit is claimed.
+Overall earned progress remains **27%**; full owned scenario and hosted merge
+verification remain outstanding.
+
 ## Device-scoped trigger management
 
 The console discovers client trigger exports from packages assigned to the

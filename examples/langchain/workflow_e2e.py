@@ -74,7 +74,8 @@ def provision(config):
         workflowGroups=[dict(id='hotfolder', displayName='Hot-folder')],
         modelGroups=[dict(id='hotfolder-models', deploymentIds=['intake'])],
         modelDeployments=[dict(id='intake', origin='https://workflow-model:8443', modelId='intake-model',
-            secretName='hotfolder-model-key', toolGroupId='default-tools', deviceGroupId='default-devices')],
+            secretName='hotfolder-model-key', toolGroupId='default-tools', deviceGroupId='default-devices',
+            generation=dict(maxOutputTokens=512,temperature=0.0))],
         agentDefinitions=[dict(agentId=AGENT, modelGroupId='hotfolder-models',
             systemPrompt=('You triage issue-log files. Your input is the exact relative source file path. '
                 'The configured context source already read that file through examples.hotfolder/read_text. '

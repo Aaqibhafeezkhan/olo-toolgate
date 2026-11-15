@@ -415,6 +415,12 @@ final class TriggerDeliveryTest {
             ((ObjectNode) config.path("dispatchBindings").get(0)).put("subscriptionUid", uid)
                 .put("sourceAssignmentUid", assignment).put("messagePointer", "/name")
                 .put("serviceAgentId", "investigator").put("serviceAgentGroupId", "support-agents");
+            var summarizer = config.path("agentDefinitions").get(0).deepCopy();
+            ((ObjectNode) summarizer).put("agentId", "summarizer").putArray("contextSources");
+            ((com.fasterxml.jackson.databind.node.ArrayNode) config.path("agentDefinitions")).add(summarizer);
+            ((com.fasterxml.jackson.databind.node.ArrayNode) config.path("workflows").get(0).path("agents"))
+                .addObject().put("agentId", "summarizer").put("agentGroupId", "summary-agents")
+                .put("entryEligible", false).put("delegationAllowed", true);
             var profile = JSON.createObjectNode().put("profileVersion", 2).put("profileId", "support");
             profile.putArray("packages");
             profile.set("workflows", config);
@@ -440,6 +446,9 @@ final class TriggerDeliveryTest {
                 var before = tx.load();
                 var entries = new HashMap<>(before.entries());
                 TestSupport.put(entries, codec, Ids.Kind.AGENT, new ControlAgent("investigator", "Investigator", null, true, 1L, "root"));
+                TestSupport.put(entries, codec, Ids.Kind.AGENT, new ControlAgent("summarizer", "Summarizer", null, true, 1L, "root"));
+                TestSupport.put(entries, codec, Ids.Kind.AGENT_GROUP, new ControlAgentGroup("summary-agents", "Summary", null, true,
+                    1L, List.of("summarizer"), List.of("workflow-service-role"), null));
                 TestSupport.put(entries, codec, Ids.Kind.AGENT_GROUP, new ControlAgentGroup("support-agents", "Support", null, true,
                     1L, List.of("investigator"), List.of("workflow-service-role"), null));
                 TestSupport.put(entries, codec, Ids.Kind.ROLE, new ControlRole("workflow-service-role", "Workflow service", true, 1L,
@@ -451,6 +460,18 @@ final class TriggerDeliveryTest {
                     new EnterpriseConditions(0L, 0L, List.of(), List.of(), List.of(), List.of(), false, false, null, null));
                 TestSupport.put(entries, codec, Ids.Kind.GRANT, new ControlAccessGrant("workflow-service-grant", "Workflow service", true,
                     1L, EnterpriseSourceType.ROLE, "workflow-service-role", EnterpriseGrantPurpose.SERVICE, scope));
+                TestSupport.put(entries, codec, Ids.Kind.TOOL_GROUP, new ControlToolGroup("workflow-files", "Files", true, 1L, List.of()));
+                TestSupport.put(entries, codec, Ids.Kind.DEVICE_GROUP, new ControlDeviceGroup("workflow-devices", "Workflow devices", true, 1L, List.of("device-a")));
+                TestSupport.put(entries, codec, Ids.Kind.BINDING, new ControlExecutionBinding("files-binding", "Files", true, 1L,
+                    "workflow-files", "workflow-devices", List.of("read"), List.of(), true, false));
+                var files = new EnterpriseScope(new GroupSelection(List.of("workflow-files"), false),
+                    new GroupSelection(List.of("workflow-devices"), false), List.of("read"), false,
+                    List.of(new EnterpriseResourceRule(ResourceKind.CUSTOM, "tool://files/read", EnterpriseResourceMatch.EXACT)), scope.conditions());
+                TestSupport.put(entries, codec, Ids.Kind.GRANT, new ControlAccessGrant("file-capability", "File capability", true, 1L,
+                    EnterpriseSourceType.AGENT_GROUP, "support-agents", EnterpriseGrantPurpose.CAPABILITY, files));
+                TestSupport.put(entries, codec, Ids.Kind.WORKLOAD_BINDING, new ControlWorkloadBinding("files-workload", "Files", true, 1L,
+                    "investigator", io.ololabs.toolgate.contracts.v2.RequestMode.SERVICE, "gateway", "files", "gateway",
+                    "f".repeat(64), 1L, T0 + DAY, null, null, null, null, false));
                 tx.save(before, new Directory(before.revision() + 1, entries));
                 return null;
             });
@@ -487,6 +508,27 @@ final class TriggerDeliveryTest {
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "other", "models")));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "other")));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "other", "models")));
+            var summaryGrant = JSON.readTree(leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "summarizer", "models").body());
+            w.store().transaction(w.tenant(), false, tx -> {
+                var models = new WorkflowModelSelection(profiles, codec, w.clock());
+                assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText()).id());
+                assertEquals(403, status(() -> new WorkflowToolAuthority(codec, models, w.clock()).resolve(tx, w.tenant(), runId,
+                    summaryGrant.path("token").asText(), "files/read", "summary-no-tools")));
+                return null;
+            });
+            w.store().transaction(w.tenant(), true, tx -> {
+                var before = tx.load(); var entries = new HashMap<>(before.entries());
+                TestSupport.put(entries, codec, Ids.Kind.AGENT_GROUP, new ControlAgentGroup("summary-agents", "Summary", null, false,
+                    2L, List.of("summarizer"), List.of("workflow-service-role"), null));
+                tx.save(before, new Directory(before.revision() + 1, entries));
+                return null;
+            });
+            assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "summarizer", "models")));
+            w.store().transaction(w.tenant(), false, tx -> {
+                assertEquals(403, status(() -> new WorkflowModelSelection(profiles, codec, w.clock()).resolve(tx, w.tenant(), runId,
+                    summaryGrant.path("token").asText())));
+                return null;
+            });
             var grant = JSON.readTree(leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "models").body());
             assertEquals("investigate", grant.path("subjectId").asText());
             var agentGrant = JSON.readTree(leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "investigator", "models").body());
@@ -496,6 +538,10 @@ final class TriggerDeliveryTest {
                 assertFalse(grant.path("token").asText().equals(agentGrant.path("token").asText()));
                 var models = new WorkflowModelSelection(profiles, codec, w.clock());
                 assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, agentGrant.path("token").asText()).id());
+                var toolContext = new WorkflowToolAuthority(codec, models, w.clock()).resolve(tx, w.tenant(), runId,
+                    agentGrant.path("token").asText(), null, "file-tools");
+                assertEquals("investigator", toolContext.context().agentId());
+                assertEquals("files-workload", toolContext.context().workloadBindingId());
                 assertEquals(403, status(() -> models.resolve(tx, w.tenant(), runId, grant.path("token").asText())));
                 return null;
             });
@@ -506,6 +552,7 @@ final class TriggerDeliveryTest {
             assertEquals(200, leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, null, "finish").status());
             var saved = JSON.readTree(leases.result(w.admin(), runId).body());
             assertEquals(result, saved.path("outcome").path("result"));
+            assertEquals("alpha", saved.path("message").asText());
             assertEquals("SUCCEEDED", saved.path("state").asText());
             assertEquals(403, status(() -> leases.result(worker, runId)));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "models")));

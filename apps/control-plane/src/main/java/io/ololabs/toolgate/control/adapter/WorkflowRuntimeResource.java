@@ -87,7 +87,7 @@ public class WorkflowRuntimeResource {
             var model = selection.resolve(tx, gateway.tenant(), runId, value.path("stepToken").textValue());
             var credential = new VaultService(store, codec, vault).workflowModelCredential(gateway.tenant(), tx, model);
             return new Store.Reply(200, codec.json(java.util.Map.of("origin", model.origin(), "modelId", model.modelId(),
-                "credential", credential)), 0);
+                "credential", credential, "generation", model.generation())), 0);
         }));
     }
 

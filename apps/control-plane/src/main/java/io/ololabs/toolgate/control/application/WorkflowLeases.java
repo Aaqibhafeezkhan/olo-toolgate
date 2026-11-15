@@ -47,7 +47,8 @@ public final class WorkflowLeases {
     private record Snapshot(String runId, String leaseId, String workflowId, String workflowVersionId, String profileDigest,
                             String leaseToken, String message, String supervisorPrompt, String supervisorModelGroupId,
                             WorkflowExecutionLimits limits, List<AgentSnapshot> agents, List<WorkflowContextSource> contextSources,
-                            String remediationMode, long expiresAtUnixMs) {
+                            String remediationMode, long expiresAtUnixMs,
+                            List<io.ololabs.toolgate.contracts.v2.WorkflowAgentStage> agentStages) {
         @Override public String toString() { return "Snapshot[runId=" + runId + "]"; }
     }
 
@@ -80,7 +81,7 @@ public final class WorkflowLeases {
             var lease = new WorkflowRunStore.Lease(run.id(), "lease-" + UUID.randomUUID(), worker.id(), DirectoryService.digest(token), expires);
             var snapshot = new Snapshot(run.id(), lease.id(), run.workflowId(), run.workflowVersionId(), run.profileDigest(),
                 token, message, workflow.systemPrompt(), workflow.modelGroupId(), workflow.limits(), agents, workflow.contextSources(),
-                run.remediationMode(), expires);
+                run.remediationMode(), expires, workflow.agentStages() == null ? List.of() : workflow.agentStages());
             runs.claim(lease);
             tx.audit(worker.id(), "WORKFLOW_RUN_CLAIM", "workflow-run:" + run.id(), 1, requestId, run.profileDigest().substring(7));
             return new Store.Reply(200, codec.json(snapshot), 0);
@@ -129,6 +130,7 @@ public final class WorkflowLeases {
             var response = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
             response.put("runId", run.id()).put("workflowId", run.workflowId()).put("workflowVersionId", run.workflowVersionId())
                 .put("profileDigest", run.profileDigest()).put("state", state);
+            response.put("message", inputs.open(tx, actor.tenant(), run));
             response.set("outcome", results.open(tx, actor.tenant(), run, state));
             return new Store.Reply(200, codec.json(response), 0);
         });
@@ -155,11 +157,11 @@ public final class WorkflowLeases {
                     yield workflow.modelGroupId();
                 }
                 case "AGENT" -> {
-                    if (!run.serviceAgentId().equals(subjectId) || workflow.agents().stream().noneMatch(binding ->
-                            binding.agentId().equals(subjectId) && binding.agentGroupId().equals(run.serviceAgentGroupId())
-                            && binding.entryEligible())) throw ManagementAccess.denied();
-                    yield config.agentDefinitions().stream().filter(agent -> agent.agentId().equals(subjectId)).findFirst()
-                        .orElseThrow(Failure::unavailable).modelGroupId();
+                    var binding = access.agent(tx.load(), workflow, subjectId, now);
+                    var definition = config.agentDefinitions().stream().filter(agent -> agent.agentId().equals(subjectId)).findFirst()
+                        .orElseThrow(Failure::unavailable);
+                    access.requireGrant(tx.load(), binding.agentGroupId(), "model.infer", "model-group:" + definition.modelGroupId(), now);
+                    yield definition.modelGroupId();
                 }
                 default -> throw Failure.validation();
             };

@@ -9,7 +9,7 @@ import uuid
 from urllib.error import HTTPError
 from urllib.request import Request
 
-from .runner import Agent, Candidate, CompletionAck, ContextSource, Denied, ID, Limits, OwnershipLost, RunLease, StepGrant, Tool, ToolOutcome
+from .runner import Agent, AgentStage, Candidate, CompletionAck, ContextSource, Denied, ID, Limits, OwnershipLost, RunLease, StepGrant, Tool, ToolOutcome
 from .trigger_bridge import _constant, _object
 from .trigger_transport import ControlTriggers
 
@@ -44,16 +44,20 @@ def _agent(value):
 
 def _lease(value):
     data = _record(value, "runId leaseId workflowId workflowVersionId profileDigest leaseToken message supervisorPrompt "
-                         "supervisorModelGroupId limits agents contextSources remediationMode expiresAtUnixMs")
+                         "supervisorModelGroupId limits agents contextSources remediationMode expiresAtUnixMs agentStages")
     if (not isinstance(data["leaseToken"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", data["leaseToken"])
             or type(data["expiresAtUnixMs"]) is not int or data["expiresAtUnixMs"] <= 0
             or not isinstance(data["agents"], list) or not 1 <= len(data["agents"]) <= 32):
         raise ValueError("Invalid run lease")
     limits = _record(data["limits"], "maxSteps maxHandoffs maxDurationSeconds")
+    if not isinstance(data['agentStages'], list) or len(data['agentStages']) > 32:
+        raise ValueError('Invalid agent stages')
+    stages = tuple(AgentStage(**{'agent_id': _record(stage, 'agentId resultMode')['agentId'],
+                                'result_mode': stage['resultMode']}) for stage in data['agentStages'])
     return RunLease(data["runId"], data["leaseId"], data["workflowId"], data["workflowVersionId"], data["profileDigest"],
                     data["leaseToken"], data["message"], data["supervisorPrompt"], data["supervisorModelGroupId"],
                     Limits(limits["maxSteps"], limits["maxHandoffs"], limits["maxDurationSeconds"]),
-                    tuple(map(_agent, data["agents"])), _contexts(data["contextSources"]), data["remediationMode"])
+                    tuple(map(_agent, data["agents"])), _contexts(data["contextSources"]), data["remediationMode"], stages)
 
 
 class ControlRuns(ControlTriggers):
@@ -140,10 +144,15 @@ class GatewayRuntime(ControlTriggers):
         decisions = ['{"kind":"finish","result":{...}}']
         if grant.subject_kind == "WORKFLOW" and candidates:
             decisions.append('{"kind":"delegate","agentId":"<available agent>","input":"..."}')
+            if any(message.get('role') == 'tool' and message.get('agentId') for message in messages):
+                decisions.append('{"kind":"delegate","agentId":"<available agent>","inputFromAgent":"<completed agent>"}')
         elif tools:
             decisions.append('{"kind":"tool","toolId":"<available tool>","arguments":{...}}')
+        if grant.subject_kind == 'AGENT' and any(agent.agent_id == grant.subject_id and agent.context_sources for agent in lease.agents):
+            decisions.append('{"kind":"finish_context"}')
         guidance = {"instruction": "Return exactly one JSON object following a listed decision shape.",
                     "decisions": decisions, "agents": [{"id": item.agent_id, "description": item.description} for item in candidates],
+                    "completedAgents": [message['agentId'] for message in messages if message.get('role') == 'tool' and message.get('agentId')],
                     "tools": [{"id": item.tool_id, "description": item.description, "inputSchema": item.input_schema} for item in tools]}
         conversation = [{"role": "system", "content": system_prompt + "\n" + json.dumps(guidance, allow_nan=False)}]
         for message in messages:
@@ -210,6 +219,10 @@ class GatewayRuntime(ControlTriggers):
                 return value["result"]
         except HTTPError as failure:
             with failure:
+                if failure.code == 403 and method == "tools/list":
+                    # Current model authority does not require an MCP execution binding.
+                    # An empty catalog grants no tools; direct calls still fail closed.
+                    return {"tools": []}
                 if failure.code in (401, 403):
                     raise Denied("Gateway refused the tool request") from None
             raise RunTransportError("Gateway tool request failed") from None

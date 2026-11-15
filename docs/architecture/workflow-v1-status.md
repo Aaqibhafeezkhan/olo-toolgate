@@ -1,6 +1,106 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Selectable WorkflowStack deployment — 2026-11-15
+
+The complete local bundle is under
+[`deploy/compose/WorkflowStack`](../../deploy/compose/WorkflowStack/README.md).
+Its main `.env` accepts only `CONFIGURATION`. Each workflow's typed `deployment`
+declaration contains runtime/model engine and artifact, service images/ports,
+trigger source, folders and monitoring/collector configuration. Model ID/origin,
+generation parameters and vault references are declared in the same profile and
+resolved through its model groups. No use-case configuration.json or authored
+global model settings remain. Generated Compose/bootstrap/collector files are
+derived artifacts. Ambient model settings cannot override the selected profile.
+One workflow deployment is enabled per stack; inactive definitions can be retained
+when combining profiles. The operator projects only the active dependency closure
+without changing the source document. This is local LANGGRAPH/LLAMA_CPP deployment,
+not arbitrary engine/plugin execution or automatic multi-workflow orchestration.
+
+Ordered `agentStages` prevent supervisor-model output from skipping configured
+agents. Text summary executes the file agent's CONTEXT stage (confirmed configured
+read, no inference), then the separate summarizer's MODEL stage. Issue triage uses
+one MODEL agent stage after its configured read. The fixed runner passes complete
+context directly and returns the final result unchanged. Current agent/group and
+own model grants are rechecked, including existing tokens; tool authority follows
+the active subject and cannot be borrowed from the run's service agent. Gateway
+uses bounded profile-selected generation parameters and canonical constrained
+decision decoding/validation. Current lease/model wire fields are explicit;
+obsolete snapshots are refused without conversion.
+
+The trusted folder adapter independently verifies Control's successful result,
+pinned profile/workflow, admitted source path and source digest before projection
+or archival. It has a tenant-administrator reader token and narrowly mounted files;
+it is an operator component, outside the untrusted native tool sandbox. Its writes
+do not qualify native mutations or authorize ambiguous effect retries.
+
+Actual accepted runs using the profile-selected stack:
+
+- Text summary `run-3a60d857-9ac8-4d46-a1e6-0321659419d6` read `acceptance-bd2cad9459.txt` through the file
+  agent, inferred only as `text-summarizer`, archived the byte-identical original
+  and wrote `acceptance-bd2cad9459-41da14d57f58.summary.txt`.
+- A second independent drop after the driver exited completed as
+  `run-45c928af-ff91-4608-937a-608bf2a22fc8` and produced
+  `acceptance-1b79a521fd-619fbb068ee0.summary.txt`. Both summaries correctly describe
+  staging, connection-pool improvement, and the pending production review.
+- Fresh issue-triage provisioning with the final source/profile completed as
+  `run-18e3713e-6e9e-46d1-a882-ed265adc052c`. Its configured agent performed the confirmed native read and
+  inference; saved/projected output contains CHECKOUT-1042, HIGH priority and an
+  investigation action. The original remains in the inbox. This profile uses
+  ports 58091/58451/58552, while summary uses 48091/48451/48552: service settings
+  switch with the profile, and both isolated projects ran together.
+
+Control/private results agree and worker observations show the required agent
+identities and successful configured read. Observations are not independent
+executor/stage-completion attestation. Earlier redeployment rebuilt an immutable
+package version and produced a release/trigger mismatch; restart now retains and
+verifies sealed custody and waits for a fresh device check-in/current trigger.
+Earlier demo state/data and stopped volumes were retained (`prior-demo/`).
+Routing-profile run `run-aba9a71a-3374-46c3-9645-f1bd8dda79c5` reported success
+without agent calls and was rejected by acceptance; its output is preserved in
+`data/text-summary/rejected-acceptance/`, not counted as accepted evidence. Fixed
+stages and skip/revocation negatives address that failure in the final profiles.
+
+Executed validation: 12 deployment/delivery tests pass on Windows and Linux;
+62 runtime tests, 14 qualification cases (one Windows symlink skip), and three
+acceptance-fixture tests pass. Fresh SQLite/owned PostgreSQL focused Control checks
+pass 49 ordinary and 28 enterprise cases with no skips; all four
+Java contract tests pass. Generated bindings (1,556 files), structural fixtures,
+canonical profile validation, TypeScript checks/build/two contract tests and 445
+PHP v2 round trips/constant negatives pass. Twelve focused UI tests pass; no full
+UI coverage gate is claimed. Rust format/workspace Clippy pass; workspace cases
+plus the isolated timing-sensitive heartbeat case pass 413 tests with 17 environment
+ignores. An earlier parallel run failed that heartbeat assertion; the focused
+rerun passes. Source-build images, Compose base/monitor syntax and source/license/
+secret checks pass. Both profile-derived local and example vendor collector
+configurations validate in the pinned image with network disabled; no vendor
+account ingestion was tested. The bundled monitoring guide covers Langfuse,
+LangSmith, Prometheus/Grafana/Tempo, OTLP, Datadog/New Relic and audit/logs. Native
+LangSmith content tracing remains disabled; full agent graphs/token/cost tracing
+is not implemented.
+
+Earlier full Windows checks remain explicitly non-green: repository CI ran 431
+tests with one socket-symlink privilege error/ten skips; the full Java gate ran
+370 ordinary tests (eight skips) and 449 enterprise tests with one unsupported
+operator TLS fixture failure. Those earlier runs are not current full-gate passes.
+Complete applicable Linux gates, message-path and complete V1.4/distributed
+security acceptance remain outstanding. Production identity lifecycle remains
+unimplemented; local enrollment approval lasts 24 hours and model leaves seven
+days. No public registry publication was executed.
+
+Known tested base `6039df65`; SHA-256 `3b3e9cd49a011686fa19631e116edd018ba943aec41348e06c5038c058196ded` covers 95
+changed/untracked public non-Markdown files: concatenate sorted repository paths,
+NUL, each file SHA-256 after CRLF-to-LF normalization and newline, then hash the UTF-8 manifest. Ignored private
+state/data/models and generated acceptance artifacts are excluded. Images used:
+Quickstart `sha256:569f4decce71a4e0f79a89ae8a9b88397af314bc8559785313626b2e1c81ac43`;
+runtime `sha256:84de1e84dcb3f9722bcaca550224ebbd4bddb0b4932ce6835206675e32cc2fbf`;
+device `sha256:b86e2aecdfeb33ede704f1d317dcea988a711d9f7e431ccdac7c72c714113c91`.
+
+The profile/stage contract extensions change no effort allocation/denominator.
+Baseline `v1-effort-1` remains 100 points, **0/100 earned**; partial phases earn
+nothing. PR #311 targets `feature/workflow-enhancement` and remains draft.
+Historical merged #297 is not treated as V1.4 acceptance or a completed roadmap.
+
 ## Live issue-log demo — 2026-11-14
 
 The bounded one-trigger/one-agent demo now executes end to end on the isolated
@@ -410,9 +510,9 @@ not elapsed time, deadlines, test coverage or measured productivity.
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
 | V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
-| V1.2 — Message to governed result | 35% | 70% | In progress; one-agent server/worker path reaches real model and uncertain context-tool outcome; successful agent execution pending | 0% |
-| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission, duplicate receipt replay and fenced worker execution exercised; successful governed completion pending | 0% |
-| V1.4 — End-to-end qualification | 10% | 100% | In progress; runtime image/release evidence gate and one-agent live driver delivered; native finality blocks live success; full fresh-install scenarios pending | 0% |
+| V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
+| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending | 0% |
+| V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment and two-profile local acceptance delivered; complete fresh-install scenarios, Linux gates and release publication pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
 V1.2 carries the largest share because admission, runtime identity, model proxy,

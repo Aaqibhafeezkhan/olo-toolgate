@@ -47,6 +47,14 @@ public final class WorkflowModelSelection {
         var directory = tx.load();
         access.require(directory, run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
         access.requireGrant(directory, run.serviceAgentGroupId(), "model.infer", "model-group:" + step.modelGroupId(), now);
+        if ("AGENT".equals(step.kind())) {
+            var binding = access.agent(directory, workflow, step.subjectId(), now);
+            var definition = config.agentDefinitions().stream().filter(agent -> agent.agentId().equals(step.subjectId()))
+                .findFirst().orElseThrow(Failure::unavailable);
+            if (!definition.modelGroupId().equals(step.modelGroupId())) throw ManagementAccess.denied();
+            access.requireGrant(directory, binding.agentGroupId(), "model.infer", "model-group:" + step.modelGroupId(), now);
+        } else if (!"WORKFLOW".equals(step.kind()) || !workflow.id().equals(step.subjectId())
+                || !workflow.modelGroupId().equals(step.modelGroupId())) throw ManagementAccess.denied();
         return new Runtime(run, step, config, workflow);
     }
 }

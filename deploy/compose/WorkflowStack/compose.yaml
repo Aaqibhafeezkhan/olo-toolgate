@@ -1,0 +1,177 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+name: toolgate-workflow-${CONFIGURATION:-issue-triage}
+services:
+  registry:
+    image: registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
+    environment:
+      REGISTRY_HTTP_ADDR: 0.0.0.0:${TOOLGATE_REGISTRY_PORT:-48552}
+    ports:
+      - "127.0.0.1:${TOOLGATE_REGISTRY_PORT:-48552}:${TOOLGATE_REGISTRY_PORT:-48552}"
+      - "127.0.0.1:${TOOLGATE_HTTP_PORT:-48091}:8080"
+      - "127.0.0.1:${TOOLGATE_TLS_PORT:-48451}:8443"
+    volumes: [registry-data:/var/lib/registry]
+    restart: unless-stopped
+  quickstart:
+    image: toolgate-configured-quickstart:${CONFIGURATION:-issue-triage}
+    build:
+      context: ../../..
+      dockerfile: deploy/compose/WorkflowStack/scripts/quickstart.Dockerfile
+      args:
+        QUICKSTART_IMAGE: ${TOOLGATE_QUICKSTART_IMAGE:-olo-toolgate-quickstart:profile-stack}
+      additional_contexts:
+        package: ./state/${CONFIGURATION:-issue-triage}/package
+    network_mode: service:registry
+    depends_on: [registry]
+    env_file:
+      - path: ./state/${CONFIGURATION:-issue-triage}/client-images.env
+        required: false
+      - path: ./state/${CONFIGURATION:-issue-triage}/workflow/qualified-readers.env
+        required: false
+    environment:
+      TOOLGATE_DISABLE_ADMIN_PASSWORD: 'false'
+      TOOLGATE_QUICKSTART_DATABASE_MODE: sqlite
+      TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS: 'true'
+      TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: https://localhost:${TOOLGATE_TLS_PORT:-48451}
+      TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: https://localhost:${TOOLGATE_TLS_PORT:-48451}
+      TOOLGATE_CONTROL_ENDPOINT_CONSOLE_URL: http://127.0.0.1:${TOOLGATE_HTTP_PORT:-48091}
+      TOOLGATE_WORKFLOW_MODEL_ORIGINS: ${TOOLGATE_WORKFLOW_MODEL_ORIGINS:?Derived from workflow profile}
+      TOOLGATE_WORKFLOW_MODEL_CA_FILE: /run/model-ca.crt
+      TOOLGATE_INSIGHTS_MODE: ${TOOLGATE_INSIGHTS_MODE:-NONE}
+    volumes:
+      - quickstart-data:/data
+      - ./configurations/${CONFIGURATION:-issue-triage}:/configuration:ro
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/model-ca.crt:/run/model-ca.crt:ro
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532']
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1536m
+    restart: unless-stopped
+    stop_grace_period: 35s
+  folder-init:
+    image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
+    user: '0:0'
+    entrypoint: [/opt/toolgate-runtime/bin/python, /deployment/init_files.py]
+    network_mode: none
+    volumes:
+      - ./scripts/init_files.py:/deployment/init_files.py:ro
+      - hotfolder-data:/device-files
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  linux-device:
+    image: ${TOOLGATE_DEVICE_IMAGE:-ololab/olo-toolgate-device:dev}
+    entrypoint: [python, -u, /opt/toolgate/langchain-device.py]
+    hostname: configured-folder-device
+    depends_on:
+      quickstart: {condition: service_healthy}
+      folder-init: {condition: service_completed_successfully}
+    environment:
+      TOOLGATE_DEVICE_UPSTREAM: registry
+      TOOLGATE_DEVICE_HTTP_PORT: ${TOOLGATE_HTTP_PORT:-48091}
+      TOOLGATE_DEVICE_TLS_PORT: ${TOOLGATE_TLS_PORT:-48451}
+    volumes:
+      - device-config:/etc/olo-toolgate
+      - device-state:/var/lib/olo-toolgate
+      - hotfolder-data:/var/lib/olo-toolgate/hotfolder
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs: ['/run:rw,nosuid,size=8m,mode=755']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python, -c, "import json; assert json.load(open('/run/olo-toolgate/device-status.json')).get('deviceId')"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 24
+  workflow-model:
+    image: ${TOOLGATE_WORKFLOW_LLAMA_IMAGE:?Derived from profile; use manage.py}
+    command: [--model, /model.gguf, --alias, '${TOOLGATE_MODEL_ALIAS:?Derived from profile}', --host, 0.0.0.0, --port, '${TOOLGATE_MODEL_PORT:?Derived from profile}', --ctx-size, '${TOOLGATE_MODEL_CONTEXT_SIZE:?Derived from profile}', --threads, '${TOOLGATE_MODEL_THREADS:?Derived from profile}', --ssl-cert-file, /custody/model.crt, --ssl-key-file, /custody/model.key, --api-key-file, /custody/model.token]
+    volumes:
+      - ${TOOLGATE_WORKFLOW_MODEL_FILE:?Derived from profile; use manage.py}:/model.gguf:ro
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/model:/custody:ro
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/model-ca.crt:/trust/model-ca.crt:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --cacert, /trust/model-ca.crt, 'https://workflow-model:${TOOLGATE_MODEL_PORT}/health']
+      interval: 5s
+      timeout: 3s
+      retries: 36
+  workflow-worker:
+    image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
+    build: {context: ../../../apps/langgraph-runtime}
+    network_mode: service:registry
+    command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --result-directory, /results]
+    volumes:
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/worker:/custody:ro
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/results:/results
+      - ./configurations/${CONFIGURATION:-issue-triage}:/configuration:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  workflow-listener:
+    image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
+    network_mode: service:registry
+    entrypoint: [/opt/toolgate-runtime/bin/python, /deployment/listener.py]
+    environment:
+      CONTROL_ORIGIN: https://localhost:${TOOLGATE_TLS_PORT:-48451}
+    volumes:
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/worker:/custody:ro
+      - ./scripts/listener.py:/deployment/listener.py:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  identity:
+    image: toolgate-compose-identity:local
+    build:
+      context: ../../..
+      dockerfile: deploy/compose/WorkflowStack/scripts/identity.Dockerfile
+      args: {QUICKSTART_IMAGE: '${TOOLGATE_QUICKSTART_IMAGE:-olo-toolgate-quickstart:profile-stack}'}
+    network_mode: service:registry
+    environment:
+      QUICKSTART_CONTAINER: toolgate-workflow-${CONFIGURATION:-issue-triage}-quickstart-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./state/${CONFIGURATION:-issue-triage}:/state
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m']
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  folder-agent:
+    image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
+    user: '0:0'
+    network_mode: service:registry
+    entrypoint: [/opt/toolgate-runtime/bin/python, /deployment/folder_agent.py]
+    environment:
+      CONTROL_ORIGIN: https://localhost:${TOOLGATE_TLS_PORT:-48451}
+      OUTPUT_UID: ${LOCAL_UID:-1000}
+      OUTPUT_GID: ${LOCAL_GID:-1000}
+    volumes:
+      - ./scripts:/deployment:ro
+      - ./configurations/${CONFIGURATION:-issue-triage}:/configuration:ro
+      - ./data/${CONFIGURATION:-issue-triage}:/exchange
+      - hotfolder-data:/device-files
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/results:/results:ro
+      - ./state/${CONFIGURATION:-issue-triage}/workflow/reader:/custody:ro
+      - folder-journal:/journal
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=8m']
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+volumes:
+  registry-data:
+  quickstart-data:
+  device-config:
+  device-state:
+  hotfolder-data:
+  folder-journal:

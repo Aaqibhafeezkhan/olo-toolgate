@@ -63,6 +63,26 @@ public final class WorkflowConfigurations {
                 entry |= binding.entryEligible();
             }
             if (!entry) throw invalid("A workflow requires an entry-eligible agent");
+            if (workflow.deployment() != null) {
+                var deployment = workflow.deployment();
+                if (workflow.agents().stream().noneMatch(a -> a.agentId().equals(deployment.fileAgent().agentId()))
+                        || !models.get(workflow.modelGroupId()).deploymentIds().contains(deployment.model().deploymentId()))
+                    throw invalid("Deployment references must belong to their workflow");
+            }
+            if (workflow.agentStages() != null) {
+                var seen = new java.util.HashSet<String>();
+                for (var stage : workflow.agentStages()) {
+                    var binding = workflow.agents().stream().filter(a -> a.agentId().equals(stage.agentId()))
+                        .findFirst().orElseThrow(() -> invalid("Stage agent is not bound to this workflow"));
+                    boolean first = seen.isEmpty();
+                    if (!seen.add(stage.agentId()) || !(first ? binding.entryEligible() : binding.delegationAllowed()))
+                        throw invalid("Stage agent is repeated or ineligible");
+                    if (stage.resultMode() == io.ololabs.toolgate.contracts.v2.WorkflowAgentResultMode.CONTEXT
+                            && agents.get(stage.agentId()).contextSources().isEmpty())
+                        throw invalid("A context stage requires configured context sources");
+                }
+                if (seen.size() > workflow.limits().maxHandoffs()) throw invalid("Stages exceed maxHandoffs");
+            }
             workflow.contextSources().forEach(c -> { context(c); external.add(new Reference(ResourceKind.TOOL, c.toolId())); });
             if (workflow.limits().maxHandoffs() > workflow.limits().maxSteps())
                 throw invalid("maxHandoffs cannot exceed maxSteps");
