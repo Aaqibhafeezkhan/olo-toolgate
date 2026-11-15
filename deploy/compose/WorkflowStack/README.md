@@ -23,6 +23,20 @@ There is no separate use-case configuration file or model setting in `.env`.
 
 ## Start
 
+On Windows, run `start.bat`. It lists every configuration with a serial number
+and asks which one to start. Press Enter to use the displayed `.env` default.
+Invalid numbers are rejected; cancelling does not start a deployment. Missing
+source images are built automatically, while digest-pinned images are pulled.
+The model file and prerequisites below must be available.
+
+```bat
+start.bat
+start.bat --configuration text-summary
+start.bat --build
+```
+
+The explicit `--configuration` form skips the menu for unattended startup.
+
 Use Docker's Linux engine with Compose, Git, and Python 3.12 or newer. The helper
 builds Java/Rust inside Docker and needs this source checkout. Install its TLS
 certificate dependency if absent:
@@ -88,6 +102,26 @@ when combining scopes. Change workflow version IDs for immutable definition edit
 Stop a deployment before removing its active workflow/profile. Removing an inactive
 scope does not activate or execute it. Deleting configuration does not delete data
 or historical run evidence.
+
+## Remove the stack and storage
+
+```bat
+stop.bat
+```
+
+**Destructive:** this removes all current WorkflowStack deployments belonging to
+this directory, their containers (including scoped native children), networks,
+Docker volumes and anonymous volumes, and the complete generated `state/` and
+`data/` trees. This includes credentials, databases, inbox files, processed files,
+summaries/results and archived demo state. It does not prompt for confirmation.
+Profiles, scripts, `.env`, supplied `models/`, private vendor credential inputs
+and shared Docker images remain, so the stack can be brought up fresh.
+
+Remove only one deployment with `stop.bat --configuration text-summary`.
+Use `manage.bat stop --configuration text-summary` to merely stop containers and
+retain all storage. Cleanup does not need a valid profile, model file or `.env`;
+it verifies Docker ownership and refuses foreign projects and linked storage.
+There is no global Docker prune.
 
 ## Agent stages
 

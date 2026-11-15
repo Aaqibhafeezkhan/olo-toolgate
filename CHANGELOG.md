@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add `WorkflowStack/start.bat` with numbered profile selection and automatic
+  missing-image preparation. Add destructive `stop.bat` cleanup for owned stack
+  containers, volumes, networks and generated state/data, preserving profiles and
+  supplied models; retain `manage.bat stop` for storage-preserving shutdown.
+
 - Bundle a selectable complete workflow deployment in `deploy/compose/WorkflowStack`,
   with issue triage and separate file/summarization agents, confirmed summary
   delivery and input archiving, and configuration-specific operating instructions.

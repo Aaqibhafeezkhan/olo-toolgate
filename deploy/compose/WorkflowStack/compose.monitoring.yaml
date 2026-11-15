@@ -59,6 +59,6 @@ services:
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
 volumes:
-  prometheus-data:
-  grafana-data:
-  tempo-data:
+  prometheus-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  grafana-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  tempo-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}

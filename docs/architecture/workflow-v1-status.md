@@ -1,6 +1,43 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Windows stack lifecycle — 2026-11-15
+
+`WorkflowStack/start.bat` lists configuration folders with serial numbers, asks
+which to start, and offers the main `.env` selection as the explicit Enter
+default. Invalid input reprompts; EOF/cancellation starts nothing. An explicit
+`--configuration` skips the menu. Startup reuses available images, builds missing
+source-image tags and pulls missing digest-pinned references before calling the
+existing profile-derived deploy path. Required model artifacts remain prerequisites.
+
+`stop.bat` is explicitly destructive: by default it removes all current
+WorkflowStack projects belonging to this bundle, owned native-child containers,
+named/anonymous Docker volumes, networks and generated `state/`/`data/` (including
+credentials and outputs). `--configuration` limits deletion to one selection.
+Profiles, scripts, supplied model artifacts, vendor credential inputs and shared
+images are retained. `manage.bat stop` remains the non-destructive pause command.
+Cleanup does not depend on a valid profile/.env. It checks project/root ownership,
+uses root+configuration-specific native engine scopes, rejects ambiguous/foreign
+ownership and linked storage, and uses verified literal PowerShell deletion on
+Windows. There is no global prune or implicit conversion of old stores/scopes.
+
+Executed: 11 Windows lifecycle tests pass, including real batch execution from a
+directory with spaces and exit-code propagation; Linux discovers the same 11 with
+the Windows batch test skipped. All 12 existing deployment/delivery regressions
+pass. The real start.bat menu smoke lists both supplied profiles and refuses EOF.
+An isolated Docker fixture with an owned device-style container, owner-labeled
+child, named/anonymous volumes and network was completely removed; unrelated
+volume and profile/model files were retained. This fixture does not attest native
+SDK posture or repeat application/model end-to-end qualification. No live demo
+storage was erased for this test. Base/monitoring Compose syntax and source checks
+pass. Earlier application runs and full-gate/platform limitations below remain
+the applicable evidence; broader V1.4 and security acceptance are still pending.
+
+Known tested base `aace4bc8`; normalized source manifest SHA-256 `ef4c78ecb02335217edab7a2fe4c3e0b6e0a7fefaf1eb3be1b6248dddeda2bd9`
+(7 changed public non-Markdown files, sorted paths + NUL + per-file SHA-256
+after CRLF-to-LF normalization + newline). Baseline `v1-effort-1` remains 100
+points with **0/100 earned**; this lifecycle delivery changes no phase weights.
+
 ## Selectable WorkflowStack deployment — 2026-11-15
 
 The complete local bundle is under

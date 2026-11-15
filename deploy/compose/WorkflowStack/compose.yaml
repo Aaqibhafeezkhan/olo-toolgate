@@ -62,7 +62,7 @@ services:
   linux-device:
     image: ${TOOLGATE_DEVICE_IMAGE:-ololab/olo-toolgate-device:dev}
     entrypoint: [python, -u, /opt/toolgate/langchain-device.py]
-    hostname: configured-folder-device
+    hostname: ${TOOLGATE_DEVICE_HOSTNAME:?Use manage.py}
     depends_on:
       quickstart: {condition: service_healthy}
       folder-init: {condition: service_completed_successfully}
@@ -169,9 +169,11 @@ services:
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
 volumes:
-  registry-data:
-  quickstart-data:
-  device-config:
-  device-state:
-  hotfolder-data:
-  folder-journal:
+  registry-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  quickstart-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  device-config: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  device-state: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  hotfolder-data: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+  folder-journal: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}
+networks:
+  default: {labels: {io.ololabs.toolgate.stack-root: '${TOOLGATE_WORKFLOW_ROOT:?Use manage.py}'}}

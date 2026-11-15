@@ -18,13 +18,14 @@ HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[2]
 sys.path.insert(0,str(HERE/'scripts'))
 import configuration
+import lifecycle
 
 
 def run(arguments, **options):
     return subprocess.run(arguments,cwd=ROOT,check=True,**options)
 
 
-def environment(selection=None):
+def default_configuration():
     env_file=HERE/'.env'
     if not env_file.exists():
         shutil.copyfile(HERE/'.env.example',env_file)
@@ -35,7 +36,11 @@ def environment(selection=None):
             if key.strip()!='CONFIGURATION':
                 raise ValueError('The main .env may contain only CONFIGURATION; configure the workflow profile')
             defaults[key.strip()]=value.strip().strip('"').strip("'")
-    name=selection or defaults.get('CONFIGURATION','issue-triage')
+    return defaults.get('CONFIGURATION','issue-triage')
+
+
+def environment(selection=None):
+    name=selection or default_configuration()
     if not configuration.NAME.fullmatch(name):
         raise ValueError('Select a configuration directory name without paths')
     settings=configuration.load(HERE/'configurations'/name)
@@ -47,7 +52,8 @@ def environment(selection=None):
     if (model_root.is_symlink() or model_file.is_symlink() or not model_root.resolve().is_relative_to(HERE.resolve())
             or model_file.resolve().parent!=model_root.resolve()):
         raise ValueError('Model artifacts must be regular files within the bundle models directory')
-    values=dict(CONFIGURATION=name,
+    values=dict(CONFIGURATION=name,TOOLGATE_WORKFLOW_ROOT=HERE.resolve().as_posix(),
+        TOOLGATE_DEVICE_HOSTNAME=lifecycle.device_hostname(HERE,name),
         TOOLGATE_QUICKSTART_IMAGE=platform['quickstartImage'],TOOLGATE_DEVICE_IMAGE=platform['deviceImage'],
         TOOLGATE_RUNTIME_IMAGE=deployment['runtime']['image'],TOOLGATE_HTTP_PORT=str(platform['httpPort']),
         TOOLGATE_TLS_PORT=str(platform['tlsPort']),TOOLGATE_REGISTRY_PORT=str(platform['registryPort']),
@@ -310,15 +316,37 @@ def deploy(settings,state,compose,build):
     print('Outputs: '+str(exchange/settings['fileAgent']['output']))
 
 
+def ensure_start_images():
+    for variable,component in [('TOOLGATE_QUICKSTART_IMAGE','quickstart'),('TOOLGATE_RUNTIME_IMAGE','runtime')]:
+        reference=os.environ[variable]
+        if subprocess.run(['docker','image','inspect',reference],capture_output=True).returncode==0:
+            continue
+        if '@sha256:' in reference:
+            run(['docker','pull',reference])
+        elif component=='quickstart':
+            run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',reference])
+        else:
+            run(['docker','build','-t',reference,'apps/langgraph-runtime'])
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['deploy','stop','status','logs'])
+    parser.add_argument('command',choices=['start','deploy','stop','destroy','status','logs'])
     parser.add_argument('--configuration')
     parser.add_argument('--build',action='store_true',help='Build current source images before provisioning')
     args=parser.parse_args()
     try:
+        if args.command=='destroy':
+            lifecycle.destroy(HERE,args.configuration)
+            return
+        if args.command=='start' and not args.configuration:
+            args.configuration=lifecycle.choose(HERE,default_configuration())
         settings,state,compose=environment(args.configuration)
-        if args.command=='deploy':
+        if args.command in ('start','deploy'):
+            if args.command=='start' and not args.build:
+                if not Path(os.environ['TOOLGATE_WORKFLOW_MODEL_FILE']).is_file():
+                    raise ValueError('Place the workflow profile modelFile in WorkflowStack/models before startup')
+                ensure_start_images()
             deploy(settings,state,compose,args.build)
         elif args.command=='stop':
             run(compose+['stop'])
@@ -328,6 +356,8 @@ def main():
             run(compose+['logs','--tail','80'])
     except (ValueError,OSError,subprocess.SubprocessError) as failure:
         parser.exit(1,'Deployment failed: '+(str(failure) if isinstance(failure,ValueError) else 'inspect bounded service logs')+'\n')
+    except KeyboardInterrupt:
+        parser.exit(130,'Cancelled.\n')
 
 
 if __name__=='__main__':
