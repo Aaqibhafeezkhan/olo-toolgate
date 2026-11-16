@@ -1,6 +1,40 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Standalone runtime image CI repair — 2026-11-17
+
+Tested source base: `facc77cd9457a301112c583bba6426bd6ea8592e` on
+`feature/native-langgraph-phase1`, targeting `feature/workflow-enhancement`.
+The [failed image job](https://github.com/olo-labs/olo-toolgate/actions/runs/43963175809/job/133651017291)
+mounted runtime tests at `/tests`, breaking the repository-relative native graph
+packager import (`IndexError: 3`). The image test command now mounts tests,
+packaging tools and native graph examples read-only under `/workspace`, preserving
+their repository layout. The installed runtime remains the code under test;
+the image, network isolation and container restrictions are unchanged. A CI
+regression test checks discovery, fixture mounts and isolation options.
+
+Executed on Windows with Docker Linux containers: fresh image build passed;
+the original mount reproduced the reported import failure; corrected discovery
+ran **75 tests successfully with 10 OpenSSL-dependent TLS skips**. Both worker
+and trigger-listener CLI checks and `pip check` passed. The three focused image
+release regression tests passed. Metadata/generated bindings, source quality and
+diff whitespace checks passed. The job's Trivy 0.61.1 HIGH/CRITICAL scan passed
+against the rebuilt image.
+
+Broader Windows checks: both `python -m unittest discover -s tests/ci -v` and
+`python tools/check.py` reached 476 CI tests with 9 errors and 11 skips. Eight
+errors were existing release-note reads using Windows cp1252 against UTF-8 text;
+the other was the LangChain device fixture's missing Windows symlink privilege
+(`WinError 1314`). The repository check stopped there, before its later component
+gates. These unrelated host failures were not changed by this CI mount repair;
+the full repository gate is not claimed as passing.
+
+This repairs CI test infrastructure only. The weighted baseline remains **0/100**;
+no #230 stage, #274 module, roadmap phase or runtime security guarantee earns new
+credit. Next work: hosted CI confirmation and the existing Phase 2 acceptance
+scope. Image publication and full end-to-end acceptance are not established by
+these local checks.
+
 ## Local stack administration and portable profiles — 2026-11-17
 
 Unweighted delivery on `feature/native-langgraph-phase1`, source base
