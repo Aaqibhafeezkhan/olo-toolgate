@@ -1,6 +1,92 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Local stack administration and portable profiles — 2026-11-17
+
+Unweighted delivery on `feature/native-langgraph-phase1`, source base
+`eb7ef0034b0baf9160ca4aba843c0f611d965b2f`. The existing 100-point baseline and
+earned **0/100** remain unchanged; no #230 stage or #274 module earns credit.
+[ADR 069](../adr/069-workflow-stack-administration.md) records the local operator
+boundary. This is a local evaluation feature, not hosted release qualification.
+
+Delivered: a loopback-only administrator web UI outside Control and the runtime;
+an absent/empty startup selection brings up an empty Control installation with
+an admin user. A configured selection provisions its workflow. Administrators
+can switch profiles while retaining prior storage, replace a selected deployment
+with fresh storage, and reset the active deployment to blank. Confirmations,
+serialized actions, visible failure states, expiring sessions, same-origin/CSRF
+checks and private operator credentials guard these local Docker operations.
+The operator account is separate from each Control console account. Switching
+persists the startup selection; blank reset clears it. Only one profile runs at
+a time. Multi-profile merge is deferred by the user's narrowed scope.
+
+Portable exports are ZIP-compressed `.olo` bundles in
+`state/administrator/exports/<configuration>/<configuration>.olo`. They include
+profile JSON, the input example, graph/trigger artifacts, exact GGUF bytes and
+Docker image archives/identities. No extra export README or profile README is
+included; import generates local trigger/input/output instructions. Immutable
+package contents remain intact. Import validates bounded archive paths, file
+types, inventory, hashes and image identities before registering a new
+configuration. Existing configurations/models are not overwritten. Databases,
+identities, runtime results and credentials are excluded. Vendor secrets need
+separate provisioning. Matching assets reproduce configured behavior, not
+identical nondeterministic output or external provider state. Digest associations
+and platform base images can require the original registries; this is not an
+offline-host or cross-architecture acceptance claim.
+
+Actual local evidence:
+
+- Browser authentication and configuration listing passed; a real browser switch
+  selected an imported configuration and started its fresh deployment.
+- Original configured file execution: Control-confirmed
+  `run-73c05be5-6623-4042-b876-3ccec8759aa1` SUCCEEDED with its configured agent,
+  governed file read and projected result.
+- A real 2,008,674,453-byte portable ZIP export/import carried five Docker image
+  identities and the model into `portable-hotfolder`. This initial acceptance
+  preceded the requested `.olo` extension/compression change.
+- The imported profile then completed Control-confirmed
+  `run-4622c2c0-7a19-49b0-aad7-a8138ac22f98` SUCCEEDED with its configured agent
+  and a new result in its own data directory. No mock supplied that model result.
+- Reset removed the imported deployment's state/data while retaining the original
+  deployment's storage. The first blank startup correctly failed protected
+  custody validation on a Windows host-mounted file. The fix initializes a
+  root-owned Docker volume and mounts it read-only into Control. Actual blank
+  console login then returned SUPER_ADMIN and zero workflow profile revisions.
+
+The final compressed `.olo` was also uploaded through the authenticated operator
+API and imported successfully as `portable-olo`; it was not activated. Its
+1,977,718,390 bytes have SHA-256
+`0f53dca4f946de130d8864f0b471e8542cde525ce6ef09a3804693ca19237caa`.
+All ZIP entries use DEFLATE; every exported payload hash was independently
+checked; the bundle has four payload files, five image identities and zero
+README entries. No extra README was written alongside it. Import generated the
+new configuration's local README. These two generated demonstration configuration
+directories remain local and are not added to the PR.
+
+The original `native-hotfolder` deployment was restored through the browser UI;
+the portal reports ready, its console remains on port 62391, and `.env` now
+persists `CONFIGURATION=native-hotfolder`. The completed `.olo` download remains
+available in the portal. Browser verification confirmed this final state and no
+README download. No unrelated local stack was removed.
+
+Final focused verification: **24 local operator/lifecycle tests** pass on Windows
+with no skips; Linux runs the same 24 tests successfully with one Windows batch
+fixture skipped. **14 existing profile/folder-delivery tests** pass. Coverage
+includes origin/session/CSRF rejection, exact destructive confirmation, scoped
+cleanup, private password login, blank protected bootstrap, startup selection,
+compressed round trips, wrong extensions, tampering, path traversal, duplicate
+entries, links and conflicting models. Metadata/generated bindings and source
+quality pass. The relative Markdown link check passed (2922 files before the
+local generated configuration READMEs; final recheck: 2923 files). Full repository, full Java/UI product
+gates, hosted CI and another physical Docker host are not claimed by these
+focused operator checks. No full #295 acceptance or new runtime sandbox/effect
+guarantee is credited. Original Phase 1 / Phase 2 limitations remain unchanged.
+
+Known tested source manifest: six operator/UI/test source files, SHA-256
+`b341252b5fabe53d1c887f1cf647af365165ca760d1de22db8b00541cce27ae5`
+(sorted repository-relative path + NUL + LF-normalized file hash + newline).
+This identifies tested source bytes, not an invented upcoming commit SHA.
+
 ## Native LangGraph Phase 1 — 2026-11-17
 
 CI repair on tested base `0831631127a42eb513d5d13a351e7c73361621e7`:

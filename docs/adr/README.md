@@ -124,3 +124,5 @@ Use `000-template.md`.
 - [ADR 066: Generic trigger-package adoption](066-generic-trigger-package-adoption.md)
 
 - [ADR 068: Operator-installed native LangGraph packages](068-native-graph-packages.md)
+
+- [ADR 069: Local WorkflowStack administration and portable profiles](069-workflow-stack-administration.md)

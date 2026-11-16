@@ -62,9 +62,11 @@ platform name switch substitutes for those gates.
 
 ## Start
 
-On Windows, run `start.bat`. It lists every configuration with a serial number
-and asks which one to start. Press Enter to use the displayed `.env` default.
-Invalid numbers are rejected; cancelling does not start a deployment. Missing
+On Windows, run `start.bat`. It opens a background local administration service
+at **http://127.0.0.1:48190/** and starts the `.env` configuration when present.
+An absent/empty selection or missing default profile starts a blank Control
+installation with an admin user and no workflows. `start.bat --blank` explicitly
+selects that blank installation. Missing
 local source-image tags are built automatically if missing; registry-qualified
 image references are pulled if missing.
 The model file and prerequisites below must be available.
@@ -72,10 +74,56 @@ The model file and prerequisites below must be available.
 ```bat
 start.bat
 start.bat --configuration text-summary
-start.bat --build
+start.bat --blank
 ```
 
 The explicit `--configuration` form skips the menu for unattended startup.
+
+The local stack administrator credentials are in
+`state/administrator/credentials/admin/username.txt` and `password.txt`.
+This account controls local Docker deployment and is separate from the selected
+Control installation's admin account. The portal shows the Control console URL
+and its private credential folder after startup. The stack operator UI binds
+only to loopback; the Control console remains exposed through its configured port.
+
+The admin web UI lists directories under `configurations/` and supports:
+
+- **Switch profile:** stop this bundle's previous containers, retain their data,
+  then provision the selected configuration and save it as the `.env` startup
+  selection. One profile runs at a time.
+- **Replace selected profile:** enter `REPLACE <configuration-name>` to remove
+  that deployment's generated state/data and provision it fresh. Sources remain.
+- **Factory reset to blank:** enter `FACTORY RESET` to remove the active
+  deployment's generated storage and start an empty Control installation. Profile
+  sources, supplied models and the local stack administrator remain. The startup
+  selection is cleared so the next start remains blank.
+- **Export portable profile:** create a compressed `.olo` bundle (ZIP format) with profile JSON and its example,
+  graphs, signed trigger packages, the declared GGUF and exact Docker images.
+  Each export is stored in `state/administrator/exports/<configuration>/` as
+  `<configuration>.olo`. No export README or profile README is included inside or
+  beside it. Immutable graph/package artifacts retain their own verified content.
+  Download the bundle after the background operation completes.
+- **Import bundle:** choose a new configuration name and upload a trusted export.
+  Import verifies content hashes and image identities and adds the configuration;
+  switching to it is a separate action. Existing sources/models aren't overwritten.
+  Import generates a local configuration README with its trigger and input/output paths.
+
+Bundles can be large (limit 12 GiB, 1024 files). Export/import carry executable
+images/graphs and are privileged operator actions; a content hash is not publisher
+trust. Source `credentials/`, runtime databases, identities, logs and results are
+excluded. Credentials are regenerated on the destination. Supply vendor monitoring
+or external-provider secrets separately. Digest-qualified registry images may
+require access to their original registry after Docker load, since Docker archives
+do not always restore repository digest associations. The destination needs the
+same supported Docker architecture and this version of WorkflowStack. Matching
+assets/configuration reproduce workflow behavior, not identical generated text or
+external system state. Downloaded bundles contain model/image assets: keep them
+private and distribute them only when their licenses permit it.
+
+Startup and management failures appear in the portal; deployment details remain
+in private `state/administrator/operation.log` and the selected service logs.
+Profile switching cannot be used to merge two active profiles. Multi-profile
+merge is deferred by the current one-profile-at-a-time scope.
 
 Use Docker's Linux engine with Compose and Python 3.12 or newer. Published-image
 deployment needs this WorkflowStack directory, its selected profile and model;
@@ -100,7 +148,7 @@ python manage.py status
 ```
 
 Windows may use `manage.bat`; POSIX hosts may use `sh manage.sh`.
-`--build` builds the images named by the profile from this checkout. Later starts
+`python manage.py deploy --build --configuration <name>` builds the images named by the profile from this checkout. Later starts
 use `python manage.py deploy`. Source-build profiles use tag references; compatible
 reviewed release-image profiles use prebuilt images without `--build`. Set the
 profile's `deployment.platform.quickstartImage`, `deviceImage` and
@@ -156,14 +204,12 @@ event producer instead of this file-demo driver.
 
 ## Switch or edit
 
-```powershell
-python manage.py stop
-# Set CONFIGURATION=text-summary in .env, then:
-python manage.py deploy
-```
+Use **Switch profile** in http://127.0.0.1:48190/. It uses the same configuration
+directories and provisioning operator as the explicit command-line deployment.
 
-`--configuration issue-triage` overrides the default selection for any manager
-command. Each selection gets a `toolgate-workflow-<selection>` project and its own
+`--configuration issue-triage` selects a configuration on initial startup or for
+direct manager commands. Once the portal is running, use its switch action.
+Each selection gets a `toolgate-workflow-<selection>` project and its own
 volumes. State and files are retained when stopping or switching.
 
 Model/runtime/trigger/folder/monitoring settings come from the selected profile on

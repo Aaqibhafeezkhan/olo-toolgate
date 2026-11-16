@@ -36,7 +36,7 @@ def source_root():
 def default_configuration():
     env_file=HERE/'.env'
     if not env_file.exists():
-        shutil.copyfile(HERE/'.env.example',env_file)
+        return ''
     defaults={}
     for line in env_file.read_text(encoding='utf-8-sig').splitlines():
         if line.strip() and not line.lstrip().startswith('#'):
@@ -44,7 +44,7 @@ def default_configuration():
             if key.strip()!='CONFIGURATION':
                 raise ValueError('The main .env may contain only CONFIGURATION; configure the workflow profile')
             defaults[key.strip()]=value.strip().strip('"').strip("'")
-    return defaults.get('CONFIGURATION','issue-triage')
+    return defaults.get('CONFIGURATION','')
 
 
 def environment(selection=None):
@@ -406,19 +406,56 @@ def ensure_start_images():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['start','deploy','stop','destroy','status','logs'])
+    parser.add_argument('command',choices=['start','admin','deploy','stop','destroy','status','logs'])
     parser.add_argument('--configuration')
+    parser.add_argument('--blank',action='store_true',help='Start the admin UI with a blank installation')
     parser.add_argument('--build',action='store_true',help='Build current source images before provisioning')
     args=parser.parse_args()
     try:
+        if args.command in ('start','admin'):
+            if args.build:raise ValueError('Build images with manage.py deploy --build --configuration <name> before starting the admin UI')
+            import admin_server
+            selection=None if args.blank else (args.configuration or default_configuration() or None)
+            if selection and not (HERE/'configurations'/selection/'workflow-profile.json').is_file():
+                if args.configuration:raise ValueError('Selected configuration does not exist')
+                selection=None
+            if args.command=='admin':
+                admin_server.serve(HERE,selection)
+                return
+            # Keep the privileged operator outside containers, with a hidden background process.
+            import urllib.request
+            try:
+                with urllib.request.urlopen(admin_server.ORIGIN,timeout=2) as response:
+                    response.read(1)
+            except OSError:
+                home=HERE/'state/administrator'
+                home.mkdir(mode=0o700,parents=True,exist_ok=True)
+                arguments=[sys.executable,str(HERE/'manage.py'),'admin']
+                arguments+=['--configuration',selection] if selection else ['--blank']
+                with open(home/'server.log','ab') as log:
+                    subprocess.Popen(arguments,cwd=HERE,stdin=subprocess.DEVNULL,stdout=log,stderr=log,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,
+                        start_new_session=os.name!='nt')
+                deadline=time.monotonic()+20
+                while time.monotonic()<deadline:
+                    try:
+                        with urllib.request.urlopen(admin_server.ORIGIN,timeout=1) as response:response.read(1)
+                        break
+                    except OSError:time.sleep(.2)
+                else:raise ValueError('Administrator UI did not start; inspect state/administrator/server.log')
+            print('WorkflowStack administration: '+admin_server.ORIGIN)
+            print('Administrator credentials: '+str(HERE/'state/administrator/credentials/admin'))
+            print('Startup runs in the background; inspect its status in the administration UI.')
+            return
         if args.command=='destroy':
+            if not args.configuration:
+                import admin_server
+                admin_server.shutdown(HERE)
             lifecycle.destroy(HERE,args.configuration)
             return
-        if args.command=='start' and not args.configuration:
-            args.configuration=lifecycle.choose(HERE,default_configuration())
         settings,state,compose=environment(args.configuration)
-        if args.command in ('start','deploy'):
-            if args.command=='start' and not args.build:
+        if args.command=='deploy':
+            if not args.build:
                 if not Path(os.environ['TOOLGATE_WORKFLOW_MODEL_FILE']).is_file():
                     raise ValueError('Place the workflow profile modelFile in WorkflowStack/models before startup')
                 ensure_start_images()
