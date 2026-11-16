@@ -50,5 +50,7 @@ class LangChainDeviceTests(unittest.TestCase):
             self.assertEqual(value['execution']['tools'],[])
             self.assertEqual(value['execution']['runtimes'],[])
             self.assertEqual(value['execution']['files']['root'],str(files))
+            self.assertIn('log',value['execution']['files']['extensions'])
+            self.assertEqual(value['execution']['files']['maxFileBytes'],65536)
             self.assertEqual((files/'support-tickets.json').read_text(),'existing input')
         cli.assert_not_called()

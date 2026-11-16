@@ -8,6 +8,11 @@ accepts `{ "file": "signals/alert.txt" }` and emits
 It uses the already supported read-only managed device-files capability and POLL
 runtime. It is not a production health, log, webhook or queue connector.
 
+`trigger-tests.json` registers its deterministic source example in the
+[parallel package test stage](../../../../tools/triggers/README.md). Tests need
+no real provider account or credentials. Its CI result is independent of the
+other registered trigger packages.
+
 Build with a current published SDK repository/version and `toolgate` CLI:
 
 ```sh

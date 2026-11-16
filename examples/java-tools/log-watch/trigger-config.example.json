@@ -1,0 +1,1 @@
+{"file":"logs/app.log","pattern":"ERROR|FATAL","threshold":1,"windowSeconds":60,"cooldownSeconds":60}

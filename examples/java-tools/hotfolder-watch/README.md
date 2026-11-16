@@ -23,6 +23,11 @@ The source is a `STATE_SNAPSHOT`: an event means "this file was present at check
 
 ## Try it
 
+`trigger-tests.json` registers this package's deterministic managed-file mocks
+in the [parallel package test stage](../../../tools/triggers/README.md). CI runs
+its tests, examples, archive validation and runtime smoke independently of
+other trigger packages, with no provider account or credentials.
+
 ```sh
 toolgate check    # the unit tests and both @TriggerExample self-tests
 toolgate pack     # build/toolgate/hotfolder-watch-0.1.0.tgpkg with triggers/new-file.json

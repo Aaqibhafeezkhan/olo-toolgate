@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "providerMode": "mock",
+  "packageId": "acceptance.signal-watch",
+  "buildRoot": "tests/fixtures/trigger-packages/signal-watch",
+  "project": "",
+  "startConfig": {"file": "signals/alert.txt"}
+}

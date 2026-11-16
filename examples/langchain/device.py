@@ -35,7 +35,7 @@ def configure(path):
     settings['execution'] = dict(enginePath='/usr/bin/docker', engineEndpoint='unix://' + str(engine_socket),
         stateDirectory=str(state/'runtimes'), allowFirstUsePull=True, pullTimeoutSeconds=180,
         runtimes=[], tools=[], files=dict(root=str(folder), maxFileBytes=65536,
-            maxEntries=256, extensions=['txt', 'md', 'json', 'csv']))
+            maxEntries=256, extensions=['txt', 'md', 'json', 'csv', 'log']))
     path.write_text(json.dumps(settings), encoding='utf-8')
 
 

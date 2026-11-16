@@ -5,6 +5,42 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Managed log package and shared PUSH work — 2026-11-16
+
+The unweighted catalog now has a working bounded client POLL
+[`examples.log-watch/error-spike`](../../examples/java-tools/log-watch/README.md)
+slice. It filters complete UTF-8 managed records using RE2/J, tracks prefix/offset
+checkpoints, detects observed rewrites/truncation, coalesces spike windows and
+suppresses notifications during a configured cooldown. Native host/container/
+Windows event access, large-file streaming and PUSH remain outstanding.
+The managed-device example policy now permits `.log` in its confined files area
+alongside the existing extensions; signed access, roots and size/count limits
+are unchanged. All current shipping/example trigger package directories and
+the independent fixture have their own README. Their package-owned mock-test
+manifests drive the new parallel foundation matrix (fail-fast disabled), and the
+foundation gate requires every entry. All three entries passed concurrently in
+isolated local Linux builds: tests/examples, package validation and trigger
+start/stop smoke. Six discovery/pipeline regressions and actionlint passed;
+the local CI suite passed 35 tests with one documented platform skip. Hosted
+matrix execution and mock adapters for the other connectors remain pending.
+
+The real `log-triage` run `run-0d59d743-21c2-48d4-8fe2-309d6ad4446a`
+passed on the unchanged common Quickstart image, using the selected external
+package and updated shared device-policy image. Noise produced no workflow;
+two matching errors reached the configured model agent and Control independently
+confirmed its result. Checks, failed first attempt, source digest and deployment
+limits are in the [workflow checkpoint](workflow-v1-status.md#managed-log-triage-and-log-device-policy--2026-11-16).
+
+Independent M7 work starts from main `f269293b` on
+`feature/triggers-m07-push-file-watching` in the adjacent worktree. Local commit
+`28f965b1` adds exact bounded Java `SnapshotState` with eight tests; SDK runtime,
+processor and harness suites pass (198 tests, no skips). It is not pushed as a
+completed module. Emitter/lifecycle, native subscriptions/version keys, rescan
+integration and owned scenario acceptance remain pending. This package adds no
+M7/M8 or existing-module credit. **Overall earned progress remains 27%**;
+no denominator or package-weight changes are made. All other catalog connector
+families and Quartz scheduling remain unimplemented.
+
 ## Generic watch adoption and source catalog — 2026-11-16
 
 The sample package is now `examples.hotfolder-watch/new-file`; old references

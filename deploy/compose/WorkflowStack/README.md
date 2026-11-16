@@ -58,6 +58,7 @@ platform name switch substitutes for those gates.
 | --- | --- | --- |
 | [Issue triage](configurations/issue-triage/README.md) | `data/issue-triage/inbox/*.txt` | `data/issue-triage/results/*.result.json`; original retained |
 | [Text summary](configurations/text-summary/README.md) | `data/text-summary/inbox/*.txt` | Original in `processed/`, generated summary in `summaries/` |
+| [Managed-log triage](configurations/log-triage/README.md) | Two matching records in device-managed `logs/app.log`; install the pinned external package first | Control workflow result and `state/log-triage/workflow/results/`; source log unchanged |
 
 ## Start
 

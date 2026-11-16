@@ -1,6 +1,83 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Managed-log triage and .log device policy — 2026-11-16
+
+The `log-triage` profile selects external package
+`examples.log-watch/error-spike`, version `0.1.0`, digest
+`sha256:1a924aebfc10080d0a970233ec0eeb401c2c6e509119add9a40a3f0f9210dca9`.
+Its workflow owns source regex/window/cooldown settings, event filter, `/sample`
+dispatch, agent/model/runtime/monitoring configuration and exposed ports.
+The package and configuration each have a README with installation, input,
+output and explicit POLL/managed-file limits. The existing generic operator,
+Gateway/client transport and workflow admission code need no package-specific
+change. No file projection/remediation agent is provisioned.
+
+User-requested `.log` support is added to the example device's existing
+`execution.files.extensions` allowlist, alongside `txt`, `md`, `json`, `csv`.
+This is a confined managed-files policy change, not a new Control admin-UI
+policy editor, ambient host-log authority or new broker operation. The profile
+selects the local `olo-toolgate-device:managed-log-v1` acceptance image.
+The normal release Dockerfile copies this updated policy helper. A normal local
+device build against the source-check Quickstart image failed because that image
+omits client-download artifacts; the successful acceptance image extends the
+existing device image with the exact updated policy helper. Full release-image
+build/publication is not claimed by this layer test.
+
+Executed checks and evidence:
+
+- Package tests: **12 passed**, plus one descriptor self-test. Linux authoring
+  build packed and `toolgate verify` accepted the artifact/digest above.
+  Initial test failures (UTF-8 expectation, RE2 exception type and the time-bearing
+  checkpoint self-test) were corrected before the passing runs. The first host
+  pack attempt lacked the native ToolGate CLI; Linux packaging completed.
+- Configuration/delivery regression suite: **14 passed**. Updated device policy
+  test: **1 passed on Linux**. Its Windows run hit the known Unix-socket symlink
+  privilege limitation; it was not counted as passing. No native Rust/Java
+  executor implementation changed in this package slice.
+- Live source/agent/model/Control run:
+  `run-0d59d743-21c2-48d4-8fe2-309d6ad4446a` **SUCCEEDED**. `INFO` input
+  produced no workflow for 12 seconds; two `ERROR` records in managed
+  `logs/app.log` triggered the configured `log-diagnoser` agent. Independent
+  Control retrieval matched the admitted sample and worker result:
+  `{"summary":"Database pool exhausted"}`. Execution metadata confirms the
+  configured model inference and no tool effects. Evidence is private under
+  `state/log-triage/verification/`; the reproducible driver is
+  `tools/workflows/verify_log_demo.py` and refuses to overwrite an existing log.
+- Common Quickstart image remained
+  `sha256:e33c1dc71572137bfdab4c2a7facd1516c7b937c15fa96519f5676ab075c30ee`.
+  No source-specific Compose service or platform routing branch was added.
+  Initial `.log` input was correctly refused by the older device policy; that
+  unaccepted demo was explicitly torn down before the fresh policy deployment.
+- Staged secret scan and public-key/credential/private-key regressions passed;
+  documentation link checking passed. The
+  current trigger package/fixture directories were checked for README presence.
+- The user chose deterministic provider mocks and parallel per-package testing.
+  The new foundation stage discovers package-owned mock-test manifests, requires
+  explanatory READMEs, prepares one shared SDK/CLI and runs an independent matrix
+  with fail-fast disabled. All three current entries passed concurrently in local
+  Linux builds, including tests/examples, pack/archive validation and isolated
+  trigger startup. Six discovery/pipeline regressions, 35 local CI tests (one
+  platform skip), three gate-selection tests, CI inventory and actionlint passed.
+  Hosted execution of the new matrix has not yet been accepted. No placeholder
+  provider package receives a passing matrix entry.
+
+Known base: `7580fcfdab3d942b36d002e88fd784bebf57a77a`. Tested source manifest
+digest: `16718fc479e09e4e148493661d52adc88841d709125d31399b76dc212dbab374`,
+over 18 changed public non-Markdown files, sorted path + NUL + per-file SHA-256
++ newline with CRLF normalized to LF. This bounded source record does not
+attest full-roadmap verification. Full repository/`javaCheck` gates were not
+rerun for this isolated example package; earlier recorded platform/full-gate
+limitations remain. No workflow phase earns weight (**0/100** unchanged).
+
+All other requested provider packages, generic PUSH/server network/credential
+capabilities and Quartz scheduling remain outstanding. The separate M7 branch
+has a local exact-snapshot primitive, not a runnable PUSH executor or completed
+module. Remaining provider packages must use package-owned protocol mocks in
+the parallel stage; real provider accounts are not required for that work.
+No simulated provider test is presented as real external acceptance. Existing module/phase
+weights and denominators remain unchanged.
+
 ## Generic package adoption and fresh stack — 2026-11-16
 
 The default watch is now `examples.hotfolder-watch/new-file`, version `0.1.0`,
@@ -750,7 +827,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
 | V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Generic package-selected fresh deployment is locally exercised; full phase remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
-| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package dispatch is exercised; server/PUSH/provider sources remain pending. | 0% |
+| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment and two-profile local acceptance delivered; complete fresh-install scenarios, Linux gates and release publication pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
