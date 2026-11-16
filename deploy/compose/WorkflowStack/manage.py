@@ -337,6 +337,11 @@ def deploy(settings,state,compose,build):
     if build:
         run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',os.environ['TOOLGATE_QUICKSTART_IMAGE']],cwd=source_root())
         run(['docker','build','-t',os.environ['TOOLGATE_RUNTIME_IMAGE'],'apps/langgraph-runtime'],cwd=source_root())
+    run(['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL',
+         '-v',str((HERE/'configurations'/settings['id']).resolve())+':/configuration:ro',
+         '--entrypoint','/opt/toolgate-runtime/bin/python',os.environ['TOOLGATE_RUNTIME_IMAGE'],
+         '-m','toolgate_runtime.graph_packages','--profile','/configuration/workflow-profile.json',
+         '--workflow',settings['workflowId'],'--graph-directory','/configuration/graphs'])
     assets=image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state)
     operator=modules(state,compose,assets)
     model_custody(operator,state)

@@ -227,6 +227,9 @@
         },
         "deployment": {
           "$ref": "#/$defs/WorkflowStackDeployment"
+        },
+        "graph": {
+          "$ref": "#/$defs/WorkflowGraphSelection"
         }
       },
       "required": [
@@ -239,7 +242,8 @@
         "parameterSchema",
         "resultSchema",
         "limits",
-        "agents"
+        "agents",
+        "graph"
       ],
       "description": "Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority."
     },
@@ -937,6 +941,46 @@
         "prometheus",
         "grafana",
         "tempo"
+      ]
+    },
+    "WorkflowGraphSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Pinned operator-installed native LangGraph factory. Configuration grants no runtime authority.",
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,127}$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$",
+          "minLength": 5,
+          "maxLength": 64
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "entryPoint": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,47}$",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "config": {
+          "type": "object",
+          "maxProperties": 64
+        }
+      },
+      "required": [
+        "packageId",
+        "version",
+        "digest",
+        "entryPoint",
+        "config"
       ]
     }
   }

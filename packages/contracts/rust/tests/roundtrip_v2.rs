@@ -446,6 +446,7 @@ fn v2_fixture_round_trips() {
         WorkflowDispatchRequest,
         WorkflowExecutionLimits,
         WorkflowFinishDecision,
+        WorkflowGraphSelection,
         WorkflowGroupDefinition,
         WorkflowModelDeployment,
         WorkflowModelGeneration,

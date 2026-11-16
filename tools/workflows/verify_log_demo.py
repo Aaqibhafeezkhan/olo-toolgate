@@ -1,5 +1,7 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 """Verify the managed-log package through a real deployed workflow and independent Control result."""
+import argparse
+import os
 import importlib.util
 import json
 from pathlib import Path
@@ -11,10 +13,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--configuration",default="log-triage")
+    args=parser.parse_args()
     spec = importlib.util.spec_from_file_location('log_stack_manager', ROOT/'deploy/compose/WorkflowStack/manage.py')
     manager = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(manager)
-    settings, state, compose = manager.environment('log-triage')
+    settings, state, compose = manager.environment(args.configuration)
     source = settings['deployment']['source']
     assert source['triggerId'] == 'examples.log-watch/error-spike'
     assert source['config'] == dict(file='logs/app.log', pattern='ERROR|FATAL', threshold=2, windowSeconds=60, cooldownSeconds=60)
@@ -52,12 +57,12 @@ with Path('/var/lib/olo-toolgate/hotfolder/logs/app.log').open('a',encoding='utf
         raise AssertionError('No completed log workflow; inspect source health and listener/worker metadata')
     assert worker['state'] == 'SUCCEEDED', worker['state']
     from folder_agent import ControlResults
-    control = ControlResults('https://localhost:62092', state/'workflow/reader')
+    control = ControlResults('https://localhost:'+os.environ['TOOLGATE_TLS_PORT'], state/'workflow/reader')
     saved = control.get(worker['runId'])
     assert saved['state'] == 'SUCCEEDED'
     assert saved['outcome']['result'] == worker['result']
     assert reference in saved['message']
-    assert saved['workflowId'] == 'log-triage'
+    assert saved['workflowId'] == settings['workflowId']
     assert worker['result']['summary'].strip()
     logs = subprocess.check_output(compose+['logs', '--no-log-prefix', '--tail', '150', 'workflow-worker'], text=True)
     observation = next(json.loads(line) for line in logs.splitlines()
@@ -66,7 +71,7 @@ with Path('/var/lib/olo-toolgate/hotfolder/logs/app.log').open('a',encoding='utf
     assert execution['tools'] == []
     assert {entry['subjectId'] for entry in execution['inferences']} == {'log-diagnoser'}
     assert image_id == subprocess.check_output(['docker', 'image', 'inspect', image, '--format', '{{.Id}}'], text=True).strip()
-    record = dict(configuration='log-triage', runId=worker['runId'], state='SUCCEEDED',
+    record = dict(configuration=args.configuration, runId=worker['runId'], state='SUCCEEDED',
                   packageId=source['packageId'], packageDigest=source['packageDigest'], agentId='log-diagnoser',
                   messagePointer='/sample', noiseTriggered=False, commonImageId=image_id,
                   result=worker['result'])

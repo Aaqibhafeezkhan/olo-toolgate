@@ -2682,6 +2682,7 @@ export interface WorkflowDefinition {
   readonly agents: ReadonlyArray<WorkflowAgentBinding>;
   readonly agentStages?: ReadonlyArray<WorkflowAgentStage>;
   readonly deployment?: WorkflowStackDeployment;
+  readonly graph: WorkflowGraphSelection;
 }
 /** Bounded delegate model proposal; never execution authority. */
 export interface WorkflowDelegateDecision {
@@ -2725,6 +2726,14 @@ export interface WorkflowExecutionLimits {
 export interface WorkflowFinishDecision {
   readonly kind: "finish";
   readonly result: unknown;
+}
+/** Pinned operator-installed native LangGraph factory. Configuration grants no runtime authority. */
+export interface WorkflowGraphSelection {
+  readonly packageId: string;
+  readonly version: string;
+  readonly digest: string;
+  readonly entryPoint: string;
+  readonly config: Record<string, unknown>;
 }
 /** Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority. */
 export interface WorkflowGroupDefinition {

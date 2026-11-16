@@ -5017,6 +5017,7 @@ pub struct WorkflowDefinition {
     pub agent_stages: Option<Vec<WorkflowAgentStage>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployment: Option<WorkflowStackDeployment>,
+    pub graph: WorkflowGraphSelection,
 }
 /// Bounded delegate model proposal; never execution authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -5086,6 +5087,16 @@ pub struct WorkflowFinishDecision {
     #[serde(deserialize_with = "const_workflow_finish_decision_kind")]
     pub kind: String,
     pub result: serde_json::Value,
+}
+/// Pinned operator-installed native LangGraph factory. Configuration grants no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowGraphSelection {
+    pub package_id: String,
+    pub version: String,
+    pub digest: String,
+    pub entry_point: String,
+    pub config: std::collections::BTreeMap<String, serde_json::Value>,
 }
 /// Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

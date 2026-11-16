@@ -26,6 +26,30 @@ function rig(initial:WorkflowPage='workflows',publishCode=200){
   return {transport,client,navigate:(value:WorkflowPage)=>view.rerender(page(value))};
 }
 async function open(){fireEvent.click(await screen.findByRole('button',{name:'Open support aaaaaaaaaaaa'}));await screen.findByText(/REVIEWED; generation 3/);}
+it('applies workflow graph JSON, repins its version and updates dispatch in the same draft',async()=>{
+  const {transport}=rig();await open();
+  const workflow=profile.workflows!.workflows[0];
+  fireEvent.click(screen.getByRole('button',{name:`Edit ${workflow.id} JSON`}));
+  fireEvent.change(screen.getByLabelText('Workflows JSON'),{target:{value:JSON.stringify({...workflow,graph:{...workflow.graph,config:{resultKey:'configured'}}})}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply Workflows JSON to draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
+  await screen.findByText(/Staged exact profile revision/);
+  const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
+  expect(sent.workflows!.workflows[0].graph.config).toEqual({resultKey:'configured'});
+  expect(sent.workflows!.workflows[0].versionId).not.toBe(workflow.versionId);
+  expect(sent.workflows!.dispatchBindings[0].workflowVersionId).toBe(sent.workflows!.workflows[0].versionId);
+});
+it('edits the agent sub JSON through the shared profile draft',async()=>{
+  const {transport}=rig('agent-configuration');await open();
+  const agent=profile.workflows!.agentDefinitions[0];
+  fireEvent.click(screen.getByRole('button',{name:`Edit ${agent.agentId} JSON`}));
+  fireEvent.change(screen.getByLabelText('Agent prompts and context JSON'),{target:{value:JSON.stringify({...agent,systemPrompt:'Prompt edited as JSON'})}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply Agent prompts and context JSON to draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
+  await screen.findByText(/Staged exact profile revision/);
+  const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
+  expect(sent.workflows!.agentDefinitions[0].systemPrompt).toBe('Prompt edited as JSON');
+});
 it('keeps workflow and agent edits in one profile draft across dedicated pages and stages exact content',async()=>{
   const {transport,navigate}=rig();await open();
   fireEvent.click(screen.getByRole('button',{name:`Edit ${profile.workflows!.workflows[0].id}`}));

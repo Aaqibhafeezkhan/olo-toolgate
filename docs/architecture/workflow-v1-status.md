@@ -1,6 +1,112 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Native LangGraph Phase 1 — 2026-11-17
+
+Branch: `feature/native-langgraph-phase1`, targeting `feature/workflow-enhancement`.
+The user requested a two-phase delivery: one minimal end-to-end PR with basic
+JSON text boxes and profile/configuration switching; advanced safety/recovery,
+rich editors and exhaustive corner cases move to Phase 2. The implementation
+and critique are in [plan.md](../../plan.md) and [ADR 068](../adr/068-native-graph-packages.md).
+
+### Baseline changes
+
+Native graph authoring is an explicit unweighted extension to the existing
+100-point #295 baseline. Phase 1 and Phase 2 are feature delivery scopes, not
+new earned roadmap phases. The denominator stays 100; earned #295 progress
+stays **0/100**, and no #230 stage or #274 module earns credit (#274 remains
+27%). Existing runtime authority and unknown-outcome behavior are not deferred.
+
+| Feature phase | Scope | Status |
+|---|---|---|
+| Phase 1 | Required JSON graph selection; operator-installed native factories; per-run governed adapters; basic profile/workflow/agent JSON text boxes; two trigger-to-result deployments on one image | Implemented and locally exercised; hosted CI/release qualification separate |
+| Phase 2 | Persistent checkpoints/interrupt resume; durable effect replay; untrusted package isolation/upload; concurrent protected steps; richer editor/preview/monitoring and exhaustive cases | Not implemented; unsupported capabilities refused |
+
+Delivered: canonical `WorkflowGraphSelection` and generated bindings; the
+selection is pinned in the Control lease and required by the worker. Graph
+manifests pin factory sources, schemas and dependencies. Fresh StateGraph
+factories receive static JSON snapshots, and `Runtime.context` supplies governed
+agent/model/tool adapters. The existing supervisor is an installed package;
+the independent async summary package uses the same loader. There is no
+workflow-name switch or new Gateway-to-client/trigger protocol. Protected
+adapter operations are serialized for Control's current one-active-step ledger.
+Unknown/denied outcomes latch even if graph code catches their exceptions.
+Old graph-less profiles/leases are refused without conversion.
+
+The current application does not supply a graph-code sandbox, native checkpoint
+service or universal effect ledger. Those proposed mechanisms were not copied
+into Phase 1. Installing Python is privileged operator work; digest checking
+is content verification, not publisher trust or tenant-code isolation. The typed
+Python API ships with the existing runtime rather than a new unpackaged Python
+file under contracts. Canonical wire models remain in packages/contracts.
+
+Executed local acceptance on source base
+`b511426aec2a00c516527ae6c6d386b111cbac7a`:
+
+- `native-log`: `run-7a84bd2b-a563-4720-a720-a5b1a64d372c`, Control-confirmed
+  SUCCEEDED. INFO noise caused no workflow; two ERROR records triggered
+  log-watch -> independent native summary graph -> configured `log-diagnoser`.
+  Model result: `{"summary":"Database pool exhausted"}`.
+- Switched to `native-hotfolder`: `run-4585538b-b7f4-4547-a83b-a17710255c46`,
+  Control-confirmed SUCCEEDED with a governed file read and projected triage
+  JSON output. The selected profile leaves the original input unarchived.
+- Both worker containers used image
+  `sha256:5865fefb5027e0c013c3e3c430e6eaedb163609fc0e1f68f881714bb0b9665b3`.
+  Source-built common Quickstart image:
+  `sha256:bfa3244819c3ae2b4bc3a86cd6dd1a43daf447568eedb1a9662a6401afd56358`.
+  Switching profiles/packages required no runtime rebuild between these runs.
+  New configurations use isolated storage/ports; other user stacks/storage were
+  not removed. The hot-folder stack remains available on port 62391.
+- Runtime: **75 tests pass, no skips** in Linux, including native async,
+  branches/parallel joins, subgraphs, per-run config/module isolation and
+  actual denied/unknown adapter outcomes. Windows initially skipped 10 TLS
+  tests; the Linux run includes them. Early byte-limit/timeout classification
+  and result-log fixture errors were corrected before this pass.
+- UI: type check/build, **16 component tests** and **3 browser tests** pass.
+  JSON edits explicitly apply to the same draft; workflow edits repin versions
+  and update dispatch references. Browser APIs are mocked: this verifies editor
+  requests, not live server publication. Real deployment publication above used
+  the existing Control APIs through the operator. The first browser attempt
+  used Quickstart's username/password page with a token-login fixture; using
+  the correct fixture resolved it without changing product authentication.
+- Control: **12 configuration tests**, **19 workflow profile tests** (SQLite
+  and provisioned PostgreSQL), **4 Java contract tests** and Quarkus build pass.
+  Profile tests were run with the implementation before the additional config
+  rejection test; the final 12-test config run passed separately. Rust v2
+  round trips (2 tests) and PHP v2 round trips/constants (445 models) pass.
+- **14 Compose/profile** and **8 CI workflow-contract** tests pass. Generated
+  bindings/fixtures/version checks, source quality, preflight and staged secret
+  regressions pass. The common Quickstart image was built from current source.
+
+Broader checks: the full 183-test contract suite on Windows encountered the
+known two symlink-privilege errors and scorecard environment failure (2 skips).
+A Linux read-only run had a drift-test write failure and a source-mutated-during-
+qualification failure; both affected tests passed when rerun with writable,
+stable sources (2 tests). This is not a single clean full-suite run. The broad
+PostgreSQL-backed `javaCheck --continue` was attempted, encountered the known
+Windows POSIX-permission failure in the operator mTLS fixture, and was stopped;
+no full Java-gate or final full-suite totals are claimed. Final focused config
+and contract checks passed afterward. Hosted CI, release image publication and
+complete #295/#274/#230 qualification remain outstanding.
+
+The [redacted local evidence record](../testing/evidence/native-langgraph-phase1.json)
+contains graph/image identities and result-artifact hashes, not credentials or
+private result payloads. Tested changed-source manifest: **50 non-document
+files**, SHA-256
+`78adfd21d9d5a4a8f52e86ddc2050cbde8f70a0a8c5f1a15e3a31972f40f45ae`
+(sorted changed source path + NUL + LF-normalized content hash + newline;
+documentation/evidence excluded). It identifies tested working sources, not
+an invented upcoming commit SHA or remote deployment attestation.
+
+Limitations: state remains JSON-compatible; packages requesting native durable
+checkpoints/resume are refused. Physical image/folder/credential/package and
+local delivery-binding changes require operator provisioning; publishing JSON
+alone is not Docker orchestration or package installation. Control's existing
+dependency readiness is not a fleet-wide graph-package readiness guarantee;
+startup additionally preflights installed graph content/configuration. The UI
+is a basic text editor, not a schema-complete IDE or graph canvas. Phase 2 must
+qualify those advanced services before advertising them.
+
 ## Qualified SDK fixtures and transport diagnostics — 2026-11-16
 
 The hosted follow-up `43880163146` at `15249dc6` passed preflight, SDK

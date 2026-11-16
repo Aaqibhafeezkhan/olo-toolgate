@@ -444,6 +444,7 @@ final class ContractV2RoundTripTest {
         "WorkflowDispatchRequest",
         "WorkflowExecutionLimits",
         "WorkflowFinishDecision",
+        "WorkflowGraphSelection",
         "WorkflowGroupDefinition",
         "WorkflowModelDeployment",
         "WorkflowModelGeneration",
