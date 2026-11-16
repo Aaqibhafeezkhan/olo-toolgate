@@ -3,7 +3,7 @@
 """Hot folder: a file dropped into the device's HotFolder inbox triggers a LangGraph flow that displays the file
 and moves it to processed/.
 
-The `examples.inbox-watch` package's `new-file` client trigger runs on the device (assigned by the deployment profile
+The `examples.hotfolder-watch` package's `new-file` client trigger runs on the device (assigned by the deployment profile
 `hotfolder-trigger.profile.json`) and reports each new file to Control. This agent consumes those events through an
 `EventSource`; each event runs one graph: read the file, display it, move it to `processed/<name>`. Every file
 operation is a real package tool call through the Gateway, under the agent's own grants.

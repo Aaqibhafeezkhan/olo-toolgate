@@ -44,5 +44,5 @@ include(
     "file-cleanup",
     "db-query",
     "hotfolder",
-    "inbox-watch",
+    "hotfolder-watch",
 )

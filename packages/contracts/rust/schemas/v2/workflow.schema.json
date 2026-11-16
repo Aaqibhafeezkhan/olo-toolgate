@@ -698,25 +698,6 @@
       ],
       "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
     },
-    "WorkflowStackTriggerConfig": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "folder": {
-          "type": "string",
-          "const": "inbox"
-        },
-        "extension": {
-          "type": "string",
-          "const": ".txt"
-        }
-      },
-      "required": [
-        "folder",
-        "extension"
-      ],
-      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
-    },
     "WorkflowStackTriggerSource": {
       "type": "object",
       "additionalProperties": false,
@@ -734,16 +715,13 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
         },
         "packageId": {
-          "type": "string",
-          "const": "examples.inbox-watch"
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
         },
         "version": {
-          "type": "string",
-          "const": "0.1.0"
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
         },
         "triggerId": {
-          "type": "string",
-          "const": "examples.inbox-watch/new-file"
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
         },
         "deviceGroupId": {
           "type": "string",
@@ -752,7 +730,19 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
         },
         "config": {
-          "$ref": "#/$defs/WorkflowStackTriggerConfig"
+          "type": "object",
+          "maxProperties": 64,
+          "x-toolgate-max-bytes": 8192,
+          "description": "Opaque package configuration, validated against the selected signed trigger descriptor by Control."
+        },
+        "eventFilter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Subscription CEL filter evaluated by Control; no watch-specific filter is supplied by the operator."
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
         }
       },
       "required": [
@@ -762,7 +752,8 @@
         "version",
         "triggerId",
         "deviceGroupId",
-        "config"
+        "config",
+        "eventFilter"
       ],
       "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
     },
@@ -907,7 +898,6 @@
         "platform",
         "model",
         "source",
-        "fileAgent",
         "monitoring"
       ],
       "description": "Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority."

@@ -460,7 +460,6 @@ final class ContractV2RoundTripTest {
         "WorkflowStackMonitoringImages",
         "WorkflowStackPlatform",
         "WorkflowStackRuntime",
-        "WorkflowStackTriggerConfig",
         "WorkflowStackTriggerSource",
         "WorkflowToolDecision");
     private final ObjectMapper mapper = JsonMapper.builder()

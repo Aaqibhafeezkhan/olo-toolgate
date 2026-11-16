@@ -3,7 +3,7 @@
   "profileId": "hotfolder-trigger",
   "packages": [
     {
-      "packageId": "examples.inbox-watch",
+      "packageId": "examples.hotfolder-watch",
       "source": "PREBUILT_CORE",
       "version": "0.1.0",
       "required": true,
@@ -13,7 +13,7 @@
       "triggers": [
         {
           "assignment": "hotfolder-inbox",
-          "triggerId": "examples.inbox-watch/new-file",
+          "triggerId": "examples.hotfolder-watch/new-file",
           "config": {
             "folder": "inbox",
             "extension": ".txt"

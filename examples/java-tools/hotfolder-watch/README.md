@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Inbox watch
+# Hotfolder watch
 
-Package `examples.inbox-watch`. Trigger `new-file` (`examples.inbox-watch/new-file`), event type `examples.files.observed.v1`. Part of the [Java Tool SDK examples](../README.md).
+Package `examples.hotfolder-watch`. Trigger `new-file` (`examples.hotfolder-watch/new-file`), event type `examples.files.observed.v1`. Part of the [Java Tool SDK examples](../README.md).
 
 A client trigger in POLL form ([ADR 058](../../../docs/adr/058-triggers.md)). Every minute it lists one folder of the device's confined files area and reports each file version present there that it has not reported before. The package has no tools: it exports one trigger, which an administrator assigns to a device group with a config such as `{"folder": "inbox", "extension": ".pdf"}`.
 
@@ -25,7 +25,7 @@ The source is a `STATE_SNAPSHOT`: an event means "this file was present at check
 
 ```sh
 toolgate check    # the unit tests and both @TriggerExample self-tests
-toolgate pack     # build/toolgate/inbox-watch-0.1.0.tgpkg with triggers/new-file.json
+toolgate pack     # build/toolgate/hotfolder-watch-0.1.0.tgpkg with triggers/new-file.json
 ```
 
-[`InboxWatchTest`](src/test/java/io/ololabs/examples/inboxwatch/InboxWatchTest.java) drives the trigger with `ToolHarness.trigger("new-file")` through the real trigger runtime and its stdio frames: several checks over a changing folder, a failed listing, retryable and terminal rejections, and a restart from the committed checkpoint.
+[`HotfolderWatchTest`](src/test/java/io/ololabs/examples/hotfolderwatch/HotfolderWatchTest.java) drives the trigger with `ToolHarness.trigger("new-file")` through the real trigger runtime and its stdio frames: several checks over a changing folder, a failed listing, retryable and terminal rejections, and a restart from the committed checkpoint.

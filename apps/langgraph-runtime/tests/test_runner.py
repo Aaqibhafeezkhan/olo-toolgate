@@ -102,7 +102,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual([('support-investigator', 'support/context', {'source': 'support'})], gate.calls)
         received = gate.inferences[0][3][0]['content']
         self.assertEqual(text, received['context'][0]['content']['text'])
-        self.assertEqual(run.message, received['sourcePath'])
+        self.assertEqual(run.message, received['message'])
         self.assertEqual(1, len(gate.decisions[run.workflow_id]))
 
     def test_fixed_stages_recheck_current_candidate_before_the_next_agent(self):
@@ -143,7 +143,7 @@ class RunnerTests(unittest.TestCase):
         outcome = Runner(gate).execute(run)
         self.assertEqual('SUCCEEDED', outcome.state)
         received = next(item[3][0]['content'] for item in gate.inferences if item[0] == 'support-fixer')
-        self.assertEqual(run.message, received['sourcePath'])
+        self.assertEqual(run.message, received['message'])
         self.assertEqual(text, received['context'][0]['content']['text'])
         self.assertNotIn('secret-step-token', str(received))
         self.assertEqual(1, len(gate.calls))

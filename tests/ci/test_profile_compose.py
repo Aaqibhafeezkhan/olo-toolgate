@@ -21,6 +21,23 @@ RUN='run-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 
 class ProfileComposeTests(unittest.TestCase):
+    def test_trigger_identity_configuration_and_filter_are_profile_data_without_folder_adapter(self):
+        profile=deepcopy(self.settings['document'])
+        deployment=profile['workflows']['workflows'][0]['deployment']
+        deployment.pop('fileAgent')
+        source=deployment['source']
+        source.update(packageId='acme.metric-watch',version='2.4.1',triggerId='acme.metric-watch/threshold',
+            config={'metric':'queue-depth','above':50},eventFilter="event.type == 'acme.threshold.v1'")
+        directory=self.root/'arbitrary';directory.mkdir()
+        path=directory/'workflow-profile.json';path.write_text(json.dumps(profile))
+        loaded=configuration.load(directory)
+        self.assertIsNone(loaded['fileAgent'])
+        self.assertEqual(source,loaded['deployment']['source'])
+        source['triggerId']='other.package/threshold'
+        path.write_text(json.dumps(profile))
+        with self.assertRaisesRegex(ValueError,'pinned package'):
+            configuration.load(directory)
+
     def test_profile_scope_preserves_inactive_workflows_without_activating_their_resources(self):
         profile=deepcopy(self.settings['document'])
         workflow=deepcopy(profile['workflows']['workflows'][0])
@@ -92,22 +109,23 @@ class ProfileComposeTests(unittest.TestCase):
         manager=importlib.util.module_from_spec(spec)
         spec.loader.exec_module(manager)
         operator=Mock()
-        (self.root/'agents').mkdir()
-        (self.root/'agents/linux.json').write_text('{}')
-        (self.root/'package').mkdir()
-        artifact=self.root/'package/inbox-watch.tgpkg'
-        artifact.write_bytes(b'reviewed package')
-        (self.root/'client-images.env').write_text('')
-        (self.root/'package/core-packages.lock.json').write_text(json.dumps({'schemaVersion':1,'packages':[{
-            'id':'examples.inbox-watch','artifact':artifact.name,'artifactSha256':hashlib.sha256(artifact.read_bytes()).hexdigest()}]}))
+        assets=self.root/'assets/packages';assets.mkdir(parents=True)
+        artifact=assets/'custom.tgpkg';artifact.write_bytes(b'reviewed package')
+        metadata=dict(id='acme.sensor-watch',version='2.3.0',artifact=artifact.name,sdkVersion='1',
+            packageDigest='sha256:'+'a'*64,artifactSha256=hashlib.sha256(artifact.read_bytes()).hexdigest())
+        (assets/'manifest.json').write_text(json.dumps(dict(formatVersion=2,packages=[metadata])))
+        settings={'id':'sensor','fileAgent':None,'deployment':{'source':{'packageId':metadata['id'],'version':metadata['version']}}}
+        manager.prepare_packages(operator,settings,self.root,['compose'],assets.parent)
+        (self.root/'deployment.json').write_text('{}')
         manager.run=Mock()
-        manager.prepare_packages(operator,self.root,['compose'])
+        manager.prepare_packages(operator,settings,self.root,['compose'],assets.parent)
         operator.packages.prepare.assert_not_called()
-        artifact.write_bytes(b'changed package')
+        staged=self.root/'package/bootstrap/trigger.tgpkg';staged.write_bytes(b'changed package')
         with self.assertRaisesRegex(ValueError,'sealed lock'):
-            manager.prepare_packages(operator,self.root,['compose'])
-        self.assertEqual(b'changed package',artifact.read_bytes())
+            manager.prepare_packages(operator,settings,self.root,['compose'],assets.parent)
+        self.assertEqual(b'changed package',staged.read_bytes())
         operator.packages.prepare.assert_not_called()
+
 
     def test_redeploy_preserves_reviewed_release_and_refuses_changed_device(self):
         spec=importlib.util.spec_from_file_location('profile_compose_manager',ROOT/'deploy/compose/WorkflowStack/manage.py')
@@ -145,7 +163,7 @@ class ProfileComposeTests(unittest.TestCase):
         os.utime(source,(1,1))
         self.agent.ingest()
         self.row=self.agent.db.execute('SELECT * FROM jobs').fetchone()
-        self.result={'sourcePath':self.row['source'],'summary':'Staging passed; load testing precedes production.'}
+        self.result={'summary':'Staging passed; load testing precedes production.'}
         self.worker={'runId':RUN,'state':'SUCCEEDED','result':self.result}
         self.control.get.return_value={'runId':RUN,'state':'SUCCEEDED','message':self.row['source'],'outcome':{'result':self.result}}
         return source
@@ -175,6 +193,14 @@ class ProfileComposeTests(unittest.TestCase):
         self.assertFalse((self.root/'device'/self.row['source']).exists())
         self.agent.project(self.worker)
         self.assertEqual(1,self.control.get.call_count)
+
+    def test_delivery_source_comes_from_control_even_when_model_claims_another_path(self):
+        source=self.stage()
+        self.result['sourcePath']='inbox/other-file.txt'
+        self.agent.project(self.worker)
+        self.assertFalse(source.exists())
+        self.assertTrue((self.root/'exchange/processed/meeting.txt').is_file())
+        self.assertFalse((self.root/'exchange/processed/other-file.txt').exists())
 
     def test_worker_success_cannot_replace_control_authority_or_admitted_source(self):
         source=self.stage()

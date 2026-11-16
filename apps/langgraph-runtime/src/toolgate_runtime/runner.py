@@ -403,7 +403,7 @@ class _Execution:
         if decision == {"kind": "finish_context"}:
             if not agent.context_sources or agent.agent_id not in self.context_results:
                 raise _Stop("CONTEXT_NOT_AVAILABLE")
-            result = _json({"sourcePath": self.lease.message, "context": self.context_results[agent.agent_id]})
+            result = _json({"message": self.lease.message, "context": self.context_results[agent.agent_id]})
         elif set(decision) == {"kind", "result"} and decision["kind"] == "finish":
             result = _json(decision["result"])
         else:

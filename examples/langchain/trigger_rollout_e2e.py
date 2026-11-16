@@ -36,7 +36,7 @@ def wait(config, assignment, devices, timeout, predicate, budget=None):
 def release_to(config, version, device):
     config.api('/api/control/v1/fleet/rollouts', {
         'id': 'm12-fleet-' + secrets.token_hex(8),
-        'packageId': 'examples.inbox-watch', 'version': version,
+        'packageId': 'examples.hotfolder-watch', 'version': version,
         'deviceIds': [device], 'desiredPresence': True, 'percentage': 100,
     })
 
@@ -47,7 +47,7 @@ def run(config, devices, good_version, failing_package, timeout):
     upload = packages.release_request(config, 'packages/uploads', failing_package.read_bytes(),
                                       'application/vnd.ololabs.toolgate.package+zip')
     release = packages.release_request(config, 'packages/client-releases', {'packageDigest': upload['packageDigest']})
-    if release['packageId'] != 'examples.inbox-watch' or not release.get('signed') or release['version'] == good_version:
+    if release['packageId'] != 'examples.hotfolder-watch' or not release.get('signed') or release['version'] == good_version:
         raise ValueError('Provide a distinct, intentionally failing Inbox Watch package version')
     bad_version = release['version']
     assignment = 'm12-rollout-' + secrets.token_hex(5)
@@ -58,7 +58,7 @@ def run(config, devices, good_version, failing_package, timeout):
     config.api(BASE + '/assignments', {
         'name': assignment,
         'spec': {
-            'trigger': 'examples.inbox-watch/new-file', 'packageVersion': good_version,
+            'trigger': 'examples.hotfolder-watch/new-file', 'packageVersion': good_version,
             'target': {'executor': 'CLIENT', 'deviceGroups': groups},
             'config': {'folder': 'inbox', 'extension': '.txt'}, 'desiredState': 'Running',
             'strategy': {'rollingUpdate': {'maxUnavailable': '1'}},

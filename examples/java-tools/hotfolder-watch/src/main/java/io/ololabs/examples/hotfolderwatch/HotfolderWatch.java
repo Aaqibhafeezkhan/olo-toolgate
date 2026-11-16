@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-package io.ololabs.examples.inboxwatch;
+package io.ololabs.examples.hotfolderwatch;
 
 import io.ololabs.toolgate.sdk.annotations.ClientTrigger;
 import io.ololabs.toolgate.sdk.annotations.DeviceFileAccess;
@@ -30,9 +30,9 @@ import java.util.TreeMap;
  * version of every file still present, so a removed file's entry is pruned and the checkpoint stays as small as the
  * folder.
  */
-@ToolPackage(id = "examples.inbox-watch", name = "Inbox watch", publisher = "OLO Labs examples",
+@ToolPackage(id = "examples.hotfolder-watch", name = "Hotfolder watch", publisher = "OLO Labs examples",
         description = "Reports new files in a folder of the device files area")
-public final class InboxWatch {
+public final class HotfolderWatch {
     /** The assignment config an administrator sets per device group. */
     public record Config(
             @Param(description = "Folder in the device files area to watch, such as inbox", pattern = "^[a-z0-9][a-z0-9._ -]{0,127}(/[a-z0-9][a-z0-9._ -]{0,127}){0,7}$")

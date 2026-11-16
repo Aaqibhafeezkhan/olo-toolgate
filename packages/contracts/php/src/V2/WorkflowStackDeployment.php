@@ -13,13 +13,13 @@ final readonly class WorkflowStackDeployment implements \JsonSerializable {
         public WorkflowStackPlatform $platform,
         public WorkflowStackModelEngine $model,
         public WorkflowStackTriggerSource $source,
-        public WorkflowStackFolderAgent $fileAgent,
-        public WorkflowStackMonitoring $monitoring
+        public WorkflowStackMonitoring $monitoring,
+        public ?WorkflowStackFolderAgent $fileAgent = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['enabled', 'runtime', 'platform', 'model', 'source', 'fileAgent', 'monitoring']) || array_diff(['enabled', 'runtime', 'platform', 'model', 'source', 'fileAgent', 'monitoring'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['enabled', 'runtime', 'platform', 'model', 'source', 'fileAgent', 'monitoring']) || array_diff(['enabled', 'runtime', 'platform', 'model', 'source', 'monitoring'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -28,8 +28,8 @@ final readonly class WorkflowStackDeployment implements \JsonSerializable {
             WorkflowStackPlatform::fromArray($data['platform']),
             WorkflowStackModelEngine::fromArray($data['model']),
             WorkflowStackTriggerSource::fromArray($data['source']),
-            WorkflowStackFolderAgent::fromArray($data['fileAgent']),
-            WorkflowStackMonitoring::fromArray($data['monitoring'])
+            WorkflowStackMonitoring::fromArray($data['monitoring']),
+            array_key_exists('fileAgent', $data) ? WorkflowStackFolderAgent::fromArray($data['fileAgent']) : null
         );
     }
 

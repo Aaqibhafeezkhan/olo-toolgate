@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-package io.ololabs.examples.inboxwatch;
+package io.ololabs.examples.hotfolderwatch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -14,8 +14,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** The inbox-watch trigger through the real trigger runtime and its stdio frames, against the harness's supervisor. */
-class InboxWatchTest {
+/** The hotfolder-watch trigger through the real trigger runtime and its stdio frames, against the harness's supervisor. */
+class HotfolderWatchTest {
     private static InMemoryDeviceFiles area() {
         InMemoryDeviceFiles files = new InMemoryDeviceFiles(List.of("pdf", "txt"), 65536);
         files.mkdir("inbox");
@@ -116,7 +116,7 @@ class InboxWatchTest {
             committed = trigger.firstPoll().checkpoint().orElseThrow();
         }
         files.file("inbox/b.pdf", "%PDF-12");
-        try (TriggerHarness restarted = ToolHarness.trigger("examples.inbox-watch/new-file").config(Map.of("folder", "inbox"))
+        try (TriggerHarness restarted = ToolHarness.trigger("examples.hotfolder-watch/new-file").config(Map.of("folder", "inbox"))
                 .checkpoint(committed).deviceFiles(files).start()) {
             assertEquals(List.of("file:inbox/b.pdf:7"), restarted.firstPoll().events().stream().map(TriggerHarness.Emitted::id).toList());
         }

@@ -432,7 +432,7 @@ final class ClientReleasesTest {
     @Test void deviceRuntimeIdsAreScopedToTheirPackageSoPackagesShareADevice() {
         // Every Java SDK package declares runtime "jvm"; a device rejects duplicate runtime ids across its packages.
         assertEquals("examples.hotfolder/jvm", ClientReleases.deviceRuntimeId("examples.hotfolder", ClientReleases.RUNTIME_ID));
-        assertEquals("examples.inbox-watch/jvm", ClientReleases.deviceRuntimeId("examples.inbox-watch", ClientReleases.RUNTIME_ID));
+        assertEquals("examples.hotfolder-watch/jvm", ClientReleases.deviceRuntimeId("examples.hotfolder-watch", ClientReleases.RUNTIME_ID));
         assertNotEquals(ClientReleases.deviceRuntimeId("a.one", "python"), ClientReleases.deviceRuntimeId("a.two", "python"));
         String longId = "a" + ".b".repeat(70);
         String hashed = ClientReleases.deviceRuntimeId(longId, ClientReleases.RUNTIME_ID);

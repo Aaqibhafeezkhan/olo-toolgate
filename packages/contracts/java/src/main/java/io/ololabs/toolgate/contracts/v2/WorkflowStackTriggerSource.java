@@ -12,6 +12,8 @@ package io.ololabs.toolgate.contracts.v2;
  * @param triggerId canonical triggerId value
  * @param deviceGroupId canonical deviceGroupId value
  * @param config canonical config value
+ * @param eventFilter canonical eventFilter value
+ * @param packageDigest canonical packageDigest value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record WorkflowStackTriggerSource(
@@ -21,7 +23,9 @@ public record WorkflowStackTriggerSource(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "version", required = true) String version,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "triggerId", required = true) String triggerId,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceGroupId", required = true) String deviceGroupId,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "config", required = true) WorkflowStackTriggerConfig config
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "config", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> config,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "eventFilter", required = true) String eventFilter,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "packageDigest", required = false) String packageDigest
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -32,17 +36,18 @@ public record WorkflowStackTriggerSource(
      * @param triggerId canonical triggerId value
      * @param deviceGroupId canonical deviceGroupId value
      * @param config canonical config value
+     * @param eventFilter canonical eventFilter value
+     * @param packageDigest canonical packageDigest value
      */
     public WorkflowStackTriggerSource {
         java.util.Objects.requireNonNull(subscription, "subscription");
         java.util.Objects.requireNonNull(assignment, "assignment");
         java.util.Objects.requireNonNull(packageId, "packageId");
-        if (packageId != null && !java.util.Objects.equals(packageId, "examples.inbox-watch")) throw new IllegalArgumentException("packageId must be examples.inbox-watch");
         java.util.Objects.requireNonNull(version, "version");
-        if (version != null && !java.util.Objects.equals(version, "0.1.0")) throw new IllegalArgumentException("version must be 0.1.0");
         java.util.Objects.requireNonNull(triggerId, "triggerId");
-        if (triggerId != null && !java.util.Objects.equals(triggerId, "examples.inbox-watch/new-file")) throw new IllegalArgumentException("triggerId must be examples.inbox-watch/new-file");
         java.util.Objects.requireNonNull(deviceGroupId, "deviceGroupId");
         java.util.Objects.requireNonNull(config, "config");
+        config = config == null ? null : java.util.Map.copyOf(config);
+        java.util.Objects.requireNonNull(eventFilter, "eventFilter");
     }
 }

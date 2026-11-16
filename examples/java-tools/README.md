@@ -19,7 +19,7 @@ Every example is a complete package: one `@ToolPackage`, its tools, unit tests w
 | [file-cleanup](file-cleanup/README.md) | `cleanup.old-files` | Lists, and when asked deletes, files older than N days | A destructive tool done carefully: off until configured, dry run by default, caps |
 | [db-query](db-query/README.md) | `db.tables`, `db.row`, `db.query` | Lists tables and runs read-only, parameterised queries on a database (an embedded H2 file) | Read-only enforced by connection, account and statement checks; a third-party driver in the fat jar |
 | [hotfolder](hotfolder/README.md) | `hotfolder.list`, `hotfolder.read_text`, `hotfolder.write_text`, `hotfolder.move`, `hotfolder.copy` and five more | Reads and writes text files in a protected folder on the selected device | A `@ClientTool` package using `@DeviceFileAccess` and the device's confined files area; no device-side code for the package |
-| [inbox-watch](inbox-watch/README.md) | trigger `inbox-watch/new-file` | Reports each new file version in a folder of the device files area, once | A `@ClientTrigger` in POLL form: checkpoints, a stable event id, `@TriggerExample` self-tests and `TriggerHarness`; a package with no tools |
+| [hotfolder-watch](hotfolder-watch/README.md) | trigger `hotfolder-watch/new-file` | Reports each new file version in a folder of the device files area, once | A `@ClientTrigger` in POLL form: checkpoints, a stable event id, `@TriggerExample` self-tests and `TriggerHarness`; a package with no tools |
 
 For fixed, fictional data in business scenarios (loan approval, a clinic, a server crash, support, HR, fraud, insurance claims), see the [mocked tool examples](../mocked-tools/README.md).
 

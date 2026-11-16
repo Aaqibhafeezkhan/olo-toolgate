@@ -16,6 +16,44 @@ Agent definitions, model deployments, model groups, generation parameters and
 vault references are in that same profile and linked to the workflow by ID.
 There is no separate use-case configuration file or model setting in `.env`.
 
+## Adopt a trigger package
+
+The fresh stack uses `examples.hotfolder-watch/new-file` for the supplied file
+profiles. There is no old-name alias or store conversion. Preserve needed old
+files and use the explicit selected-stack teardown before deploying this version.
+Old stack/image/bootstrap formats are refused intact.
+
+The workflow's `deployment.source` declares `packageId`, exact `version`,
+`triggerId`, `deviceGroupId`, opaque `config`, `eventFilter`, `assignment` and
+`subscription`. Control validates configuration against the selected package's
+signed trigger descriptor. A dispatch binding in the same profile selects the
+workflow/version, actor and message pointer; event content cannot select them.
+There are no fixed watch IDs, versions, config keys or event filters in the
+deployment operator or canonical source model.
+
+To adopt an external package using supported executor capabilities, place its
+`.tgpkg` in `configurations/<selection>/packages/` and pin its `packageDigest`
+(`sha256:` plus the SHA-256 of its `CHECKSUMS.sha256` bytes) in `deployment.source`.
+Use the digest emitted by `toolgate pack`. The selected package/version must
+match exactly. Only the selected artifact enters bootstrap custody. Review the
+package before this privileged operator action; a digest is not publisher proof.
+The common deployment images and Compose services stay the same.
+
+`deployment.fileAgent` is optional. Omit it for a non-file workflow: events reach
+the model/agents through the configured message pointer, results are recorded in
+`state/<selection>/workflow/results/`, and no folder-agent or file-tool agent is
+provisioned. For a file profile, keep the explicit file-delivery adapter settings.
+Package changes on an existing stack are refused; choose a fresh stack scope.
+Changed immutable subscription filters require a new subscription name and
+workflow version, rather than silently keeping the previous filter.
+
+This adoption path covers supported package/executor capabilities. It does not
+implement arbitrary network access or every requested connector. The
+[trigger catalog](../../../docs/architecture/trigger-package-catalog.md) records
+webhook, log, health, email, chat, ticket, queue, CDC, schedule and Git-event work
+and the required generic executor/broker gates. No watch-specific sidecar or
+platform name switch substitutes for those gates.
+
 | Profile | Trigger input | Confirmed output |
 | --- | --- | --- |
 | [Issue triage](configurations/issue-triage/README.md) | `data/issue-triage/inbox/*.txt` | `data/issue-triage/results/*.result.json`; original retained |
@@ -100,6 +138,20 @@ Startup never silently adopts a replacement Gateway or converts old stores.
 
 Use the selected profile's README to drop an example file and inspect its output.
 The continuous listener and worker process subsequent files without a demo driver.
+
+From the repository root, verify a real drop with:
+
+```powershell
+python tools/workflows/verify_stack_demo.py --configuration text-summary
+python tools/workflows/verify_stack_demo.py --configuration issue-triage
+```
+
+The driver creates one unique input from the selected `example.txt`, independently
+checks Control's profile/workflow/result and admitted source, confirms configured
+agent execution, verifies the output and (when enabled) byte-identical archive,
+and records private verification metadata under `state/<selection>/verification/`.
+It performs no workflow-effect retries. Non-file packages use their own real
+event producer instead of this file-demo driver.
 
 ## Switch or edit
 

@@ -5,6 +5,27 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Generic watch adoption and source catalog — 2026-11-16
+
+The sample package is now `examples.hotfolder-watch/new-file`; old references
+below are historical evidence, not runtime aliases. [ADR 066](../adr/066-generic-trigger-package-adoption.md)
+and the [source catalog](trigger-package-catalog.md) require descriptor-driven
+package/profile adoption. The WorkflowStack source contract no longer fixes the
+watch identity, version, configuration or event filter. Exact locally supplied
+packages are explicitly operator-pinned bootstrap inputs; Control still validates
+packages/descriptors and signs client releases. No publisher or executor
+qualification is inferred from a hash or structural profile.
+
+Two real external `acceptance.signal-watch` runs dispatch `/body` to a configured
+non-file workflow/model agent using unchanged common images and no folder agent.
+Fresh renamed-watch triage and two-agent summary/archive runs also pass. Actual
+run IDs, source digest, component checks, corrected failed attempts and full-gate
+limits are in the matching [workflow checkpoint](workflow-v1-status.md#generic-package-adoption-and-fresh-stack--2026-11-16).
+The runtime is still client POLL; this is not M7/M8, authenticated webhook ingress,
+queue/provider adapters or Quartz scheduling. The existing module table and
+**27% earned** are unchanged. Those modules retain their original Done-when gates
+and branch/PR requirements; native mutation finality is not accepted here.
+
 ## Packaged image deployment integration — 2026-11-15
 
 The common published-image build now seals inbox-watch/HotFolder artifacts at
@@ -172,6 +193,14 @@ evidence. No module weight or baseline denominator changes; earned progress stay
 - A slice or gate is ✅ only when its own evidence has run, not because its modules are merged.
 
 ## Baseline changes
+
+2026-11-16: the requested provider/source families are recorded in a separate
+unweighted catalog. This is an explicit product-backlog extension, with no change
+to the preserved 100-point module denominator or earned weights. Future package
+scope/weights must be amended explicitly; they are not silently counted inside
+previously merged modules. The current change renames the M2 sample and repairs
+workflow deployment adoption, without accepting another module.
+
 
 The baseline is plan revision 12, section 24.2. Module weights are unchanged; the scope moves below are recorded with
 their reasons.

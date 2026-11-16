@@ -120,3 +120,5 @@ Use `000-template.md`.
 - [ADR 064: Qualified device file reads and private workflow results](064-qualified-device-file-reads-and-workflow-results.md)
 
 - [ADR 065: Profile-selected Compose and folder delivery](065-profile-selected-compose-and-folder-delivery.md)
+
+- [ADR 066: Generic trigger-package adoption](066-generic-trigger-package-adoption.md)

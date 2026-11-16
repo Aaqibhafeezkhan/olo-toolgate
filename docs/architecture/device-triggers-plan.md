@@ -461,8 +461,8 @@ notifications as broker events. This works the same on Linux, Windows and macOS,
 runs in a VM.
 
 ```java
-@ToolPackage(id = "examples.inbox-watch", version = "1.0.0")
-public final class InboxWatch {
+@ToolPackage(id = "examples.hotfolder-watch", version = "1.0.0")
+public final class HotfolderWatch {
     @ClientTrigger(name = "new-file", mode = TriggerMode.PUSH, sourceReplay = SourceReplay.STATE_SNAPSHOT,
                    description = "Reports each file version present in a folder that has not been reported before",
                    config = Config.class, event = FileObserved.class,
@@ -526,7 +526,7 @@ def check(config: Config, ctx: PollContext) -> PollResult[NewMessage]: ...
 @client_trigger(name="new-file", mode="push", source_replay="STATE_SNAPSHOT", config=Config, event=FileObserved,
                 event_type="examples.files.observed.v1", resync_interval_ms=300_000)
 @device_file_access()
-class InboxWatch(PushTrigger[Config, FileObserved]):
+class HotfolderWatch(PushTrigger[Config, FileObserved]):
     async def start(self, config: Config, ctx: PushContext, emitter: TriggerEmitter[FileObserved]) -> None:
         # Native notifications are coalesced, reordered and dropped: they are only HINTS that wake reconcile().
         self._watch = await ctx.files.watch(config.folder, kinds={"any"},
@@ -798,7 +798,7 @@ Mapping rules:
     - `mail-watch`;
     - `mail-idle`: an IMAP message expunged before reconcile is not reported, and a `UIDVALIDITY` change re-reports the
       mailbox's current messages once under new ids;
-    - `inbox-watch`: a file created and deleted while offline is not reported, and rapid rewrites coalesce into the
+    - `hotfolder-watch`: a file created and deleted while offline is not reported, and rapid rewrites coalesce into the
       versions seen at reconcile time.
   - The processor warns on `EVENT_LOG` or `STATE_SNAPSHOT` without `reconcile()` or without a `position` on events.
   - The review screen and console show the class and its guarantee sentence verbatim.
@@ -1360,7 +1360,7 @@ reason: Month-end freeze
 action: Stop
 selector:
   deviceGroups: [finance-desktops]
-  triggers: ["examples.inbox-watch/*"]
+  triggers: ["examples.hotfolder-watch/*"]
 reason: Incident 4411
 ```
 
@@ -2641,7 +2641,7 @@ latency or throughput target.
 - Property tests for the barrier: randomized completion order, rejections and crashes never commit past an unresolved
   emit.
 - Harness: inject watch events, network faults and slow acks.
-- Samples: `examples.mail-idle` (IMAP IDLE via Jakarta Mail, `CREDENTIALS_IN_SANDBOX`), `examples.inbox-watch`
+- Samples: `examples.mail-idle` (IMAP IDLE via Jakarta Mail, `CREDENTIALS_IN_SANDBOX`), `examples.hotfolder-watch`
   (executor-native watch), and a `nativeMount` variant. The Python twins implement **the same semantics** as the Java
   samples: hints plus reconcile, exact version keys, `SnapshotState`, and the IMAP identity with `UIDVALIDITY`.
 - **Shared SDK trigger conformance fixtures** (`tool-sdk/conformance/triggers/`), run identically against the Java and
@@ -2777,7 +2777,7 @@ latency or throughput target.
 16. Remove the subscriber's grant: the socket gets `revoked` and closes. A ticket replayed after use is refused.
 
 **Device trigger → authorized MCP:**
-17. `examples.inbox-watch` on d1 fires for `a.pdf`. The action runs a client tool on `OriginatingDevice` d1 as the
+17. `examples.hotfolder-watch` on d1 fires for `a.pdf`. The action runs a client tool on `OriginatingDevice` d1 as the
     run-as Agent, with the producer recorded in audit. Re-emitting the same event (`reconcile()`) gives `EXISTING` and
     no second run.
 18. Setting `placement: OriginatingDevice` for a device outside the tool's binding group denies the action. An
@@ -3035,12 +3035,12 @@ point is to test each piece once, when it is built, and not re-test half-finishe
 | # | Module | Effort | Cumulative | Builds | Depends on | Done when |
 |---|---|---|---|---|---|---|
 | 1 | **Contracts, ADR and model** | 5% | 5% | ADR 058; `v2/trigger.schema.json` and protocol frames; generated Java, Rust, PHP and TS bindings; fixtures; proposed OpenAPI; descriptor keyword amendment; `trigger_delivery.tla` | — | Gate D0 approved; contract round-trip tests pass; the check-in and ack worst-case size contract test passes (8.5); TLC passes on the model (6.6.1) |
-| 2 | **Java SDK, POLL** | 6% | 11% | `@ClientTrigger` and `@ServerTrigger` (POLL), processor rules, `PollContext`, runtime loop and frames, `toolgate check` and `toolgate pack`, harness; sample `inbox-watch` in POLL form | 1 | Processor compile-error tests (5.8), runtime frame tests, harness tests for the sample; the package packs and verifies |
+| 2 | **Java SDK, POLL** | 6% | 11% | `@ClientTrigger` and `@ServerTrigger` (POLL), processor rules, `PollContext`, runtime loop and frames, `toolgate check` and `toolgate pack`, harness; sample `hotfolder-watch` in POLL form | 1 | Processor compile-error tests (5.8), runtime frame tests, harness tests for the sample; the package packs and verifies |
 | 3 | **Supervisor crate** | 8% | 19% | `crates/trigger-supervisor`: process lifecycle, frames, outbox with `outboxSeq`, the `LOCAL` barrier, rejection classes, loss records, backoff and crash loop, health, the sequence namespaces | 1 | Stateful property tests against the model (G-STATE item 2) with a fake runtime and a fake Control; crash-point tests T1–T5 and T10 |
 | 4 | **Control core for client triggers** | 8% | 27% | Package acceptance of trigger exports and the security delta; the definitions API; `TriggerAssignment` CRUD for **client** targets (ETag, idempotency, dry run); instances; the signed `TriggerDesiredDocument`; client leases; permissions; audit; tenant tables | 1, 2 | API tests including cross-tenant negatives; desired-document signing and verification tests |
 | 5 | ★ **Client integration and ingest** | 8% | 35% | The endpoint client links the supervisor, fetches desired state and adds `TriggerSync` to check-in; Control ingest (T6–T9, dedupe, `acceptedOutboxSeq`, acks, `retryLater`, dispositions); instance and event queries; derived `Stale` | 3, 4 | **Slice 1:** allocate a POLL trigger to a device, see `Running`, receive events, query status. Owned scenarios pass |
 | 6 | **Lifecycle, rollout and raw page** | 6% | 41% | `:action` with overrides and precedence; `excludeDevices`; rolling package upgrade and `:rollback`; the raw `#triggers` page (upload, assignments, actions, status) | 5 | Override-resolution unit tests; owned scenarios pass |
-| 7 | **PUSH mode and file watching** | 7% | 48% | Java `PushTrigger`, emitter, position barrier, `ACCEPTED` level (checkpoints ≤ 4 KiB inline), `requestReconcile`, `SnapshotState`; client `FILES_WATCH` and `FILES_INFO` `versionKey`; sample `inbox-watch` in PUSH form | 5 | Java part of the SDK trigger conformance fixtures (M2); owned scenarios pass |
+| 7 | **PUSH mode and file watching** | 7% | 48% | Java `PushTrigger`, emitter, position barrier, `ACCEPTED` level (checkpoints ≤ 4 KiB inline), `requestReconcile`, `SnapshotState`; client `FILES_WATCH` and `FILES_INFO` `versionKey`; sample `hotfolder-watch` in PUSH form | 5 | Java part of the SDK trigger conformance fixtures (M2); owned scenarios pass |
 | 8 | ★ **Server triggers on the Tool Host** | 8% | 56% | Tool Host links the supervisor; server placement, singleton lease and failover; the lease-bound broker and secrets; snapshot paging with generations (8.5); chunked checkpoint transfer (8.6); compromise quarantine (T15); sample `mail-watch` (POLL) | 7 | **Slice 2:** a server mail trigger in a two-host pool, with failover. Owned scenarios pass |
 | 9 | **Python SDK parity** | 4% | 60% | `@server_trigger` and `@client_trigger`, POLL and PUSH, `SnapshotState`, and the Python twins of all samples | 2, 7 | The full shared SDK conformance fixtures pass for Python and Java |
 | 10 | **Event router and retention** | 4% | 64% | Transactional outbox, router workers, the delivery state machine (with `Held` and `Superseded`), dead letters and re-drive, retention, tombstones, purge (T11), bulkheads (20.1) | 5 | Router unit and integration tests; retention tests. Deliveries go to a test consumer only |

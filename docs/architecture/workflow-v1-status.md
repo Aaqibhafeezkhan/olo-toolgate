@@ -1,6 +1,101 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Generic package adoption and fresh stack — 2026-11-16
+
+The default watch is now `examples.hotfolder-watch/new-file`, version `0.1.0`,
+under `examples/java-tools/hotfolder-watch`. Active packages/profiles/builds/tests
+use the new identity; earlier checkpoints below retain their historical names.
+No old-name alias, backward-compatible constructor, store conversion or migration
+is added. The stack, image-asset catalog and bootstrap custody require the new
+formats; prior host state/data were preserved before fresh deployment.
+
+[ADR 066](../adr/066-generic-trigger-package-adoption.md) defines package/profile
+adoption. The canonical source no longer fixes a package ID, version, config keys
+or file event type. It declares an explicit event filter and opaque configuration
+validated by Control against the selected signed export. The operator resolves
+one exact package/version from the generic image catalog or the configuration's
+`packages/` folder; external artifacts require the profile's package-digest pin.
+Selected bytes enter checked, root-owned bootstrap custody; no watch-specific
+Compose service, source branch or platform image rebuild is needed to adopt a
+supported package. Native client-release image construction/signing by Control
+still happens as part of package provisioning.
+
+This local artifact path is a privileged operator bootstrap action, not publisher
+provenance or independent security review. Package bytes must be reviewed before
+selection. Unsupported executor modes/capabilities are not granted by discovery.
+The [requested trigger catalog](trigger-package-catalog.md) records webhook/log/
+health, communication/ticketing, bus/CDC and schedule/Git sources as future work.
+PUSH/server ingress/brokers/secrets/schedules and production provider adapters
+remain unimplemented; this delivers client POLL adoption, not every catalog row.
+No existing module/phase weight absorbs that extra backlog.
+
+The folder adapter is optional. Non-file deployment provisions its configured
+agent and source group without the file-tool fixture, and dispatches the selected
+event field through the configured message pointer. CONTEXT handoff is generic
+`message` plus `context`; models do not echo internal source paths. File delivery
+selects its journal entry from Control's independently confirmed admitted message,
+then verifies the input digest and output/archive state. It never selects a host
+path from model output. The supplied profiles are now issue-triage-v3 and
+text-summary-v5, returning semantic results only.
+
+Executed evidence:
+
+- External SDK fixture `acceptance.signal-watch/signal-ready` was compiled/packed
+  separately, with another config/event shape and `/body` mapping. No folder
+  adapter or file-tool agent was installed. Runs
+  `run-82799f19-a3db-435b-92a1-0de5a0e0ad9d` and
+  `run-e2b0479a-f2e9-44c2-8730-c9a347904124` independently confirm Control success,
+  configured `signal-diagnoser` inference and zero workflow file-tool calls.
+  The second run uses common image ID
+  `sha256:e33c1dc71572137bfdab4c2a7facd1516c7b937c15fa96519f5676ab075c30ee`,
+  unchanged during package adoption. This fixture is not a production connector.
+- Fresh triage `run-bd03f8ad-356a-4d8a-b25c-011c4200bf04` produced
+  `acceptance-aeac4bf73e-b05dd6e774ce.result.json` with the configured read/model
+  evidence and retained input. Summary
+  `run-b3d0f9f4-8977-448a-aec8-17e6d62549ca` called both agents, archived exact
+  bytes and wrote `acceptance-58ef88a334-da1d2ac402e4.summary.txt`.
+  The tracked `tools/workflows/verify_stack_demo.py` independently checks these
+  flows using Control admission and execution observations.
+- The first generic attempt exposed a missing source-readiness barrier (404)
+  and the non-file Control validator dereference (500); both are fixed. An early
+  summary copied a path instruction literally. It is retained in private results,
+  with its original under `data/text-summary/rejected-acceptance/`; it is not an
+  accepted delivery. The new contract removes model path copying altogether and
+  new independent inputs pass. No uncertain workflow effect is retried.
+- 14 profile/delivery, 11 lifecycle, 36 operator and 5 package tests pass.
+  Image/package custody tests: Windows 5/one Linux-root skip; Linux 5 pass, including an empty catalog with no bundled watch.
+  Runtime 62 pass with OpenSSL available; initial host import and missing-test-
+  OpenSSL attempts are not accepted as full gates. Seven schema tests, 1554
+  generated-binding checks, corpus checks, Java/TS/PHP/Rust round trips pass.
+  PHP covers 444 v2 models; Rust 1.94.1 runs four contract tests and fmt passes.
+  The renamed watch's SDK check/two examples and external fixture example pass.
+- Focused SQLite/owned PostgreSQL workflow/profile/client-release tests pass
+  30 with no skips, including optional-folder positives and unbound-agent
+  negatives on both stores. Four Java contract and nine archive/CLI-parity tests
+  pass without skips. Full Windows javaCheck executes 375 ordinary tests
+  (eight skips) with no failures; enterprise executes 449, with the known Windows
+  `KillSwitchTest.separateOperatorMtlsListenerCommitsOnlyAcceptedOfflineQuorum`
+  UnsupportedOperationException. This is not a green full Java gate.
+- Full Windows CI-Python discovery ran 454 tests with 11 skips and three errors:
+  the known device-socket symlink privilege error and two stamping tests that
+  enumerated deleted generated files before the index was staged. After staging
+  the current generated inventory, all 33 affected stamping/release tests pass.
+  No passing full Windows CI gate is claimed. The prior hosted run at 25cf0e3b
+  was cancelled before completing; its check labels are not accepted failures
+  or passing execution evidence for this change.
+
+Known tested base `25cf0e3b`; normalized source manifest SHA-256 `c2506a59131b41f13abb1c45cee3569301bbd197a288992a8452191f6f091c28`
+(57 existing changed public non-Markdown paths, sorted path + NUL + per-file
+SHA-256 after CRLF-to-LF normalization + newline). Baseline `v1-effort-1` stays
+**0/100 earned**, #274 stays **27%**, #230 weights and all full security exits
+remain unchanged. Next work is the qualified generic PUSH/server/broker path
+before webhook/provider packages, plus full Linux/distributed V1.4 and authorized
+release publication. PR #311 was merged at `25cf0e3b`; these changes belong to
+a separate draft follow-up targeting `feature/workflow-enhancement`. Sonar's
+external analysis-mode conflict
+from the previous checkpoint is not fixed by these code changes.
+
 ## Hosted contract-gate follow-up — 2026-11-16
 
 Hosted revision `0389013a` passed Java, Rust, UI, browser, native-client,
@@ -653,9 +748,9 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Generic package-selected fresh deployment is locally exercised; full phase remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
-| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending | 0% |
+| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package dispatch is exercised; server/PUSH/provider sources remain pending. | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment and two-profile local acceptance delivered; complete fresh-install scenarios, Linux gates and release publication pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 

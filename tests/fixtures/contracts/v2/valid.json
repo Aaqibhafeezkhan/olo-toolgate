@@ -3826,7 +3826,7 @@
     }
   },
   "TriggerAssignmentSpec": {
-    "trigger": "examples.inbox-watch/new-file",
+    "trigger": "examples.hotfolder-watch/new-file",
     "packageVersion": "1.0.0",
     "target": {
       "executor": "CLIENT",
@@ -3920,7 +3920,7 @@
       "updatedAtUnixMs": 1793413660000
     },
     "spec": {
-      "trigger": "examples.inbox-watch/new-file",
+      "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "1.0.0",
       "target": {
         "executor": "CLIENT",
@@ -3972,7 +3972,7 @@
       }
     ],
     "spec": {
-      "trigger": "examples.inbox-watch/new-file",
+      "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "1.0.0",
       "target": {
         "executor": "CLIENT",
@@ -4015,7 +4015,7 @@
           "updatedAtUnixMs": 1793413660000
         },
         "spec": {
-          "trigger": "examples.inbox-watch/new-file",
+          "trigger": "examples.hotfolder-watch/new-file",
           "packageVersion": "1.0.0",
           "target": {
             "executor": "CLIENT",
@@ -4087,7 +4087,7 @@
         "updatedAtUnixMs": 1793413660000
       },
       "spec": {
-        "trigger": "examples.inbox-watch/new-file",
+        "trigger": "examples.hotfolder-watch/new-file",
         "packageVersion": "1.0.0",
         "target": {
           "executor": "CLIENT",
@@ -4144,7 +4144,7 @@
   "TriggerInstanceView": {
     "instanceId": "ti-0123456789abcdef0123456789abcdef",
     "assignment": "finance-inbox-pdf",
-    "triggerId": "examples.inbox-watch/new-file",
+    "triggerId": "examples.hotfolder-watch/new-file",
     "executor": "CLIENT",
     "executorId": "device-42",
     "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -4167,7 +4167,7 @@
       {
         "instanceId": "ti-0123456789abcdef0123456789abcdef",
         "assignment": "finance-inbox-pdf",
-        "triggerId": "examples.inbox-watch/new-file",
+        "triggerId": "examples.hotfolder-watch/new-file",
         "executor": "CLIENT",
         "executorId": "device-42",
         "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5319,14 +5319,15 @@
     "source": {
       "subscription": "configured-workflow",
       "assignment": "hotfolder-inbox",
-      "packageId": "examples.inbox-watch",
+      "packageId": "examples.hotfolder-watch",
       "version": "0.1.0",
-      "triggerId": "examples.inbox-watch/new-file",
+      "triggerId": "examples.hotfolder-watch/new-file",
       "deviceGroupId": "ReadAndWriteDeviceGroup",
       "config": {
         "folder": "inbox",
         "extension": ".txt"
-      }
+      },
+      "eventFilter": "event.type == 'examples.files.observed.v1'"
     },
     "fileAgent": {
       "agentId": "langchain-linux-agent",
@@ -5443,18 +5444,15 @@
   "WorkflowStackTriggerSource": {
     "subscription": "configured-workflow",
     "assignment": "hotfolder-inbox",
-    "packageId": "examples.inbox-watch",
+    "packageId": "examples.hotfolder-watch",
     "version": "0.1.0",
-    "triggerId": "examples.inbox-watch/new-file",
+    "triggerId": "examples.hotfolder-watch/new-file",
     "deviceGroupId": "ReadAndWriteDeviceGroup",
     "config": {
       "folder": "inbox",
       "extension": ".txt"
-    }
-  },
-  "WorkflowStackTriggerConfig": {
-    "folder": "inbox",
-    "extension": ".txt"
+    },
+    "eventFilter": "event.type == 'examples.files.observed.v1'"
   },
   "WorkflowStackFolderAgent": {
     "agentId": "langchain-linux-agent",

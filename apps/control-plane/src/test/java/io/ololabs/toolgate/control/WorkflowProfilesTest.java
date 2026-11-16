@@ -60,6 +60,24 @@ final class WorkflowProfilesTest {
     @Test void postgresDispatchResolutionFollowsPublication() throws Exception { dispatchResolution(true); }
     @Test void sqliteRunAndAdmissionShareOneTenantTransaction() throws Exception { durableRun(false); }
     @Test void postgresRunAndAdmissionShareOneTenantTransaction() throws Exception { durableRun(true); }
+    @Test void sqliteNonFileDeploymentDoesNotRequireFolderAgent() throws Exception { nonFileDeployment(false); }
+    @Test void postgresNonFileDeploymentDoesNotRequireFolderAgent() throws Exception { nonFileDeployment(true); }
+
+    private void nonFileDeployment(boolean postgres) throws Exception {
+        var rig = rig(postgres);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
+        var value = profile();
+        var fixtures = Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
+        var deployment = (ObjectNode)JSON.readTree(Files.readString(fixtures)).path("WorkflowStackDeployment").deepCopy();
+        deployment.remove("fileAgent");
+        ((ObjectNode)deployment.path("model")).put("deploymentId", value.path("workflows").path("modelDeployments").get(0).path("id").asText());
+        var workflow = (ObjectNode)value.path("workflows").path("workflows").get(0);
+        workflow.set("deployment", deployment);
+        assertEquals(201, service.upload(rig.admin, value.toString(), "non-file").status());
+        deployment.set("fileAgent", JSON.readTree(Files.readString(fixtures)).path("WorkflowStackFolderAgent"));
+        ((ObjectNode)deployment.path("fileAgent")).put("agentId", "unbound-agent");
+        assertEquals(400, assertThrows(Failure.class, () -> service.upload(rig.admin, value.toString(), "unbound-folder-agent")).status());
+    }
 
     private void durableRun(boolean postgres) throws Exception {
         var rig = rig(postgres);
@@ -178,7 +196,7 @@ final class WorkflowProfilesTest {
         var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
         var value = profile();
         var entry = ((ArrayNode)value.get("packages")).addObject();
-        entry.put("packageId", "examples.inbox-watch").put("version", "0.1.0")
+        entry.put("packageId", "examples.hotfolder-watch").put("version", "0.1.0")
             .put("source", "PREBUILT_CORE").put("required", true);
         entry.putArray("deviceGroupIds").add("devices").add("devices");
 
@@ -379,7 +397,7 @@ final class WorkflowProfilesTest {
     @Test void realDependencyChecksRequireVaultScopeAndCurrentAgentMembership() throws Exception {
         var rig = rig(false); var deps = new WorkflowProfileDependencies(codec, java.time.Clock.systemUTC(), null, null, rig.tenant);
         var service = new WorkflowProfiles(rig.store, codec, deps, keys()); var value = profile();
-        value.putArray("packages").addObject().put("packageId", "examples.inbox-watch")
+        value.putArray("packages").addObject().put("packageId", "examples.hotfolder-watch")
             .put("version", "0.1.0").put("source", "PREBUILT_CORE").put("required", true);
         ((ObjectNode)value.path("workflows")).putArray("dispatchBindings");
         ((ObjectNode)value.path("workflows").path("agentDefinitions").get(0)).putArray("contextSources");
