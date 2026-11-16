@@ -58,7 +58,10 @@ def load(directory):
     if len(active)!=1:
         raise ValueError('A local stack profile must select exactly one enabled workflow deployment')
     workflow=active[0]
-    deployment=fields(workflow['deployment'],'enabled runtime platform model source fileAgent monitoring')
+    deployment=workflow['deployment']
+    if not isinstance(deployment,dict) or set(deployment)-{'enabled','runtime','platform','model','source','fileAgent','monitoring'}:
+        raise ValueError('Unsupported workflow deployment configuration')
+    fields({key:value for key,value in deployment.items() if key!='fileAgent'},'enabled runtime platform model source monitoring')
     runtime=fields(deployment['runtime'],'engine image')
     if runtime['engine']!='LANGGRAPH':
         raise ValueError('Unsupported workflow runtime engine')
@@ -92,19 +95,27 @@ def load(directory):
             or type(generation['temperature']) not in (int,float) or not math.isfinite(generation['temperature'])
             or not 0<=generation['temperature']<=2):
         raise ValueError('Use bounded model generation parameters in the profile')
-    source=fields(deployment['source'],'subscription assignment packageId version triggerId deviceGroupId config')
+    source=deployment['source']
+    if not isinstance(source,dict) or set(source)-{'subscription','assignment','packageId','version','triggerId','deviceGroupId','config','eventFilter','packageDigest'}:
+        raise ValueError('Unsupported trigger source declaration')
+    fields({key:value for key,value in source.items() if key!='packageDigest'},'subscription assignment packageId version triggerId deviceGroupId config eventFilter')
     if (any(not isinstance(source[name],str) or not NAME.fullmatch(source[name]) for name in ('subscription','assignment','deviceGroupId'))
-            or source['packageId']!='examples.inbox-watch' or source['version']!='0.1.0'
-            or source['triggerId']!='examples.inbox-watch/new-file' or source['config']!={'folder':'inbox','extension':'.txt'}):
-        raise ValueError('Unsupported signed hot-folder trigger source')
-    agent=deployment['fileAgent']
-    if (not isinstance(agent,dict) or set(agent) != {'agentId','inbox','processed','output','archive','projection'}
+            or not isinstance(source['packageId'],str) or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,127}',source['packageId'])
+            or not isinstance(source['version'],str) or not re.fullmatch(r'\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?',source['version'])
+            or not isinstance(source['triggerId'],str) or not source['triggerId'].startswith(source['packageId']+'/')
+            or not re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,127}/[a-z0-9][a-z0-9._-]{0,127}',source['triggerId'])
+            or not isinstance(source['config'],dict) or len(source['config'])>64 or len(json.dumps(source['config']).encode())>8192
+            or not isinstance(source['eventFilter'],str) or not 1<=len(source['eventFilter'])<=1024
+            or 'packageDigest' in source and not re.fullmatch(r'sha256:[a-f0-9]{64}',source['packageDigest'])):
+        raise ValueError('Use a pinned package, its trigger ID, bounded configuration and an explicit event filter')
+    agent=deployment.get('fileAgent')
+    if agent is not None and (not isinstance(agent,dict) or set(agent) != {'agentId','inbox','processed','output','archive','projection'}
             or not isinstance(agent['agentId'],str) or not NAME.fullmatch(agent['agentId'])
             or type(agent['archive']) is not bool or agent['projection'] not in ('json','summary')
             or any(not isinstance(agent[k],str) or not NAME.fullmatch(agent[k]) for k in ('inbox','processed','output'))
             or len({agent[k] for k in ('inbox','processed','output')}) != 3):
         raise ValueError('Folder agent needs distinct confined input, processed and output folders')
-    if agent['agentId'] not in {item['agentId'] for item in workflow['agents']}:
+    if agent is not None and agent['agentId'] not in {item['agentId'] for item in workflow['agents']}:
         raise ValueError('Folder agent must belong to the selected workflow')
     monitoring=fields(deployment['monitoring'],'enabled mode collectorConfig spanSampleRatio grafanaUser grafanaSecret grafanaPort prometheusPort images')
     if (type(monitoring['enabled']) is not bool or monitoring['mode'] not in ('NONE','BASIC','DETAILED')

@@ -1,0 +1,9 @@
+// Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+// The SDK test stage must not resolve unrelated application or analysis plugins.
+settingsEvaluated { settings ->
+    settings.pluginManagement.resolutionStrategy.eachPlugin {
+        if (requested.id.id in ['org.sonarqube', 'io.quarkus']) {
+            throw new GradleException('SDK fixture tried to configure an unrelated application/analysis plugin')
+        }
+    }
+}

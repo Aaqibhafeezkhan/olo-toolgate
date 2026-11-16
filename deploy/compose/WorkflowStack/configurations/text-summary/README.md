@@ -17,6 +17,9 @@ After successful, schema-valid completion, the file agent adapter
 independently verifies Control's result, profile and admitted source path before
 writing files. Folder paths come from the workflow profile's `deployment.fileAgent`, never model output.
 The adapter performs delivery writes; this does not qualify native mutation tools.
+Version `text-summary-v5` returns only the summary. Context stages transfer
+`message` and `context`; the model does not need to copy a device path.
+The adapter binds the result to Control's admitted message and the private file journal.
 
 From `deploy/compose/WorkflowStack`, stop the previous configuration, select
 `CONFIGURATION=text-summary` in `.env`, then run `start.bat` and choose text-summary.

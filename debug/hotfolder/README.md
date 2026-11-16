@@ -6,7 +6,7 @@ Docker Desktop, enable the distribution's WSL integration before selecting its
 engine. The independent WSL Docker engine also works. Windows file sharing that
 does not preserve owner-only permissions is unsuitable for this example.
 
-This is the existing signed `examples.inbox-watch` trigger and LangGraph example,
+This is the existing signed `examples.hotfolder-watch` trigger and LangGraph example,
 run under its own `toolgate-hotfolder` Compose project. It uses the source-built
 endpoint and the existing `olo-toolgate-quickstart:debug` image. The console is
 at [port 18092](http://127.0.0.1:18092/console/), TLS at 18452, and the local

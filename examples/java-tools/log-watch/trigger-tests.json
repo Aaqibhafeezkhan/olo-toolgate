@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "providerMode": "mock",
+  "packageId": "examples.log-watch",
+  "buildRoot": "examples/java-tools",
+  "project": "log-watch",
+  "startConfig": {"file": "logs/app.log"}
+}

@@ -2778,7 +2778,7 @@ export interface WorkflowStackDeployment {
   readonly platform: WorkflowStackPlatform;
   readonly model: WorkflowStackModelEngine;
   readonly source: WorkflowStackTriggerSource;
-  readonly fileAgent: WorkflowStackFolderAgent;
+  readonly fileAgent?: WorkflowStackFolderAgent;
   readonly monitoring: WorkflowStackMonitoring;
 }
 /** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
@@ -2832,19 +2832,16 @@ export interface WorkflowStackRuntime {
   readonly image: string;
 }
 /** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
-export interface WorkflowStackTriggerConfig {
-  readonly folder: "inbox";
-  readonly extension: ".txt";
-}
-/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
 export interface WorkflowStackTriggerSource {
   readonly subscription: string;
   readonly assignment: string;
-  readonly packageId: "examples.inbox-watch";
-  readonly version: "0.1.0";
-  readonly triggerId: "examples.inbox-watch/new-file";
+  readonly packageId: string;
+  readonly version: string;
+  readonly triggerId: string;
   readonly deviceGroupId: string;
-  readonly config: WorkflowStackTriggerConfig;
+  readonly config: Record<string, unknown>;
+  readonly eventFilter: string;
+  readonly packageDigest?: string;
 }
 /** Bounded tool model proposal; never execution authority. */
 export interface WorkflowToolDecision {

@@ -191,7 +191,11 @@ class WireTests(unittest.TestCase):
                 return DispatchReceipt(uid, cursor, "dispatch-1", "ADMITTED" if len(admissions) == 1 else "DUPLICATE", "run-1")
             client.admit = admit
             for _ in range(2):
-                count, receipt = TriggerListener(client, SUB).listen_once(max_events=1)
+                try:
+                    count, receipt = TriggerListener(client, SUB).listen_once(max_events=1)
+                except ListenerFailure as failure:
+                    failure.add_note(f"cause={type(failure.__context__).__name__}, mock errors={errors}, frame_counts={[len(frames) for frames in seen]}")
+                    raise
                 self.assertEqual(count, 1); self.assertEqual(receipt.run_id, "run-1")
             self.assertTrue(finished.wait(3))
             self.assertEqual(errors, [])

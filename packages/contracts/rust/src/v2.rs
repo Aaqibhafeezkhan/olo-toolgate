@@ -5172,7 +5172,8 @@ pub struct WorkflowStackDeployment {
     pub platform: WorkflowStackPlatform,
     pub model: WorkflowStackModelEngine,
     pub source: WorkflowStackTriggerSource,
-    pub file_agent: WorkflowStackFolderAgent,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_agent: Option<WorkflowStackFolderAgent>,
     pub monitoring: WorkflowStackMonitoring,
 }
 /// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
@@ -5242,26 +5243,17 @@ pub struct WorkflowStackRuntime {
 /// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkflowStackTriggerConfig {
-    #[serde(deserialize_with = "const_workflow_stack_trigger_config_folder")]
-    pub folder: String,
-    #[serde(deserialize_with = "const_workflow_stack_trigger_config_extension")]
-    pub extension: String,
-}
-/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowStackTriggerSource {
     pub subscription: String,
     pub assignment: String,
-    #[serde(deserialize_with = "const_workflow_stack_trigger_source_package_id")]
     pub package_id: String,
-    #[serde(deserialize_with = "const_workflow_stack_trigger_source_version")]
     pub version: String,
-    #[serde(deserialize_with = "const_workflow_stack_trigger_source_trigger_id")]
     pub trigger_id: String,
     pub device_group_id: String,
-    pub config: WorkflowStackTriggerConfig,
+    pub config: std::collections::BTreeMap<String, serde_json::Value>,
+    pub event_filter: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
 }
 /// Bounded tool model proposal; never execution authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -5379,23 +5371,6 @@ const_field!(
     "LLAMA_CPP"
 );
 const_field!(const_workflow_stack_runtime_engine, String, "LANGGRAPH");
-const_field!(const_workflow_stack_trigger_config_folder, String, "inbox");
-const_field!(
-    const_workflow_stack_trigger_config_extension,
-    String,
-    ".txt"
-);
-const_field!(
-    const_workflow_stack_trigger_source_package_id,
-    String,
-    "examples.inbox-watch"
-);
-const_field!(const_workflow_stack_trigger_source_version, String, "0.1.0");
-const_field!(
-    const_workflow_stack_trigger_source_trigger_id,
-    String,
-    "examples.inbox-watch/new-file"
-);
 const_field!(const_workflow_tool_decision_kind, String, "tool");
 /// Embedded canonical schemas for offline boundary validation.
 pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[

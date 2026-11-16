@@ -236,6 +236,109 @@ jobs:
     - name: Java SDK plugins and Java example tools end to end
       run: |
         python tools/check.py --ci-common --ci-part examples
+  trigger-package-sdk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.packages.outputs.matrix }}
+    env:
+      TOOLGATE_BUILD: ${{ inputs.build_number || 'local' }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ inputs.source_sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Discover every registered trigger package and require its README
+      id: packages
+      run: python tools/triggers/package_tests.py --matrix --github-output
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
+    - name: Prepare the shared test SDK and offline package CLI once
+      env:
+        RUSTUP_HOME: ${{ runner.temp }}/toolgate-rustup
+        CARGO_HOME: ${{ runner.temp }}/toolgate-cargo
+      run: |
+        python tools/ci/install_rust.py
+        printf 'RUSTUP_HOME=%s\n' "$RUSTUP_HOME" >> "$GITHUB_ENV"
+        printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
+        printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
+        export PATH="$CARGO_HOME/bin:$PATH"
+        ./gradlew --no-daemon --configure-on-demand -I tools/ci/sdk-isolation.init.gradle -PprebuiltAdminUi=true :publishJavaSdkLocally
+        cargo build --locked -p toolgate-cli
+        mkdir -p build/trigger-package-sdk
+        cp target/debug/toolgate build/trigger-package-sdk/toolgate
+        cp VERSION build/trigger-package-sdk/VERSION
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: trigger-package-sdk
+        path: |
+          build/sdk-repo/
+          build/trigger-package-sdk/
+        retention-days: 1
+        if-no-files-found: error
+  trigger-package-tests:
+    needs: trigger-package-sdk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.trigger-package-sdk.outputs.matrix) }}
+    env:
+      TOOLGATE_BUILD: ${{ inputs.build_number || 'local' }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ inputs.source_sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '21'
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: trigger-package-sdk
+        path: .dev/trigger-package-sdk
+    - name: Run isolated package mock tests, descriptor examples, pack validation and runtime smoke
+      env:
+        TOOLGATE_TEST_PACKAGE: ${{ matrix.package }}
+        TOOLGATE_TEST_SDK_REPO: ${{ github.workspace }}/.dev/trigger-package-sdk/sdk-repo
+        TOOLGATE_CLI: ${{ github.workspace }}/.dev/trigger-package-sdk/trigger-package-sdk/toolgate
+        TOOLGATE_TEST_PROVIDER_MODE: mock
+      run: |
+        chmod +x "$TOOLGATE_CLI"
+        python tools/triggers/package_tests.py --sdk-version-file .dev/trigger-package-sdk/trigger-package-sdk/VERSION
+    - name: Retain individual package test evidence
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: trigger-tests-${{ matrix.key }}
+        path: |
+          build/trigger-package-tests/
+          ${{ matrix.package }}/build/test-results/
+          ${{ matrix.package }}/build/reports/
+          ${{ matrix.package }}/build/toolgate/*.tgpkg
+        if-no-files-found: warn
+        retention-days: 7
   scans:
     runs-on: ubuntu-24.04
     env:
@@ -471,7 +574,7 @@ jobs:
         retention-days: 1
         if-no-files-found: error
   check:
-    needs: [python, ui, rust, examples, scans, browser, java, core-mcp]
+    needs: [python, ui, rust, examples, trigger-package-sdk, trigger-package-tests, scans, browser, java, core-mcp]
     runs-on: ubuntu-24.04
     env:
       TOOLGATE_BUILD: ${{ inputs.build_number || 'local' }}

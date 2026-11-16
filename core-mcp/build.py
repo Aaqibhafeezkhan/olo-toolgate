@@ -80,11 +80,11 @@ def main():
     gradle = ROOT / ("gradlew.bat" if os.name == "nt" else "gradlew")
     prerequisites = []
     if any(p["sdk"] == "java-gradle" for p, _ in packages):
-        prerequisites.append("publishJavaSdkLocally")
+        prerequisites.append(":publishJavaSdkLocally")
     if any(p["sdk"] == "json" for p, _ in packages):
         prerequisites.append(":sdk-json:installDist")
     if prerequisites:
-        run([gradle, "--console=plain", *prerequisites], env)
+        run([gradle, "--configure-on-demand", "--console=plain", *prerequisites], env)
     python_env = dict(env, TOOLGATE_PYTHON=sys.executable,
                       PYTHONPATH=str(ROOT / "tool-sdk/python-sdk/src") + os.pathsep + env.get("PYTHONPATH", ""))
     output = args.output.resolve()

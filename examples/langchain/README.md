@@ -153,7 +153,7 @@ A file dropped into the device's `inbox/` folder triggers a LangGraph flow
 ([trigger_agent.py](trigger_agent.py)). The flow displays the file's content and
 then moves it to `processed/`. The feature is enabled by a deployment profile, not by a flag:
 [hotfolder-trigger.profile.json](hotfolder-trigger.profile.json) releases the
-trigger-only [`examples.inbox-watch`](../java-tools/inbox-watch/README.md) package to
+trigger-only [`examples.hotfolder-watch`](../java-tools/hotfolder-watch/README.md) package to
 `ReadAndWriteDeviceGroup` and assigns its `new-file` client trigger there with
 `{"folder": "inbox", "extension": ".txt"}`. The HotFolder package stays tools-only, so the
 base setup above works without triggers. Any Control that applies the

@@ -65,7 +65,7 @@ public final class WorkflowConfigurations {
             if (!entry) throw invalid("A workflow requires an entry-eligible agent");
             if (workflow.deployment() != null) {
                 var deployment = workflow.deployment();
-                if (workflow.agents().stream().noneMatch(a -> a.agentId().equals(deployment.fileAgent().agentId()))
+                if (deployment.fileAgent() != null && workflow.agents().stream().noneMatch(a -> a.agentId().equals(deployment.fileAgent().agentId()))
                         || !models.get(workflow.modelGroupId()).deploymentIds().contains(deployment.model().deploymentId()))
                     throw invalid("Deployment references must belong to their workflow");
             }

@@ -1,30 +1,27 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
-"""Seal profile-independent native packages into the release image at build time."""
-import hashlib
+"""Seal built packages into a generic release-image catalog."""
 import json
 from pathlib import Path
 import shutil
 import sys
-import zipfile
+from package_assets import describe
 
 
 def seal(source,output):
-    packages=[]
-    for name in ('hotfolder','inbox-watch'):
-        artifact=source/name/'build/toolgate'/(name+'-0.1.0.tgpkg')
-        with zipfile.ZipFile(artifact) as archive:
-            manifest=json.loads(archive.read('toolgate-package.json'))
-            checksum=archive.read('CHECKSUMS.sha256')
-        if manifest['id']!='examples.'+name or manifest['version']!='0.1.0':
-            raise ValueError('Unexpected workflow package identity')
-        packages.append(dict(id=manifest['id'],version=manifest['version'],artifact=name+'.tgpkg',
-            artifactSha256=hashlib.sha256(artifact.read_bytes()).hexdigest(),
-            packageDigest='sha256:'+hashlib.sha256(checksum).hexdigest(),sdkVersion=manifest['sdk']['version']))
+    found=[]
+    for artifact in sorted(source.glob('*/build/toolgate/*.tgpkg')):
+        metadata=describe(artifact)
+        metadata['artifact']=artifact.parents[2].name+'.tgpkg'
+        found.append((metadata,artifact))
+    if len(found)>64 or len({(p['id'],p['version']) for p,_ in found})!=len(found):
+        raise ValueError('Package catalog must contain unique, bounded package identities')
+    if len({p['artifact'] for p,_ in found})!=len(found):raise ValueError('Duplicate catalog artifact names')
     output.mkdir(parents=True,exist_ok=True)
-    for package in packages:
-        name=package['artifact'].removesuffix('.tgpkg')
-        shutil.copyfile(source/name/'build/toolgate'/(name+'-0.1.0.tgpkg'),output/package['artifact'])
-    (output/'manifest.json').write_text(json.dumps(dict(formatVersion=1,packages=packages),indent=2)+'\n',encoding='utf-8')
+    packages=[]
+    for package,artifact in sorted(found,key=lambda row:(row[0]['id'],row[0]['version'])):
+        shutil.copyfile(artifact,output/package['artifact'])
+        packages.append(package)
+    (output/'manifest.json').write_text(json.dumps(dict(formatVersion=2,packages=packages),indent=2)+'\n',encoding='utf-8')
 
 
 if __name__=='__main__':seal(Path(sys.argv[1]),Path(sys.argv[2]))

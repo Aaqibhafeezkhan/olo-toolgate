@@ -222,10 +222,10 @@ class ProfileTest(unittest.TestCase):
     def test_the_profile_assigns_the_trigger_to_the_example_device_group(self):
         profile = json.loads((HERE / 'hotfolder-trigger.profile.json').read_text(encoding='utf-8'))
         package, = profile['packages']
-        self.assertEqual((package['packageId'], package['source']), ('examples.inbox-watch', 'PREBUILT_CORE'))
+        self.assertEqual((package['packageId'], package['source']), ('examples.hotfolder-watch', 'PREBUILT_CORE'))
         self.assertEqual(package['deviceGroupIds'], ['ReadAndWriteDeviceGroup'])
         trigger, = package['triggers']
-        self.assertEqual(trigger, dict(assignment=ta.ASSIGNMENT, triggerId='examples.inbox-watch/new-file',
+        self.assertEqual(trigger, dict(assignment=ta.ASSIGNMENT, triggerId='examples.hotfolder-watch/new-file',
                                        config=dict(folder=ta.INBOX, extension='.txt')))
 
 

@@ -456,7 +456,6 @@ $models = [
     'WorkflowStackMonitoringImages',
     'WorkflowStackPlatform',
     'WorkflowStackRuntime',
-    'WorkflowStackTriggerConfig',
     'WorkflowStackTriggerSource',
     'WorkflowToolDecision'
 ];

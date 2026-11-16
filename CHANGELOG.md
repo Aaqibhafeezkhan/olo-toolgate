@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add the `examples.log-watch/error-spike` client POLL package and a profile-scoped
+  managed-log triage use case, with bounded RE2 filtering, observation windows,
+  cooldowns, restart checkpoints and explicit rewrite/rotation limits. Host log
+  access and native PUSH remain separate executor work.
+  Include `.log` in the managed-device file allowlist and run registered trigger
+  packages in a parallel CI mock-test matrix with individual reports and READMEs.
+
 - Add `WorkflowStack/start.bat` with numbered profile selection and automatic
   missing-image preparation. Add destructive `stop.bat` cleanup for owned stack
   containers, volumes, networks and generated state/data, preserving profiles and

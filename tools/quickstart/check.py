@@ -107,7 +107,7 @@ def toolgate_cli():
 
 def starter_package(revocation=False):
     """The Java starter as a tool author builds it: `toolgate init`, then `toolgate pack`."""
-    run(['./gradlew','-q','--configure-on-demand','publishJavaSdkLocally'])
+    run(['./gradlew','-q','--configure-on-demand',':publishJavaSdkLocally'])
     toolgate=toolgate_cli()
     build=(ROOT/'build').resolve();build.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='quickstart-starter-',dir=build) as temporary:

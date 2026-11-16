@@ -13,8 +13,8 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PACKAGE_ID = 'examples.hotfolder'
-# The hot-folder trigger is the trigger-only inbox-watch package; the profile releases and assigns it.
-TRIGGER_PACKAGE_ID = 'examples.inbox-watch'
+# The hot-folder trigger is the trigger-only hotfolder-watch package; the profile releases and assigns it.
+TRIGGER_PACKAGE_ID = 'examples.hotfolder-watch'
 # move is granted for the hot-folder trigger agent (trigger_agent.py), which files each dropped file in processed/.
 TOOLS = {PACKAGE_ID+'/'+name for name in ('list', 'read_text', 'write_text', 'move')}
 BASE = 'eclipse-temurin@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c'
@@ -27,7 +27,7 @@ def prepare(compose, state, environment):
     subprocess.run(['docker', 'build', '--platform', 'linux/amd64', '-f', str(HERE/'package.Dockerfile'),
         '--build-arg', 'QUICKSTART_IMAGE='+image, '--output', 'type=local,dest='+str(state/'package'),
         str(ROOT)], check=True)
-    core_lock(state/'package', 'inbox-watch.tgpkg', TRIGGER_PACKAGE_ID, 'examples/java-tools/inbox-watch')
+    core_lock(state/'package', 'hotfolder-watch.tgpkg', TRIGGER_PACKAGE_ID, 'examples/java-tools/hotfolder-watch')
     registry(compose,state,environment)
 
 
@@ -66,7 +66,7 @@ def registry(compose,state,environment):
     (state/'client-images.env').write_text(''.join(k+'='+v+'\n' for k,v in settings.items()), encoding='utf-8')
 
 
-def core_lock(directory, name='inbox-watch.tgpkg', package_id=None, project='examples/java-tools/inbox-watch'):
+def core_lock(directory, name='hotfolder-watch.tgpkg', package_id=None, project='examples/java-tools/hotfolder-watch'):
     """A sealed core lock naming the built trigger package, for the hot-folder profile (compose.triggers.yaml).
 
     Control resolves a PREBUILT_CORE profile entry only from such a lock, with the same fields and digests as

@@ -462,7 +462,6 @@ fn v2_fixture_round_trips() {
         WorkflowStackMonitoringImages,
         WorkflowStackPlatform,
         WorkflowStackRuntime,
-        WorkflowStackTriggerConfig,
         WorkflowStackTriggerSource,
         WorkflowToolDecision,
     );

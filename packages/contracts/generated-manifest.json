@@ -39,7 +39,7 @@
     "packages/contracts/schemas/v2/settings.schema.json": "2a55ae4fd562d8904f33104177a66f6789912509035e4fe8da91b92b2776da5a",
     "packages/contracts/schemas/v2/trigger.schema.json": "6230d9966e4d4d734e4dce19af60904ab7efdf1b599f673723aa60294509a22b",
     "packages/contracts/schemas/v2/workflow-decision.schema.json": "f89d999aa3958a2b325fca073550fe77da3897d3e34d82f601c1f3689d9cf753",
-    "packages/contracts/schemas/v2/workflow.schema.json": "55985befce11bad00253adc91e1854155e66c94a9a2d97b93e16dff8a9e38618"
+    "packages/contracts/schemas/v2/workflow.schema.json": "a5d15e84740e8a87ddc6c4de67ab4f209a3234f305327924be7d278b3415f7d7"
   },
   "generatorSha256": "97c8ba972f69933485098cf6ffdf8596c4bf1655603fd9c1d0026a23ccadd493",
   "outputs": [
@@ -793,7 +793,6 @@
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackMonitoringImages.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackPlatform.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackRuntime.java",
-    "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackTriggerConfig.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackTriggerSource.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowToolDecision.java",
     "packages/contracts/php/LICENSE",
@@ -1546,7 +1545,6 @@
     "packages/contracts/php/src/V2/WorkflowStackMonitoringImages.php",
     "packages/contracts/php/src/V2/WorkflowStackPlatform.php",
     "packages/contracts/php/src/V2/WorkflowStackRuntime.php",
-    "packages/contracts/php/src/V2/WorkflowStackTriggerConfig.php",
     "packages/contracts/php/src/V2/WorkflowStackTriggerSource.php",
     "packages/contracts/php/src/V2/WorkflowToolDecision.php",
     "packages/contracts/rust/LICENSE",

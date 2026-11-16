@@ -153,18 +153,22 @@ class FolderAgent:
         if not isinstance(run,str) or not re.fullmatch(r'run-[a-f0-9-]{36}',run):
             return
         candidate=worker.get('result')
-        if not isinstance(candidate,dict) or not isinstance(candidate.get('sourcePath'),str):
+        if not isinstance(candidate,dict):
             return
-        row=self.db.execute('SELECT * FROM jobs WHERE source=?',(candidate['sourcePath'],)).fetchone()
-        if row is None or row['state'] not in ('WAITING','PROJECTING'):
-            return
-        if row['run'] is not None and row['run']!=run:
+        previous=self.db.execute('SELECT state FROM jobs WHERE run=?',(run,)).fetchone()
+        if previous is not None and previous['state']=='COMPLETE':
             return
         saved=self.control.get(run)
         result=saved.get('outcome',{}).get('result') if isinstance(saved.get('outcome'),dict) else None
         if (saved.get('runId')!=run or saved.get('state')!='SUCCEEDED' or result!=worker.get('result')
-                or saved.get('message')!=candidate['sourcePath']
-                or not isinstance(result,dict) or not isinstance(result.get('sourcePath'),str)):
+                or not isinstance(saved.get('message'),str) or not isinstance(result,dict)):
+            return
+        # Only Control's admitted message selects the journal entry. Model output
+        # never chooses a source file and need not echo an internal device path.
+        row=self.db.execute('SELECT * FROM jobs WHERE source=?',(saved['message'],)).fetchone()
+        if row is None or row['state'] not in ('WAITING','PROJECTING'):
+            return
+        if row['run'] is not None and row['run']!=run:
             return
         # The input and all output paths are fixed by custody/configuration, never by a model.
         source=self.exchange/self.folders['inbox']/row['name']

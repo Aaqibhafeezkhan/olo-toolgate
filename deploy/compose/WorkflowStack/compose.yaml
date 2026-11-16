@@ -65,6 +65,7 @@ services:
     volumes:
       - bootstrap-config:/bootstrap
       - ./state/${CONFIGURATION:-issue-triage}/package/workflow-bootstrap.json:/input/profile.json:ro
+      - ./state/${CONFIGURATION:-issue-triage}/package/bootstrap:/input/packages:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

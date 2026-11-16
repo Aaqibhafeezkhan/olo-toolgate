@@ -19,6 +19,7 @@ sys.path.insert(0,str(HERE/'scripts'))
 import configuration
 import lifecycle
 import image_assets
+import package_assets
 
 
 def run(arguments, **options):
@@ -75,6 +76,12 @@ def environment(selection=None):
         PROMETHEUS_PORT=str(monitoring['prometheusPort']),
         LOCAL_UID=str(os.getuid() if hasattr(os,'getuid') else 1000),LOCAL_GID=str(os.getgid() if hasattr(os,'getgid') else 1000))
     state.mkdir(mode=0o700,parents=True,exist_ok=True)
+    marker=state/'format.json'
+    if any(state.iterdir()) and not marker.is_file():
+        raise ValueError('Unsupported existing WorkflowStack state; preserve files and remove this selected stack before a fresh start')
+    if marker.is_symlink() or marker.exists() and json.loads(marker.read_text())!={'formatVersion':2}:
+        raise ValueError('Unsupported WorkflowStack state format')
+    marker.write_text('{\"formatVersion\":2}\n',encoding='ascii')
     if monitoring['enabled']:
         custody=state/'workflow/monitoring'
         custody.mkdir(mode=0o700,parents=True,exist_ok=True)
@@ -173,28 +180,62 @@ def qualify_reader(operator,config,state):
     operator.shared.private_file(destination,'TOOLGATE_CONTROL_QUALIFIED_DEVICE_FILE_READERS='+pin+'\n')
 
 
-def prepare_packages(operator,state,compose,assets=None):
-    if not (state/'agents/linux.json').exists():
-        assets=assets or image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state)
-        (state/'package').mkdir(mode=0o700,exist_ok=True)
-        for name in ('hotfolder.tgpkg','inbox-watch.tgpkg'):
-            shutil.copyfile(assets/'packages'/name,state/'package'/name)
-        operator.packages.core_lock(state/'package','inbox-watch.tgpkg','examples.inbox-watch')
-        operator.packages.registry(compose,state,os.environ)
+def verify_deployment(operator,state):
+    saved=json.loads((state/'deployment.json').read_text(encoding='utf-8'))
+    ca=operator.docker('quickstart',['cat','/data/keys/device-ca.crt'])
+    if saved!={'deviceId':operator.linux_status()['deviceId'],
+            'gateway':operator.gateway_url(),'caSha256':hashlib.sha256(ca.encode()).hexdigest()}:
+        raise ValueError('Saved deployment does not match the current device and Gateway')
+
+
+def provision(operator,settings,state):
+    if settings['fileAgent'] is not None:
+        operator.provision(argparse.Namespace(bootstrap_local=True,approve_linux_device=True,target='linux',device_id=None))
+    else:
+        config=operator.Configuration(operator.wait_ready(),True)
+        config.presets()
+        group=settings['deployment']['source']['deviceGroupId']
+        config.upsert('device-groups',dict(id=group,name=group,revision=1,enabled=True,deviceIds=[]))
+        operator.DEVICE_GROUP=group
+        operator.register_devices(config,argparse.Namespace(approve_linux_device=True,target='linux',device_id=None))
+        operator.configure_package_device()
+        operator.wait_linux_status(timeout=120)
+        operator.sync_deployment_metadata()
+    ca=operator.docker('quickstart',['cat','/data/keys/device-ca.crt'])
+    operator.shared.private_file(state/'agents/gateway-ca.crt',ca)
+    operator.shared.private_file(state/'deployment.json',json.dumps(dict(deviceId=operator.linux_status()['deviceId'],
+        gateway=operator.gateway_url(),caSha256=hashlib.sha256(ca.encode()).hexdigest())))
+
+
+def prepare_packages(operator,settings,state,compose,assets):
+    source=settings['deployment']['source']
+    metadata,artifact=package_assets.select(source,HERE/'configurations'/settings['id'],assets)
+    directory=state/'package/bootstrap'
+    if (state/'deployment.json').exists():
+        lock=json.loads((directory/'core-packages.lock.json').read_text(encoding='utf-8'))
+        if lock.get('schemaVersion')!=1 or len(lock.get('packages',[]))!=1:
+            raise ValueError('Existing selected trigger package custody is unsupported')
+        saved=lock['packages'][0]
+        path=directory/saved['artifact']
+        if (saved['id'],saved['version'],saved['packageDigest'],saved['artifactSha256']) != (
+                metadata['id'],metadata['version'],metadata['packageDigest'],metadata['artifactSha256']):
+            raise ValueError('Selected trigger package changed; preserve state and use a fresh stack')
+        if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest()!=saved['artifactSha256']:
+            raise ValueError('Existing selected trigger package custody does not match its sealed lock')
+        run(compose+['up','-d','registry'])
         return
-    # Recovery uses the sealed current deployment, never a rebuild under an
-    # already published package version. Refuse incomplete/altered custody.
-    lock=state/'package/core-packages.lock.json'
-    artifact=state/'package/inbox-watch.tgpkg'
-    if not lock.is_file() or not artifact.is_file() or not (state/'client-images.env').is_file():
-        raise ValueError('Existing deployment package custody is incomplete')
-    document=json.loads(lock.read_text(encoding='utf-8'))
-    entries=document.get('packages')
-    if (document.get('schemaVersion')!=1 or not isinstance(entries,list) or len(entries)!=1
-            or entries[0].get('id')!='examples.inbox-watch' or entries[0].get('artifact')!=artifact.name
-            or entries[0].get('artifactSha256')!=hashlib.sha256(artifact.read_bytes()).hexdigest()):
-        raise ValueError('Existing deployment package custody does not match its sealed lock')
-    run(compose+['up','-d','registry'])
+    directory.mkdir(mode=0o700,parents=True,exist_ok=True)
+    target=dict(metadata,artifact='trigger.tgpkg')
+    shutil.copyfile(artifact,directory/target['artifact'])
+    lock=dict(schemaVersion=1,sdkVersion=metadata['sdkVersion'],packages=[dict(
+        project='profile-selected-package',sdk='java-gradle',**{key:target[key] for key in
+            ('id','version','artifact','artifactSha256','packageDigest')})])
+    (directory/'core-packages.lock.json').write_text(json.dumps(lock,indent=2)+'\n',encoding='utf-8')
+    if settings['fileAgent'] is not None:
+        # This optional file-delivery adapter has its own tool package. It does
+        # not determine the watch package, trigger configuration or event filter.
+        shutil.copyfile(assets/'packages/hotfolder.tgpkg',state/'package/hotfolder.tgpkg')
+    operator.packages.registry(compose,state,os.environ)
 
 
 def bootstrap_profile(settings,state):
@@ -209,7 +250,10 @@ def bootstrap_profile(settings,state):
 def wait_trigger(config,settings,timeout=120):
     deadline=time.monotonic()+timeout
     while True:
-        assignment=config.api('/api/control/v1/triggers/assignments/'+settings['assignment'])
+        try:assignment=config.api('/api/control/v1/triggers/assignments/'+settings['assignment'])
+        except ValueError as failure:
+            if 'HTTP 404' not in str(failure):raise
+            assignment={}
         status=assignment.get('status',{})
         if (status.get('observedGeneration')==assignment.get('metadata',{}).get('generation')
                 and any(item.get('type')=='Available' and item.get('status')=='True'
@@ -222,15 +266,20 @@ def wait_trigger(config,settings,timeout=120):
 
 def profile(operator,settings,state):
     config=operator.Configuration(operator.wait_ready(),True)
+    wait_trigger(config,settings,timeout=360)
     try:
         config.api('/api/control/v1/triggers/subscriptions/'+settings['subscription'])
     except ValueError as failure:
         if 'HTTP 404' not in str(failure):
             raise
         config.api('/api/control/v1/triggers/subscriptions',dict(name=settings['subscription'],spec=dict(
-            sources=dict(assignments=[settings['assignment']]),filter="event.type == 'examples.files.observed.v1'",
+            sources=dict(assignments=[settings['assignment']]),filter=settings['deployment']['source']['eventFilter'],
             expiresAtUnixMs=int(time.time()*1000)+30*86400000)))
-    subscription=config.api('/api/control/v1/triggers/subscriptions/'+settings['subscription'])['metadata']['uid']
+    declared=config.api('/api/control/v1/triggers/subscriptions/'+settings['subscription'])
+    if (declared['spec']['filter']!=settings['deployment']['source']['eventFilter']
+            or declared['spec']['sources']!={'assignments':[settings['assignment']]}):
+        raise ValueError('Subscription declaration changed; use a new subscription name and workflow version')
+    subscription=declared['metadata']['uid']
     assignment=config.api('/api/control/v1/triggers/assignments/'+settings['assignment'])['metadata']['uid']
     document=json.loads(json.dumps(settings['document']))
     document['workflows']['dispatchBindings']=configuration.resolve(document['workflows']['dispatchBindings'],
@@ -279,7 +328,7 @@ def profile(operator,settings,state):
     operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(profileDigest=staged['profileDigest'],
         workflowIds=[item['id'] for item in workflows['workflows']])))
     operator.shared.private_file(state/'workflow/worker/listener.json',json.dumps(dict(name=settings['subscription'],uid=subscription)))
-    qualify_reader(operator,config,state)
+    if settings['fileAgent'] is not None:qualify_reader(operator,config,state)
     return config
 
 
@@ -291,22 +340,22 @@ def deploy(settings,state,compose,build):
     assets=image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state)
     operator=modules(state,compose,assets)
     model_custody(operator,state)
-    prepare_packages(operator,state,compose,assets)
+    prepare_packages(operator,settings,state,compose,assets)
     bootstrap_profile(settings,state)
     if os.environ.get('TOOLGATE_MONITORING','false').lower()=='true':
         run(compose+['up','-d','insights-collector','prometheus','tempo','grafana'])
     run(compose+['up','-d','--force-recreate','--wait','--wait-timeout','240','quickstart','linux-device','workflow-model'])
-    if (state/'agents/linux.json').exists():
-        try:operator.verify_deployment('linux')
+    if (state/'deployment.json').exists():
+        try:verify_deployment(operator,state)
         except ValueError:
             raise ValueError('Saved deployment credentials do not match the current Gateway. '
                 'Run stop.bat --configuration '+settings['id']+' to remove its generated storage, '
                 'then start.bat --configuration '+settings['id']+'. This deletes that configuration state/data.') from None
     else:
-        operator.provision(argparse.Namespace(bootstrap_local=True,approve_linux_device=True,target='linux',device_id=None))
+        provision(operator,settings,state)
     config=profile(operator,settings,state)
     exchange=HERE/'data'/settings['id']
-    for folder in settings['fileAgent'].values():
+    for folder in (settings['fileAgent'] or {}).values():
         if isinstance(folder,str) and folder in (settings['fileAgent'][key] for key in ('inbox','processed','output')):
             (exchange/folder).mkdir(mode=0o700,parents=True,exist_ok=True)
     (state/'workflow/results').mkdir(mode=0o700,parents=True,exist_ok=True)
@@ -327,11 +376,13 @@ def deploy(settings,state,compose,build):
         if time.monotonic()>deadline:
             raise ValueError('Identity service did not become ready; inspect its metadata logs')
         time.sleep(1)
-    run(compose+['up','-d','--no-deps','--force-recreate','workflow-worker','workflow-listener','folder-agent'])
+    services=['workflow-worker','workflow-listener']+(['folder-agent'] if settings['fileAgent'] is not None else [])
+    run(compose+['up','-d','--no-deps','--force-recreate',*services])
     print('Configuration: '+settings['id'])
     print('Console: http://127.0.0.1:'+os.environ['TOOLGATE_HTTP_PORT']+'/console/')
-    print('Drop .txt files in: '+str(exchange/settings['fileAgent']['inbox']))
-    print('Outputs: '+str(exchange/settings['fileAgent']['output']))
+    if settings['fileAgent'] is not None:
+        print('Drop .txt files in: '+str(exchange/settings['fileAgent']['inbox']))
+        print('Outputs: '+str(exchange/settings['fileAgent']['output']))
     print('Admin credentials: '+str(state/'credentials/admin'))
 
 

@@ -97,7 +97,7 @@ def run(config, devices, package_version, timeout, checkpoint_service=None):
     config.api(BASE + '/assignments', {
         'name': assignment,
         'spec': {
-            'trigger': 'examples.inbox-watch/new-file',
+            'trigger': 'examples.hotfolder-watch/new-file',
             'packageVersion': package_version,
             'target': {'executor': 'CLIENT', 'deviceGroups': [g1, g2]},
             'config': {'folder': 'inbox', 'extension': '.txt'},

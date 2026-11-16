@@ -14,22 +14,15 @@ final readonly class WorkflowStackTriggerSource implements \JsonSerializable {
         public string $version,
         public string $triggerId,
         public string $deviceGroupId,
-        public WorkflowStackTriggerConfig $config
+        public \stdClass $config,
+        public string $eventFilter,
+        public ?string $packageDigest = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['subscription', 'assignment', 'packageId', 'version', 'triggerId', 'deviceGroupId', 'config']) || array_diff(['subscription', 'assignment', 'packageId', 'version', 'triggerId', 'deviceGroupId', 'config'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['subscription', 'assignment', 'packageId', 'version', 'triggerId', 'deviceGroupId', 'config', 'eventFilter', 'packageDigest']) || array_diff(['subscription', 'assignment', 'packageId', 'version', 'triggerId', 'deviceGroupId', 'config', 'eventFilter'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
-        }
-        if ($data['packageId'] !== 'examples.inbox-watch') {
-            throw new \InvalidArgumentException('packageId must be examples.inbox-watch');
-        }
-        if ($data['version'] !== '0.1.0') {
-            throw new \InvalidArgumentException('version must be 0.1.0');
-        }
-        if ($data['triggerId'] !== 'examples.inbox-watch/new-file') {
-            throw new \InvalidArgumentException('triggerId must be examples.inbox-watch/new-file');
         }
         return new self(
             $data['subscription'],
@@ -38,7 +31,9 @@ final readonly class WorkflowStackTriggerSource implements \JsonSerializable {
             $data['version'],
             $data['triggerId'],
             $data['deviceGroupId'],
-            WorkflowStackTriggerConfig::fromArray($data['config'])
+            (object) $data['config'],
+            $data['eventFilter'],
+            array_key_exists('packageDigest', $data) ? $data['packageDigest'] : null
         );
     }
 

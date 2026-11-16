@@ -20,7 +20,7 @@ public record WorkflowStackDeployment(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "platform", required = true) WorkflowStackPlatform platform,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "model", required = true) WorkflowStackModelEngine model,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "source", required = true) WorkflowStackTriggerSource source,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "fileAgent", required = true) WorkflowStackFolderAgent fileAgent,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "fileAgent", required = false) WorkflowStackFolderAgent fileAgent,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "monitoring", required = true) WorkflowStackMonitoring monitoring
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
@@ -39,7 +39,6 @@ public record WorkflowStackDeployment(
         java.util.Objects.requireNonNull(platform, "platform");
         java.util.Objects.requireNonNull(model, "model");
         java.util.Objects.requireNonNull(source, "source");
-        java.util.Objects.requireNonNull(fileAgent, "fileAgent");
         java.util.Objects.requireNonNull(monitoring, "monitoring");
     }
 }

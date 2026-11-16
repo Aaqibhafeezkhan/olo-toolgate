@@ -3,7 +3,7 @@
 #
 # Hot-folder trigger overlay: docker compose -f compose.yaml -f compose.triggers.yaml up --build ...
 # Control applies hotfolder-trigger.profile.json at startup and every minute. The profile releases the trigger-only
-# examples.inbox-watch package to ReadAndWriteDeviceGroup and assigns its new-file trigger to inbox/ .txt files; a profile
+# examples.hotfolder-watch package to ReadAndWriteDeviceGroup and assigns its new-file trigger to inbox/ .txt files; a profile
 # that declares a trigger enables triggers, so no separate feature flag is set. The package resolves from the sealed lock
 # that `manage.py prepare` writes next to the built package. triggers.Dockerfile bakes the profile and lock into the
 # selected Quickstart image (root-owned, as Control requires of mounted custody material); they replace the image's

@@ -43,6 +43,8 @@ POLICY = {
     'foundation.ui': 'replay',
     'foundation.rust': 'replay',
     'foundation.examples': 'replay',
+    'foundation.trigger-package-sdk': 'staged',
+    'foundation.trigger-package-tests': 'staged',
     'foundation.scans': 'replay',
     'foundation.browser': 'staged',
     'foundation.java': 'staged',
