@@ -15,7 +15,8 @@ def build(source, destination, *, check=False):
     if set(manifest) != {"format", "packageId", "version", "runtimeApi", "dependencies", "capabilities", "factories"}:
         raise ValueError("Unsupported graph package declaration")
     files = {}
-    for path in sorted(source.rglob("*")):
+    # Path ordering follows host case rules; package bytes must not.
+    for path in sorted(source.rglob("*"), key=lambda path: path.relative_to(source).as_posix()):
         if path.is_symlink():
             raise ValueError("Graph package links are unsupported")
         if not path.is_file() or path.name == "package.json":

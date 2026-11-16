@@ -3,6 +3,25 @@
 
 ## Native LangGraph Phase 1 — 2026-11-17
 
+CI repair on tested base `0831631127a42eb513d5d13a351e7c73361621e7`:
+run [43944102244](https://github.com/olo-labs/olo-toolgate/actions/runs/43944102244)
+failed its Python gate because `Path` sorting uses host-specific case rules.
+The Windows-generated manifest listed `graph.py` before `README.md`; Linux
+rebuilt the opposite order and correctly rejected differing installed bytes.
+Packaging now explicitly sorts portable relative path strings, and both checked-in
+manifests use that order. Package IDs, canonical manifest digests and graph source
+hashes are unchanged. Immutable-content rejection remains enforced. Regression
+tests check ordering, checked-in package parity and rejection of changed content.
+Windows workflow tooling: 16 tests passed with one symlink-privilege skip. Linux
+package checks and dependency consistency passed; runtime discovery ran 75 tests
+successfully with 10 TLS tests skipped because this image lacks OpenSSL. Metadata,
+Linux workflow tooling (16 tests, no skips) and mocked workflow acceptance
+(3 tests) also passed. Metadata, generated bindings and source quality checks
+passed. The original scan job's
+Maven HTTP 429 failure cleared on rerun; all other executed jobs in that run
+passed. Hosted acceptance of this repair and image publication remain pending;
+no baseline weight, runtime security claim or Phase 2 scope changes.
+
 Branch: `feature/native-langgraph-phase1`, targeting `feature/workflow-enhancement`.
 The user requested a two-phase delivery: one minimal end-to-end PR with basic
 JSON text boxes and profile/configuration switching; advanced safety/recovery,
