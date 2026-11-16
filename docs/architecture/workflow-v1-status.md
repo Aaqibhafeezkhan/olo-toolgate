@@ -1,6 +1,38 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Hosted contract-gate follow-up — 2026-11-16
+
+Hosted revision `0389013a` passed Java, Rust, UI, browser, native-client,
+example, SDK, scan and preflight jobs, but the Python foundation job failed:
+the contract inventory still expected 19 v2 schemas after adding the canonical
+workflow-decision schema. The assertion now expects 20 and explicitly requires
+that schema. All seven focused ContractsV2 tests pass locally. Windows full
+contract discovery runs 183 cases with two symlink-privilege errors, one
+scorecard subprocess assertion failure and two skips; it is not a passing gate.
+Full contract discovery then passes in a writable native Linux source snapshot:
+**183 tests, two skips, no failures/errors**. Source header/license/obvious-secret,
+UI OpenAPI binding and documentation-link checks also pass. The first Linux
+harness attempt lacked Git and mounted source read-only (two failures/one error);
+the direct Windows-mounted retry was stopped after slow integrity hashing. The
+accepted Linux run uses Git, the current tracked source bytes and native storage;
+the interrupted mounted run earns no passing result.
+
+The separate Sonar analysis fails because Automatic Analysis and CI analysis
+are both enabled, before any quality-gate results are available. The configured
+Gradle CI analysis should be retained; a project administrator needs to disable
+Automatic Analysis in SonarQube Cloud. Browser automation could not verify the
+current Chrome URL and stopped without changing that setting. No quality check
+was weakened, suppressed or presented as passing.
+
+Known tested base `0389013a`; normalized changed contract-test SHA-256
+`fc958173d8d4cb4942ec061f4111cfc24ee32a1f664e2e9a23f3ef4c9505dd0d`. This is a regression-gate repair, not a new workflow runtime or security
+slice. Prior actual demo evidence remains historical; no WorkflowStack containers
+were running at this review. Other local demo stacks were left untouched.
+Baseline `v1-effort-1` remains **0/100 earned**, all weights unchanged. Hosted
+reevaluation, Sonar project configuration, full V1.4/security acceptance and
+public release publication remain outstanding.
+
 ## Packaged deployment, exposed console and credential folders — 2026-11-15
 
 The Admin UI HTTP port is published on all host interfaces (triage 58091,
