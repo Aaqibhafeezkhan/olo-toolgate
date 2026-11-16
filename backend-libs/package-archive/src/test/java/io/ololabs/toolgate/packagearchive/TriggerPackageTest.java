@@ -61,7 +61,7 @@ final class TriggerPackageTest {
         PackageArchive.validate(TriggerPackages.build(ID, "1.0.0", List.of(with(server, "executors", "[\"CLIENT\",\"SERVER\"]"))), true);
     }
 
-    /** Parity with the CLI: a package `toolgate pack` built (the inbox-watch sample) passes, when one is given. */
+    /** Parity with the CLI: a package `toolgate pack` built (the hotfolder-watch sample) passes, when one is given. */
     @Test
     void acceptsAPackageTheCliBuilt() throws Exception {
         String path = System.getProperty("toolgate.triggerPackage", "");

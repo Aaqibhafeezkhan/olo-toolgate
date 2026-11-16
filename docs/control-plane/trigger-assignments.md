@@ -16,7 +16,7 @@ device. The workflow profile editor on the same page manages profile drafts.
    {
      "name": "watch-inbox",
      "spec": {
-       "trigger": "examples.inbox-watch/new-file",
+       "trigger": "examples.hotfolder-watch/new-file",
        "packageVersion": "1.0.0",
        "target": {"executor": "CLIENT", "deviceGroups": ["finance"]},
        "config": {"folder": "inbox"},
@@ -48,7 +48,7 @@ permits. The watch has no stored cursor. Choose **Stop watching** to close it.
 
 To exercise the lifecycle phase transitions from M12 scenario 10, use a
 disposable Quickstart with four approved, running devices. Each device needs
-the same signed client release for `examples.inbox-watch` and an accessible
+the same signed client release for `examples.hotfolder-watch` and an accessible
 `inbox` folder. From the repository root, using the isolated LangChain
 example's connection and credentials:
 

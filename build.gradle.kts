@@ -13,7 +13,6 @@ import org.gradle.api.tasks.SourceSetContainer
 plugins {
     base
     jacoco
-    id("org.sonarqube") version "7.5.0.8588"
 }
 
 tasks.register<JacocoReport>("jacocoRootReport") {
@@ -37,22 +36,10 @@ configurations.matching { it.name == "jacocoAgent" || it.name == "jacocoAnt" }.c
     resolutionStrategy.deactivateDependencyLocking()
 }
 
-sonar {
-    properties {
-        property("sonar.projectKey", providers.environmentVariable("SONAR_PROJECT_KEY").getOrElse("olo-labs_olo-toolgate"))
-        providers.environmentVariable("SONAR_ORGANIZATION").orNull?.takeIf { it.isNotBlank() }?.let {
-            property("sonar.organization", it)
-        }
-        property("sonar.qualitygate.wait", "false")
-        // Our .sql files target PostgreSQL/SQLite, not Oracle (where '' is NULL).
-        // Keep Oracle analysis on Oracle suffixes; both actual SQL engines have executable gates.
-        property("sonar.plsql.file.suffixes", "pks,pkb,pls,plb")
-        property("sonar.sources", "tools,apps/admin-ui/src,apps/browser-extension,apps/quickstart,apps/gateway/src,apps/endpoint-client/src,apps/tool-host/src,tool-sdk/cli/src,tool-sdk/python-sdk/src,packages/contracts/typescript/src,packages/contracts/rust/src,packages/tenant-identity")
-        property("sonar.exclusions", "**/tests/**,**/test/**,**/*.test.*,**/*.d.ts,**/build/**,**/dist/**,**/node_modules/**")
-        property("sonar.javascript.lcov.reportPaths", "build/coverage/typescript/lcov.info,build/coverage/javascript/lcov.info")
-        property("sonar.python.coverage.reportPaths", "build/coverage/python.xml")
-        property("sonar.rust.lcov.reportPaths", "build/coverage/rust.lcov")
-    }
+// Analysis tooling is loaded only by the explicit analysis task. SDK publication
+// and runtime smoke builds must not depend on Sonar's plugin repository.
+if (gradle.startParameter.taskNames.any { it.substringAfterLast(':') == "sonar" }) {
+    apply(from = "gradle/sonar.gradle.kts")
 }
 
 group = "io.ololabs.toolgate"
@@ -90,11 +77,6 @@ tasks.named("build") {
 
 subprojects {
     plugins.withType<JavaPlugin> {
-        extensions.configure<org.sonarqube.gradle.SonarExtension> {
-            properties {
-                property("sonar.coverage.jacoco.xmlReportPaths", rootProject.layout.buildDirectory.file("reports/jacoco/jacocoRootReport/jacocoRootReport.xml").get().asFile.absolutePath)
-            }
-        }
         apply(plugin = "jacoco")
         extensions.configure<JacocoPluginExtension> {
             toolVersion = "0.8.16"

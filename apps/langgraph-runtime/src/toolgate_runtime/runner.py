@@ -45,6 +45,7 @@ class Limits:
 class ContextSource:
     tool_id: str
     arguments: dict = field(repr=False)
+    argument_bindings: dict = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,12 @@ class Agent:
     context_sources: tuple[ContextSource, ...] = ()
     entry_eligible: bool = True
     delegation_allowed: bool = True
+
+
+@dataclass(frozen=True)
+class AgentStage:
+    agent_id: str
+    result_mode: Literal["CONTEXT", "MODEL"]
 
 
 @dataclass(frozen=True)
@@ -72,6 +79,7 @@ class RunLease:
     agents: tuple[Agent, ...]
     context_sources: tuple[ContextSource, ...] = ()
     remediation_mode: Literal["PREPARE", "APPLY"] = "PREPARE"
+    agent_stages: tuple[AgentStage, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -184,6 +192,19 @@ def _validate(lease: RunLease) -> None:
         raise _Stop("INVALID_AGENTS")
     if not any(a.entry_eligible is True for a in lease.agents):
         raise _Stop("INVALID_AGENTS")
+    stage_ids = set()
+    agents = {agent.agent_id: agent for agent in lease.agents}
+    if len(lease.agent_stages) > lease.limits.max_handoffs:
+        raise _Stop("INVALID_STAGES")
+    for stage in lease.agent_stages:
+        if not isinstance(stage, AgentStage) or not isinstance(stage.agent_id, str):
+            raise _Stop("INVALID_STAGES")
+        agent = agents.get(stage.agent_id)
+        if (agent is None or stage.agent_id in stage_ids or stage.result_mode not in ("CONTEXT", "MODEL")
+                or not (agent.entry_eligible if not stage_ids else agent.delegation_allowed)
+                or stage.result_mode == "CONTEXT" and not agent.context_sources):
+            raise _Stop("INVALID_STAGES")
+        stage_ids.add(stage.agent_id)
     prompts = [lease.supervisor_prompt]
     sources = [lease.context_sources]
     for agent in lease.agents:
@@ -201,6 +222,10 @@ def _validate(lease: RunLease) -> None:
         for source in contexts:
             if not isinstance(source.tool_id, str) or not source.tool_id or not isinstance(source.arguments, dict):
                 raise _Stop("INVALID_CONTEXT")
+            if (not isinstance(source.argument_bindings, dict) or len(source.argument_bindings) > 32
+                    or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key)
+                           or value != "/message" or key in source.arguments for key, value in source.argument_bindings.items())):
+                raise _Stop("INVALID_CONTEXT")
             _json(source.arguments)
 
 
@@ -211,6 +236,8 @@ class _Execution:
         self.steps = self.handoffs = 0
         self.agents = {a.agent_id: a for a in lease.agents}
         self.current_candidates: set[str] = set()
+        self.context_results: dict[str, list[dict]] = {}
+        self.completed: dict[str, object] = {}
 
     def remaining(self) -> float:
         remaining = self.deadline - self.clock()
@@ -293,10 +320,17 @@ class _Execution:
 
     def context(self, agent: Agent | None, messages: list[dict]) -> list[dict]:
         messages = deepcopy(messages)
+        results = []
         for source in agent.context_sources if agent else self.lease.context_sources:
-            value = self.call(agent, source.tool_id, source.arguments, context=True)
+            arguments = deepcopy(source.arguments)
+            for name in source.argument_bindings:
+                arguments[name] = self.lease.message
+            value = self.call(agent, source.tool_id, arguments, context=True)
             messages.append({"role": "tool", "toolId": source.tool_id, "content": value})
+            results.append({"toolId": source.tool_id, "content": value})
         _json(messages)
+        if agent is not None:
+            self.context_results[agent.agent_id] = _json(results)
         return messages
 
     def infer(self, agent: Agent | None, messages: list[dict]) -> dict:
@@ -321,10 +355,24 @@ class _Execution:
             messages = state["supervisor_messages"]
             if not state["supervisor_context_loaded"]:
                 messages = self.context(None, messages)
-            decision = self.infer(None, messages)
+            if self.lease.agent_stages:
+                self.consume()
+                grant = self.grant(None)
+                if self.handoffs == len(self.lease.agent_stages):
+                    return {"outcome": RunOutcome("SUCCEEDED", _json(self.completed[self.lease.agent_stages[-1].agent_id]))}
+                self.candidates(grant)
+                stage = self.lease.agent_stages[self.handoffs]
+                decision = {"kind": "delegate", "agentId": stage.agent_id}
+                if self.handoffs:
+                    decision["inputFromAgent"] = self.lease.agent_stages[self.handoffs - 1].agent_id
+                else:
+                    decision["input"] = self.lease.message
+            else:
+                decision = self.infer(None, messages)
             if set(decision) == {"kind", "result"} and decision["kind"] == "finish":
                 return {"outcome": RunOutcome("SUCCEEDED", decision["result"])}
-            if set(decision) != {"kind", "agentId", "input"} or decision["kind"] != "delegate":
+            if (set(decision) not in ({"kind", "agentId", "input"}, {"kind", "agentId", "inputFromAgent"})
+                    or decision["kind"] != "delegate"):
                 raise _Stop("INVALID_MODEL_DECISION")
             agent_id = decision["agentId"]
             agent = self.agents.get(agent_id) if isinstance(agent_id, str) else None
@@ -332,17 +380,37 @@ class _Execution:
                 raise _Stop("AGENT_NOT_AVAILABLE")
             if self.handoffs >= self.lease.limits.max_handoffs:
                 raise _Stop("HANDOFF_LIMIT")
+            if "inputFromAgent" in decision:
+                source = decision["inputFromAgent"]
+                if not isinstance(source, str) or source not in self.completed:
+                    raise _Stop("CONTEXT_NOT_AVAILABLE")
+                handoff = _json(self.completed[source])
+            else:
+                handoff = decision["input"]
+                if not isinstance(handoff, str):
+                    raise _Stop("INVALID_MODEL_DECISION")
             self.handoffs += 1
             return {"phase": "agent", "active_agent": agent_id,
                     "supervisor_messages": messages, "supervisor_context_loaded": True,
-                    "agent_messages": [{"role": "user", "content": decision["input"]}], "agent_context_loaded": False}
+                    "agent_messages": [{"role": "user", "content": handoff}], "agent_context_loaded": False}
         agent = self.agents[state["active_agent"]]
         messages = state["agent_messages"]
         if not state["agent_context_loaded"]:
             messages = self.context(agent, messages)
-        decision = self.infer(agent, messages)
-        if set(decision) == {"kind", "result"} and decision["kind"] == "finish":
-            supervisor = state["supervisor_messages"] + [{"role": "tool", "agentId": agent.agent_id, "content": decision["result"]}]
+        context_only = (self.lease.agent_stages and self.lease.agent_stages[self.handoffs - 1].result_mode == "CONTEXT")
+        decision = {"kind": "finish_context"} if context_only else self.infer(agent, messages)
+        finishing = True
+        if decision == {"kind": "finish_context"}:
+            if not agent.context_sources or agent.agent_id not in self.context_results:
+                raise _Stop("CONTEXT_NOT_AVAILABLE")
+            result = _json({"message": self.lease.message, "context": self.context_results[agent.agent_id]})
+        elif set(decision) == {"kind", "result"} and decision["kind"] == "finish":
+            result = _json(decision["result"])
+        else:
+            finishing = False
+        if finishing:
+            self.completed[agent.agent_id] = _json(result)
+            supervisor = state["supervisor_messages"] + [{"role": "tool", "agentId": agent.agent_id, "content": result}]
             _json(supervisor)
             return {"phase": "supervisor", "active_agent": None, "supervisor_messages": supervisor}
         if (set(decision) != {"kind", "toolId", "arguments"} or decision["kind"] != "tool"

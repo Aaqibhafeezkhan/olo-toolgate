@@ -49,6 +49,15 @@ public final class VaultService {
         try{return VaultEncryption.decrypt(encryption,secret.cipher(),context(tenant,secret.name(),secret.toolGroupId(),secret.deviceGroupId(),secret.version(),secret.keyVersion()));}
         finally{Arrays.fill(encryption,(byte)0);}
     }
+    /** Server-only credential lookup after the workflow model has passed current admission. */
+    public String workflowModelCredential(Ids.TenantId tenant, Store.Session tx, io.ololabs.toolgate.contracts.v2.WorkflowModelDeployment model) {
+        var secret = tx.enterprise().secret(model.secretName());
+        if (secret == null || !secret.toolGroupId().equals(model.toolGroupId()) || !secret.deviceGroupId().equals(model.deviceGroupId()))
+            throw ManagementAccess.denied();
+        byte[] clear = decrypt(tenant, tx, secret);
+        try { return new String(clear, java.nio.charset.StandardCharsets.UTF_8); }
+        finally { Arrays.fill(clear, (byte)0); }
+    }
     /** Internal read-only target adapter. The caller has already validated exact profile/review/operator scope. */
     String targetLookupSecret(Ids.TenantId tenant,Store.Session tx,EnterpriseInvocation invocation,String name,long version){
         var secret=tx.enterprise().secret(name);

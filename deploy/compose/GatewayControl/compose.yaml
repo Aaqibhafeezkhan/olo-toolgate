@@ -38,6 +38,7 @@ services:
     environment:
       TOOLGATE_GATEWAY_CONFIG: /config/gateway.json
       TOOLGATE_GATEWAY_CREDENTIALS: /config/credentials.json
+      TOOLGATE_WORKFLOW_MODEL_ORIGINS: ${TOOLGATE_WORKFLOW_MODEL_ORIGINS:-}
     volumes:
       - ./custody/gateway:/config:ro
   proxy:

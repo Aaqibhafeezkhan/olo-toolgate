@@ -68,7 +68,8 @@ presets remain unchanged. The
 installation owner's audited Super Admin path is used for these explicit local
 management changes; execution authorization is not bypassed.
 
-Fresh local passwords are retained privately in `.state/console-passwords.json`.
+Fresh local logins are retained privately in
+`.state/credentials/<username>/username.txt` and `password.txt`.
 For an existing installation, provide its current credentials in `.env`.
 Preparation never reads private signing keys or manufactures tool profiles.
 Existing enrollment and files remain in named volumes. A recreated container
@@ -98,11 +99,61 @@ docker compose exec linux-device cat /var/lib/olo-toolgate/hotfolder/langchain-s
 
 ## Hot-folder trigger (in progress, issue #274)
 
+For the one-agent workflow acceptance run, use `compose.workflow.yaml` together
+with the base and trigger Compose files. Supply `TOOLGATE_WORKFLOW_LLAMA_IMAGE`
+and `TOOLGATE_WORKFLOW_MODEL_FILE` for a llama.cpp server image and an instruct
+GGUF. Under the example state directory, place the model CA at
+`workflow/model-ca.crt` and the TLS certificate, key, and API key at
+`workflow/model/model.crt`, `workflow/model/model.key`, and
+`workflow/model/model.token`. The certificate must cover `workflow-model`.
+Build Quickstart from the same checkout, then run the base preparation and
+setup below with all three overlays and `workflow-model` running. Put
+`apps/langgraph-runtime/src` on `PYTHONPATH`, install the runtime lock in the
+host environment, and run `python workflow_e2e.py`. The acceptance driver
+uses an isolated Quickstart fixture, stages and publishes a real workflow
+profile, and starts the worker container with a dedicated workload credential.
+It replays admission to require the same admission/run IDs, and requires worker
+observations of supervisor and configured-agent inference plus a confirmed
+`examples.hotfolder/read_text` call. The agent's configured context source binds
+the read's `path` argument to the admitted workflow message (`/message`), before
+agent inference. Terminal success alone does not pass. These
+observations do not attest server deployment or replace the full v1 scenarios.
+The driver explicitly qualifies this local device, administered device group and
+exact managed Java image for broker-only read tools. This is an operator pin,
+not automatic platform attestation. The default remains unqualified; writes,
+network tools, unpinned images and other device configurations retain their
+existing finality limits. An unknown tool outcome stops the flow without retry.
+
+On success, the driver checks the issue ID and source path against the actual
+file, compares Control's encrypted result with the private result log at
+`${TOOLGATE_LANGCHAIN_STATE}/workflow/results/<run-id>.json`, and leaves the
+`workflow-worker` and `workflow-listener` containers running. Subsequent `.txt`
+issue logs in `inbox/` use the same published workflow and agent. Results include
+`issueId`, `summary`, `priority`, `nextAction` and `sourcePath`; input files remain
+in place. The current tenant Super Admin can retrieve a run using
+`GET /api/control/v1/workflow-runs/<run-id>`. Runtime credentials cannot read it.
+
+Run `python workflow_identity.py` in a separate local terminal while using this
+isolated Quickstart demo. It refreshes the mounted short-lived listener and worker
+credentials every five minutes using the fixture IdP. Production deployments
+must supply their own workload and subscription identity lifecycle. Keep the
+state directory private: it contains credentials and explicitly enabled result
+content logs. Default worker stdout contains call metadata only.
+
+With the same project/state/port environment as setup, submit another file:
+
+```sh
+python workflow_demo.py issue-demo.txt
+```
+
+This copies the file into the device's owner-only `inbox/` and waits for the
+continuous listener and configured workflow to produce a confirmed result.
+
 A file dropped into the device's `inbox/` folder triggers a LangGraph flow
 ([trigger_agent.py](trigger_agent.py)). The flow displays the file's content and
 then moves it to `processed/`. The feature is enabled by a deployment profile, not by a flag:
 [hotfolder-trigger.profile.json](hotfolder-trigger.profile.json) releases the
-trigger-only [`examples.inbox-watch`](../java-tools/inbox-watch/README.md) package to
+trigger-only [`examples.hotfolder-watch`](../java-tools/hotfolder-watch/README.md) package to
 `ReadAndWriteDeviceGroup` and assigns its `new-file` client trigger there with
 `{"folder": "inbox", "extension": ".txt"}`. The HotFolder package stays tools-only, so the
 base setup above works without triggers. Any Control that applies the

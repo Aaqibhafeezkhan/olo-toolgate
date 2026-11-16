@@ -4948,6 +4948,21 @@ pub struct WorkflowAgentDefinition {
     pub context_sources: Vec<WorkflowContextSource>,
     pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
 }
+/// Canonical WorkflowAgentResultMode wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkflowAgentResultMode {
+    #[serde(rename = "CONTEXT")]
+    Context,
+    #[serde(rename = "MODEL")]
+    Model,
+}
+/// Ordered configured agent stage; identifiers and modes are data, never executable expressions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowAgentStage {
+    pub agent_id: String,
+    pub result_mode: WorkflowAgentResultMode,
+}
 /// Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -4959,12 +4974,30 @@ pub struct WorkflowConfiguration {
     pub dispatch_bindings: Vec<WorkflowDispatchBinding>,
     pub model_deployments: Vec<WorkflowModelDeployment>,
 }
+/// Bounded finish_context model proposal; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowContextDecision {
+    #[serde(deserialize_with = "const_workflow_context_decision_kind")]
+    pub kind: String,
+}
+/// Bounded delegate model proposal; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowContextDelegateDecision {
+    #[serde(deserialize_with = "const_workflow_context_delegate_decision_kind")]
+    pub kind: String,
+    pub agent_id: String,
+    pub input_from_agent: String,
+}
 /// Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowContextSource {
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub argument_bindings: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 /// Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -4980,6 +5013,19 @@ pub struct WorkflowDefinition {
     pub result_schema: std::collections::BTreeMap<String, serde_json::Value>,
     pub limits: WorkflowExecutionLimits,
     pub agents: Vec<WorkflowAgentBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_stages: Option<Vec<WorkflowAgentStage>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deployment: Option<WorkflowStackDeployment>,
+}
+/// Bounded delegate model proposal; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowDelegateDecision {
+    #[serde(deserialize_with = "const_workflow_delegate_decision_kind")]
+    pub kind: String,
+    pub agent_id: String,
+    pub input: String,
 }
 /// Profile declaration for WorkflowDispatchBinding; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -5033,6 +5079,14 @@ pub struct WorkflowExecutionLimits {
     pub max_handoffs: u64,
     pub max_duration_seconds: u64,
 }
+/// Bounded finish model proposal; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowFinishDecision {
+    #[serde(deserialize_with = "const_workflow_finish_decision_kind")]
+    pub kind: String,
+    pub result: serde_json::Value,
+}
 /// Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -5050,6 +5104,14 @@ pub struct WorkflowModelDeployment {
     pub secret_name: String,
     pub tool_group_id: String,
     pub device_group_id: String,
+    pub generation: WorkflowModelGeneration,
+}
+/// Explicit bounded inference parameters selected from the pinned model deployment, never from a runner request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowModelGeneration {
+    pub max_output_tokens: u64,
+    pub temperature: f64,
 }
 /// Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -5100,6 +5162,107 @@ pub enum WorkflowRemediationMode {
     Prepare,
     #[serde(rename = "APPLY")]
     Apply,
+}
+/// Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackDeployment {
+    pub enabled: bool,
+    pub runtime: WorkflowStackRuntime,
+    pub platform: WorkflowStackPlatform,
+    pub model: WorkflowStackModelEngine,
+    pub source: WorkflowStackTriggerSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_agent: Option<WorkflowStackFolderAgent>,
+    pub monitoring: WorkflowStackMonitoring,
+}
+/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackFolderAgent {
+    pub agent_id: String,
+    pub inbox: String,
+    pub processed: String,
+    pub output: String,
+    pub archive: bool,
+    pub projection: String,
+}
+/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackModelEngine {
+    pub deployment_id: String,
+    #[serde(deserialize_with = "const_workflow_stack_model_engine_engine")]
+    pub engine: String,
+    pub image: String,
+    pub model_file: String,
+    pub context_size: u64,
+    pub threads: u64,
+}
+/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackMonitoring {
+    pub enabled: bool,
+    pub mode: String,
+    pub grafana_user: String,
+    pub grafana_secret: String,
+    pub grafana_port: u64,
+    pub prometheus_port: u64,
+    pub collector_config: std::collections::BTreeMap<String, serde_json::Value>,
+    pub span_sample_ratio: f64,
+    pub images: WorkflowStackMonitoringImages,
+}
+/// Explicit workflow monitoring service images; credentials remain external custody references.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackMonitoringImages {
+    pub collector: String,
+    pub prometheus: String,
+    pub grafana: String,
+    pub tempo: String,
+}
+/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackPlatform {
+    pub quickstart_image: String,
+    pub device_image: String,
+    pub http_port: u64,
+    pub tls_port: u64,
+    pub registry_port: u64,
+}
+/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackRuntime {
+    #[serde(deserialize_with = "const_workflow_stack_runtime_engine")]
+    pub engine: String,
+    pub image: String,
+}
+/// Workflow-scoped operator deployment data; structural configuration confers no runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowStackTriggerSource {
+    pub subscription: String,
+    pub assignment: String,
+    pub package_id: String,
+    pub version: String,
+    pub trigger_id: String,
+    pub device_group_id: String,
+    pub config: std::collections::BTreeMap<String, serde_json::Value>,
+    pub event_filter: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_digest: Option<String>,
+}
+/// Bounded tool model proposal; never execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowToolDecision {
+    #[serde(deserialize_with = "const_workflow_tool_decision_kind")]
+    pub kind: String,
+    pub tool_id: String,
+    pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
 }
 const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
 const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");
@@ -5190,6 +5353,25 @@ const_field!(
     "TriggerSubscription"
 );
 const_field!(const_trigger_view_event_specversion, String, "1.0");
+const_field!(
+    const_workflow_context_decision_kind,
+    String,
+    "finish_context"
+);
+const_field!(
+    const_workflow_context_delegate_decision_kind,
+    String,
+    "delegate"
+);
+const_field!(const_workflow_delegate_decision_kind, String, "delegate");
+const_field!(const_workflow_finish_decision_kind, String, "finish");
+const_field!(
+    const_workflow_stack_model_engine_engine,
+    String,
+    "LLAMA_CPP"
+);
+const_field!(const_workflow_stack_runtime_engine, String, "LANGGRAPH");
+const_field!(const_workflow_tool_decision_kind, String, "tool");
 /// Embedded canonical schemas for offline boundary validation.
 pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
@@ -5263,6 +5445,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/trigger.schema.json",
         include_str!("../schemas/v2/trigger.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/workflow-decision.schema.json",
+        include_str!("../schemas/v2/workflow-decision.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/workflow.schema.json",

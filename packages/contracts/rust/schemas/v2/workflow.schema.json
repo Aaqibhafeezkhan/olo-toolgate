@@ -16,6 +16,20 @@
         "arguments": {
           "type": "object",
           "maxProperties": 32
+        },
+        "argumentBindings": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "/message"
+            ]
+          },
+          "description": "Maps tool argument names to the immutable admitted run message. Bound names must not also occur in arguments; no executable expressions are supported."
         }
       },
       "required": [
@@ -201,6 +215,18 @@
           },
           "minItems": 1,
           "maxItems": 32
+        },
+        "agentStages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/WorkflowAgentStage"
+          },
+          "description": "Optional fixed ordered stages. First input is the admitted message, subsequent inputs are the previous completed result; the last result is the workflow result."
+        },
+        "deployment": {
+          "$ref": "#/$defs/WorkflowStackDeployment"
         }
       },
       "required": [
@@ -500,6 +526,9 @@
         },
         "deviceGroupId": {
           "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "generation": {
+          "$ref": "#/$defs/WorkflowModelGeneration"
         }
       },
       "required": [
@@ -508,7 +537,406 @@
         "modelId",
         "secretName",
         "toolGroupId",
-        "deviceGroupId"
+        "deviceGroupId",
+        "generation"
+      ]
+    },
+    "WorkflowAgentResultMode": {
+      "type": "string",
+      "enum": [
+        "CONTEXT",
+        "MODEL"
+      ],
+      "description": "Fixed stage completion source; context contains only confirmed configured reads."
+    },
+    "WorkflowAgentStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Ordered configured agent stage; identifiers and modes are data, never executable expressions.",
+      "properties": {
+        "agentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "resultMode": {
+          "$ref": "#/$defs/WorkflowAgentResultMode"
+        }
+      },
+      "required": [
+        "agentId",
+        "resultMode"
+      ]
+    },
+    "WorkflowModelGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Explicit bounded inference parameters selected from the pinned model deployment, never from a runner request.",
+      "properties": {
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096,
+          "default": 512
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0
+        }
+      },
+      "required": [
+        "maxOutputTokens",
+        "temperature"
+      ]
+    },
+    "WorkflowStackRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "type": "string",
+          "const": "LANGGRAPH"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        }
+      },
+      "required": [
+        "engine",
+        "image"
+      ],
+      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
+    },
+    "WorkflowStackPlatform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quickstartImage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        },
+        "deviceImage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        },
+        "httpPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "tlsPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "registryPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "quickstartImage",
+        "deviceImage",
+        "httpPort",
+        "tlsPort",
+        "registryPort"
+      ],
+      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
+    },
+    "WorkflowStackModelEngine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deploymentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "engine": {
+          "type": "string",
+          "const": "LLAMA_CPP"
+        },
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}@sha256:[a-f0-9]{64}$"
+        },
+        "modelFile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\\.gguf$"
+        },
+        "contextSize": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 131072
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        }
+      },
+      "required": [
+        "deploymentId",
+        "engine",
+        "image",
+        "modelFile",
+        "contextSize",
+        "threads"
+      ],
+      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
+    },
+    "WorkflowStackTriggerSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subscription": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "assignment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "packageId": {
+          "$ref": "identifiers.schema.json#/$defs/PackageId"
+        },
+        "version": {
+          "$ref": "identifiers.schema.json#/$defs/SemanticVersion"
+        },
+        "triggerId": {
+          "$ref": "trigger.schema.json#/$defs/TriggerId"
+        },
+        "deviceGroupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "config": {
+          "type": "object",
+          "maxProperties": 64,
+          "x-toolgate-max-bytes": 8192,
+          "description": "Opaque package configuration, validated against the selected signed trigger descriptor by Control."
+        },
+        "eventFilter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "Subscription CEL filter evaluated by Control; no watch-specific filter is supplied by the operator."
+        },
+        "packageDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        }
+      },
+      "required": [
+        "subscription",
+        "assignment",
+        "packageId",
+        "version",
+        "triggerId",
+        "deviceGroupId",
+        "config",
+        "eventFilter"
+      ],
+      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
+    },
+    "WorkflowStackFolderAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "inbox": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "processed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "archive": {
+          "type": "boolean"
+        },
+        "projection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(json|summary)$"
+        }
+      },
+      "required": [
+        "agentId",
+        "inbox",
+        "processed",
+        "output",
+        "archive",
+        "projection"
+      ],
+      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
+    },
+    "WorkflowStackMonitoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(NONE|BASIC|DETAILED)$"
+        },
+        "grafanaUser": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "grafanaSecret": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+        },
+        "grafanaPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "prometheusPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "collectorConfig": {
+          "type": "object",
+          "maxProperties": 16
+        },
+        "spanSampleRatio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "images": {
+          "$ref": "#/$defs/WorkflowStackMonitoringImages"
+        }
+      },
+      "required": [
+        "enabled",
+        "mode",
+        "grafanaUser",
+        "grafanaSecret",
+        "grafanaPort",
+        "prometheusPort",
+        "collectorConfig",
+        "spanSampleRatio",
+        "images"
+      ],
+      "description": "Workflow-scoped operator deployment data; structural configuration confers no runtime authority."
+    },
+    "WorkflowStackDeployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "runtime": {
+          "$ref": "#/$defs/WorkflowStackRuntime"
+        },
+        "platform": {
+          "$ref": "#/$defs/WorkflowStackPlatform"
+        },
+        "model": {
+          "$ref": "#/$defs/WorkflowStackModelEngine"
+        },
+        "source": {
+          "$ref": "#/$defs/WorkflowStackTriggerSource"
+        },
+        "fileAgent": {
+          "$ref": "#/$defs/WorkflowStackFolderAgent"
+        },
+        "monitoring": {
+          "$ref": "#/$defs/WorkflowStackMonitoring"
+        }
+      },
+      "required": [
+        "enabled",
+        "runtime",
+        "platform",
+        "model",
+        "source",
+        "monitoring"
+      ],
+      "description": "Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority."
+    },
+    "WorkflowStackMonitoringImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Explicit workflow monitoring service images; credentials remain external custody references.",
+      "properties": {
+        "collector": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        },
+        "prometheus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        },
+        "grafana": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        },
+        "tempo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9./:@_-]{0,511}$"
+        }
+      },
+      "required": [
+        "collector",
+        "prometheus",
+        "grafana",
+        "tempo"
       ]
     }
   }

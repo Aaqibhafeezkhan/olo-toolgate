@@ -3259,6 +3259,97 @@
       ]
     },
     {
+      "name": "control_workflow_admissions",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "subscription_uid",
+        "cursor"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_workflow_runs",
+          "columns": [
+            "tenant_id",
+            "run_id"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "run_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_workflow_runs",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "run_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_workflow_profile_revisions",
+          "columns": [
+            "tenant_id",
+            "profile_id",
+            "profile_digest"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "profile_id",
+            "digest"
+          ]
+        },
+        {
+          "table": "control_tenant_vault_keys",
+          "columns": [
+            "tenant_id",
+            "key_version"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "version"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
       "name": "control_workflow_profile_heads",
       "classification": "tenant-data",
       "tenantColumn": "tenant_id",

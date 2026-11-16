@@ -237,6 +237,11 @@ deploy/client-assets/release/
 
 # Externally provisioned Compose custody must never enter Git.
 deploy/compose/GatewayControl/custody/
+deploy/compose/WorkflowStack/state/
+deploy/compose/WorkflowStack/data/
+deploy/compose/WorkflowStack/models/
+deploy/compose/WorkflowStack/monitoring/collector-vendors.yaml
+deploy/compose/WorkflowStack/monitoring/credentials.env
 
 *.tgpkg
 .seed

@@ -23,7 +23,7 @@ import java.util.zip.ZipOutputStream;
 public final class TriggerPackages {
     private TriggerPackages() {}
 
-    /** The client POLL descriptor of the {@code inbox-watch} sample, for package {@code packageId}. */
+    /** The client POLL descriptor of the {@code hotfolder-watch} sample, for package {@code packageId}. */
     public static String clientDescriptor(String packageId, String name) {
         return """
                 {"checkpointSchemaVersion":1,"configSchema":{"additionalProperties":false,"properties":{"extension":{"default":".pdf","description":"File name suffix to report","pattern":"^\\\\.[a-z0-9]{1,16}$","type":"string"},"folder":{"description":"Folder to watch","pattern":"^[a-z0-9][a-z0-9._ -]{0,127}$","type":"string"}},"required":["folder"],"type":"object"},"eventSchema":{"additionalProperties":false,"properties":{"name":{"type":"string"},"path":{"type":"string"},"size":{"maximum":9007199254740991,"minimum":-9007199254740991,"type":"integer"}},"required":["name","path","size"],"type":"object"},"eventType":"examples.files.observed.v1","executors":["CLIENT"],"kind":"CLIENT_TRIGGER","limits":{"maxBrokerCallsPerMinute":120,"maxCheckpointBytes":16384,"maxEventBytes":16384,"maxEventsPerHour":600,"memoryMiB":256,"stopGraceMs":10000},"lossTolerant":false,"mode":"POLL","onTerminalRejection":"HALT","overflow":"BLOCK","permissions":["DEVICE_FILES_READ"],"routes":[],"schedule":{"intervalMs":60000},"secrets":[],"selfTests":[],"sourceReplay":"STATE_SNAPSHOT","tcpDestinations":[],"tiers":["OCI_SANDBOX"],"triggerId":"%s/%s"}"""

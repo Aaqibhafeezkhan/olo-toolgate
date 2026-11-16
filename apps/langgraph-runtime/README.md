@@ -1,19 +1,51 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Generic ToolGate runtime — execution and trigger foundations
 
+For the complete selectable local deployment, use
+[`WorkflowStack`](../../deploy/compose/WorkflowStack/README.md). Its configurations include
+issue triage and a two-agent text-summary/archive use case. Full roadmap
+acceptance remains separate from these bounded local executions.
+
+An optional pinned `agentStages` array selects fixed ordered execution instead
+of model-directed supervisor routing. Each entry selects a declared agent and
+`CONTEXT` or `MODEL` result mode. Context stages return only successful configured
+context reads without inference; model stages run the configured agent loop.
+Each stage rechecks current eligibility and step authority. The admitted message
+feeds the first stage, completed results feed subsequent stages, and the last
+result completes the workflow. Model responses cannot skip these stages. The
+current lease wire format explicitly includes `agentStages` (empty for routing);
+obsolete snapshots without that field are rejected.
+
+An agent with configured context reads can return `{"kind":"finish_context"}`
+to finish with those confirmed tool values and the admitted source path. The
+supervisor can delegate using
+`{"kind":"delegate","agentId":"target","inputFromAgent":"completed-source"}`.
+The fixed runner copies that completed result within the same run after checking
+candidate eligibility; foreign/unfinished references fail closed. No adapter
+credential enters the transferred context. This permits full file handoff within
+the inference response budget. Every tool/model request retains current server
+authorization; references do not grant another agent's tools.
+
+Gateway requests JSON-schema-constrained decisions using the canonical
+`workflow-decision.schema.json` contract and independently validates the returned
+JSON. The approved model backend must support the `json_schema` response format.
+These syntax constraints do not authorize a delegation or tool call; current
+profile eligibility and server grants still decide each step.
+
 This package runs one fixed LangGraph supervisor/agent loop against a supplied
 `ToolGate` adapter. Workflows, agent IDs, explicit models, prompts, context tools,
 eligibility, remediation mode and execution limits come from a leased snapshot.
 The graph has no use-case IDs, provider keys, provider clients, arbitrary imports
 or executable profile expressions. It does not union different agents' tools.
 
-**Integration is pending.** This is a tested executor library, not a working
-ToolGate run API, live LangChain/model-proxy integration or complete
-end-to-end standalone workflow program. The trigger subscriber described below
-uses the existing stream, but durable workflow admission still needs server implementation. There is no default fake adapter, local authority
-fallback or runnable-profile claim. Complete V1.1 provisioning/readiness and V1.2 server
-admission/leases, runtime identities, model proxy and real transport must be
-implemented before the external message/trigger demo can run end to end.
+The worker uses the Control lease API and the Gateway model and MCP endpoints.
+The trigger subscriber uses the existing stream and the Control admission API.
+The first live profile qualification is tracked in the workflow v1 status.
+Each worker result includes an `execution` summary of completed inference
+responses and attempted tools, with subject IDs, tool IDs and outcome states.
+It excludes prompts, arguments, model/tool results and credentials. The summary
+is scoped to one run and bounded by its step limit. These are worker observations;
+independent server evidence is still required for full qualification.
 
 ## Install and verify outside containers
 
@@ -37,13 +69,13 @@ tools, server authorization or workflow publication.
 
 `Runner(adapter).execute(lease)` accepts a server-admitted `RunLease`, never a
 caller-authored profile or self-selected identity. This internal Python snapshot
-is not a new profile format or a published wire contract. The future transport
+is not a new profile format or a published wire contract. The transport
 must decode the canonical server contract, cap input/response bytes, verify TLS,
 use configured infrastructure endpoints, and enforce deadlines without redirects,
 credential logging or automatic retries. Prompts and results are sensitive.
 
-The adapter must implement `authorize_step`, `discover_agents`, `discover_tools`, `infer`,
-`call_tool` and `finish`. ToolGate must independently enforce current tenant,
+The adapter implements `authorize_step`, `discover_agents`, `discover_tools`, `infer`,
+`call_tool` and `finish`. ToolGate independently enforces current tenant,
 run ownership, delegation, model/tool permissions, profile readiness and kill
 switches at every protected operation. It must bind mutations to existing
 single-use effect/consent identities and record authoritative outcomes. The
@@ -68,8 +100,8 @@ tools. It may return exactly `finish` as above or:
 
 All decisions and tool results are treated as untrusted bounded JSON. Unknown
 agents, tools, extra model-selection fields and malformed decisions fail closed.
-The future model adapter must validate/translate these decisions from the governed
-model response; no such adapter is included yet.
+The Gateway requests a structured decision from the configured model and the
+runner validates it before taking the next step.
 
 ## Stop and completion semantics
 
@@ -92,15 +124,50 @@ model response; no such adapter is included yet.
   tracing was enabled by the host. This does not sandbox a hostile host or stop
   an application from explicitly logging its own inputs.
 
-No durable workflow checkpoint, automatic workflow failover/replay, cancellation
-propagation, model streaming or container image is delivered here.
+Durable workflow checkpoints, automatic workflow failover/replay, cancellation
+propagation, and model streaming remain pending.
 The [v1 qualification guide](../../docs/testing/workflow-v1-qualification.md)
 describes the repeatable scenario controller, private evidence reports and
 explicit blocked outcomes while live server integration is missing.
 See the [live status](../../docs/architecture/workflow-v1-status.md) and
 [architecture plan](../../docs/architecture/langgraph-runtime-plan.md).
 
-## V1.3 host trigger subscriber
+## V1.3 trigger subscriber
+
+The standalone image packages the worker, listener, and LangGraph executor.
+Release builds publish `olo-toolgate-langgraph-runtime:<release-version>` to
+`ghcr.io/olo-labs` and the configured Docker Hub namespace
+(`DOCKERHUB_NAMESPACE`, or `DOCKERHUB_USERNAME` when unset). For example, a
+namespace of `ololab` produces
+`docker.io/ololab/olo-toolgate-langgraph-runtime:<release-version>`.
+Ordinary branch CI builds and verifies the image but does not publish it.
+Publication requires the release workflow and all its required gates; adding
+the image does not qualify the currently incomplete live workflow slice.
+The image uses digest-pinned Python 3.12 on Alpine, applies available OS package
+updates and installs the unchanged dependency lock. CI executes runtime tests
+inside the image; TLS fixtures skip there when the OpenSSL CLI is unavailable,
+and the foundation runtime gate exercises them on its OpenSSL-equipped host.
+
+Build it and inspect both entry points from the repository root:
+
+```sh
+docker build -t toolgate-langgraph-runtime:local apps/langgraph-runtime
+docker run --rm --read-only toolgate-langgraph-runtime:local --help
+docker run --rm --read-only --entrypoint /opt/toolgate-runtime/bin/python \
+  toolgate-langgraph-runtime:local -m toolgate_runtime.trigger_listener --help
+```
+
+The image runs as UID 65532. The listener uses a subscription owner credential
+provided through the process environment. The worker takes a separate mounted
+`--token-file` containing a short-lived `toolgate-workflow-runtime` credential
+for the configured tenant, plus `--control-origin`, `--gateway-origin`, and the
+respective CA files. Provide the worker with direct TLS access to Control's
+internal runtime listener. The worker reloads the mounted credential on every
+request. Configure `TOOLGATE_WORKFLOW_MODEL_ORIGINS` on the Gateway as a
+comma-separated list of approved HTTPS origins. Model containers supply a
+TLS-protected OpenAI-compatible completion endpoint trusted by the Gateway.
+Set `TOOLGATE_WORKFLOW_MODEL_CA_FILE` to a mounted PEM trust bundle for model
+endpoints using a private CA.
 
 The generic listener reuses the current authenticated subscription/ticket APIs and
 `toolgate.triggers.v1`. Obtain the subscription name and immutable UID from the
@@ -140,12 +207,12 @@ DUPLICATE refers to the original durable outcome and may have no run for an
 original rejection/filter. The listener never substitutes its event payload for
 that authoritative lookup.
 
-**That Control endpoint is not implemented by this slice.** A current server's
-404/401/503, a timeout, or any non-durable/mismatched receipt stops the connection
+Control now implements the admission endpoint. A server's 404/401/503,
+a timeout, or any non-durable/mismatched receipt stops the connection
 without ACK. There is no local admission ledger, fake production success or
-fallback workflow. Registration plus an uploaded profile is not yet enough for
-end-to-end execution: complete V1.1 provisioning/readiness and V1.2 admission/run/lease/model transport
-remain required. Once available, admitted work belongs to Control's run queue;
+fallback workflow. Registration plus an uploaded profile is not enough for
+execution: the profile must be reviewed, dependency-ready and published, and the
+workload worker and approved model transport must be running. Admitted work belongs to Control's run queue;
 the listener never fabricates a RunLease or executes an event as Python code.
 
 Processing is serial: commit evidence first, ACK second, credit third. Any error

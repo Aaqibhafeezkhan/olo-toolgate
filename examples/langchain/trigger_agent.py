@@ -3,7 +3,7 @@
 """Hot folder: a file dropped into the device's HotFolder inbox triggers a LangGraph flow that displays the file
 and moves it to processed/.
 
-The `examples.inbox-watch` package's `new-file` client trigger runs on the device (assigned by the deployment profile
+The `examples.hotfolder-watch` package's `new-file` client trigger runs on the device (assigned by the deployment profile
 `hotfolder-trigger.profile.json`) and reports each new file to Control. This agent consumes those events through an
 `EventSource`; each event runs one graph: read the file, display it, move it to `processed/<name>`. Every file
 operation is a real package tool call through the Gateway, under the agent's own grants.
@@ -268,7 +268,7 @@ def main():
     # After `manage.py setup --bootstrap-local` the rotated local passwords are in .state; otherwise .env supplies them.
     mimic = _load('agent_mimic', ROOT / 'debug/standard/agent-mimic.py')
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'credentials/admin/password.txt').is_file())
     directory = manage.STATE / 'agents'
     descriptor = json.loads((directory / (args.target + '.json')).read_text(encoding='utf-8'))
     gateway = mimic.Agent(descriptor['gateway'], directory / (args.target + '.token'), directory / 'gateway-ca.crt')

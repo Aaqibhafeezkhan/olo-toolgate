@@ -31,14 +31,14 @@ public class QuickstartProxy {
         var origin=routing.request().getHeader("Origin");
         if(origin!=null && !origin.equals("https://"+host))throw new Failure(ErrorCode.FORBIDDEN,403,"Invalid origin");
         var bytes=document==null?new byte[0]:document.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        if(bytes.length>65536)throw Failure.validation();
+        if(bytes.length>(path.equals("/v1/chat/completions")?98304:65536))throw Failure.validation();
         try {
-            var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).timeout(Duration.ofSeconds(path.equals("/mcp")?35:12))
+            var request=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+path)).timeout(Duration.ofSeconds(path.equals("/mcp")||path.equals("/v1/chat/completions")?35:12))
                 .header("Content-Type","application/json").method(method,bytes.length==0?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofByteArray(bytes));
             var authorization=routing.request().getHeader("Authorization");
             if(authorization==null) authorization=routing.get(QuickstartRuntimeAuthentication.BEARER);
             if(authorization!=null){if(authorization.length()>16384)throw Failure.validation();request.header("Authorization",authorization);}
-            for(var header:java.util.List.of("X-Request-ID","Idempotency-Key","traceparent","Accept","MCP-Protocol-Version","MCP-Method","MCP-Name")){
+            for(var header:java.util.List.of("X-Request-ID","Idempotency-Key","traceparent","Accept","MCP-Protocol-Version","MCP-Method","MCP-Name","X-ToolGate-Run-Id")){
                 var value=routing.request().getHeader(header);
                 if(value!=null){if(value.length()>(header.equals("MCP-Name")?1024:128))throw Failure.validation();request.header(header,value);}
             }
@@ -61,4 +61,6 @@ public class QuickstartProxy {
     public Response catalog(String document){return relay("/access/catalog","POST",document,8081);}
     @POST @Path("mcp") @Consumes("application/json")
     public Response mcp(String document){return relay("/mcp","POST",document,8081);}
+    @POST @Path("v1/chat/completions") @Consumes("application/json")
+    public Response workflowInference(String document){return relay("/v1/chat/completions","POST",document,8081);}
 }

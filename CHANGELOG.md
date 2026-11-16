@@ -6,6 +6,39 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add the `examples.log-watch/error-spike` client POLL package and a profile-scoped
+  managed-log triage use case, with bounded RE2 filtering, observation windows,
+  cooldowns, restart checkpoints and explicit rewrite/rotation limits. Host log
+  access and native PUSH remain separate executor work.
+  Include `.log` in the managed-device file allowlist and run registered trigger
+  packages in a parallel CI mock-test matrix with individual reports and READMEs.
+
+- Add `WorkflowStack/start.bat` with numbered profile selection and automatic
+  missing-image preparation. Add destructive `stop.bat` cleanup for owned stack
+  containers, volumes, networks and generated state/data, preserving profiles and
+  supplied models; retain `manage.bat stop` for storage-preserving shutdown.
+
+- Bundle a selectable complete workflow deployment in `deploy/compose/WorkflowStack`,
+  with issue triage and separate file/summarization agents, confirmed summary
+  delivery and input archiving, and configuration-specific operating instructions.
+  Pin ordered context/model agent stages so supervisor output cannot skip the
+  configured agents. Recheck each active agent's own grants and constrain/validate
+  model decisions with a canonical JSON schema. Include optional local monitoring and documented
+  Langfuse/LangSmith OTLP configuration without default content tracing.
+
+- Bind configured workflow context-tool arguments to the admitted message, store
+  encrypted workflow results for current tenant administrators, and optionally
+  write private worker result files. The hot-folder demo uses a configured
+  agent to read and triage issue logs, with explicit device/group/image pins for
+  the bounded Java broker-only read tier; writes remain unqualified.
+
+- Include `olo-toolgate-langgraph-runtime` in container release builds, image
+  verification, SBOM/provenance and Docker Hub/GHCR publication.
+
+- Report workflow worker inference/tool observations without content or credentials.
+  Require configured-agent/tool evidence and stable duplicate admission IDs in
+  the one-agent acceptance fixture; uncertain tool outcomes fail acceptance.
+
 - Move standard debug scripts into `debug/standard` and add a separate
   `debug/hotfolder` lab with a host-mounted inbox and a real trigger smoke check.
 

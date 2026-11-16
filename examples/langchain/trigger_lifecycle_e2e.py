@@ -97,7 +97,7 @@ def run(config, devices, package_version, timeout, checkpoint_service=None):
     config.api(BASE + '/assignments', {
         'name': assignment,
         'spec': {
-            'trigger': 'examples.inbox-watch/new-file',
+            'trigger': 'examples.hotfolder-watch/new-file',
             'packageVersion': package_version,
             'target': {'executor': 'CLIENT', 'deviceGroups': [g1, g2]},
             'config': {'folder': 'inbox', 'extension': '.txt'},
@@ -137,7 +137,7 @@ def main():
     if args.timeout < 1:
         parser.error('--timeout must be positive')
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'credentials/admin/password.txt').is_file())
     if args.checkpoint_service:
         manage.COMPOSE.extend(['-f', str(manage.HERE / 'compose.trigger-lifecycle.yaml')])
     run(config, args.device, args.package_version, args.timeout, args.checkpoint_service)

@@ -191,7 +191,11 @@ class WireTests(unittest.TestCase):
                 return DispatchReceipt(uid, cursor, "dispatch-1", "ADMITTED" if len(admissions) == 1 else "DUPLICATE", "run-1")
             client.admit = admit
             for _ in range(2):
-                count, receipt = TriggerListener(client, SUB).listen_once(max_events=1)
+                try:
+                    count, receipt = TriggerListener(client, SUB).listen_once(max_events=1)
+                except ListenerFailure as failure:
+                    failure.add_note(f"cause={type(failure.__context__).__name__}, mock errors={errors}, frame_counts={[len(frames) for frames in seen]}")
+                    raise
                 self.assertEqual(count, 1); self.assertEqual(receipt.run_id, "run-1")
             self.assertTrue(finished.wait(3))
             self.assertEqual(errors, [])
@@ -238,6 +242,22 @@ class WireTests(unittest.TestCase):
 
 
 class ListenerTests(unittest.TestCase):
+    def test_mounted_credential_is_reread_after_rotation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            token = Path(directory) / 'listener.token'
+            token.write_text('first-token', encoding='ascii')
+            def listen(control, subscription):
+                self.assertEqual(control._token(), 'first-token')
+                token.write_text('second-token', encoding='ascii')
+                self.assertEqual(control._token(), 'second-token')
+                return 0, None
+            with patch('toolgate_runtime.trigger_listener.TriggerListener') as listener, \
+                 patch('sys.stdout', new_callable=io.StringIO):
+                listener.side_effect = lambda control, subscription: type('Listener', (), {
+                    'listen_once': lambda self, **kwargs: listen(control, subscription)})()
+                self.assertEqual(main(['--control-origin', 'https://localhost', '--subscription', SUB.name,
+                    '--subscription-uid', SUB.uid, '--token-file', str(token)]), 0)
+
     def test_uid_is_checked_before_ticket_or_connection(self):
         class Recreated:
             timeout = 1

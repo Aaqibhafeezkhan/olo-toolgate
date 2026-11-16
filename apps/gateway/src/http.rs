@@ -173,10 +173,100 @@ pub fn runtime_router(state: Arc<AppState>) -> Router {
         .route("/access/invocations/{id}/history", get(operation_history))
         .route("/access/catalog", post(catalog))
         .route("/mcp", post(crate::mcp::ingress))
+        .route("/v1/chat/completions", post(workflow_inference))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
+}
+
+async fn workflow_inference(State(s): State<Arc<AppState>>, request: Request) -> Response {
+    let correlation = request
+        .extensions()
+        .get::<Correlation>()
+        .expect("guard correlation")
+        .clone();
+    let result = async {
+        let run = single_header(request.headers(), "x-toolgate-run-id").filter(|value| {
+            value.strip_prefix("run-").is_some_and(crate::tenancy::canonical_uuid)
+        }).ok_or(ErrorCode::Validation)?;
+        let token = single_header(request.headers(), "authorization").and_then(|value| value.strip_prefix("Bearer "))
+            .filter(|value| value.len() == 43 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte)))
+            .ok_or(ErrorCode::Unauthorized)?;
+        if single_header(request.headers(), "content-type") != Some("application/json") || request.headers().contains_key("content-encoding") {
+            return Err(ErrorCode::Validation);
+        }
+        let (run, token) = (run.to_owned(), token.to_owned());
+        let bytes = to_bytes(request.into_body(), s.config.limits.max_body_bytes.min(98_304)).await.map_err(|_| ErrorCode::Validation)?;
+        let value = crate::validation::strict_json(&bytes).map_err(|_| ErrorCode::Validation)?;
+        let messages = value.as_object().filter(|object| object.len() == 1).and_then(|object| object.get("messages"))
+            .and_then(Value::as_array).filter(|messages| !messages.is_empty() && messages.len() <= 64).ok_or(ErrorCode::Validation)?;
+        if messages.iter().any(|message| !message.as_object().is_some_and(|object| object.len() == 2
+            && object.get("role").and_then(Value::as_str).is_some_and(|role| ["system", "user", "assistant"].contains(&role))
+            && object.get("content").is_some_and(Value::is_string))) {
+            return Err(ErrorCode::Validation);
+        }
+        let model = s.gateway.authority.workflow_model(&run, &token).await?;
+        let (max_tokens, temperature) = workflow_generation(&model)?;
+        let origin = reqwest::Url::parse(&model.origin).map_err(|_| ErrorCode::DependencyUnavailable)?;
+        let approved = std::env::var("TOOLGATE_WORKFLOW_MODEL_ORIGINS").unwrap_or_default();
+        if origin.scheme() != "https" || origin.host_str().is_none() || origin.path() != "/" || !origin.username().is_empty()
+            || origin.password().is_some() || origin.query().is_some() || origin.fragment().is_some()
+            || !approved.split(',').map(str::trim).any(|entry| entry == origin.origin().ascii_serialization()) {
+            return Err(ErrorCode::Forbidden);
+        }
+        let mut builder = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none())
+            .retry(reqwest::retry::never()).tls_sslkeylogfile(false).connect_timeout(Duration::from_secs(3))
+            .timeout(Duration::from_secs(30));
+        if let Some(path) = std::env::var_os("TOOLGATE_WORKFLOW_MODEL_CA_FILE") {
+            let bytes = crate::config::read_bytes(std::path::Path::new(&path)).map_err(|_| ErrorCode::DependencyUnavailable)?;
+            let roots = reqwest::Certificate::from_pem_bundle(&bytes).map_err(|_| ErrorCode::DependencyUnavailable)?;
+            if roots.is_empty() { return Err(ErrorCode::DependencyUnavailable); }
+            builder = builder.tls_certs_only(roots);
+        }
+        let client = builder.build().map_err(|_| ErrorCode::DependencyUnavailable)?;
+        let response = client.post(origin.join("v1/chat/completions").map_err(|_| ErrorCode::Validation)?)
+            .bearer_auth(model.credential).header("Content-Type", "application/json")
+            .header("traceparent", &correlation.traceparent)
+            .body(serde_json::json!({"model":model.model_id,"messages":messages,"stream":false,"max_tokens":max_tokens,
+                "temperature":temperature,"response_format":workflow_decision_format()?}).to_string())
+            .send().await.map_err(|_| ErrorCode::DependencyUnavailable)?;
+        if !response.status().is_success() { return Err(ErrorCode::DependencyUnavailable); }
+        let body = crate::relay::read_workflow_body(response, 98_304).await?;
+        let value = crate::validation::strict_json(&body).map_err(|_| ErrorCode::Validation)?;
+        let content = value["choices"][0]["message"]["content"].as_str().ok_or(ErrorCode::Validation)?;
+        let decision = crate::validation::strict_json(content.as_bytes()).map_err(|_| ErrorCode::Validation)?;
+        if !s.gateway.contracts.valid("WorkflowModelDecision", &decision) { return Err(ErrorCode::Validation); }
+        Ok(decision)
+    }.await;
+    match result {
+        Ok(decision) => ([("cache-control", "no-store")], Json(decision)).into_response(),
+        Err(code) => error(code, &correlation.request_id),
+    }
+}
+
+/// The provider receives the same closed decision schema validated at Gateway.
+/// Decoding constrains syntax; it grants no agent, tool, context or model authority.
+fn workflow_decision_format() -> Result<Value, ErrorCode> {
+    let document: Value = serde_json::from_str(include_str!(
+        "../../../packages/contracts/rust/schemas/v2/workflow-decision.schema.json"
+    ))
+    .map_err(|_| ErrorCode::DependencyUnavailable)?;
+    Ok(serde_json::json!({"type":"json_schema","json_schema":{
+        "name":"toolgate_workflow_decision","strict":true,
+        "schema":{"oneOf":document["$defs"].as_object().ok_or(ErrorCode::DependencyUnavailable)?
+            .values().cloned().collect::<Vec<_>>()}}}))
+}
+
+fn workflow_generation(model: &crate::relay::WorkflowModel) -> Result<(u64, f64), ErrorCode> {
+    let generation = &model.generation;
+    if !(1..=4096).contains(&generation.max_output_tokens)
+        || !generation.temperature.is_finite()
+        || !(0.0..=2.0).contains(&generation.temperature)
+    {
+        return Err(ErrorCode::DependencyUnavailable);
+    }
+    Ok((generation.max_output_tokens, generation.temperature))
 }
 
 async fn public_document(s: &AppState) -> Result<crate::discovery::Document, ErrorCode> {
@@ -385,6 +475,19 @@ async fn guard(State(s): State<Arc<AppState>>, mut request: Request, next: Next)
                 "/.well-known/olo-toolgate-client" | "/api/public/v1/clients/configuration"
             )
         {
+            return timeout(
+                Duration::from_millis(s.config.limits.request_timeout_ms),
+                next.run(request),
+            )
+            .await
+            .unwrap_or_else(|_| error(ErrorCode::Timeout, &correlation.request_id));
+        }
+        if request.method() == axum::http::Method::POST
+            && (request.uri().path() == "/v1/chat/completions"
+                || request.uri().path() == "/mcp"
+                    && request.headers().contains_key("x-toolgate-run-id"))
+        {
+            // Control checks the run-bound step credential before releasing model routing or vault data.
             return timeout(
                 Duration::from_millis(s.config.limits.request_timeout_ms),
                 next.run(request),
@@ -802,6 +905,32 @@ mod dedup_key {
 #[cfg(test)]
 mod trace_context {
     use super::{valid_declared_id, valid_tracestate};
+
+    #[test]
+    fn model_generation_is_profile_selected_and_bounded() {
+        let mut value = serde_json::json!({"origin":"https://model.example","modelId":"profile-model",
+            "credential":"fixture","generation":{"maxOutputTokens":256,"temperature":0.25}});
+        let model = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(super::workflow_generation(&model).unwrap(), (256, 0.25));
+        value["generation"]["maxOutputTokens"] = 4097.into();
+        assert!(
+            super::workflow_generation(&serde_json::from_value(value.clone()).unwrap()).is_err()
+        );
+        value.as_object_mut().unwrap().remove("generation");
+        assert!(serde_json::from_value::<crate::relay::WorkflowModel>(value).is_err());
+    }
+
+    #[test]
+    fn provider_decoding_uses_the_canonical_closed_decisions() {
+        let format = super::workflow_decision_format().unwrap();
+        assert_eq!(format["type"], "json_schema");
+        assert_eq!(format["json_schema"]["strict"], true);
+        let schema = &format["json_schema"]["schema"];
+        assert_eq!(schema["oneOf"].as_array().unwrap().len(), 5);
+        let validator = jsonschema::validator_for(schema).unwrap();
+        assert!(validator.is_valid(&serde_json::json!({"kind":"finish_context"})));
+        assert!(!validator.is_valid(&serde_json::json!({"kind":"finish_context","result":"extra"})));
+    }
 
     #[test]
     fn durable_conflicts_remain_client_conflicts() {

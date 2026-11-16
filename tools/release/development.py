@@ -24,7 +24,8 @@ IMAGES = {'control':('olo-toolgate-control:module05','olo-toolgate-control'),
           'gateway':('olo-toolgate-gateway:module05','olo-toolgate-gateway'),
           'quickstart':('olo-toolgate-quickstart:module11','olo-toolgate-quickstart'),
           'device':('olo-toolgate-device:module11','olo-toolgate-device'),
-          'secured_device':('olo-toolgate-linux-secured-device:module11','olo-toolgate-linux-secured-device')}
+          'secured_device':('olo-toolgate-linux-secured-device:module11','olo-toolgate-linux-secured-device'),
+          'langgraph_runtime':('olo-toolgate-langgraph-runtime:tested','olo-toolgate-langgraph-runtime')}
 
 
 def run(*arguments, capture=False, input=None):
@@ -150,6 +151,7 @@ def prepare(run_id=None):
         run('gh','run','download',str(selected[name]),'--repo',repo,'--name',artifact,'--dir',str(OUTPUT/name))
     run('gh','run','download',str(selected['quickstart']),'--repo',repo,'--name','device-evidence','--dir',str(OUTPUT/'device'))
     run('gh','run','download',str(selected['quickstart']),'--repo',repo,'--name','secured-device-evidence','--dir',str(OUTPUT/'secured_device'))
+    run('gh','run','download',str(selected['quickstart']),'--repo',repo,'--name','langgraph-runtime-evidence','--dir',str(OUTPUT/'langgraph_runtime'))
     run(sys.executable,'tools/client/manifest.py','--source',str(OUTPUT/'client'),'--output',str(assets))
     if not (assets/'installers.json').exists():raise ValueError('Native installers required for release')
     # ZIP archives remain CI build inputs, never public Windows installation assets.

@@ -19,9 +19,21 @@ import jakarta.ws.rs.core.Response;
 public class TriggerResource {
     @Inject TriggerService service; @Inject RoutingContext routing; @Inject Correlation correlation; @Inject VerifiedActors actors;
     @Inject TriggerRouter router; @Inject TriggerSubscriptions subscriptions; @Inject TriggerStream stream;
+    @Inject PostgresStore store; @Inject ContractCodec codec; @Inject TriggerBootstrap bootstrap; @Inject VaultKeyBootstrap vaultKeys;
 
     private void tls() { if (!routing.request().isSSL()) throw new Failure(ErrorCode.UNAUTHORIZED, 401, "Direct TLS required"); }
     private DirectoryService.Actor actor() { tls(); return actors.management(); }
+
+    @POST @Path("workflow-dispatches:admit") @Consumes("application/json") @io.quarkus.security.Authenticated
+    public Response admitWorkflow(String document) {
+        var actor = actor();
+        if (document == null || document.length() > 1024) throw Failure.validation();
+        var clock = java.time.Clock.systemUTC();
+        var keys = vaultKeys.required();
+        var profiles = new WorkflowProfiles(store, codec, new WorkflowProfileDependencies(codec, clock,
+            bootstrap.subscriptions(actor.tenant()), bootstrap.forTenant(actor.tenant()), actor.tenant()), keys);
+        return response(new WorkflowAdmissions(store, codec, clock, stream, profiles, keys).admit(actor, document, correlation.id()));
+    }
     private static Response response(Store.Reply reply) {
         var builder = Response.status(reply.status()).header("Cache-Control", "no-store").entity(reply.body());
         if (reply.revision() > 0) builder.header("ETag", "W/\"" + reply.revision() + "\"");

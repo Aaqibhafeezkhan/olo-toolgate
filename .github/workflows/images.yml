@@ -444,6 +444,50 @@ jobs:
         path: build/langchain/
         if-no-files-found: ignore
 
+  langgraph-runtime:
+    if: ${{ inputs.run_tests }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        ref: ${{ inputs.source_sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      if: ${{ inputs.development_source }}
+      with:
+        name: manual-development-source
+        path: .
+    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+      with:
+        python-version: '3.12'
+    - name: Derive build versions from version.json
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python -m pip install -r tools/release/notes-requirements.txt
+        python tools/release/config.py
+    - name: Build and verify the standalone LangGraph image
+      if: ${{ inputs.run_tests }}
+      env:
+        RELEASE_SHA: ${{ inputs.source_sha || github.sha }}
+      run: |
+        mkdir -p build/langgraph-runtime
+        docker build --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$RELEASE_SHA" -t olo-toolgate-langgraph-runtime:tested apps/langgraph-runtime
+        docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true olo-toolgate-langgraph-runtime:tested --help
+        docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint /opt/toolgate-runtime/bin/python olo-toolgate-langgraph-runtime:tested -m toolgate_runtime.trigger_listener --help
+        docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint /opt/toolgate-runtime/bin/python olo-toolgate-langgraph-runtime:tested -m pip check
+        docker run --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true -v "$PWD/apps/langgraph-runtime/tests:/tests:ro" --entrypoint /opt/toolgate-runtime/bin/python olo-toolgate-langgraph-runtime:tested -m unittest discover -s /tests -v
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-langgraph-runtime:tested
+        docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/langgraph-runtime:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/langgraph-runtime-sbom.cdx.json olo-toolgate-langgraph-runtime:tested
+        docker save olo-toolgate-langgraph-runtime:tested -o build/langgraph-runtime/image.tar
+        (cd build/langgraph-runtime && sha256sum image.tar langgraph-runtime-sbom.cdx.json > SHA256SUMS)
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: langgraph-runtime-evidence
+        path: build/langgraph-runtime/
+        if-no-files-found: error
+
   build:
     if: ${{ !inputs.run_tests }}
     runs-on: ubuntu-24.04
@@ -494,7 +538,7 @@ jobs:
         docker save --output build/manual-development/images.tar \
           olo-toolgate-control:manual-development olo-toolgate-gateway:manual-development \
           olo-toolgate-quickstart:manual-development olo-toolgate-device:manual-development \
-          olo-toolgate-linux-secured-device:manual-development
+          olo-toolgate-linux-secured-device:manual-development olo-toolgate-langgraph-runtime:manual-development
       if: ${{ !inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
@@ -520,7 +564,7 @@ jobs:
         if-no-files-found: error
       if: ${{ !inputs.run_tests }}
   verify:
-    needs: [quickstart, control, gateway, device, secured-device, langchain, build]
+    needs: [quickstart, control, gateway, device, secured-device, langchain, langgraph-runtime, build]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -531,7 +575,7 @@ jobs:
         RUN_TESTS: ${{ inputs.run_tests }}
       run: |
         if [ "$RUN_TESTS" = true ]; then
-          required='["quickstart","control","gateway","device","secured-device","langchain"]'
+          required='["quickstart","control","gateway","device","secured-device","langchain","langgraph-runtime"]'
         else
           required='["build"]'
         fi

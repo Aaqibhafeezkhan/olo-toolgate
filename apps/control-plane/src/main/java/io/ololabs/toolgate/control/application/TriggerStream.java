@@ -294,6 +294,48 @@ public final class TriggerStream {
         return false;
     }
 
+    /** Resolve an in-flight delivery under its current owner and source authority in the admission transaction. */
+    public record DispatchEvent(String assignmentUid, JsonNode event) {}
+
+    public DispatchEvent dispatchEvent(Store.Session tx, DirectoryService.Actor actor, String subscriptionUid, String cursor) {
+        triggers.tenantOf(actor);
+        if (subscriptionUid == null || !subscriptionUid.matches("ts-[a-f0-9]{32}")
+                || cursor == null || !cursor.matches("[0-9]{16}")) throw Failure.validation();
+        var delivery = tx.triggers().get(DELIVERY, subscriptionUid + "/" + cursor);
+        if (delivery == null) throw TriggerService.notFound();
+        var record = TriggerService.read(delivery.document());
+        var consumer = record.path("consumer");
+        if (!"SUBSCRIPTION".equals(consumer.path("kind").asText()) || !"InFlight".equals(record.path("state").asText()))
+            throw TriggerService.notFound();
+        var sub = subscriptions.stored(tx, consumer.path("name").asText());
+        if (sub == null || !sub.uid().equals(subscriptionUid) || !sub.owner().equals(actor.userId())
+                || !"Active".equals(sub.phase()) || sub.spec().path("expiresAtUnixMs").asLong() <= clock.millis())
+            throw TriggerService.notFound();
+        subscriptions.requireSources(tx, subscriptions.owner(sub), sub.sources());
+
+        var logRow = tx.triggers().get(LOG, cursor);
+        if (logRow == null) throw TriggerService.notFound();
+        var log = TriggerService.read(logRow.document());
+        var eventRow = tx.triggers().get(TriggerStore.Kind.EVENT, log.path("event").asText());
+        if (eventRow == null) throw TriggerService.notFound();
+        var stored = TriggerService.read(eventRow.document());
+        var producer = stored.path("producer");
+        String assignmentName = producer.path("assignment").asText();
+        if (!sub.sources().contains(assignmentName) || !readsSource(tx, sub.owner(), producer))
+            throw ManagementAccess.denied();
+        var assignment = triggers.existing(tx, assignmentName);
+        String instance = TriggerService.instanceId(assignment.uid(), producer.path("executorId").asText());
+        if (!instance.equals(producer.path("instanceId").asText()) || !"Running".equals(assignment.spec().path("desiredState").asText()))
+            throw ManagementAccess.denied();
+
+        var classification = io.ololabs.toolgate.contracts.v2.TriggerClassification.valueOf(log.path("classification").asText());
+        var clearance = subscriptions.clearance(tx, sub.owner());
+        if (!TriggerLabels.covers(clearance, classification)) throw ManagementAccess.denied();
+        var event = TriggerLabels.view(stored.path("event"), classification, clearance);
+        if (!TriggerSubscriptions.passes(TriggerSubscriptions.filter(sub, true), event)) throw ManagementAccess.denied();
+        return new DispatchEvent(assignment.uid(), event);
+    }
+
     String server(JsonNode message) {
         String text = codec.json(message);
         codec.model(text, TriggerStreamServerMessage.class);

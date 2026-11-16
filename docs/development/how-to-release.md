@@ -167,7 +167,7 @@ same build; dispatch a fresh run with no reuse ID for a new release number.
 |---|---|
 | Contracts JAR, sources, Javadoc, POM and Gradle module | Configured Maven repository; default GitHub Maven Packages |
 | `@olo-labs/toolgate-contracts` | GitHub npm Packages |
-| Control, Gateway, Quickstart, device, secured device | `ghcr.io/olo-labs/<image>:1.0.0-beta.42` and `docker.io/<namespace>/<image>:1.0.0-beta.42` |
+| Control, Gateway, Quickstart, device, secured device, LangGraph runtime (`olo-toolgate-langgraph-runtime`) | `ghcr.io/olo-labs/<image>:1.0.0-beta.42` and `docker.io/<namespace>/<image>:1.0.0-beta.42` |
 | Helm chart | `oci://ghcr.io/olo-labs/charts/olo-toolgate:1.0.0-beta.42` |
 | Installers, distributions, SDK JARs, SBOMs and manifests | GitHub Release `v1.0.0-beta.42` |
 

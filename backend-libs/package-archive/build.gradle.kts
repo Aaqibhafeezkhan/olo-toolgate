@@ -21,7 +21,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     systemProperty("toolgate.root", rootProject.projectDir.absolutePath)
-    // Parity with the CLI: TOOLGATE_TRIGGER_PACKAGE names a package `toolgate pack` built, such as the inbox-watch sample.
+    // Parity with the CLI: TOOLGATE_TRIGGER_PACKAGE names a package `toolgate pack` built, such as the hotfolder-watch sample.
     providers.environmentVariable("TOOLGATE_TRIGGER_PACKAGE").orNull?.let { systemProperty("toolgate.triggerPackage", it) }
 }
 

@@ -4522,6 +4522,50 @@ BEGIN
 END;$$;
 CREATE TRIGGER workflow_revision_immutable BEFORE UPDATE ON control_workflow_profile_revisions FOR EACH ROW EXECUTE FUNCTION control_workflow_revision_guard();
 
+CREATE TABLE control_workflow_runs(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ run_id varchar(128) NOT NULL, profile_id varchar(128) NOT NULL, profile_digest varchar(71) NOT NULL,
+ workflow_id varchar(128) NOT NULL, workflow_version_id varchar(128) NOT NULL,
+ service_agent_id varchar(128) NOT NULL, service_agent_group_id varchar(128) NOT NULL,
+ remediation_mode varchar(16) NOT NULL CHECK(remediation_mode IN('PREPARE','APPLY')),
+ state varchar(24) NOT NULL CHECK(state IN('QUEUED','RUNNING','SUCCEEDED','FAILED','AWAITING_APPROVAL','CANCELLED','EXPIRED')),
+ document text NOT NULL CHECK(octet_length(document)<=65536), created_at bigint NOT NULL CHECK(created_at>=0),
+ key_version bigint NOT NULL,
+ lease_id varchar(128), lease_owner varchar(128), lease_token_digest varchar(64), lease_expires_at bigint,
+ step_kind varchar(16) CHECK(step_kind IN('WORKFLOW','AGENT')), step_subject varchar(128), step_model_group varchar(128), step_token_digest varchar(64),
+ CHECK((step_kind IS NULL AND step_subject IS NULL AND step_model_group IS NULL AND step_token_digest IS NULL)
+    OR (state='RUNNING' AND step_kind IS NOT NULL AND step_subject IS NOT NULL AND step_model_group IS NOT NULL AND step_token_digest IS NOT NULL)),
+ CHECK((state='RUNNING' AND lease_id IS NOT NULL AND lease_owner IS NOT NULL AND lease_token_digest IS NOT NULL AND lease_expires_at IS NOT NULL)
+    OR (state<>'RUNNING' AND lease_id IS NULL AND lease_owner IS NULL AND lease_token_digest IS NULL AND lease_expires_at IS NULL)),
+ FOREIGN KEY(tenant_id,profile_id,profile_digest) REFERENCES control_workflow_profile_revisions(tenant_id,profile_id,digest),
+ FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version),
+ PRIMARY KEY(tenant_id,run_id));
+CREATE INDEX control_workflow_runs_queue ON control_workflow_runs(tenant_id,state,created_at,run_id);
+CREATE INDEX control_workflow_runs_expiry ON control_workflow_runs(tenant_id,state,lease_expires_at);
+CREATE TABLE control_workflow_admissions(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ subscription_uid varchar(160) NOT NULL, cursor varchar(16) NOT NULL CHECK(length(cursor)=16),
+ owner_id varchar(128) NOT NULL, admission_id varchar(128) NOT NULL,
+ disposition varchar(16) NOT NULL CHECK(disposition IN('ADMITTED','FILTERED','REJECTED')),
+ run_id varchar(128),
+ CHECK((disposition='ADMITTED' AND run_id IS NOT NULL) OR (disposition<>'ADMITTED' AND run_id IS NULL)),
+ FOREIGN KEY(tenant_id,run_id) REFERENCES control_workflow_runs(tenant_id,run_id),
+ PRIMARY KEY(tenant_id,subscription_uid,cursor), UNIQUE(tenant_id,admission_id), UNIQUE(tenant_id,run_id));
+ALTER TABLE control_workflow_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_runs FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_runs USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_runs AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_runs FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_runs TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_runs TO toolgate_control_platform;
+ALTER TABLE control_workflow_admissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_admissions FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_admissions USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_admissions AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_admissions FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT ON TABLE public.control_workflow_admissions TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_workflow_admissions TO toolgate_control_platform;
+
 -- BEGIN TENANT CAPACITY
 GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
 
@@ -4531,6 +4575,30 @@ CREATE FUNCTION control_capacity_seed() RETURNS trigger LANGUAGE plpgsql SECURIT
 BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id);RETURN NEW;END;$$;
 REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
+
+CREATE FUNCTION control_workflow_runs_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_runs_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_runs FOR EACH ROW EXECUTE FUNCTION control_workflow_runs_capacity();
+
+CREATE FUNCTION control_workflow_admissions_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.subscription_uid),0)+COALESCE(octet_length(NEW.cursor),0)+COALESCE(octet_length(NEW.owner_id),0)+COALESCE(octet_length(NEW.admission_id),0)+COALESCE(octet_length(NEW.disposition),0)+COALESCE(octet_length(NEW.run_id),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.subscription_uid),0)+COALESCE(octet_length(OLD.cursor),0)+COALESCE(octet_length(OLD.owner_id),0)+COALESCE(octet_length(OLD.admission_id),0)+COALESCE(octet_length(OLD.disposition),0)+COALESCE(octet_length(OLD.run_id),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_admissions_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_admissions FOR EACH ROW EXECUTE FUNCTION control_workflow_admissions_capacity();
 
 CREATE FUNCTION control_workflow_profile_revisions_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;

@@ -26,6 +26,7 @@ from tools.release import development_source, github_release, images as image_pu
 HELM_IMAGE = 'alpine/helm:3.17.3'
 IMAGES = {name: 'olo-toolgate-'+name for name in ('control', 'gateway', 'quickstart', 'device')}
 IMAGES['secured_device'] = 'olo-toolgate-linux-secured-device'
+IMAGES['langgraph_runtime'] = 'olo-toolgate-langgraph-runtime'
 
 
 def run(*args, capture=False, input=None):
@@ -90,6 +91,8 @@ def build():
     run('docker', 'build', '-f', 'apps/device/secured.Dockerfile',
         '--build-arg', 'DEVICE_IMAGE=olo-toolgate-device:manual-development',
         '-t', 'olo-toolgate-linux-secured-device:manual-development', '.')
+    run('docker', 'build', *common, '-t', 'olo-toolgate-langgraph-runtime:manual-development',
+        'apps/langgraph-runtime')
     for path in sorted(CLIENTS.iterdir()):
         if path.is_file() and public_asset(path):
             shutil.copyfile(path, ASSETS/path.name)

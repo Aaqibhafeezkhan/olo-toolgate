@@ -2637,6 +2637,12 @@ export interface WorkflowAgentDefinition {
   readonly contextSources: ReadonlyArray<WorkflowContextSource>;
   readonly outputSchema: Record<string, unknown>;
 }
+export type WorkflowAgentResultMode = "CONTEXT" | "MODEL";
+/** Ordered configured agent stage; identifiers and modes are data, never executable expressions. */
+export interface WorkflowAgentStage {
+  readonly agentId: string;
+  readonly resultMode: WorkflowAgentResultMode;
+}
 /** Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority. */
 export interface WorkflowConfiguration {
   readonly workflowGroups: ReadonlyArray<WorkflowGroupDefinition>;
@@ -2646,10 +2652,21 @@ export interface WorkflowConfiguration {
   readonly dispatchBindings: ReadonlyArray<WorkflowDispatchBinding>;
   readonly modelDeployments: ReadonlyArray<WorkflowModelDeployment>;
 }
+/** Bounded finish_context model proposal; never execution authority. */
+export interface WorkflowContextDecision {
+  readonly kind: "finish_context";
+}
+/** Bounded delegate model proposal; never execution authority. */
+export interface WorkflowContextDelegateDecision {
+  readonly kind: "delegate";
+  readonly agentId: string;
+  readonly inputFromAgent: string;
+}
 /** Profile declaration for WorkflowContextSource; eligibility and configuration confer no runtime authority. */
 export interface WorkflowContextSource {
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
+  readonly argumentBindings?: Record<string, unknown>;
 }
 /** Profile declaration for WorkflowDefinition; eligibility and configuration confer no runtime authority. */
 export interface WorkflowDefinition {
@@ -2663,6 +2680,14 @@ export interface WorkflowDefinition {
   readonly resultSchema: Record<string, unknown>;
   readonly limits: WorkflowExecutionLimits;
   readonly agents: ReadonlyArray<WorkflowAgentBinding>;
+  readonly agentStages?: ReadonlyArray<WorkflowAgentStage>;
+  readonly deployment?: WorkflowStackDeployment;
+}
+/** Bounded delegate model proposal; never execution authority. */
+export interface WorkflowDelegateDecision {
+  readonly kind: "delegate";
+  readonly agentId: string;
+  readonly input: string;
 }
 /** Profile declaration for WorkflowDispatchBinding; eligibility and configuration confer no runtime authority. */
 export interface WorkflowDispatchBinding {
@@ -2696,6 +2721,11 @@ export interface WorkflowExecutionLimits {
   readonly maxHandoffs: number;
   readonly maxDurationSeconds: number;
 }
+/** Bounded finish model proposal; never execution authority. */
+export interface WorkflowFinishDecision {
+  readonly kind: "finish";
+  readonly result: unknown;
+}
 /** Profile declaration for WorkflowGroupDefinition; eligibility and configuration confer no runtime authority. */
 export interface WorkflowGroupDefinition {
   readonly id: string;
@@ -2709,6 +2739,12 @@ export interface WorkflowModelDeployment {
   readonly secretName: string;
   readonly toolGroupId: string;
   readonly deviceGroupId: string;
+  readonly generation: WorkflowModelGeneration;
+}
+/** Explicit bounded inference parameters selected from the pinned model deployment, never from a runner request. */
+export interface WorkflowModelGeneration {
+  readonly maxOutputTokens: number;
+  readonly temperature: number;
 }
 /** Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority. */
 export interface WorkflowModelGroupDefinition {
@@ -2735,3 +2771,81 @@ export interface WorkflowProfileStatus {
   readonly reviewedBy?: string;
 }
 export type WorkflowRemediationMode = "PREPARE" | "APPLY";
+/** Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority. */
+export interface WorkflowStackDeployment {
+  readonly enabled: boolean;
+  readonly runtime: WorkflowStackRuntime;
+  readonly platform: WorkflowStackPlatform;
+  readonly model: WorkflowStackModelEngine;
+  readonly source: WorkflowStackTriggerSource;
+  readonly fileAgent?: WorkflowStackFolderAgent;
+  readonly monitoring: WorkflowStackMonitoring;
+}
+/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
+export interface WorkflowStackFolderAgent {
+  readonly agentId: string;
+  readonly inbox: string;
+  readonly processed: string;
+  readonly output: string;
+  readonly archive: boolean;
+  readonly projection: string;
+}
+/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
+export interface WorkflowStackModelEngine {
+  readonly deploymentId: string;
+  readonly engine: "LLAMA_CPP";
+  readonly image: string;
+  readonly modelFile: string;
+  readonly contextSize: number;
+  readonly threads: number;
+}
+/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
+export interface WorkflowStackMonitoring {
+  readonly enabled: boolean;
+  readonly mode: string;
+  readonly grafanaUser: string;
+  readonly grafanaSecret: string;
+  readonly grafanaPort: number;
+  readonly prometheusPort: number;
+  readonly collectorConfig: Record<string, unknown>;
+  readonly spanSampleRatio: number;
+  readonly images: WorkflowStackMonitoringImages;
+}
+/** Explicit workflow monitoring service images; credentials remain external custody references. */
+export interface WorkflowStackMonitoringImages {
+  readonly collector: string;
+  readonly prometheus: string;
+  readonly grafana: string;
+  readonly tempo: string;
+}
+/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
+export interface WorkflowStackPlatform {
+  readonly quickstartImage: string;
+  readonly deviceImage: string;
+  readonly httpPort: number;
+  readonly tlsPort: number;
+  readonly registryPort: number;
+}
+/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
+export interface WorkflowStackRuntime {
+  readonly engine: "LANGGRAPH";
+  readonly image: string;
+}
+/** Workflow-scoped operator deployment data; structural configuration confers no runtime authority. */
+export interface WorkflowStackTriggerSource {
+  readonly subscription: string;
+  readonly assignment: string;
+  readonly packageId: string;
+  readonly version: string;
+  readonly triggerId: string;
+  readonly deviceGroupId: string;
+  readonly config: Record<string, unknown>;
+  readonly eventFilter: string;
+  readonly packageDigest?: string;
+}
+/** Bounded tool model proposal; never execution authority. */
+export interface WorkflowToolDecision {
+  readonly kind: "tool";
+  readonly toolId: string;
+  readonly arguments: Record<string, unknown>;
+}

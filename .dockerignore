@@ -4,6 +4,12 @@
 .dev
 .data
 examples/langchain/.state
+deploy/compose/WorkflowStack/state
+deploy/compose/WorkflowStack/data
+deploy/compose/WorkflowStack/models
+deploy/compose/WorkflowStack/monitoring/.env
+deploy/compose/WorkflowStack/monitoring/collector-vendors.yaml
+deploy/compose/WorkflowStack/monitoring/credentials.env
 .gradle
 target
 **/build

@@ -69,10 +69,31 @@ public final class WorkflowProfiles {
             owned.add(new Owned("WORKFLOW_VERSION", key, Canonical.digest((JsonNode)codec.value(codec.json(workflow)))));
         }
         for (var binding : profile.workflows().dispatchBindings()) {
-            String key = DirectoryService.digest(codec.json(java.util.List.of(binding.subscriptionUid(), binding.sourceAssignmentUid())));
-            owned.add(new Owned("DISPATCH_SOURCE", key, null));
+            owned.add(new Owned("DISPATCH_SOURCE", dispatchSourceKey(binding.subscriptionUid(), binding.sourceAssignmentUid()), null));
         }
         return owned;
+    }
+    private String dispatchSourceKey(String subscriptionUid, String assignmentUid) {
+        return DirectoryService.digest(codec.json(java.util.List.of(subscriptionUid, assignmentUid)));
+    }
+
+    /** Configuration selected inside the admission transaction. This carries no execution authority. */
+    public record DispatchTarget(String profileId, String profileDigest, WorkflowDispatchBinding binding, WorkflowDefinition workflow) {}
+
+    public DispatchTarget dispatchTarget(Store.Session tx, Ids.TenantId tenant, String subscriptionUid, String assignmentUid) {
+        Ids.valid(subscriptionUid);
+        Ids.valid(assignmentUid);
+        var owner = tx.workflowProfiles().owner("DISPATCH_SOURCE", dispatchSourceKey(subscriptionUid, assignmentUid));
+        if (owner == null) throw ManagementAccess.denied();
+        var head = tx.workflowProfiles().publication(owner.profileId());
+        var profile = published(tx, tenant, owner.profileId(), head);
+        var binding = profile.workflows().dispatchBindings().stream()
+            .filter(candidate -> candidate.subscriptionUid().equals(subscriptionUid) && candidate.sourceAssignmentUid().equals(assignmentUid))
+            .findFirst().orElseThrow(ManagementAccess::denied);
+        var workflow = profile.workflows().workflows().stream()
+            .filter(candidate -> candidate.id().equals(binding.workflowId()) && candidate.versionId().equals(binding.workflowVersionId()))
+            .findFirst().orElseThrow(Failure::unavailable);
+        return new DispatchTarget(head.profileId(), head.digest(), binding, workflow);
     }
     private WorkflowProfileStatus status(Store.Session tx, Ids.TenantId tenant, WorkflowProfileStore.Revision revision) {
         var head = tx.workflowProfiles().publication(revision.profileId());
@@ -215,7 +236,18 @@ public final class WorkflowProfiles {
     }
     /** Internal admission boundary: recheck readiness, never treat a saved pointer as runtime authority. */
     public DeploymentProfile published(Store.Session tx, Ids.TenantId tenant, String id) {
-        Ids.valid(id); var head = tx.workflowProfiles().publication(id);
+        Ids.valid(id);
+        return published(tx, tenant, id, tx.workflowProfiles().publication(id));
+    }
+    /** A pinned run can only use the reviewed revision while its publication and readiness are current. */
+    public DeploymentProfile runnableRevision(Store.Session tx, Ids.TenantId tenant, String id, String digest) {
+        Ids.valid(id);
+        digest(digest);
+        var head = tx.workflowProfiles().publication(id);
+        if (head == null || !head.digest().equals(digest)) throw ManagementAccess.denied();
+        return published(tx, tenant, id, head);
+    }
+    private DeploymentProfile published(Store.Session tx, Ids.TenantId tenant, String id, WorkflowProfileStore.Publication head) {
         if (head == null) throw ManagementAccess.denied();
         var revision = revision(tx, tenant, id, head.digest());
         if (!revision.state().equals("REVIEWED")) throw Failure.unavailable();

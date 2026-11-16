@@ -94,7 +94,70 @@ fn decoded_name(headers: &HeaderMap) -> Option<String> {
     }
 }
 
-pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) -> Response {
+pub(crate) async fn ingress(State(s): State<Arc<AppState>>, mut request: Request) -> Response {
+    let mut workflow_read_only = None;
+    if request.headers().contains_key("x-toolgate-run-id") {
+        let correlation = request
+            .extensions()
+            .get::<crate::http::Correlation>()
+            .expect("guard correlation")
+            .clone();
+        let headers = request.headers();
+        let credentials = (|| {
+            let run = single_header(headers, "x-toolgate-run-id")
+                .filter(|value| {
+                    value
+                        .strip_prefix("run-")
+                        .is_some_and(crate::tenancy::canonical_uuid)
+                })
+                .ok_or(ErrorCode::Validation)?;
+            let token = single_header(headers, "authorization")
+                .and_then(|value| value.strip_prefix("Bearer "))
+                .filter(|value| {
+                    value.len() == 43
+                        && value
+                            .bytes()
+                            .all(|byte| byte.is_ascii_alphanumeric() || b"_-".contains(&byte))
+                })
+                .ok_or(ErrorCode::Unauthorized)?;
+            let method = single_header(headers, "mcp-method");
+            let name = match method {
+                Some("tools/list") => None,
+                Some("tools/call") => Some(decoded_name(headers).ok_or(ErrorCode::Validation)?),
+                _ => return Err(ErrorCode::Forbidden),
+            };
+            Ok((run.to_owned(), token.to_owned(), name))
+        })();
+        let result = async {
+            let (run, token, name) = credentials?;
+            let mut authority = s
+                .gateway
+                .authority
+                .workflow_tool(&run, &token, name.as_deref())
+                .await?;
+            if authority.context.tenant_id != s.config.control.tenant_id
+                || authority.context.mode != olo_toolgate_contracts::v2::RequestMode::Service
+                || unix_ms().is_none_or(|now| now >= authority.expires_at_unix_ms)
+            {
+                return Err(ErrorCode::Forbidden);
+            }
+            authority.context.request_id = correlation.request_id.clone();
+            Ok(authority)
+        }
+        .await;
+        match result {
+            Ok(authority) => {
+                workflow_read_only = Some(authority.read_only_tools);
+                request
+                    .extensions_mut()
+                    .insert(crate::http::CredentialDeadline(
+                        authority.expires_at_unix_ms,
+                    ));
+                request.extensions_mut().insert(authority.context);
+            }
+            Err(code) => return error(code, &correlation.request_id),
+        }
+    }
     let credential_deadline = request
         .extensions()
         .get::<crate::http::CredentialDeadline>()
@@ -187,7 +250,7 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
         "server/discover" => Ok(
             json!({"supportedVersions":supported_versions(),"capabilities":json!({"tools":{}}),"ttlMs":0,"cacheScope":"private"}),
         ),
-        "tools/list" => tools_list(&s, &context, &id).await,
+        "tools/list" => tools_list(&s, &context, &id, workflow_read_only.as_deref()).await,
         // Read-only authenticated binding evidence. Carries no credential and grants no tool access.
         "olo/identity" => Ok(json!({"tenantId":context.tenant_id,"mode":context.mode,
             "userId":context.user_id,"agentId":context.agent_id,"chain":context.chain,"ttlMs":0,"cacheScope":"private"})),
@@ -285,13 +348,21 @@ pub(crate) async fn ingress(State(s): State<Arc<AppState>>, request: Request) ->
 }
 
 /// The caller's enabled tools, looked up again on every request.
-async fn tools_list(s: &AppState, context: &RequestContext, id: &Value) -> Result<Value, Response> {
+async fn tools_list(
+    s: &AppState,
+    context: &RequestContext,
+    id: &Value,
+    workflow_read_only: Option<&[String]>,
+) -> Result<Value, Response> {
     match s.gateway.authority.catalog(context).await {
         Ok(catalog) => Ok(
             json!({"tools":catalog.tools.iter().filter(|tool|tool.enabled).map(|tool|{
                 let mut value=json!({"name":tool.tool_id,"description":tool.description,"inputSchema":tool.input_schema});
                 if let Some(policy)=&tool.business_key_policy {
                     value["_meta"]=json!({"io.ololabs.toolgate/businessKeyPolicy":policy});
+                }
+                if let Some(read_only) = workflow_read_only {
+                    value["annotations"] = json!({"readOnlyHint": read_only.contains(&tool.tool_id)});
                 }
                 value
             }).collect::<Vec<_>>(),"ttlMs":0,"cacheScope":"private"}),

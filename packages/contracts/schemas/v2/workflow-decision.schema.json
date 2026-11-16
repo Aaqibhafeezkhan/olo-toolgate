@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/workflow-decision.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Workflow model decisions",
+  "description": "A model proposal is never authority; current runtime eligibility and server grants still apply.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/WorkflowFinishDecision"
+    },
+    {
+      "$ref": "#/$defs/WorkflowContextDecision"
+    },
+    {
+      "$ref": "#/$defs/WorkflowDelegateDecision"
+    },
+    {
+      "$ref": "#/$defs/WorkflowContextDelegateDecision"
+    },
+    {
+      "$ref": "#/$defs/WorkflowToolDecision"
+    }
+  ],
+  "$defs": {
+    "WorkflowFinishDecision": {
+      "description": "Bounded finish model proposal; never execution authority.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "finish"
+        },
+        "result": {}
+      },
+      "required": [
+        "kind",
+        "result"
+      ]
+    },
+    "WorkflowContextDecision": {
+      "description": "Bounded finish_context model proposal; never execution authority.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "finish_context"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "WorkflowDelegateDecision": {
+      "description": "Bounded delegate model proposal; never execution authority.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "delegate"
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "input": {
+          "type": "string",
+          "maxLength": 98304
+        }
+      },
+      "required": [
+        "kind",
+        "agentId",
+        "input"
+      ]
+    },
+    "WorkflowContextDelegateDecision": {
+      "description": "Bounded delegate model proposal; never execution authority.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "delegate"
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "inputFromAgent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "kind",
+        "agentId",
+        "inputFromAgent"
+      ]
+    },
+    "WorkflowToolDecision": {
+      "description": "Bounded tool model proposal; never execution authority.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "tool"
+        },
+        "toolId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "kind",
+        "toolId",
+        "arguments"
+      ]
+    }
+  }
+}

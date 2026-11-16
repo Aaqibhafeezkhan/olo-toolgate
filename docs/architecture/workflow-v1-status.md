@@ -1,6 +1,850 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Qualified SDK fixtures and transport diagnostics — 2026-11-16
+
+The hosted follow-up `43880163146` at `15249dc6` passed preflight, SDK
+preparation and all three parallel package jobs. It also exposed a separate
+Linux native fixture failure: unqualified root SDK task selection configured
+Control and tried to resolve Quarkus. Core package preparation and the
+Quickstart starter now select `:publishJavaSdkLocally` explicitly with
+configuration on demand. The shared package SDK stage uses the same selection
+plus an init guard that rejects unrelated application/analysis plugins. The
+exact SDK/JSON prerequisite invocation passes with both Sonar and Quarkus
+plugin requests refused; 69 Gradle tasks are accounted for. An initial probe
+using the unqualified name still hit Control and was corrected before passing.
+
+The same run's Python foundation failed one WSS reconnect wire test with
+`CONNECTION_LOST`. This was not reproduced in 100 local repetitions; the complete
+runtime suite passes (62 tests, no skips, with OpenSSL). The test retains its
+protocol assertions/timeouts and now attaches bounded mock error/frame-count
+diagnostics on failure. This is diagnostic coverage, not a claimed production
+transport fix or proven resolution of that intermittent hosted failure.
+Three core inventory, six starter and six matrix regression tests pass, as
+does actionlint. Full hosted native/Gateway/Java/image acceptance is still pending.
+Known tested base is `15249dc6aa0b0d2a293aa63bed8efb3c2d93d7ee`; no module or
+workflow phase earns weight and the existing baseline denominators are unchanged.
+
+## CI prerequisite repairs — 2026-11-16
+
+Run `43866210753`, Gateway job `133325695639`, built the production Gateway
+image on `7580fcfd` successfully, then failed preparing its Java SDK fixture:
+the pinned Sonar Gradle plugin could not be resolved. The pin exists in the
+official plugin repository; no invalid-version or Gateway-runtime defect was
+inferred. The analysis plugin and its unchanged properties are now loaded from
+`gradle/sonar.gradle.kts` only for an explicit `sonar` task. Ordinary SDK/runtime
+fixture builds no longer resolve that analysis dependency. The quality workflow
+still invokes the same analysis task and required gate; no failure is ignored.
+
+Run `43874977529`, preflight job `133330989808`, failed three existing checks
+on `2c2f9852`: the new SDK job did not persist its Rust homes/path, the final
+foundation gate omitted that job from its explicit dependencies, and the
+package matrix job did not materialize version metadata. All three workflow
+definitions are corrected, preserving the tests and full dependency gate.
+
+Executed verification on these repairs: 32 focused Rust-installation/unified-CI/
+version checks passed; the complete Linux CI suite passed (**461 total, 18
+skipped, no failures or errors**), after giving its temporary `.dev` custody a
+writable tmpfs (the first read-only container run had two environment errors).
+Actionlint passed. Ordinary root `buildEnvironment` reports no classpath
+dependencies; SDK publication passed with an init fixture refusing Sonar plugin
+marker requests. An initial init-fixture closure binding error was corrected
+before that successful run. Explicit `sonar --dry-run` still configured the
+analysis task and project resolvers successfully; no actual authenticated Sonar
+analysis or green hosted Gateway smoke is claimed by a dry run. Full image/
+repository/Java gates were not repeated locally for this build-tooling repair.
+Hosted rerun evidence remains pending; the external Sonar automatic-analysis
+configuration limitation remains separate.
+
+Known tested base is `2c2f98520b80943eb502a79a867a53df6e762aca`.
+The three changed non-Markdown source files have normalized manifest digest
+`bf4c3231f32c3484840d1d4c5635c88e5c194e416224d01aa10e938d16526411`
+(sorted path + NUL + per-file SHA-256 + newline, CRLF normalized to LF).
+No workflow phase earns weight, no trigger module completes, and the **0/100**
+workflow / **27%** trigger earned baselines are unchanged. Webhook PUSH still
+requires the shared M7/M8 implementation and its own acceptance.
+
+## Managed-log triage and .log device policy — 2026-11-16
+
+The `log-triage` profile selects external package
+`examples.log-watch/error-spike`, version `0.1.0`, digest
+`sha256:1a924aebfc10080d0a970233ec0eeb401c2c6e509119add9a40a3f0f9210dca9`.
+Its workflow owns source regex/window/cooldown settings, event filter, `/sample`
+dispatch, agent/model/runtime/monitoring configuration and exposed ports.
+The package and configuration each have a README with installation, input,
+output and explicit POLL/managed-file limits. The existing generic operator,
+Gateway/client transport and workflow admission code need no package-specific
+change. No file projection/remediation agent is provisioned.
+
+User-requested `.log` support is added to the example device's existing
+`execution.files.extensions` allowlist, alongside `txt`, `md`, `json`, `csv`.
+This is a confined managed-files policy change, not a new Control admin-UI
+policy editor, ambient host-log authority or new broker operation. The profile
+selects the local `olo-toolgate-device:managed-log-v1` acceptance image.
+The normal release Dockerfile copies this updated policy helper. A normal local
+device build against the source-check Quickstart image failed because that image
+omits client-download artifacts; the successful acceptance image extends the
+existing device image with the exact updated policy helper. Full release-image
+build/publication is not claimed by this layer test.
+
+Executed checks and evidence:
+
+- Package tests: **12 passed**, plus one descriptor self-test. Linux authoring
+  build packed and `toolgate verify` accepted the artifact/digest above.
+  Initial test failures (UTF-8 expectation, RE2 exception type and the time-bearing
+  checkpoint self-test) were corrected before the passing runs. The first host
+  pack attempt lacked the native ToolGate CLI; Linux packaging completed.
+- Configuration/delivery regression suite: **14 passed**. Updated device policy
+  test: **1 passed on Linux**. Its Windows run hit the known Unix-socket symlink
+  privilege limitation; it was not counted as passing. No native Rust/Java
+  executor implementation changed in this package slice.
+- Live source/agent/model/Control run:
+  `run-0d59d743-21c2-48d4-8fe2-309d6ad4446a` **SUCCEEDED**. `INFO` input
+  produced no workflow for 12 seconds; two `ERROR` records in managed
+  `logs/app.log` triggered the configured `log-diagnoser` agent. Independent
+  Control retrieval matched the admitted sample and worker result:
+  `{"summary":"Database pool exhausted"}`. Execution metadata confirms the
+  configured model inference and no tool effects. Evidence is private under
+  `state/log-triage/verification/`; the reproducible driver is
+  `tools/workflows/verify_log_demo.py` and refuses to overwrite an existing log.
+- Common Quickstart image remained
+  `sha256:e33c1dc71572137bfdab4c2a7facd1516c7b937c15fa96519f5676ab075c30ee`.
+  No source-specific Compose service or platform routing branch was added.
+  Initial `.log` input was correctly refused by the older device policy; that
+  unaccepted demo was explicitly torn down before the fresh policy deployment.
+- Staged secret scan and public-key/credential/private-key regressions passed;
+  documentation link checking passed. The
+  current trigger package/fixture directories were checked for README presence.
+- The user chose deterministic provider mocks and parallel per-package testing.
+  The new foundation stage discovers package-owned mock-test manifests, requires
+  explanatory READMEs, prepares one shared SDK/CLI and runs an independent matrix
+  with fail-fast disabled. All three current entries passed concurrently in local
+  Linux builds, including tests/examples, pack/archive validation and isolated
+  trigger startup. Six discovery/pipeline regressions, 35 local CI tests (one
+  platform skip), three gate-selection tests, CI inventory and actionlint passed.
+  Hosted execution of the new matrix has not yet been accepted. No placeholder
+  provider package receives a passing matrix entry.
+
+Known base: `7580fcfdab3d942b36d002e88fd784bebf57a77a`. Tested source manifest
+digest: `16718fc479e09e4e148493661d52adc88841d709125d31399b76dc212dbab374`,
+over 18 changed public non-Markdown files, sorted path + NUL + per-file SHA-256
++ newline with CRLF normalized to LF. This bounded source record does not
+attest full-roadmap verification. Full repository/`javaCheck` gates were not
+rerun for this isolated example package; earlier recorded platform/full-gate
+limitations remain. No workflow phase earns weight (**0/100** unchanged).
+
+All other requested provider packages, generic PUSH/server network/credential
+capabilities and Quartz scheduling remain outstanding. The separate M7 branch
+has a local exact-snapshot primitive, not a runnable PUSH executor or completed
+module. Remaining provider packages must use package-owned protocol mocks in
+the parallel stage; real provider accounts are not required for that work.
+No simulated provider test is presented as real external acceptance. Existing module/phase
+weights and denominators remain unchanged.
+
+## Generic package adoption and fresh stack — 2026-11-16
+
+The default watch is now `examples.hotfolder-watch/new-file`, version `0.1.0`,
+under `examples/java-tools/hotfolder-watch`. Active packages/profiles/builds/tests
+use the new identity; earlier checkpoints below retain their historical names.
+No old-name alias, backward-compatible constructor, store conversion or migration
+is added. The stack, image-asset catalog and bootstrap custody require the new
+formats; prior host state/data were preserved before fresh deployment.
+
+[ADR 066](../adr/066-generic-trigger-package-adoption.md) defines package/profile
+adoption. The canonical source no longer fixes a package ID, version, config keys
+or file event type. It declares an explicit event filter and opaque configuration
+validated by Control against the selected signed export. The operator resolves
+one exact package/version from the generic image catalog or the configuration's
+`packages/` folder; external artifacts require the profile's package-digest pin.
+Selected bytes enter checked, root-owned bootstrap custody; no watch-specific
+Compose service, source branch or platform image rebuild is needed to adopt a
+supported package. Native client-release image construction/signing by Control
+still happens as part of package provisioning.
+
+This local artifact path is a privileged operator bootstrap action, not publisher
+provenance or independent security review. Package bytes must be reviewed before
+selection. Unsupported executor modes/capabilities are not granted by discovery.
+The [requested trigger catalog](trigger-package-catalog.md) records webhook/log/
+health, communication/ticketing, bus/CDC and schedule/Git sources as future work.
+PUSH/server ingress/brokers/secrets/schedules and production provider adapters
+remain unimplemented; this delivers client POLL adoption, not every catalog row.
+No existing module/phase weight absorbs that extra backlog.
+
+The folder adapter is optional. Non-file deployment provisions its configured
+agent and source group without the file-tool fixture, and dispatches the selected
+event field through the configured message pointer. CONTEXT handoff is generic
+`message` plus `context`; models do not echo internal source paths. File delivery
+selects its journal entry from Control's independently confirmed admitted message,
+then verifies the input digest and output/archive state. It never selects a host
+path from model output. The supplied profiles are now issue-triage-v3 and
+text-summary-v5, returning semantic results only.
+
+Executed evidence:
+
+- External SDK fixture `acceptance.signal-watch/signal-ready` was compiled/packed
+  separately, with another config/event shape and `/body` mapping. No folder
+  adapter or file-tool agent was installed. Runs
+  `run-82799f19-a3db-435b-92a1-0de5a0e0ad9d` and
+  `run-e2b0479a-f2e9-44c2-8730-c9a347904124` independently confirm Control success,
+  configured `signal-diagnoser` inference and zero workflow file-tool calls.
+  The second run uses common image ID
+  `sha256:e33c1dc71572137bfdab4c2a7facd1516c7b937c15fa96519f5676ab075c30ee`,
+  unchanged during package adoption. This fixture is not a production connector.
+- Fresh triage `run-bd03f8ad-356a-4d8a-b25c-011c4200bf04` produced
+  `acceptance-aeac4bf73e-b05dd6e774ce.result.json` with the configured read/model
+  evidence and retained input. Summary
+  `run-b3d0f9f4-8977-448a-aec8-17e6d62549ca` called both agents, archived exact
+  bytes and wrote `acceptance-58ef88a334-da1d2ac402e4.summary.txt`.
+  The tracked `tools/workflows/verify_stack_demo.py` independently checks these
+  flows using Control admission and execution observations.
+- The first generic attempt exposed a missing source-readiness barrier (404)
+  and the non-file Control validator dereference (500); both are fixed. An early
+  summary copied a path instruction literally. It is retained in private results,
+  with its original under `data/text-summary/rejected-acceptance/`; it is not an
+  accepted delivery. The new contract removes model path copying altogether and
+  new independent inputs pass. No uncertain workflow effect is retried.
+- 14 profile/delivery, 11 lifecycle, 36 operator and 5 package tests pass.
+  Image/package custody tests: Windows 5/one Linux-root skip; Linux 5 pass, including an empty catalog with no bundled watch.
+  Runtime 62 pass with OpenSSL available; initial host import and missing-test-
+  OpenSSL attempts are not accepted as full gates. Seven schema tests, 1554
+  generated-binding checks, corpus checks, Java/TS/PHP/Rust round trips pass.
+  PHP covers 444 v2 models; Rust 1.94.1 runs four contract tests and fmt passes.
+  The renamed watch's SDK check/two examples and external fixture example pass.
+- Focused SQLite/owned PostgreSQL workflow/profile/client-release tests pass
+  30 with no skips, including optional-folder positives and unbound-agent
+  negatives on both stores. Four Java contract and nine archive/CLI-parity tests
+  pass without skips. Full Windows javaCheck executes 375 ordinary tests
+  (eight skips) with no failures; enterprise executes 449, with the known Windows
+  `KillSwitchTest.separateOperatorMtlsListenerCommitsOnlyAcceptedOfflineQuorum`
+  UnsupportedOperationException. This is not a green full Java gate.
+- Full Windows CI-Python discovery ran 454 tests with 11 skips and three errors:
+  the known device-socket symlink privilege error and two stamping tests that
+  enumerated deleted generated files before the index was staged. After staging
+  the current generated inventory, all 33 affected stamping/release tests pass.
+  No passing full Windows CI gate is claimed. The prior hosted run at 25cf0e3b
+  was cancelled before completing; its check labels are not accepted failures
+  or passing execution evidence for this change.
+
+Known tested base `25cf0e3b`; normalized source manifest SHA-256 `c2506a59131b41f13abb1c45cee3569301bbd197a288992a8452191f6f091c28`
+(57 existing changed public non-Markdown paths, sorted path + NUL + per-file
+SHA-256 after CRLF-to-LF normalization + newline). Baseline `v1-effort-1` stays
+**0/100 earned**, #274 stays **27%**, #230 weights and all full security exits
+remain unchanged. Next work is the qualified generic PUSH/server/broker path
+before webhook/provider packages, plus full Linux/distributed V1.4 and authorized
+release publication. PR #311 was merged at `25cf0e3b`; these changes belong to
+a separate draft follow-up targeting `feature/workflow-enhancement`. Sonar's
+external analysis-mode conflict
+from the previous checkpoint is not fixed by these code changes.
+
+## Hosted contract-gate follow-up — 2026-11-16
+
+Hosted revision `0389013a` passed Java, Rust, UI, browser, native-client,
+example, SDK, scan and preflight jobs, but the Python foundation job failed:
+the contract inventory still expected 19 v2 schemas after adding the canonical
+workflow-decision schema. The assertion now expects 20 and explicitly requires
+that schema. All seven focused ContractsV2 tests pass locally. Windows full
+contract discovery runs 183 cases with two symlink-privilege errors, one
+scorecard subprocess assertion failure and two skips; it is not a passing gate.
+Full contract discovery then passes in a writable native Linux source snapshot:
+**183 tests, two skips, no failures/errors**. Source header/license/obvious-secret,
+UI OpenAPI binding and documentation-link checks also pass. The first Linux
+harness attempt lacked Git and mounted source read-only (two failures/one error);
+the direct Windows-mounted retry was stopped after slow integrity hashing. The
+accepted Linux run uses Git, the current tracked source bytes and native storage;
+the interrupted mounted run earns no passing result.
+
+The separate Sonar analysis fails because Automatic Analysis and CI analysis
+are both enabled, before any quality-gate results are available. The configured
+Gradle CI analysis should be retained; a project administrator needs to disable
+Automatic Analysis in SonarQube Cloud. Browser automation could not verify the
+current Chrome URL and stopped without changing that setting. No quality check
+was weakened, suppressed or presented as passing.
+
+Known tested base `0389013a`; normalized changed contract-test SHA-256
+`fc958173d8d4cb4942ec061f4111cfc24ee32a1f664e2e9a23f3ef4c9505dd0d`. This is a regression-gate repair, not a new workflow runtime or security
+slice. Prior actual demo evidence remains historical; no WorkflowStack containers
+were running at this review. Other local demo stacks were left untouched.
+Baseline `v1-effort-1` remains **0/100 earned**, all weights unchanged. Hosted
+reevaluation, Sonar project configuration, full V1.4/security acceptance and
+public release publication remain outstanding.
+
+## Packaged deployment, exposed console and credential folders — 2026-11-15
+
+The Admin UI HTTP port is published on all host interfaces (triage 58091,
+summary 48091); TLS/private-registry ports remain loopback-bound. Fresh local
+human credentials are stored separately as
+`state/<selection>/credentials/<username>/username.txt` and `password.txt`.
+The identity refresher reads that custody; startup prints its folder, never the
+password. Old credential stores are not converted or silently adopted.
+
+The common Quickstart image contains the provisioning operator, bootstrap
+initializer and sealed HotFolder/inbox-watch packages. Control builds those
+packages during image publication. Compose contains no build directives or
+profile-specific derived image. Startup extracts assets from the selected
+immutable local image identity, validates package digests and initializes
+root-owned bootstrap data mounted read-only by Control. Registry-qualified
+missing images are pulled; explicit source builds remain available from a
+checkout. Model/engine/agent/trigger/folder choices still come from the selected
+workflow profile. Signed client-tool image provisioning inside Control remains
+part of setup, separate from rebuilding deployment images. No public registry
+publication was performed or claimed.
+
+The reported Gateway-trust failure was stale host credentials after Docker
+volume replacement. Previous issue-triage state/data were preserved under
+`prior-demo/gateway-reset-issue-triage-20261115-204414`, followed by a selected
+fresh reset and successful start. A subsequent start reused the new credentials
+successfully. Other old summary artifacts and the portable-image test evidence
+are also preserved under `prior-demo/`. Trust changes are refused with this
+stack's explicit reset command; no effects are automatically replayed.
+
+Executed evidence:
+
+- Fresh issue run `run-d927491a-9f35-461b-9a53-a1967be2dec8` completed with a
+  confirmed configured-agent read and inference, CHECKOUT-1042/HIGH, and
+  `acceptance-10c4e524a7-bf1cb6ec2371.result.json`; original retained.
+- Portable text-summary run `run-eb17596a-106e-4f16-804a-2870491b066e` completed
+  using a copied bundle and cached registry-qualified prebuilt image tags, with
+  no repository operator/package build. It confirmed file-agent read, inference
+  only by `text-summarizer`, exact-byte archival and
+  `acceptance-4fedc083c4-6f5c69f97fa7.summary.txt`. This tests local image reuse,
+  not remote registry credentials/download/publication. Fixture storage was
+  archived and its owned Docker resources removed afterwards.
+- A fresh text-summary start in the main WorkflowStack directory then completed
+  `run-d2dcea17-a490-4ed3-8976-85ca0dec53c1`, confirming the two configured
+  agents, exact-byte archive and
+  `data/text-summary/summaries/acceptance-155269e9e9-53c4ffda9c29.summary.txt`.
+  Both supplied configurations are running in the main bundle with their own
+  credential folders and UI ports; the portable fixture is no longer running.
+- Quickstart/Control source image builds pass. Both image-only Compose profiles
+  validate; the live Admin UI responds HTTP 200 and Docker publishes
+  `0.0.0.0:58091`. Admin/reviewer username/password files are verified present.
+- 12 profile/delivery, 11 Windows lifecycle, 36 operator, 5 package and 10
+  documentation tests pass. Image-asset tests: Windows 3 discovered/1 Linux-root
+  skip, Linux 3 pass, including altered digests, writable/linked bootstrap
+  custody and unknown-store refusal. Ten trigger-agent tests pass in the
+  existing runtime container; the host lacks its LangGraph dependency.
+- Full Windows CI-Python discovery: 450 tests, 10 errors and 11 skips. Eight
+  release-note errors were Windows default-encoding failures; all 21 affected
+  release suites pass with PYTHONUTF8=1. All four debug-manager cases pass on
+  rerun after an initial 30-second timeout. The device Unix-socket symlink case
+  still requires Windows symlink privileges. This is not a green full gate.
+- Source/license/secret/dependency scans pass with Docker tooling and
+  PYTHONUTF8=1. Initial scan attempts lacked host Cargo and then hit Windows
+  decoding; those failed attempts are not accepted. Documentation links pass
+  after excluding the private generated image cache, with an explicit test
+  retaining checks of authored configuration READMEs. Prior full Java/Rust/UI
+  evidence and limitations below remain applicable; they were not rerun here.
+
+Known tested base `e62cfc60`; normalized source manifest SHA-256
+`c8a646b966871803c213a8c7b421d27ec4737945d680256b515bdd5cc991f7d3` (18 existing changed public non-Markdown files;
+sorted path + NUL + file SHA-256 after CRLF-to-LF normalization + newline).
+Baseline `v1-effort-1` stays 100 points with **0/100 earned**. No phase weights
+or security/trigger qualification credits change. Full Linux/distributed V1.4,
+production identity, native mutation qualification and authorized release-image
+publication remain outstanding; PR #311 remains draft.
+
+## Windows stack lifecycle — 2026-11-15
+
+`WorkflowStack/start.bat` lists configuration folders with serial numbers, asks
+which to start, and offers the main `.env` selection as the explicit Enter
+default. Invalid input reprompts; EOF/cancellation starts nothing. An explicit
+`--configuration` skips the menu. Startup reuses available images, builds missing
+source-image tags and pulls missing digest-pinned references before calling the
+existing profile-derived deploy path. Required model artifacts remain prerequisites.
+
+`stop.bat` is explicitly destructive: by default it removes all current
+WorkflowStack projects belonging to this bundle, owned native-child containers,
+named/anonymous Docker volumes, networks and generated `state/`/`data/` (including
+credentials and outputs). `--configuration` limits deletion to one selection.
+Profiles, scripts, supplied model artifacts, vendor credential inputs and shared
+images are retained. `manage.bat stop` remains the non-destructive pause command.
+Cleanup does not depend on a valid profile/.env. It checks project/root ownership,
+uses root+configuration-specific native engine scopes, rejects ambiguous/foreign
+ownership and linked storage, and uses verified literal PowerShell deletion on
+Windows. There is no global prune or implicit conversion of old stores/scopes.
+
+Executed: 11 Windows lifecycle tests pass, including real batch execution from a
+directory with spaces and exit-code propagation; Linux discovers the same 11 with
+the Windows batch test skipped. All 12 existing deployment/delivery regressions
+pass. The real start.bat menu smoke lists both supplied profiles and refuses EOF.
+An isolated Docker fixture with an owned device-style container, owner-labeled
+child, named/anonymous volumes and network was completely removed; unrelated
+volume and profile/model files were retained. This fixture does not attest native
+SDK posture or repeat application/model end-to-end qualification. No live demo
+storage was erased for this test. Base/monitoring Compose syntax and source checks
+pass. Earlier application runs and full-gate/platform limitations below remain
+the applicable evidence; broader V1.4 and security acceptance are still pending.
+
+Known tested base `aace4bc8`; normalized source manifest SHA-256 `ef4c78ecb02335217edab7a2fe4c3e0b6e0a7fefaf1eb3be1b6248dddeda2bd9`
+(7 changed public non-Markdown files, sorted paths + NUL + per-file SHA-256
+after CRLF-to-LF normalization + newline). Baseline `v1-effort-1` remains 100
+points with **0/100 earned**; this lifecycle delivery changes no phase weights.
+
+## Selectable WorkflowStack deployment — 2026-11-15
+
+The complete local bundle is under
+[`deploy/compose/WorkflowStack`](../../deploy/compose/WorkflowStack/README.md).
+Its main `.env` accepts only `CONFIGURATION`. Each workflow's typed `deployment`
+declaration contains runtime/model engine and artifact, service images/ports,
+trigger source, folders and monitoring/collector configuration. Model ID/origin,
+generation parameters and vault references are declared in the same profile and
+resolved through its model groups. No use-case configuration.json or authored
+global model settings remain. Generated Compose/bootstrap/collector files are
+derived artifacts. Ambient model settings cannot override the selected profile.
+One workflow deployment is enabled per stack; inactive definitions can be retained
+when combining profiles. The operator projects only the active dependency closure
+without changing the source document. This is local LANGGRAPH/LLAMA_CPP deployment,
+not arbitrary engine/plugin execution or automatic multi-workflow orchestration.
+
+Ordered `agentStages` prevent supervisor-model output from skipping configured
+agents. Text summary executes the file agent's CONTEXT stage (confirmed configured
+read, no inference), then the separate summarizer's MODEL stage. Issue triage uses
+one MODEL agent stage after its configured read. The fixed runner passes complete
+context directly and returns the final result unchanged. Current agent/group and
+own model grants are rechecked, including existing tokens; tool authority follows
+the active subject and cannot be borrowed from the run's service agent. Gateway
+uses bounded profile-selected generation parameters and canonical constrained
+decision decoding/validation. Current lease/model wire fields are explicit;
+obsolete snapshots are refused without conversion.
+
+The trusted folder adapter independently verifies Control's successful result,
+pinned profile/workflow, admitted source path and source digest before projection
+or archival. It has a tenant-administrator reader token and narrowly mounted files;
+it is an operator component, outside the untrusted native tool sandbox. Its writes
+do not qualify native mutations or authorize ambiguous effect retries.
+
+Actual accepted runs using the profile-selected stack:
+
+- Text summary `run-3a60d857-9ac8-4d46-a1e6-0321659419d6` read `acceptance-bd2cad9459.txt` through the file
+  agent, inferred only as `text-summarizer`, archived the byte-identical original
+  and wrote `acceptance-bd2cad9459-41da14d57f58.summary.txt`.
+- A second independent drop after the driver exited completed as
+  `run-45c928af-ff91-4608-937a-608bf2a22fc8` and produced
+  `acceptance-1b79a521fd-619fbb068ee0.summary.txt`. Both summaries correctly describe
+  staging, connection-pool improvement, and the pending production review.
+- Fresh issue-triage provisioning with the final source/profile completed as
+  `run-18e3713e-6e9e-46d1-a882-ed265adc052c`. Its configured agent performed the confirmed native read and
+  inference; saved/projected output contains CHECKOUT-1042, HIGH priority and an
+  investigation action. The original remains in the inbox. This profile uses
+  ports 58091/58451/58552, while summary uses 48091/48451/48552: service settings
+  switch with the profile, and both isolated projects ran together.
+
+Control/private results agree and worker observations show the required agent
+identities and successful configured read. Observations are not independent
+executor/stage-completion attestation. Earlier redeployment rebuilt an immutable
+package version and produced a release/trigger mismatch; restart now retains and
+verifies sealed custody and waits for a fresh device check-in/current trigger.
+Earlier demo state/data and stopped volumes were retained (`prior-demo/`).
+Routing-profile run `run-aba9a71a-3374-46c3-9645-f1bd8dda79c5` reported success
+without agent calls and was rejected by acceptance; its output is preserved in
+`data/text-summary/rejected-acceptance/`, not counted as accepted evidence. Fixed
+stages and skip/revocation negatives address that failure in the final profiles.
+
+Executed validation: 12 deployment/delivery tests pass on Windows and Linux;
+62 runtime tests, 14 qualification cases (one Windows symlink skip), and three
+acceptance-fixture tests pass. Fresh SQLite/owned PostgreSQL focused Control checks
+pass 49 ordinary and 28 enterprise cases with no skips; all four
+Java contract tests pass. Generated bindings (1,556 files), structural fixtures,
+canonical profile validation, TypeScript checks/build/two contract tests and 445
+PHP v2 round trips/constant negatives pass. Twelve focused UI tests pass; no full
+UI coverage gate is claimed. Rust format/workspace Clippy pass; workspace cases
+plus the isolated timing-sensitive heartbeat case pass 413 tests with 17 environment
+ignores. An earlier parallel run failed that heartbeat assertion; the focused
+rerun passes. Source-build images, Compose base/monitor syntax and source/license/
+secret checks pass. Both profile-derived local and example vendor collector
+configurations validate in the pinned image with network disabled; no vendor
+account ingestion was tested. The bundled monitoring guide covers Langfuse,
+LangSmith, Prometheus/Grafana/Tempo, OTLP, Datadog/New Relic and audit/logs. Native
+LangSmith content tracing remains disabled; full agent graphs/token/cost tracing
+is not implemented.
+
+Earlier full Windows checks remain explicitly non-green: repository CI ran 431
+tests with one socket-symlink privilege error/ten skips; the full Java gate ran
+370 ordinary tests (eight skips) and 449 enterprise tests with one unsupported
+operator TLS fixture failure. Those earlier runs are not current full-gate passes.
+Complete applicable Linux gates, message-path and complete V1.4/distributed
+security acceptance remain outstanding. Production identity lifecycle remains
+unimplemented; local enrollment approval lasts 24 hours and model leaves seven
+days. No public registry publication was executed.
+
+Known tested base `6039df65`; SHA-256 `3b3e9cd49a011686fa19631e116edd018ba943aec41348e06c5038c058196ded` covers 95
+changed/untracked public non-Markdown files: concatenate sorted repository paths,
+NUL, each file SHA-256 after CRLF-to-LF normalization and newline, then hash the UTF-8 manifest. Ignored private
+state/data/models and generated acceptance artifacts are excluded. Images used:
+Quickstart `sha256:569f4decce71a4e0f79a89ae8a9b88397af314bc8559785313626b2e1c81ac43`;
+runtime `sha256:84de1e84dcb3f9722bcaca550224ebbd4bddb0b4932ce6835206675e32cc2fbf`;
+device `sha256:b86e2aecdfeb33ede704f1d317dcea988a711d9f7e431ccdac7c72c714113c91`.
+
+The profile/stage contract extensions change no effort allocation/denominator.
+Baseline `v1-effort-1` remains 100 points, **0/100 earned**; partial phases earn
+nothing. PR #311 targets `feature/workflow-enhancement` and remains draft.
+Historical merged #297 is not treated as V1.4 acceptance or a completed roadmap.
+
+## Live issue-log demo — 2026-11-14
+
+The bounded one-trigger/one-agent demo now executes end to end on the isolated
+`toolgate-workflow-demo` stack. A real signed device trigger admits the published
+`hotfolder-intake` / `issue-triage-v1` workflow. Its configured
+`langchain-linux-agent` reads the admitted file path using
+`examples.hotfolder/read_text`, then infers through Gateway and the local TLS
+model. The supervisor returns the configured five-field result. Control validates
+the pinned result schema and current service authority, encrypts the result under
+tenant custody and commits it with completion. The worker explicitly writes a
+private result file after acknowledgement. Default stdout remains content-free.
+
+Executed evidence on base `1d7271c7`, with implementation/test/example source
+manifest digest `bbfdd0a40151cb0a9513e3403683f1a39eb9402efdbc4c550c509ac066b5b082`:
+
+- Acceptance run `run-b2591041-7cae-4614-824a-0d9ed944dfa1` succeeded for
+  `TG-DEMO-fe85fd5a`. Duplicate admission returned the original admission/run.
+  Worker observations include supervisor → configured agent → supervisor model
+  calls and one confirmed configured `read_text`. The result's issue ID and exact
+  source path matched the actual file; Control and the private result file agreed.
+- A second file, submitted after the driver exited, completed through the
+  continuous listener/worker as `run-a0527243-e708-4329-b096-c87f94a93360`,
+  returning `CHECKOUT-1042`, priority `HIGH`, and a connection-pool investigation
+  action. The fixture credential helper refreshes mounted short-lived tokens;
+  replacement is atomic and local result directories use private permissions.
+- The actual managed Java containers were observed with non-root `65532:65532`,
+  no mounts/network, read-only root, dropped capabilities, no-new-privileges,
+  seccomp, 512 MiB memory and 64 PIDs. A current native agent read succeeded;
+  the actual tool returned `exists=false` and empty text for parent traversal to
+  an existing outside-root fictional sentinel. This is bounded observation,
+  not independent executor posture attestation.
+- Focused Control tests passed: 38 ordinary and 28 enterprise tests, including
+  fresh SQLite/PostgreSQL admission-pin, finalization and recovery regressions.
+  Runtime gate: 54 tests passed; the additional mounted-token rotation test and
+  existing transport suite passed all 14 tests. Qualification gate: 13 tests
+  discovered with the Windows symlink case skipped; three fixture tests passed.
+  Generated bindings (1,521 files), UI operation generation and fixture corpus
+  checks passed. UI type checking and TypeScript contract checks/build/tests passed.
+
+The final focused rerun passed 46 ordinary and 28 enterprise tests with no skips,
+including context-binding checks and added result size/tenant assertions. The
+full ordinary Control suite passed 370 tests with eight skips; the Java contract
+suite passed all four tests. Linux reruns passed all six knowledge qualification
+tests and the device socket-symlink regression. Source/license/secret checks passed.
+
+The first two live runs exposed a supervisor omitting mandatory `issueId`.
+Control refused completion and those runs expired; no tool effects were retried.
+The corrected immutable workflow version makes all five required fields explicit.
+Malformed model results still fail closed; model correctness is not guaranteed.
+The listener encountered transient disconnects and recovered using the durable
+cursor; separate idle socket and subscribed-socket checks each stayed connected
+for 65 seconds. Continuous acceptance above confirms recovery without lost work.
+
+The full Windows repository check stopped in the 424-test CI suite: one
+PowerShell timeout (the focused four-test rerun passed) and the existing socket
+symlink privilege refusal. The 183-test contract suite also encountered two
+Windows symlink privilege errors and a scorecard observation failure. The full
+Java gate's enterprise suite reports 449 tests with one Windows unsupported
+operator TLS fixture failure. These are not recorded as passing component gates.
+
+Images actually used: Quickstart overlay
+`sha256:707c61b72a61ee340c4322d422779335ccf7d01dc05eeb9d2b79cc12b0f56fc2`,
+worker `sha256:381093c8812d8b958a704b3ebd8b6db82ea97fbe3779171fe886316bccd15ea5`,
+device `sha256:b86e2aecdfeb33ede704f1d317dcea988a711d9f7e431ccdac7c72c714113c91`.
+The local Quickstart image has no validated public client download bundle; this
+demo uses the existing native device image. Release publication is wired but no
+release image publication was performed by this demo.
+
+Limitations/next work: operator-qualified Linux Java broker-only reads are
+explicitly enabled for one device/group/image; the default and file mutations
+remain unqualified (ADR 064). This supplies no general native runtime security,
+replay authority or production IdP lifecycle. Local enrollment approval expires
+after 24 hours. Complete applicable Linux component gates, full V1.4 acceptance
+and the outstanding weighted phases remain required. Weights and earned phase
+credit are unchanged. PRs #297 and #309 are already merged; this follow-up targets
+`feature/workflow-enhancement`. Their merged state does not earn additional
+V1.4 acceptance credit or establish completion of the original draft criterion.
+
+## One-trigger, one-agent production slice (2026-11-14)
+
+The [delivery plan](../plans/langgraph-workflow-execution-plan.md) narrows the
+first live use case to one real trigger, one published workflow, one configured
+agent, and one approved model. It uses the existing #295 contracts and runtime.
+Phase weights and earned completion are unchanged.
+
+- V1.1 and V1.3 now have transaction-scoped resolution for an in-flight
+  delivery and its published binding. The resolver checks the immutable source,
+  subscription owner, current grants and clearance, and reviewed profile head.
+  Tests cover pending and acknowledged deliveries, a different subscription
+  owner, another tenant, and an unready or withdrawn binding.
+- The standalone image packages the existing listener and LangGraph executor
+  library under an unprivileged user. Its current entry point is the listener.
+
+Verification on base `f269293b` with this change applied: `WorkflowProfilesTest`
+and `TriggerDeliveryTest` passed all 23 tests with the disposable PostgreSQL
+fixture and SQLite. `python tools/workflows/check.py` passed with 32 runtime
+and 13 qualification tests executed, with 10 OpenSSL-dependent tests and one
+symlink test skipped on Windows. The digest-pinned runtime image built and
+printed listener help with a read-only root filesystem and dropped capabilities.
+The full component gates and live trigger-to-agent execution remain pending.
+
+Next is the Control admission transaction and its durable run ledger, then
+workload claim, step authorization, Gateway model transport, and live execution
+qualification. The resolvers currently have no public admission endpoint and
+return no runtime credential.
+
+### Durable run storage and input mapping
+
+The fresh SQLite and PostgreSQL schemas now store tenant-fenced admission and
+queued-run records. Runs pin a profile digest and encrypt the mapped message
+under tenant vault custody. The profile's JSON Pointer maps event data to the
+workflow's `message` input, which is validated against the pinned parameter
+schema. The store supports atomic enqueue and admission receipt persistence.
+
+Verification on `4630c600` with this increment applied: nine focused Java tests
+passed across the dispatch mapping, queue transaction, and tenant row security
+suites. The four schema inventory/capacity tests passed. Admission and run APIs,
+workflow service authorization, worker claims and live execution remain pending.
+
+### Trigger admission endpoint
+
+Control accepts the existing dispatch request over direct TLS. The listener
+supplies only the subscription UID and delivered cursor. Control verifies the
+current source and published binding, checks explicit service workflow and model
+grants, and commits the encrypted queued run, admission receipt and audit row
+in one tenant transaction. Duplicate requests return the original identifiers.
+The listener and Control use the same existing receipt contract.
+
+Verification on `5613d925` with this increment applied: the focused trigger
+admission test passed on SQLite and disposable PostgreSQL. It covers a live
+directory grant denial, a forged workflow field, a queued run with the pinned
+revision, and duplicate receipt replay. Both Quickstart direct TLS routing tests
+passed in Linux. Full component gates and live worker execution remain pending.
+The next increment needs workload claims, runtime step authorization and
+Gateway model and tool transport. Phase credit is unchanged.
+
+### Workload claim and completion
+
+The workload-only Control routes claim one queued run per request and return a
+snapshot of its pinned workflow and agent definitions. Claims recheck current
+publication, readiness, and service grants. Only the same workload principal
+holding the current lease token can record completion before expiry. The
+Python transport decodes the snapshot and sends completion using its separate
+workload credential. Worker step authorization and Gateway model and tool
+transport remain required before the container can run a claimed workflow.
+
+Verification on `bebfd374` with this increment applied: the focused admission,
+claim and completion test and both transaction tests passed with SQLite and
+disposable PostgreSQL. Two Python transport tests and four schema ownership
+and capacity tests passed. No live workload HTTP, model, or Gateway tool
+execution was exercised. Phase credit is unchanged.
+
+### One-agent step authorization and model selection
+
+The workload runtime can request a step token for the pinned supervisor or the
+entry agent when the agent is the trigger's service identity. Each new step
+replaces the previous token. Control checks current readiness, service grants,
+trigger data clearance at admission, and the tenant kill state at step issuance.
+The model resolver intersects the workflow and step model groups and selects the
+first permitted deployment in workflow order. It rejects superseded step tokens.
+
+Verification on `e8185ef7` with this increment applied: the focused trigger
+admission, claim, step, model-selection and completion scenario passed on
+SQLite and disposable PostgreSQL. Three Python transport tests and four schema
+ownership tests passed. Model selection was exercised inside Control. Gateway
+inference, MCP execution, and the container's live worker loop remain pending.
+
+### Gateway runtime transport
+
+The worker image now claims a run, executes the existing LangGraph runner,
+and sends inference and MCP calls to Gateway using the active step token.
+Gateway resolves the step with Control. Inference uses an operator-approved
+HTTPS origin and the current vault credential. MCP uses the existing Gateway
+catalog and invocation path. Control denies a PREPARE call when the signed
+package descriptor does not establish a read-only tool.
+
+Verification on `362f7c5e` with this increment applied: Control compilation,
+the Gateway Rust test suite, five focused Python transport tests, and a
+read-only worker image help smoke passed. The model response and MCP adapter
+tests use transport fixtures. A fresh real trigger, model, and tool run
+remains the next acceptance step. Phase credit is unchanged.
+
+### Live acceptance fixture and model trust
+
+The Compose fixture runs the real listener, worker and external llama.cpp
+server. The first attempt admitted a real hot-folder event, claimed the
+published `hotfolder-intake` run, and recorded `FAILED` at inference. The
+Gateway now accepts an operator-mounted PEM trust bundle for approved HTTPS
+model origins. The fixture uses an isolated CA and mounts the workload and
+model credentials separately. Verification on `5c55cc07` with this increment
+applied includes a rebuilt Quickstart image, a loaded llama.cpp model, Python
+syntax checks, and `git diff --check`. The live retry is pending. No phase
+credit is claimed.
+
+The retry on `c2b25e74` admitted a second real event and reached agent tool
+discovery after model inference. PREPARE refused the context tool because
+client releases use a managed deployment digest. The fix records effect
+evidence from the verified descriptor during client release and resolves it
+by the current tool ID and managed digest. The stored evidence contains only
+the tool ID and declared effect safety. Validation of this fix is pending.
+On `a5afb7b1`, all 11 client release tests and the focused workflow admission
+test passed with the disposable PostgreSQL fixture. The client release suite
+asserts the bounded effect record under each managed digest. All 47 Python
+runtime tests passed with OpenSSL available. Quickstart image
+`sha256:03226d95d19d8b7addd982571e248f7d1ea6e9b6f048aa47c8786ba33bd7c25c`
+was built from `9bda47bc`. The live acceptance rerun is in progress.
+
+### Acceptance review and duplicate admission (2026-11-14)
+
+Review base: `3424a053f207a961af5bc149fe693deff9a4057d` on
+`codex/langgraph-workflow-execution`. The terminal-state-only acceptance check
+could pass without the configured agent or its context tool being exercised.
+The worker now reports per-run inference responses and tool attempts using only
+subject/tool IDs and outcome states. The fixture requires supervisor and agent
+inference plus a confirmed `examples.hotfolder/list` result; it also replays
+admission and requires the original admission/run coordinates. Observations are
+bounded by the runner step limit and exclude credentials, content and arguments.
+They are worker observations, not independent server attestation.
+
+The first review rerun admitted `run-cfe3486b-b556-4a60-9bd3-25d925f260a8`
+and stopped with `TOOL_OUTCOME_UNKNOWN`. The rebuilt worker rerun admitted
+`run-26019dff-97c8-4f11-b3a3-50c9f9c7b70b`; duplicate admission returned
+the original admission/run IDs. Its observations confirm supervisor inference
+and an agent-scoped `examples.hotfolder/list` attempt with `OUTCOME_UNKNOWN`.
+The ledger completion was acknowledged as `FAILED`; the fixture exited 1.
+The context failure prevented agent inference. Neither run qualifies the live
+slice. Each rerun used a new event; no uncertain operation was automatically
+retried. These runs reused the existing isolated SQLite installation; they are
+not fresh-store or PostgreSQL end-to-end qualification.
+
+Executed verification: `python tools/workflows/check.py` passed dependency
+installation and pip check, 51 runtime tests, 13 qualification tests (one host
+symlink skip), and three acceptance regression tests. Git's OpenSSL was added
+to PATH, so TLS tests executed on Windows. The seven new tests cover missing
+agent/tool observations, terminal-only false success, foreign IDs, unknown and
+denied outcomes without retry, per-run isolation, credential/content exclusion,
+and stable duplicate coordinates. The runtime image built successfully as
+`sha256:5fda72c8decbd3287803cadce1377fc3d32e79f8bda70205c4aa8c6c2ba4ec38`.
+The Quickstart services still used the previously recorded `9bda47bc` build;
+this change modifies only the worker, fixture and verification/docs.
+
+`python tools/check.py` was attempted and failed in the initial CI regression
+suite: 422 tests, ten errors and ten skips. Eight errors were Windows default
+encoding failures in release/PR-policy tests, one was a debug fixture's
+30-second subprocess timeout, and one was a device fixture lacking symlink
+privileges (WinError 1314). With `PYTHONUTF8=1`, isolated reruns passed all seven
+PR-policy, 14 release-notes and four debug-management tests. The symlink
+privilege limitation remains; the full gate's later component stages did not
+execute. No full repository pass or new Java/UI gate pass is claimed.
+Metadata/preflight (1521 bindings), source headers/licenses/obvious-secret
+policy, relative Markdown links (2896 files), staged PR policy, staged secret
+scan and whitespace checks passed. Logs are retained under ignored
+`build/workflow-*-review.log`. No Git hooks were configured in this checkout;
+no hook bypass was used.
+
+Known tested source SHA-256:
+
+- Worker: `d1f634684623cdf4b02ead6cef199ff0364d94b2ee9cbe67e8a9396c6f5ffc16`.
+- Live driver: `7e0af43db11a6dbcfd3fd05f951c5d5294cc5f5d24ff171ae7c67a19981b5f13`.
+
+Next: qualify native HotFolder finality under #230's own stage workflow, then
+complete the live agent/model/tool success path and authorization-negative
+scenarios. Full v1 phase acceptance, two-agent execution, complete profile
+provisioning and fresh-install qualification remain outstanding. No #230/#274
+stage/module or runtime security guarantee is completed by this change. Phase
+weights and overall earned completion remain **0 / 100**.
+
+### CI repair and standalone image release wiring (2026-11-14)
+
+Review base: `f02a0c45c7c074aba5e5d250ab855da61cc56652`.
+[Rust job 132444767419](https://github.com/olo-labs/olo-toolgate/actions/runs/43593600248/job/132444767419)
+failed on Clippy's redundant-closure and nonminimal-boolean warnings in the
+workflow Gateway adapter. Both expressions are simplified without changing
+validation behavior. Its missing containment artifact was a downstream failure:
+the producing checks were skipped after Clippy failed.
+
+The standalone image previously had no release publication wiring. It now uses
+the existing tested image/evidence gate, immutable release bundle, GHCR and
+Docker Hub publishers, and provenance steps as `olo-toolgate-langgraph-runtime`.
+The manual development build/save/publish path includes it too. Product release
+coordinates are `ghcr.io/olo-labs/olo-toolgate-langgraph-runtime:<version>` and
+`docker.io/<namespace>/olo-toolgate-langgraph-runtime:<version>`; the latter
+uses `DOCKERHUB_NAMESPACE` or the configured Docker Hub username. No namespace
+secret value is assumed. Ordinary branch CI does not publish images.
+
+The Debian base scan found 49 HIGH/CRITICAL package findings; available Debian
+updates left 47 without available fixes. The image now uses digest-pinned Python
+3.12 Alpine, applies available OS updates and installs the unchanged Python
+lock using musllinux wheels. Final Linux amd64 image
+`sha256:55207450127637bc1ef313484debde6f28a168f3b62a42743f1271e4b7259098`
+built with version `1.0.0-dev.1` and the known review-base revision label.
+Trivy 0.61.1 reported zero HIGH/CRITICAL findings in that image, and CycloneDX
+SBOM generation passed. Trivy warned that Alpine 3.24 was absent from its EOL
+list; this result is not lifecycle certification or a security guarantee.
+
+Executed checks: Rust workspace formatting and Clippy with all targets and
+`-D warnings` passed using Rust 1.94.1 in Docker.
+`cargo test --workspace --locked` also passed: 410 tests passed and 17 were
+ignored across unit, integration and documentation test summaries. Ignored
+tests and the separate containment/conformance checks are not qualified by this
+run. Release regression suites
+passed: image wiring/registry identity 2, product release 25, unified CI 16,
+tagged release 23, manual development 8, shared release jobs 5, and local CI
+35 tests (one symlink skip). Tests cover required runtime image bytes,
+registry push coordinates, refusal of mismatched image revisions, and CI gate
+ownership. The final image passed worker/listener help and pip check with a
+read-only root, no network, dropped capabilities and no-new-privileges. Its
+runtime suite passed 41 tests with ten OpenSSL-dependent skips; the foundation
+host runtime gate remains responsible for TLS fixtures.
+
+`PYTHONUTF8=1 python tools/check.py` was rerun after correcting a new mock's
+serialized response and registering the image job in local CI policy. It ran
+424 CI tests with one error and ten skips: the existing Windows device fixture
+cannot create its Docker socket symlink (WinError 1314). Later component gates
+did not execute. Focused release checks, workflow actionlint, metadata/preflight,
+source policy, relative links and whitespace passed. No full repository pass,
+actual registry push or release provenance execution is claimed by local
+publisher simulations. Publication awaits a successful authorized release run.
+
+Known tested source SHA-256:
+
+- Gateway HTTP: `79f28149d901fbfba5e4607cfafb742bbbea18e1af2b0b53c0db26bdd1252fea`.
+- Gateway relay: `2b7c1f6808eb5dc9529dcf926f0cec93e779e06e46472b72286c38b82231d0e7`.
+- Runtime Dockerfile: `bdaeebb209d7a703ffe5cff97a4ea72843248d15a01fe5c52733ab980fed8bbf`.
+- Image workflow: `5643d9ebed42234a8765ad564f4e47665d829eea9946e6ca3b1e113f832b9b9a`.
+
+This delivers distribution wiring, not successful workflow execution. The live
+context-tool finality blocker, full authorization-negative scenarios,
+fresh-install/two-profile acceptance and original phase exit criteria remain.
+No phase weight or #230/#274 completion is credited; overall earned completion
+remains **0 / 100**.
+
+### Explicit image test-mode guard follow-up (2026-11-14)
+
+Delivery: draft [PR #309](https://github.com/olo-labs/olo-toolgate/pull/309)
+into `feature/workflow-enhancement`; full live acceptance remains outstanding.
+
+Review base: `6d4812cf5bd6296ddb967afd27e32f10c8239e00`.
+[Run 43596899996](https://github.com/olo-labs/olo-toolgate/actions/runs/43596899996)
+failed its manual-release admission regression before Rust or image jobs ran.
+The final in-image unittest command needs an explicit step-level
+`if: inputs.run_tests`, in addition to the existing job condition. That guard is
+now present; the regression is retained. The earlier local full-check run had
+evaluated admission before that unittest command was added, so it did not
+establish final-workflow admission coverage.
+
+Executed checks on the corrected workflow: actionlint, source policy and Linux
+metadata/preflight passed. Linux Python 3.12 ran all 424 CI tests with two errors
+and 17 skips; both errors were fixtures writing temporary files under the
+read-only checkout's `.dev`. With writable isolated `.dev` temporary storage,
+the admission and affected coverage/debug-asset suites passed 39 executed tests
+(44 discovered, five PowerShell skips), including the originally failing
+admission test. No production source was changed to accommodate those fixtures.
+The Windows `PYTHONUTF8=1 python tools/check.py` attempt ran 424 CI tests with
+one existing device-symlink privilege error and ten skips; later component gates
+did not execute. No complete repository or complete local Linux-suite pass is
+claimed. Staged PR policy, secret scan and whitespace checks passed.
+
+Corrected image workflow SHA-256:
+`f095e85df91c0f49e3bb63d8afb34e73bb17d786310312d59b5dfef10b6ad812`.
+Next verification is hosted preflight on the corrected commit. Runtime/image
+publication still requires all release gates, and live workflow finality and
+full-phase exit criteria remain outstanding. Baseline weights and earned
+completion remain **0 / 100**.
+
 ## Published configuration in the console
 
 The Control API exposes tenant-scoped, read-only published workflow and agent
@@ -33,7 +877,7 @@ Issue: [#295](https://github.com/olo-labs/olo-toolgate/issues/295) ·
 Integration: `feature/workflow-enhancement` ·
 Merged milestone: [PR #297](https://github.com/olo-labs/olo-toolgate/pull/297)
 
-Last updated: 2026-11-11. Baseline: **v1-effort-1**, 100 effort points.
+Last updated: 2026-11-14. Baseline: **v1-effort-1**, 100 effort points.
 Architecture and acceptance: [runtime plan, section 15](langgraph-runtime-plan.md#15-delivery-phases--minimal-end-to-end-v1).
 This is the authoritative live status for #295 v1; the architecture plan owns
 scope and acceptance. These estimates are relative shares of expected v1 work,
@@ -44,10 +888,10 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending | 0% |
-| V1.2 — Message to governed result | 35% | 70% | In progress by requested phase jump; generic runner tested, server integration pending | 0% |
-| V1.3 — Trigger to the same run path | 20% | 90% | In progress; HTTPS/WSS listener and admission contract tested, Control durable admission/execution pending | 0% |
-| V1.4 — End-to-end qualification | 10% | 100% | In progress; scenario/evidence controller implemented; live driver and server prerequisites missing | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Generic package-selected fresh deployment is locally exercised; full phase remains pending. | 0% |
+| V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
+| V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
+| V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment and two-profile local acceptance delivered; complete fresh-install scenarios, Linux gates and release publication pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
 V1.2 carries the largest share because admission, runtime identity, model proxy,
@@ -73,9 +917,9 @@ changes require a baseline revision, reason and old/new allocations totaling
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
 | V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete property editor, dedicated workflow/group/agent screens and tenant-scoped revision discovery implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
-| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | Fixed LangGraph execution core with two simulated profiles; 20 focused runner tests pass; no live ToolGate integration claimed | Server admission/ledger/leases and runtime identities, model proxy, canonical snapshot transport, V1.1 publication and real model/tool qualification |
-| V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Existing stream/ticket client, immutable UID validation, admission request/receipt contract, serial commit-before-ACK bridge and host CLI; 41 runtime/listener tests pass | Implement Control admission transaction/binding resolution and queue/lease execution; qualify real authorization, dedupe, disablement and governed write-back |
-| V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | Repeatable 16-scenario controller, source/artifact hashes, explicit blocked/error/failed reports and operator guide; controller tests use simulations | Implement server prerequisites and live-install driver/fresh provisioning with canonical example profiles; execute and review real integration evidence |
+| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | One-agent admission/lease/step/model/MCP transport; live supervisor inference and agent context attempt stop at unknown outcome; per-run metadata regression coverage | Confirmed tool finality and agent completion, message admission, two-agent execution and complete runtime authorization qualification |
+| V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Listener plus Control binding/admission/queue path; real trigger and duplicate receipt retain admission/run IDs; worker records FAILED on unknown tool outcome | Qualify successful trigger-to-result, live disable/revocation/forgery denials and governed write-back |
+| V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | 16-scenario controller, one-agent live fixture, and standalone runtime image/release evidence gate; local image tests/scan pass, live context attempt fails conservatively | Resolve native finality, complete fresh provisioning and two-profile live scenario coverage with independent server evidence and applicable full gates; execute registry publication through an authorized release |
 
 ## Update required with every PR
 

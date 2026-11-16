@@ -28,6 +28,7 @@ public interface Store {
         default McpStore mcp() { throw Failure.unavailable(); }
         default PackageStore packages() { throw Failure.unavailable(); }
         default WorkflowProfileStore workflowProfiles() { throw Failure.unavailable(); }
+        default WorkflowRunStore workflowRuns() { throw Failure.unavailable(); }
         default McpServerStore mcpServers() { throw Failure.unavailable(); }
         default RunEventStore runEvents() { throw Failure.unavailable(); }
         default InsightsStore insights() { throw Failure.unavailable(); }

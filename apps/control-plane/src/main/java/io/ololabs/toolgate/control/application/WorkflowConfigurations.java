@@ -50,7 +50,7 @@ public final class WorkflowConfigurations {
         for (var agent : config.agentDefinitions()) {
             require(models, agent.modelGroupId(), "agent model group");
             external.add(new Reference(ResourceKind.AGENT, agent.agentId()));
-            agent.contextSources().forEach(c -> external.add(new Reference(ResourceKind.TOOL, c.toolId())));
+            agent.contextSources().forEach(c -> { context(c); external.add(new Reference(ResourceKind.TOOL, c.toolId())); });
         }
         for (var workflow : config.workflows()) {
             require(groups, workflow.workflowGroupId(), "workflow group");
@@ -63,7 +63,27 @@ public final class WorkflowConfigurations {
                 entry |= binding.entryEligible();
             }
             if (!entry) throw invalid("A workflow requires an entry-eligible agent");
-            workflow.contextSources().forEach(c -> external.add(new Reference(ResourceKind.TOOL, c.toolId())));
+            if (workflow.deployment() != null) {
+                var deployment = workflow.deployment();
+                if (deployment.fileAgent() != null && workflow.agents().stream().noneMatch(a -> a.agentId().equals(deployment.fileAgent().agentId()))
+                        || !models.get(workflow.modelGroupId()).deploymentIds().contains(deployment.model().deploymentId()))
+                    throw invalid("Deployment references must belong to their workflow");
+            }
+            if (workflow.agentStages() != null) {
+                var seen = new java.util.HashSet<String>();
+                for (var stage : workflow.agentStages()) {
+                    var binding = workflow.agents().stream().filter(a -> a.agentId().equals(stage.agentId()))
+                        .findFirst().orElseThrow(() -> invalid("Stage agent is not bound to this workflow"));
+                    boolean first = seen.isEmpty();
+                    if (!seen.add(stage.agentId()) || !(first ? binding.entryEligible() : binding.delegationAllowed()))
+                        throw invalid("Stage agent is repeated or ineligible");
+                    if (stage.resultMode() == io.ololabs.toolgate.contracts.v2.WorkflowAgentResultMode.CONTEXT
+                            && agents.get(stage.agentId()).contextSources().isEmpty())
+                        throw invalid("A context stage requires configured context sources");
+                }
+                if (seen.size() > workflow.limits().maxHandoffs()) throw invalid("Stages exceed maxHandoffs");
+            }
+            workflow.contextSources().forEach(c -> { context(c); external.add(new Reference(ResourceKind.TOOL, c.toolId())); });
             if (workflow.limits().maxHandoffs() > workflow.limits().maxSteps())
                 throw invalid("maxHandoffs cannot exceed maxSteps");
         }
@@ -84,6 +104,10 @@ public final class WorkflowConfigurations {
         return config;
     }
 
+    private static void context(io.ololabs.toolgate.contracts.v2.WorkflowContextSource source) {
+        if (source.argumentBindings() != null && source.argumentBindings().keySet().stream().anyMatch(source.arguments()::containsKey))
+            throw invalid("A context argument cannot be both static and input-bound");
+    }
     private static <T> Map<String,T> index(java.util.List<T> values, Function<T,String> key, String kind) {
         var result = new HashMap<String,T>();
         for (T value : values) if (result.putIfAbsent(key.apply(value), value) != null) throw invalid("Duplicate " + kind);

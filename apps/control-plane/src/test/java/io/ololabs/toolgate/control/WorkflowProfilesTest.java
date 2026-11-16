@@ -56,12 +56,147 @@ final class WorkflowProfilesTest {
     @Test void postgresLifecycleIsAtomicAndPublishedSeparately() throws Exception { lifecycle(true); }
     @Test void sqliteCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(false); }
     @Test void postgresCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(true); }
+    @Test void sqliteDispatchResolutionFollowsPublication() throws Exception { dispatchResolution(false); }
+    @Test void postgresDispatchResolutionFollowsPublication() throws Exception { dispatchResolution(true); }
+    @Test void sqliteRunAndAdmissionShareOneTenantTransaction() throws Exception { durableRun(false); }
+    @Test void postgresRunAndAdmissionShareOneTenantTransaction() throws Exception { durableRun(true); }
+    @Test void sqliteNonFileDeploymentDoesNotRequireFolderAgent() throws Exception { nonFileDeployment(false); }
+    @Test void postgresNonFileDeploymentDoesNotRequireFolderAgent() throws Exception { nonFileDeployment(true); }
+
+    private void nonFileDeployment(boolean postgres) throws Exception {
+        var rig = rig(postgres);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
+        var value = profile();
+        var fixtures = Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
+        var deployment = (ObjectNode)JSON.readTree(Files.readString(fixtures)).path("WorkflowStackDeployment").deepCopy();
+        deployment.remove("fileAgent");
+        ((ObjectNode)deployment.path("model")).put("deploymentId", value.path("workflows").path("modelDeployments").get(0).path("id").asText());
+        var workflow = (ObjectNode)value.path("workflows").path("workflows").get(0);
+        workflow.set("deployment", deployment);
+        assertEquals(201, service.upload(rig.admin, value.toString(), "non-file").status());
+        deployment.set("fileAgent", JSON.readTree(Files.readString(fixtures)).path("WorkflowStackFolderAgent"));
+        ((ObjectNode)deployment.path("fileAgent")).put("agentId", "unbound-agent");
+        assertEquals(400, assertThrows(Failure.class, () -> service.upload(rig.admin, value.toString(), "unbound-folder-agent")).status());
+    }
+
+    private void durableRun(boolean postgres) throws Exception {
+        var rig = rig(postgres);
+        var vault = keys();
+        var profiles = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, vault);
+        String digest = node(profiles.upload(rig.admin, profile().toString(), "run-stage")).path("profileDigest").asText();
+        var inputs = new WorkflowRunInputs(codec, vault);
+        var admission = new WorkflowRunStore.Admission("ts-123", "0000000000000001", "root", "admission-1", "ADMITTED", "run-1");
+        java.util.function.Function<Store.Session, WorkflowRunStore.QueuedRun> queue = tx -> {
+            var sealed = inputs.seal(tx, rig.tenant, "run-1", digest, "Private event message");
+            var run = new WorkflowRunStore.QueuedRun("run-1", "support", digest, "investigate", "revision-1",
+                "automation", "automation-group", "PREPARE", 1234, sealed.keyVersion(), sealed.ciphertext());
+            tx.workflowRuns().enqueue(run);
+            tx.workflowRuns().insertAdmission(admission);
+            return run;
+        };
+        assertThrows(Failure.class, () -> rig.store.transaction(rig.tenant, true, tx -> {
+            queue.apply(tx);
+            throw Failure.conflict();
+        }));
+        rig.store.transaction(rig.tenant, true, tx -> {
+            assertNull(tx.workflowRuns().queued("run-1"));
+            assertNull(tx.workflowRuns().admission(admission.subscriptionUid(), admission.cursor()));
+            return queue.apply(tx);
+        });
+        rig.store.transaction(rig.tenant, false, tx -> {
+            var run = tx.workflowRuns().queued("run-1");
+            assertEquals(digest, run.profileDigest());
+            assertFalse(run.document().contains("Private event message"));
+            assertEquals("Private event message", inputs.open(tx, rig.tenant, run));
+            assertEquals(admission, tx.workflowRuns().admission(admission.subscriptionUid(), admission.cursor()));
+            return null;
+        });
+        var results = new WorkflowRunResults(codec, vault);
+        var completed = JSON.createObjectNode().put("issueId", "private-issue").put("summary", "Private triage result");
+        assertThrows(Failure.class, () -> rig.store.transaction(rig.tenant, true, tx -> {
+            results.save(tx, rig.tenant, tx.workflowRuns().get("run-1"), "SUCCEEDED", completed, null);
+            throw Failure.conflict();
+        }));
+        rig.store.transaction(rig.tenant, true, tx -> {
+            var run = tx.workflowRuns().get("run-1");
+            assertTrue(results.open(tx, rig.tenant, run, "SUCCEEDED").isNull());
+            assertThrows(Failure.class, () -> results.save(tx, rig.tenant, run, "SUCCEEDED",
+                JSON.getNodeFactory().textNode("x".repeat(32768)), null));
+            assertTrue(results.open(tx, rig.tenant, run, "SUCCEEDED").isNull());
+            results.save(tx, rig.tenant, run, "SUCCEEDED", completed, null);
+            assertEquals(completed, results.open(tx, rig.tenant, run, "SUCCEEDED").path("result"));
+            String key = Canonical.digest(JSON.valueToTree(List.of("workflow-run-result/v1", "run-1")));
+            assertFalse(tx.packages().document(key).contains("Private triage result"));
+            assertThrows(Failure.class, () -> results.open(tx, rig.tenant, run, "FAILED"));
+            assertThrows(Failure.class, () -> results.save(tx, rig.tenant, run, "SUCCEEDED", completed, null));
+            return null;
+        });
+        var foreignTenant = Tenants.id("other");
+        TestSupport.seed(rig.store, codec, foreignTenant, "root");
+        rig.store.transaction(foreignTenant, false, tx -> {
+            assertNull(tx.workflowRuns().get("run-1"));
+            assertNull(tx.workflowRuns().queued("run-1"));
+            assertNull(tx.workflowRuns().admission(admission.subscriptionUid(), admission.cursor()));
+            return null;
+        });
+    }
+
+    private void dispatchResolution(boolean postgres) throws Exception {
+        var rig = rig(postgres);
+        var ready = new AtomicBoolean(true);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> ready.get(), keys());
+        var document = profile();
+        ((ObjectNode) document.path("workflows").path("workflows").get(0)).set("parameterSchema", JSON.readTree("""
+            {"type":"object","required":["message"],"properties":{"message":{"type":"string","minLength":4}}}
+            """));
+        var binding = document.path("workflows").path("dispatchBindings").get(0);
+        String subscription = binding.path("subscriptionUid").asText();
+        String assignment = binding.path("sourceAssignmentUid").asText();
+        var resolve = (java.util.function.Supplier<WorkflowProfiles.DispatchTarget>) () -> rig.store.transaction(rig.tenant, false,
+            tx -> service.dispatchTarget(tx, rig.tenant, subscription, assignment));
+
+        String digest = node(service.upload(rig.admin, document.toString(), "dispatch-stage")).path("profileDigest").asText();
+        assertEquals(403, assertThrows(Failure.class, resolve::get).status());
+        service.review(rig.admin, "support", review(digest), "dispatch-review");
+        service.publish(rig.admin, "support", publish(digest, 0), "dispatch-publish");
+        var target = resolve.get();
+        assertEquals("support", target.profileId());
+        assertEquals(digest, target.profileDigest());
+        assertEquals(binding.path("workflowId").asText(), target.binding().workflowId());
+        assertEquals(binding.path("workflowVersionId").asText(), target.binding().workflowVersionId());
+        assertEquals("Inspect the inbox", WorkflowDispatchInput.message(codec, target, new TriggerStream.DispatchEvent(assignment,
+            JSON.readTree("""
+                {"summary":"ignored envelope","data":{"summary":"Inspect the inbox"}}
+                """))));
+        for (String event : List.of("{\"summary\":\"missing data\"}", "{\"data\":{\"summary\":7}}",
+                "{\"data\":{\"summary\":\"   \"}}", "{\"data\":{\"summary\":\"hi\"}}")) {
+            var delivery = new TriggerStream.DispatchEvent(assignment, JSON.readTree(event));
+            assertEquals(400, assertThrows(Failure.class, () -> WorkflowDispatchInput.message(codec, target, delivery)).status());
+        }
+        assertEquals(403, assertThrows(Failure.class, () -> rig.store.transaction(rig.tenant, false,
+            tx -> service.dispatchTarget(tx, rig.tenant, subscription, "other-assignment"))).status());
+
+        var foreignTenant = Tenants.id("other");
+        TestSupport.seed(rig.store, codec, foreignTenant, "root");
+        assertEquals(403, assertThrows(Failure.class, () -> rig.store.transaction(foreignTenant, false,
+            tx -> service.dispatchTarget(tx, foreignTenant, subscription, assignment))).status());
+
+        ready.set(false);
+        assertEquals(403, assertThrows(Failure.class, resolve::get).status());
+        ready.set(true);
+        ((ObjectNode) document.path("workflows")).putArray("dispatchBindings");
+        String replacement = node(service.upload(rig.admin, document.toString(), "withdraw-stage")).path("profileDigest").asText();
+        service.review(rig.admin, "support", review(replacement), "withdraw-review");
+        service.publish(rig.admin, "support", publish(replacement, 1), "withdraw-publish");
+        assertEquals(403, assertThrows(Failure.class, resolve::get).status());
+    }
+
     @Test void malformedPackageDeclarationsCannotBeStaged() throws Exception {
         var rig = rig(false);
         var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
         var value = profile();
         var entry = ((ArrayNode)value.get("packages")).addObject();
-        entry.put("packageId", "examples.inbox-watch").put("version", "0.1.0")
+        entry.put("packageId", "examples.hotfolder-watch").put("version", "0.1.0")
             .put("source", "PREBUILT_CORE").put("required", true);
         entry.putArray("deviceGroupIds").add("devices").add("devices");
 
@@ -262,7 +397,7 @@ final class WorkflowProfilesTest {
     @Test void realDependencyChecksRequireVaultScopeAndCurrentAgentMembership() throws Exception {
         var rig = rig(false); var deps = new WorkflowProfileDependencies(codec, java.time.Clock.systemUTC(), null, null, rig.tenant);
         var service = new WorkflowProfiles(rig.store, codec, deps, keys()); var value = profile();
-        value.putArray("packages").addObject().put("packageId", "examples.inbox-watch")
+        value.putArray("packages").addObject().put("packageId", "examples.hotfolder-watch")
             .put("version", "0.1.0").put("source", "PREBUILT_CORE").put("required", true);
         ((ObjectNode)value.path("workflows")).putArray("dispatchBindings");
         ((ObjectNode)value.path("workflows").path("agentDefinitions").get(0)).putArray("contextSources");

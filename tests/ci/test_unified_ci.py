@@ -153,7 +153,7 @@ class SharedCheckOwnershipTests(unittest.TestCase):
         self.assertEqual(scripts.count('--prebuilt-ui'), 2)
         self.assertIn('--postgresql --no-browser', scripts)
         self.assertIn('agent --target linux --verify-native-boundary', scripts)
-        for image in ('quickstart','control','gateway','device','linux-secured-device'):
+        for image in ('quickstart','control','gateway','device','linux-secured-device','langgraph-runtime'):
             self.assertIn(f'--severity HIGH,CRITICAL olo-toolgate-{image}:', scripts)
         self.assertNotIn('tools/check.py', scripts)
         self.assertNotIn('cargo test', scripts)

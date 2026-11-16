@@ -3826,7 +3826,7 @@
     }
   },
   "TriggerAssignmentSpec": {
-    "trigger": "examples.inbox-watch/new-file",
+    "trigger": "examples.hotfolder-watch/new-file",
     "packageVersion": "1.0.0",
     "target": {
       "executor": "CLIENT",
@@ -3920,7 +3920,7 @@
       "updatedAtUnixMs": 1793413660000
     },
     "spec": {
-      "trigger": "examples.inbox-watch/new-file",
+      "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "1.0.0",
       "target": {
         "executor": "CLIENT",
@@ -3972,7 +3972,7 @@
       }
     ],
     "spec": {
-      "trigger": "examples.inbox-watch/new-file",
+      "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "1.0.0",
       "target": {
         "executor": "CLIENT",
@@ -4015,7 +4015,7 @@
           "updatedAtUnixMs": 1793413660000
         },
         "spec": {
-          "trigger": "examples.inbox-watch/new-file",
+          "trigger": "examples.hotfolder-watch/new-file",
           "packageVersion": "1.0.0",
           "target": {
             "executor": "CLIENT",
@@ -4087,7 +4087,7 @@
         "updatedAtUnixMs": 1793413660000
       },
       "spec": {
-        "trigger": "examples.inbox-watch/new-file",
+        "trigger": "examples.hotfolder-watch/new-file",
         "packageVersion": "1.0.0",
         "target": {
           "executor": "CLIENT",
@@ -4144,7 +4144,7 @@
   "TriggerInstanceView": {
     "instanceId": "ti-0123456789abcdef0123456789abcdef",
     "assignment": "finance-inbox-pdf",
-    "triggerId": "examples.inbox-watch/new-file",
+    "triggerId": "examples.hotfolder-watch/new-file",
     "executor": "CLIENT",
     "executorId": "device-42",
     "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -4167,7 +4167,7 @@
       {
         "instanceId": "ti-0123456789abcdef0123456789abcdef",
         "assignment": "finance-inbox-pdf",
-        "triggerId": "examples.inbox-watch/new-file",
+        "triggerId": "examples.hotfolder-watch/new-file",
         "executor": "CLIENT",
         "executorId": "device-42",
         "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -5159,7 +5159,11 @@
         "modelId": "approved-model",
         "secretName": "model-key",
         "toolGroupId": "model-tools",
-        "deviceGroupId": "model-devices"
+        "deviceGroupId": "model-devices",
+        "generation": {
+          "maxOutputTokens": 512,
+          "temperature": 0.0
+        }
       }
     ]
   },
@@ -5249,7 +5253,303 @@
     "modelId": "approved-model",
     "secretName": "model-key",
     "toolGroupId": "model-tools",
-    "deviceGroupId": "model-devices"
+    "deviceGroupId": "model-devices",
+    "generation": {
+      "maxOutputTokens": 512,
+      "temperature": 0.0
+    }
   },
-  "WorkflowProfileState": "DRAFT"
+  "WorkflowProfileState": "DRAFT",
+  "WorkflowFinishDecision": {
+    "kind": "finish",
+    "result": {
+      "summary": "Example summary"
+    }
+  },
+  "WorkflowContextDecision": {
+    "kind": "finish_context"
+  },
+  "WorkflowDelegateDecision": {
+    "kind": "delegate",
+    "agentId": "summary",
+    "input": "Example text"
+  },
+  "WorkflowContextDelegateDecision": {
+    "kind": "delegate",
+    "agentId": "summary",
+    "inputFromAgent": "reader"
+  },
+  "WorkflowToolDecision": {
+    "kind": "tool",
+    "toolId": "read",
+    "arguments": {
+      "path": "inbox/example.txt"
+    }
+  },
+  "WorkflowAgentResultMode": "MODEL",
+  "WorkflowAgentStage": {
+    "agentId": "agent-1",
+    "resultMode": "MODEL"
+  },
+  "WorkflowModelGeneration": {
+    "maxOutputTokens": 512,
+    "temperature": 0.25
+  },
+  "WorkflowStackDeployment": {
+    "enabled": true,
+    "runtime": {
+      "engine": "LANGGRAPH",
+      "image": "olo-toolgate-langgraph-runtime:profile-stack"
+    },
+    "platform": {
+      "quickstartImage": "olo-toolgate-quickstart:profile-stack",
+      "deviceImage": "ololab/olo-toolgate-device:dev",
+      "httpPort": 48091,
+      "tlsPort": 48451,
+      "registryPort": 48552
+    },
+    "model": {
+      "deploymentId": "intake",
+      "engine": "LLAMA_CPP",
+      "image": "ghcr.io/ggml-org/llama.cpp:server@sha256:e3032ea0712da96dec820c770626385de4322dd06619fb5829256a504bbc9375",
+      "modelFile": "model.gguf",
+      "contextSize": 8192,
+      "threads": 4
+    },
+    "source": {
+      "subscription": "configured-workflow",
+      "assignment": "hotfolder-inbox",
+      "packageId": "examples.hotfolder-watch",
+      "version": "0.1.0",
+      "triggerId": "examples.hotfolder-watch/new-file",
+      "deviceGroupId": "ReadAndWriteDeviceGroup",
+      "config": {
+        "folder": "inbox",
+        "extension": ".txt"
+      },
+      "eventFilter": "event.type == 'examples.files.observed.v1'"
+    },
+    "fileAgent": {
+      "agentId": "langchain-linux-agent",
+      "inbox": "inbox",
+      "processed": "processed",
+      "output": "summaries",
+      "archive": true,
+      "projection": "summary"
+    },
+    "monitoring": {
+      "enabled": false,
+      "mode": "NONE",
+      "grafanaPort": 49000,
+      "prometheusPort": 49090,
+      "grafanaUser": "admin",
+      "grafanaSecret": "grafana-admin",
+      "collectorConfig": {
+        "receivers": {
+          "otlp": {
+            "protocols": {
+              "http": {
+                "endpoint": "0.0.0.0:4318"
+              }
+            }
+          }
+        },
+        "processors": {
+          "memory_limiter": {
+            "check_interval": "1s",
+            "limit_mib": 400,
+            "spike_limit_mib": 100
+          },
+          "deltatocumulative": {
+            "max_stale": "1h",
+            "max_streams": 100000
+          },
+          "batch": {
+            "send_batch_size": 1024,
+            "timeout": "5s"
+          }
+        },
+        "exporters": {
+          "otlphttp/tempo": {
+            "endpoint": "http://tempo:4318"
+          },
+          "prometheus": {
+            "endpoint": "0.0.0.0:8889",
+            "add_metric_suffixes": false,
+            "send_timestamps": false,
+            "metric_expiration": "1h",
+            "resource_to_telemetry_conversion": {
+              "enabled": true
+            }
+          }
+        },
+        "service": {
+          "pipelines": {
+            "traces": {
+              "receivers": [
+                "otlp"
+              ],
+              "processors": [
+                "memory_limiter",
+                "batch"
+              ],
+              "exporters": [
+                "otlphttp/tempo"
+              ]
+            },
+            "metrics": {
+              "receivers": [
+                "otlp"
+              ],
+              "processors": [
+                "memory_limiter",
+                "deltatocumulative",
+                "batch"
+              ],
+              "exporters": [
+                "prometheus"
+              ]
+            }
+          }
+        }
+      },
+      "spanSampleRatio": 1.0,
+      "images": {
+        "collector": "otel/opentelemetry-collector-contrib:0.120.0",
+        "prometheus": "prom/prometheus:v3.2.1",
+        "grafana": "grafana/grafana:12.1.0",
+        "tempo": "grafana/tempo:2.7.2"
+      }
+    }
+  },
+  "WorkflowStackRuntime": {
+    "engine": "LANGGRAPH",
+    "image": "olo-toolgate-langgraph-runtime:profile-stack"
+  },
+  "WorkflowStackPlatform": {
+    "quickstartImage": "olo-toolgate-quickstart:profile-stack",
+    "deviceImage": "ololab/olo-toolgate-device:dev",
+    "httpPort": 48091,
+    "tlsPort": 48451,
+    "registryPort": 48552
+  },
+  "WorkflowStackModelEngine": {
+    "deploymentId": "intake",
+    "engine": "LLAMA_CPP",
+    "image": "ghcr.io/ggml-org/llama.cpp:server@sha256:e3032ea0712da96dec820c770626385de4322dd06619fb5829256a504bbc9375",
+    "modelFile": "model.gguf",
+    "contextSize": 8192,
+    "threads": 4
+  },
+  "WorkflowStackTriggerSource": {
+    "subscription": "configured-workflow",
+    "assignment": "hotfolder-inbox",
+    "packageId": "examples.hotfolder-watch",
+    "version": "0.1.0",
+    "triggerId": "examples.hotfolder-watch/new-file",
+    "deviceGroupId": "ReadAndWriteDeviceGroup",
+    "config": {
+      "folder": "inbox",
+      "extension": ".txt"
+    },
+    "eventFilter": "event.type == 'examples.files.observed.v1'"
+  },
+  "WorkflowStackFolderAgent": {
+    "agentId": "langchain-linux-agent",
+    "inbox": "inbox",
+    "processed": "processed",
+    "output": "summaries",
+    "archive": true,
+    "projection": "summary"
+  },
+  "WorkflowStackMonitoring": {
+    "enabled": false,
+    "mode": "NONE",
+    "grafanaPort": 49000,
+    "prometheusPort": 49090,
+    "grafanaUser": "admin",
+    "grafanaSecret": "grafana-admin",
+    "collectorConfig": {
+      "receivers": {
+        "otlp": {
+          "protocols": {
+            "http": {
+              "endpoint": "0.0.0.0:4318"
+            }
+          }
+        }
+      },
+      "processors": {
+        "memory_limiter": {
+          "check_interval": "1s",
+          "limit_mib": 400,
+          "spike_limit_mib": 100
+        },
+        "deltatocumulative": {
+          "max_stale": "1h",
+          "max_streams": 100000
+        },
+        "batch": {
+          "send_batch_size": 1024,
+          "timeout": "5s"
+        }
+      },
+      "exporters": {
+        "otlphttp/tempo": {
+          "endpoint": "http://tempo:4318"
+        },
+        "prometheus": {
+          "endpoint": "0.0.0.0:8889",
+          "add_metric_suffixes": false,
+          "send_timestamps": false,
+          "metric_expiration": "1h",
+          "resource_to_telemetry_conversion": {
+            "enabled": true
+          }
+        }
+      },
+      "service": {
+        "pipelines": {
+          "traces": {
+            "receivers": [
+              "otlp"
+            ],
+            "processors": [
+              "memory_limiter",
+              "batch"
+            ],
+            "exporters": [
+              "otlphttp/tempo"
+            ]
+          },
+          "metrics": {
+            "receivers": [
+              "otlp"
+            ],
+            "processors": [
+              "memory_limiter",
+              "deltatocumulative",
+              "batch"
+            ],
+            "exporters": [
+              "prometheus"
+            ]
+          }
+        }
+      }
+    },
+    "spanSampleRatio": 1.0,
+    "images": {
+      "collector": "otel/opentelemetry-collector-contrib:0.120.0",
+      "prometheus": "prom/prometheus:v3.2.1",
+      "grafana": "grafana/grafana:12.1.0",
+      "tempo": "grafana/tempo:2.7.2"
+    }
+  },
+  "WorkflowStackMonitoringImages": {
+    "collector": "otel/opentelemetry-collector-contrib:0.120.0",
+    "prometheus": "prom/prometheus:v3.2.1",
+    "grafana": "grafana/grafana:12.1.0",
+    "tempo": "grafana/tempo:2.7.2"
+  }
 }

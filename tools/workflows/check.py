@@ -24,6 +24,8 @@ def main():
                    cwd=ROOT, env=env, check=True)
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", "tools/workflows",
                     "-p", "test_*.py", "-v"], cwd=ROOT, check=True)
+    subprocess.run([str(python), "-m", "unittest", "discover", "-s", "examples/langchain",
+                    "-p", "test_workflow_e2e.py", "-v"], cwd=ROOT, env=env, check=True)
 
 
 if __name__ == "__main__":

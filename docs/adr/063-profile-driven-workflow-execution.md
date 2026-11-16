@@ -85,7 +85,7 @@ events. It gains no service token and cannot supply runAs. Before delivery can
 start a run, Control rechecks listener/source read authority and service execution
 authority. Expired/recreated subscriptions cannot inherit an old binding.
 
-Add `POST /api/control/v1/workflow-dispatches:admit` (proposed contract) accepting
+`POST /api/control/v1/workflow-dispatches:admit` accepts
 only subscription UID and opaque delivered cursor, with ordinary authenticated
 caller credentials. Control verifies caller ownership, that this cursor was
 delivered to that subscription, current source/binding status and full data
@@ -110,6 +110,21 @@ recovery status; do not pretend missing events were handled. A known replay may
 return its prior reference after disablement, but cannot execute a new effect;
 run authority is rechecked separately. Re-enabling a binding cannot resurrect
 previous terminal rejected events automatically.
+
+The trigger admission gate checks current Actor Service role grants on the
+configured service agent group. Use explicit `workflow.execute` and
+`model.infer` actions with exact `CUSTOM` resource selectors
+`workflow-group:<id>` and `model-group:<id>` respectively. The admission check
+requires unrestricted tool and device selectors because it has no tool or
+device target. Time conditions are evaluated using Control's clock. Runtime
+model and tool calls require their own current authorization.
+
+The initial one-agent slice binds the trigger's service Agent to the same
+entry-eligible agent and group declared on the workflow. Control authorizes
+the workflow supervisor and that agent through the lease-bound step endpoint.
+Issuing a new step replaces the previous token, and closing the run clears
+the token. Cross-agent delegation requires a separate runtime authorization
+path before it can be enabled.
 
 ## Decision: message admission, runner identity and execution
 

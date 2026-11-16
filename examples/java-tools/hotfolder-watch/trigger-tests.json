@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "providerMode": "mock",
+  "packageId": "examples.hotfolder-watch",
+  "buildRoot": "examples/java-tools",
+  "project": "hotfolder-watch",
+  "startConfig": {"folder": "inbox"}
+}

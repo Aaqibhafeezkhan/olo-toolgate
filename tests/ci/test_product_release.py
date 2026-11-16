@@ -229,10 +229,16 @@ class ReleaseBundleTests(unittest.TestCase):
             pipeline.validate_bundle()
 
     def test_missing_platform_image_cannot_pass_even_with_recomputed_checksums(self):
-        (self.output/'images/device/image.tar').unlink()
-        self.rechecksum()
-        with self.assertRaisesRegex(ValueError, 'missing a required image'):
-            pipeline.validate_bundle()
+        for component in ('device', 'langgraph_runtime'):
+            with self.subTest(component=component):
+                path = self.output/'images'/component/'image.tar'
+                content = path.read_bytes()
+                path.unlink()
+                self.rechecksum()
+                with self.assertRaisesRegex(ValueError, 'missing a required image'):
+                    pipeline.validate_bundle()
+                path.write_bytes(content)
+                self.rechecksum()
 
 
 class RegistryResumeTests(unittest.TestCase):

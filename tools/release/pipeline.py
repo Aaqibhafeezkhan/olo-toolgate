@@ -97,7 +97,8 @@ def collect(source):
     evidence = ROOT/'build/release-evidence'
     for artifact, directory in [('foundation-evidence', 'foundation'), ('public-client-bundle', 'client')]+[
             (name+'-evidence', key) for key, name in [('control', 'control'), ('gateway', 'gateway'),
-            ('quickstart', 'quickstart'), ('device', 'device'), ('secured_device', 'secured-device')]]:
+            ('quickstart', 'quickstart'), ('device', 'device'), ('secured_device', 'secured-device'),
+            ('langgraph_runtime', 'langgraph-runtime')]]:
         run('gh', 'run', 'download', info['buildRun'], '--repo', os.environ['GITHUB_REPOSITORY'],
             '--name', artifact, '--dir', str(evidence/directory))
     assets = OUTPUT/'assets'

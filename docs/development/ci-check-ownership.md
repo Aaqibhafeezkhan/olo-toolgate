@@ -34,6 +34,7 @@ full-test graph. See [development releases](development-releases.md) and
 | Production Gateway delegated effects, headers/container proof and benchmark | images / gateway |
 | Linux device enrollment/tools/health/container proof | images / device, images / secured-device |
 | LangChain native smoke on the device image | images / langchain |
+| Standalone LangGraph worker/listener image, dependency smoke, vulnerability scan and SBOM | images / langgraph-runtime |
 | Every production image vulnerability scan, SBOM, archive and checksum | images (the job that builds the image) |
 | Raw contract/Java/Helm release assets, source release SBOM and asset checksums | foundation / check |
 | Prepared source/version verification and product registry publication | Build and release binaries |

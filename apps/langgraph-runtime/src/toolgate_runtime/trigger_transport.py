@@ -1,12 +1,13 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""TLS-only trigger transport; workflow dispatch admission remains a pending Control API."""
+"""TLS-only transport for trigger subscriptions and workflow dispatch admission."""
 from __future__ import annotations
 
 import json
 import logging
 import re
 import ssl
+import time
 from typing import Callable
 import urllib.error
 import urllib.parse
@@ -37,7 +38,7 @@ def _quiet_logger():
 
 
 class ControlTriggers:
-    """Existing subscription/ticket APIs plus the proposed ADR-063 admission path.
+    """Subscription, ticket and ADR 063 dispatch admission APIs.
 
     404/501/503, redirects, auth failures and malformed responses fail closed.
     No API availability, persistence or workflow execution is simulated here.
@@ -58,6 +59,10 @@ class ControlTriggers:
             raise ValueError("Transport timeout must be positive and at most 30 seconds")
         self.origin, self._token, self.timeout = origin.rstrip("/"), token, timeout_seconds
         self._tls = ssl.create_default_context(cafile=ca_file)
+        # Quickstart's explicitly supplied CA may predate OpenSSL strict key-identifier checks.
+        # Chain, hostname and expiry verification remain active.
+        if ca_file is not None:
+            self._tls.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect(),
                                                    urllib.request.HTTPSHandler(context=self._tls))
 
@@ -129,13 +134,16 @@ class TriggerListener:
     def __init__(self, control: ControlTriggers, subscription: Subscription):
         self.control, self.subscription = control, subscription
 
-    def listen_once(self, *, max_events: int | None = None) -> tuple[int, DispatchReceipt | None]:
+    def listen_once(self, *, max_events: int | None = None, idle_timeout: float | None = None) -> tuple[int, DispatchReceipt | None]:
         if max_events is not None and (type(max_events) is not int or max_events < 1):
             raise ValueError("max_events must be a positive integer")
+        if idle_timeout is not None and not 0 < idle_timeout <= 3600:
+            raise ValueError("idle_timeout must be positive and at most 3600 seconds")
         self.control.verify_subscription(self.subscription)
         ticket = self.control.ticket()
         bridge = TriggerBridge(self.subscription, self.control, timeout_seconds=self.control.timeout)
         processed, last = 0, None
+        deadline = None if idle_timeout is None else time.monotonic() + idle_timeout
         try:
             with self.control.connect(ticket) as connection:
                 if connection.subprotocol != PROTOCOL:
@@ -143,14 +151,19 @@ class TriggerListener:
                 # Omit resumeAfter: only the durable server-side cursor is authoritative after ACK loss.
                 connection.send(json.dumps({"type": "subscribe", "subscription": self.subscription.name}))
                 while max_events is None or processed < max_events:
+                    remaining = self.control.timeout if deadline is None else min(self.control.timeout, deadline - time.monotonic())
+                    if remaining <= 0:
+                        raise ListenerFailure(Reason.CONNECTION_LOST)
                     try:
-                        raw = connection.recv(timeout=self.control.timeout)
+                        raw = connection.recv(timeout=remaining)
                     except TimeoutError:
                         continue  # Idle connections use protocol pings; no synthetic ACK or cursor movement.
                     receipt = bridge.handle(raw, connection.send)
                     if receipt is not None:
                         processed += 1
                         last = receipt
+                        if idle_timeout is not None:
+                            deadline = time.monotonic() + idle_timeout
         except ListenerFailure:
             raise
         except Exception:

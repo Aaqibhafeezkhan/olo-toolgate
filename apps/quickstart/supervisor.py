@@ -56,7 +56,7 @@ DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', 
 
 
 def direct_tls(path):
-    return path == "/api/control/v1/triggers:action" or path.startswith(DIRECT_TLS_PREFIXES)
+    return path in ("/api/control/v1/triggers:action", "/api/control/v1/workflow-dispatches:admit") or path.startswith(DIRECT_TLS_PREFIXES)
 
 
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
@@ -397,7 +397,7 @@ DIRECT_TLS_PREFIXES = ('/api/control/v1/endpoint/', '/api/control/v1/builder/', 
 
 
 def direct_tls(path):
-    return path == "/api/control/v1/triggers:action" or path.startswith(DIRECT_TLS_PREFIXES)
+    return path in ("/api/control/v1/triggers:action", "/api/control/v1/workflow-dispatches:admit") or path.startswith(DIRECT_TLS_PREFIXES)
 
 
 def origin_target(value):

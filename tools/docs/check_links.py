@@ -203,6 +203,7 @@ def markdown_files():
         directories[:] = sorted(
             name for name in directories
             if name not in ALWAYS_EXCLUDED_DIRS
+            and not (relative_parts == ('deploy', 'compose', 'WorkflowStack') and name == 'state')
             and not (
                 name in GENERATED_DIRS
                 and not inside_examples

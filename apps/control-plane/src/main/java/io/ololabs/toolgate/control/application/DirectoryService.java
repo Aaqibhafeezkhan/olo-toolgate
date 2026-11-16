@@ -239,13 +239,13 @@ public final class DirectoryService {
             lifecycle(tx,old,next);var entries=new HashMap<>(before.entries());entries.put(next.id(),next);var after=validated(tx,before,before.revision()+1,entries);tx.save(before,after);auditChanges(tx,actor,before,after,requestId,"WORKLOAD_CREDENTIAL_ROTATE",hash);
             var chain=new ArrayList<io.ololabs.toolgate.contracts.v2.ActorHop>();for(var parent=b.parentBindingId();parent!=null;){var p=codec.model(after.entries().get(Kind.WORKLOAD_BINDING.id(parent)).document(),ControlWorkloadBinding.class);chain.addFirst(new io.ololabs.toolgate.contracts.v2.ActorHop(p.agentId(),p.id()));parent=p.parentBindingId();if(chain.size()>8)throw Failure.conflict();}
             var binding=codec.model(next.document(),ControlWorkloadBinding.class);
-            var execution=request.bindingId()!=null?request.bindingId():executionBinding(after,b.agentId());
+            var execution=request.bindingId()!=null?request.bindingId():executionBinding(codec,after,b.agentId());
             var context=new io.ololabs.toolgate.contracts.v2.RequestContext(id,actor.tenant().value(),b.mode(),io.ololabs.toolgate.contracts.v2.CredentialKind.STATIC_TOKEN,null,delegated?b.delegatedUserId():null,b.agentId(),id,chain,delegated?session:null,binding.credentialEpoch(),null,null,execution,request.credentialSha256());
             var reply=new Store.Reply(200,codec.json(new ControlWorkloadCredentialResult(binding,context)),binding.revision());tx.remember(actor.id(),key,hash,reply);return reply;
         });
     }
     /** The one enabled execution binding that the agent groups' CAPABILITY or SERVICE grants select, or null when none or several do. */
-    private String executionBinding(Directory d,String agent) {
+    static String executionBinding(Codec codec,Directory d,String agent) {
         var groups=GroupGraph.memberships(d,codec,Kind.AGENT,agent,true);var result=new TreeSet<String>();
         for(var g:d.entries().values())if(g.id().kind()==Kind.GRANT&&g.enabled()){var grant=codec.model(g.document(),ControlAccessGrant.class);if(grant.sourceType()!=EnterpriseSourceType.AGENT_GROUP||!groups.contains(grant.sourceId())||grant.purpose()!=EnterpriseGrantPurpose.CAPABILITY&&grant.purpose()!=EnterpriseGrantPurpose.SERVICE)continue;
             for(var e:d.entries().values())if(e.id().kind()==Kind.BINDING&&e.enabled()){var x=codec.model(e.document(),ControlExecutionBinding.class);if(EnterpriseEvaluator.selected(grant.scope().toolGroups(),x.toolGroupId())&&EnterpriseEvaluator.selected(grant.scope().deviceGroups(),x.deviceGroupId()))result.add(x.id());}}

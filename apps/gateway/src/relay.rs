@@ -18,6 +18,52 @@ use std::{
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 use tokio::io::AsyncReadExt;
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowModel {
+    pub origin: String,
+    pub model_id: String,
+    pub credential: String,
+    pub generation: olo_toolgate_contracts::v2::WorkflowModelGeneration,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowTool {
+    pub context: RequestContext,
+    pub expires_at_unix_ms: u64,
+    pub read_only_tools: Vec<String>,
+}
+
+pub(crate) async fn read_workflow_body(
+    mut response: reqwest::Response,
+    limit: usize,
+) -> Result<Vec<u8>, ErrorCode> {
+    if response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .is_none_or(|value| value.split(';').next() != Some("application/json"))
+        || response
+            .content_length()
+            .is_some_and(|length| length > limit as u64)
+    {
+        return Err(ErrorCode::Validation);
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| ErrorCode::DependencyUnavailable)?
+    {
+        if body.len() + chunk.len() > limit {
+            return Err(ErrorCode::Validation);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RelayConfig {
@@ -69,6 +115,21 @@ impl RelayConfig {
     }
 }
 pub trait RelayPort: Send + Sync {
+    fn workflow_tool<'a>(
+        &'a self,
+        _run: &'a str,
+        _step: &'a str,
+        _tool: Option<&'a str>,
+    ) -> PortFuture<'a, Result<WorkflowTool, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
+    fn workflow_model<'a>(
+        &'a self,
+        _run: &'a str,
+        _step: &'a str,
+    ) -> PortFuture<'a, Result<WorkflowModel, ErrorCode>> {
+        Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
+    }
     fn cancel<'a>(
         &'a self,
         _context: &'a RequestContext,
@@ -252,6 +313,33 @@ impl HttpRelay {
         }
         Ok(token.to_owned())
     }
+    async fn workflow_resolution<R: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        payload: serde_json::Value,
+    ) -> Result<R, ErrorCode> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/internal/v1/runtime/{path}",
+                self.config.url.trim_end_matches('/')
+            ))
+            .bearer_auth(self.token().await?)
+            .header("Toolgate-Tenant-ID", &self.config.tenant_id)
+            .header("Content-Type", "application/json")
+            .body(payload.to_string())
+            .send()
+            .await
+            .map_err(|_| ErrorCode::DependencyUnavailable)?;
+        match response.status().as_u16() {
+            200 => {}
+            401 | 403 => return Err(ErrorCode::Forbidden),
+            _ => return Err(ErrorCode::DependencyUnavailable),
+        }
+        let body = read_workflow_body(response, 16384).await?;
+        serde_json::from_value(strict_json(&body).map_err(|_| ErrorCode::Validation)?)
+            .map_err(|_| ErrorCode::Validation)
+    }
     async fn post<T: Serialize, R: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -409,6 +497,27 @@ impl HttpRelay {
     }
 }
 impl RelayPort for HttpRelay {
+    fn workflow_tool<'a>(
+        &'a self,
+        run: &'a str,
+        step: &'a str,
+        tool: Option<&'a str>,
+    ) -> PortFuture<'a, Result<WorkflowTool, ErrorCode>> {
+        Box::pin(self.workflow_resolution(
+            "tool:resolve",
+            serde_json::json!({"runId": run, "stepToken": step, "toolId": tool}),
+        ))
+    }
+    fn workflow_model<'a>(
+        &'a self,
+        run: &'a str,
+        step: &'a str,
+    ) -> PortFuture<'a, Result<WorkflowModel, ErrorCode>> {
+        Box::pin(self.workflow_resolution(
+            "model:resolve",
+            serde_json::json!({"runId": run, "stepToken": step}),
+        ))
+    }
     fn cancel<'a>(
         &'a self,
         context: &'a RequestContext,

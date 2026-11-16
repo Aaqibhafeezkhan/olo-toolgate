@@ -5,6 +5,116 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Hosted package matrix follow-up — 2026-11-16
+
+Hosted run `43880163146` passed preflight, the shared SDK producer and every
+registered trigger-package matrix entry on `15249dc6`. A following repair scopes
+native/starter SDK preparation to the explicit root task and adds an SDK init
+guard against unrelated Quarkus/Sonar plugin resolution. A separate hosted WSS
+wire-test failure was not reproduced in 100 repetitions or the passing 62-test
+runtime suite; bounded test diagnostics are added without relaxing assertions.
+Exact checks, remaining hosted limits and the tested base are in the
+[workflow record](workflow-v1-status.md#qualified-sdk-fixtures-and-transport-diagnostics--2026-11-16).
+This closes no original module Done-when; earned progress remains **27%**.
+
+## Package CI prerequisite repairs — 2026-11-16
+
+The two reported hosted failures were diagnosed: Gateway image construction
+passed but SDK fixture preparation could not resolve the unrelated Sonar plugin;
+the following run's preflight caught three omissions in the new package stage
+(Rust environment persistence, explicit SDK gate dependency and matrix version
+materialization). The analysis dependency is isolated to explicit analysis and
+the workflow omissions are fixed without weakening existing assertions. Full
+Linux CI regression discovery passes (461 tests, 18 environment skips), as do
+32 focused checks, actionlint, ordinary SDK publication and explicit analysis
+task configuration. Actual failures, verification scope and remaining hosted
+limits are recorded in the [workflow checkpoint](workflow-v1-status.md#ci-prerequisite-repairs--2026-11-16).
+This build-tooling repair changes no trigger protocol or module scope; earned
+progress stays **27%**. M7/M8 and webhook PUSH remain unfinished.
+
+## Managed log package and shared PUSH work — 2026-11-16
+
+The unweighted catalog now has a working bounded client POLL
+[`examples.log-watch/error-spike`](../../examples/java-tools/log-watch/README.md)
+slice. It filters complete UTF-8 managed records using RE2/J, tracks prefix/offset
+checkpoints, detects observed rewrites/truncation, coalesces spike windows and
+suppresses notifications during a configured cooldown. Native host/container/
+Windows event access, large-file streaming and PUSH remain outstanding.
+The managed-device example policy now permits `.log` in its confined files area
+alongside the existing extensions; signed access, roots and size/count limits
+are unchanged. All current shipping/example trigger package directories and
+the independent fixture have their own README. Their package-owned mock-test
+manifests drive the new parallel foundation matrix (fail-fast disabled), and the
+foundation gate requires every entry. All three entries passed concurrently in
+isolated local Linux builds: tests/examples, package validation and trigger
+start/stop smoke. Six discovery/pipeline regressions and actionlint passed;
+the local CI suite passed 35 tests with one documented platform skip. Hosted
+matrix execution and mock adapters for the other connectors remain pending.
+
+The real `log-triage` run `run-0d59d743-21c2-48d4-8fe2-309d6ad4446a`
+passed on the unchanged common Quickstart image, using the selected external
+package and updated shared device-policy image. Noise produced no workflow;
+two matching errors reached the configured model agent and Control independently
+confirmed its result. Checks, failed first attempt, source digest and deployment
+limits are in the [workflow checkpoint](workflow-v1-status.md#managed-log-triage-and-log-device-policy--2026-11-16).
+
+Independent M7 work starts from main `f269293b` on
+`feature/triggers-m07-push-file-watching` in the adjacent worktree. Local commit
+`28f965b1` adds exact bounded Java `SnapshotState` with eight tests; SDK runtime,
+processor and harness suites pass (198 tests, no skips). It is not pushed as a
+completed module. Emitter/lifecycle, native subscriptions/version keys, rescan
+integration and owned scenario acceptance remain pending. This package adds no
+M7/M8 or existing-module credit. **Overall earned progress remains 27%**;
+no denominator or package-weight changes are made. All other catalog connector
+families and Quartz scheduling remain unimplemented.
+
+## Generic watch adoption and source catalog — 2026-11-16
+
+The sample package is now `examples.hotfolder-watch/new-file`; old references
+below are historical evidence, not runtime aliases. [ADR 066](../adr/066-generic-trigger-package-adoption.md)
+and the [source catalog](trigger-package-catalog.md) require descriptor-driven
+package/profile adoption. The WorkflowStack source contract no longer fixes the
+watch identity, version, configuration or event filter. Exact locally supplied
+packages are explicitly operator-pinned bootstrap inputs; Control still validates
+packages/descriptors and signs client releases. No publisher or executor
+qualification is inferred from a hash or structural profile.
+
+Two real external `acceptance.signal-watch` runs dispatch `/body` to a configured
+non-file workflow/model agent using unchanged common images and no folder agent.
+Fresh renamed-watch triage and two-agent summary/archive runs also pass. Actual
+run IDs, source digest, component checks, corrected failed attempts and full-gate
+limits are in the matching [workflow checkpoint](workflow-v1-status.md#generic-package-adoption-and-fresh-stack--2026-11-16).
+The runtime is still client POLL; this is not M7/M8, authenticated webhook ingress,
+queue/provider adapters or Quartz scheduling. The existing module table and
+**27% earned** are unchanged. Those modules retain their original Done-when gates
+and branch/PR requirements; native mutation finality is not accepted here.
+
+## Packaged image deployment integration — 2026-11-15
+
+The common published-image build now seals inbox-watch/HotFolder artifacts at
+image-build time; deployment selects the profile and provisions the current
+signed trigger interfaces without a per-configuration package/image build.
+Fresh triage and portable two-agent summary runs passed through existing durable
+admission, with actual checks/limits in the
+[workflow checkpoint](workflow-v1-status.md#packaged-deployment-exposed-console-and-credential-folders--2026-11-15).
+This changes no trigger interface/module scope and earns no additional M12 or
+merged-module weight. Overall earned progress remains **27%**.
+
+## Selectable workflow integration — 2026-11-15
+
+The local [WorkflowStack deployment](../../deploy/compose/WorkflowStack/README.md)
+reuses the existing signed `inbox-watch` assignment, authenticated subscription
+stream, durable dispatch admission and listener cursor/ack rules. The selected
+configuration supplies the published workflow binding. Issue triage and the
+two-agent text-summary/archive use cases use the same listener/worker code.
+Actual runs, source checkpoint, tested gates and platform limitations are in the
+[workflow status](workflow-v1-status.md#selectable-workflowstack-deployment--2026-11-15).
+The folder adapter's projection/archive is explicitly trusted operator delivery;
+it does not qualify native mutation finality. No trigger interface or module
+baseline is changed, and no additional M12/merged module credit is claimed.
+Overall earned progress remains **27%**; full owned scenario and hosted merge
+verification remain outstanding.
+
 ## Device-scoped trigger management
 
 The console discovers client trigger exports from packages assigned to the
@@ -146,6 +256,14 @@ evidence. No module weight or baseline denominator changes; earned progress stay
 - A slice or gate is ✅ only when its own evidence has run, not because its modules are merged.
 
 ## Baseline changes
+
+2026-11-16: the requested provider/source families are recorded in a separate
+unweighted catalog. This is an explicit product-backlog extension, with no change
+to the preserved 100-point module denominator or earned weights. Future package
+scope/weights must be amended explicitly; they are not silently counted inside
+previously merged modules. The current change renames the M2 sample and repairs
+workflow deployment adoption, without accepting another module.
+
 
 The baseline is plan revision 12, section 24.2. Module weights are unchanged; the scope moves below are recorded with
 their reasons.
