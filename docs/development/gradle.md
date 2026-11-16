@@ -32,6 +32,19 @@ Pinned Gradle:
 ./gradlew :contracts-java:publishToMavenLocal
 ```
 
+Sonar analysis is an explicit invocation:
+
+```bash
+./gradlew --no-configuration-cache sonar
+```
+
+Only that task loads the pinned analysis plugin and its configuration from
+`gradle/sonar.gradle.kts`. Normal SDK publication, builds and runtime smoke
+fixtures do not resolve the Sonar plugin. The analysis workflow still runs
+the same task and controls the required quality gate; plugin or analysis
+failures remain failures when analysis is requested. Use `sonar --dry-run`
+to inspect task configuration without submitting an analysis.
+
 ## Workspace Contracts
 
 Default:

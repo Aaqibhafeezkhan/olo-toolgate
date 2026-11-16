@@ -1,6 +1,45 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## CI prerequisite repairs — 2026-11-16
+
+Run `43866210753`, Gateway job `133325695639`, built the production Gateway
+image on `7580fcfd` successfully, then failed preparing its Java SDK fixture:
+the pinned Sonar Gradle plugin could not be resolved. The pin exists in the
+official plugin repository; no invalid-version or Gateway-runtime defect was
+inferred. The analysis plugin and its unchanged properties are now loaded from
+`gradle/sonar.gradle.kts` only for an explicit `sonar` task. Ordinary SDK/runtime
+fixture builds no longer resolve that analysis dependency. The quality workflow
+still invokes the same analysis task and required gate; no failure is ignored.
+
+Run `43874977529`, preflight job `133330989808`, failed three existing checks
+on `2c2f9852`: the new SDK job did not persist its Rust homes/path, the final
+foundation gate omitted that job from its explicit dependencies, and the
+package matrix job did not materialize version metadata. All three workflow
+definitions are corrected, preserving the tests and full dependency gate.
+
+Executed verification on these repairs: 32 focused Rust-installation/unified-CI/
+version checks passed; the complete Linux CI suite passed (**461 total, 18
+skipped, no failures or errors**), after giving its temporary `.dev` custody a
+writable tmpfs (the first read-only container run had two environment errors).
+Actionlint passed. Ordinary root `buildEnvironment` reports no classpath
+dependencies; SDK publication passed with an init fixture refusing Sonar plugin
+marker requests. An initial init-fixture closure binding error was corrected
+before that successful run. Explicit `sonar --dry-run` still configured the
+analysis task and project resolvers successfully; no actual authenticated Sonar
+analysis or green hosted Gateway smoke is claimed by a dry run. Full image/
+repository/Java gates were not repeated locally for this build-tooling repair.
+Hosted rerun evidence remains pending; the external Sonar automatic-analysis
+configuration limitation remains separate.
+
+Known tested base is `2c2f98520b80943eb502a79a867a53df6e762aca`.
+The three changed non-Markdown source files have normalized manifest digest
+`bf4c3231f32c3484840d1d4c5635c88e5c194e416224d01aa10e938d16526411`
+(sorted path + NUL + per-file SHA-256 + newline, CRLF normalized to LF).
+No workflow phase earns weight, no trigger module completes, and the **0/100**
+workflow / **27%** trigger earned baselines are unchanged. Webhook PUSH still
+requires the shared M7/M8 implementation and its own acceptance.
+
 ## Managed-log triage and .log device policy — 2026-11-16
 
 The `log-triage` profile selects external package

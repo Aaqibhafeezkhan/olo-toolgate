@@ -5,6 +5,21 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Package CI prerequisite repairs — 2026-11-16
+
+The two reported hosted failures were diagnosed: Gateway image construction
+passed but SDK fixture preparation could not resolve the unrelated Sonar plugin;
+the following run's preflight caught three omissions in the new package stage
+(Rust environment persistence, explicit SDK gate dependency and matrix version
+materialization). The analysis dependency is isolated to explicit analysis and
+the workflow omissions are fixed without weakening existing assertions. Full
+Linux CI regression discovery passes (461 tests, 18 environment skips), as do
+32 focused checks, actionlint, ordinary SDK publication and explicit analysis
+task configuration. Actual failures, verification scope and remaining hosted
+limits are recorded in the [workflow checkpoint](workflow-v1-status.md#ci-prerequisite-repairs--2026-11-16).
+This build-tooling repair changes no trigger protocol or module scope; earned
+progress stays **27%**. M7/M8 and webhook PUSH remain unfinished.
+
 ## Managed log package and shared PUSH work — 2026-11-16
 
 The unweighted catalog now has a working bounded client POLL
