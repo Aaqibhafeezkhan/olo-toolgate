@@ -1,6 +1,37 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Generic ToolGate runtime — execution and trigger foundations
 
+For the complete selectable local deployment, use
+[`WorkflowStack`](../../deploy/compose/WorkflowStack/README.md). Its configurations include
+issue triage and a two-agent text-summary/archive use case. Full roadmap
+acceptance remains separate from these bounded local executions.
+
+An optional pinned `agentStages` array selects fixed ordered execution instead
+of model-directed supervisor routing. Each entry selects a declared agent and
+`CONTEXT` or `MODEL` result mode. Context stages return only successful configured
+context reads without inference; model stages run the configured agent loop.
+Each stage rechecks current eligibility and step authority. The admitted message
+feeds the first stage, completed results feed subsequent stages, and the last
+result completes the workflow. Model responses cannot skip these stages. The
+current lease wire format explicitly includes `agentStages` (empty for routing);
+obsolete snapshots without that field are rejected.
+
+An agent with configured context reads can return `{"kind":"finish_context"}`
+to finish with those confirmed tool values and the admitted source path. The
+supervisor can delegate using
+`{"kind":"delegate","agentId":"target","inputFromAgent":"completed-source"}`.
+The fixed runner copies that completed result within the same run after checking
+candidate eligibility; foreign/unfinished references fail closed. No adapter
+credential enters the transferred context. This permits full file handoff within
+the inference response budget. Every tool/model request retains current server
+authorization; references do not grant another agent's tools.
+
+Gateway requests JSON-schema-constrained decisions using the canonical
+`workflow-decision.schema.json` contract and independently validates the returned
+JSON. The approved model backend must support the `json_schema` response format.
+These syntax constraints do not authorize a delegation or tool call; current
+profile eligibility and server grants still decide each step.
+
 This package runs one fixed LangGraph supervisor/agent loop against a supplied
 `ToolGate` adapter. Workflows, agent IDs, explicit models, prompts, context tools,
 eligibility, remediation mode and execution limits come from a leased snapshot.
@@ -38,7 +69,7 @@ tools, server authorization or workflow publication.
 
 `Runner(adapter).execute(lease)` accepts a server-admitted `RunLease`, never a
 caller-authored profile or self-selected identity. This internal Python snapshot
-is not a new profile format or a published wire contract. The future transport
+is not a new profile format or a published wire contract. The transport
 must decode the canonical server contract, cap input/response bytes, verify TLS,
 use configured infrastructure endpoints, and enforce deadlines without redirects,
 credential logging or automatic retries. Prompts and results are sensitive.
@@ -179,9 +210,9 @@ that authoritative lookup.
 Control now implements the admission endpoint. A server's 404/401/503,
 a timeout, or any non-durable/mismatched receipt stops the connection
 without ACK. There is no local admission ledger, fake production success or
-fallback workflow. Registration plus an uploaded profile is not yet enough for
-end-to-end execution: complete V1.1 provisioning/readiness and V1.2 admission/run/lease/model transport
-remain required. Once available, admitted work belongs to Control's run queue;
+fallback workflow. Registration plus an uploaded profile is not enough for
+execution: the profile must be reviewed, dependency-ready and published, and the
+workload worker and approved model transport must be running. Admitted work belongs to Control's run queue;
 the listener never fabricates a RunLease or executes an event as Python code.
 
 Processing is serial: commit evidence first, ACK second, credit third. Any error

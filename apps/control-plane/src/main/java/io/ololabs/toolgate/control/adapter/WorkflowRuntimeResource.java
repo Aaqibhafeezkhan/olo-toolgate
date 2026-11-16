@@ -51,12 +51,13 @@ public class WorkflowRuntimeResource {
     @POST @Path("runs/{runId}/finish") @Consumes("application/json") @RolesAllowed(ROLE)
     public Response finish(@PathParam("runId") String runId, String document) {
         var worker = worker();
-        if (document == null || document.length() > 1024) throw Failure.validation();
-        if (!(codec.value(document) instanceof JsonNode value) || !value.isObject() || value.size() != 3
-                || !value.path("leaseId").isTextual() || !value.path("leaseToken").isTextual() || !value.path("state").isTextual())
+        if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 49152) throw Failure.validation();
+        if (!(codec.value(document) instanceof JsonNode value) || !value.isObject() || value.size() != 5
+                || !value.path("leaseId").isTextual() || !value.path("leaseToken").isTextual() || !value.path("state").isTextual()
+                || !value.has("result") || !value.has("code") || !(value.get("code").isNull() || value.get("code").isTextual()))
             throw Failure.validation();
         return reply(leases(worker).finish(worker, runId, value.path("leaseId").textValue(), value.path("leaseToken").textValue(),
-            value.path("state").textValue(), correlation.id()));
+            value.path("state").textValue(), value.get("result"), value.get("code").textValue(), correlation.id()));
     }
 
     @POST @Path("runs/{runId}/steps:authorize") @Consumes("application/json") @RolesAllowed(ROLE)
@@ -86,7 +87,7 @@ public class WorkflowRuntimeResource {
             var model = selection.resolve(tx, gateway.tenant(), runId, value.path("stepToken").textValue());
             var credential = new VaultService(store, codec, vault).workflowModelCredential(gateway.tenant(), tx, model);
             return new Store.Reply(200, codec.json(java.util.Map.of("origin", model.origin(), "modelId", model.modelId(),
-                "credential", credential)), 0);
+                "credential", credential, "generation", model.generation())), 0);
         }));
     }
 

@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """Worker observations cannot substitute a terminal status for actual adapter calls."""
 import json
+import os
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from toolgate_runtime.runner import Denied, StepGrant, ToolOutcome
-from toolgate_runtime.worker import ExecutionEvidence
+from toolgate_runtime.runner import Denied, RunOutcome, StepGrant, ToolOutcome
+from toolgate_runtime.worker import ExecutionEvidence, log_result
 
 
 class ExecutionEvidenceTests(unittest.TestCase):
@@ -48,3 +52,18 @@ class ExecutionEvidenceTests(unittest.TestCase):
         self.adapter.infer.return_value = {'kind': 'finish', 'result': {}}
         self.evidence.infer(None, self.grant)
         self.assertEqual({'inferences': [], 'tools': []}, ExecutionEvidence(self.adapter).summary())
+
+    def test_explicit_result_logging_is_private_and_never_overwrites_a_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder) / 'results'
+            lease = SimpleNamespace(run_id='run-1', workflow_id='triage')
+            log_result(directory, lease, RunOutcome('SUCCEEDED', {'issueId': 'issue-123'}))
+            path = directory / 'run-1.json'
+            self.assertEqual({'issueId': 'issue-123'}, json.loads(path.read_text())['result'])
+            if os.name != 'nt':
+                self.assertEqual(0o600, path.stat().st_mode & 0o777)
+            with self.assertRaises(FileExistsError):
+                log_result(directory, lease, RunOutcome('FAILED'))
+            self.assertEqual('SUCCEEDED', json.loads(path.read_text())['state'])
+            with self.assertRaises(ValueError):
+                log_result(directory, SimpleNamespace(run_id='../outside', workflow_id='triage'), RunOutcome('FAILED'))

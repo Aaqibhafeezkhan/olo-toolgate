@@ -15,6 +15,8 @@ package io.ololabs.toolgate.contracts.v2;
  * @param resultSchema canonical resultSchema value
  * @param limits canonical limits value
  * @param agents canonical agents value
+ * @param agentStages canonical agentStages value
+ * @param deployment canonical deployment value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record WorkflowDefinition(
@@ -27,7 +29,9 @@ public record WorkflowDefinition(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "parameterSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> parameterSchema,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "resultSchema", required = true) java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> resultSchema,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "limits", required = true) WorkflowExecutionLimits limits,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "agents", required = true) java.util.List<WorkflowAgentBinding> agents
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "agents", required = true) java.util.List<WorkflowAgentBinding> agents,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "agentStages", required = false) java.util.List<WorkflowAgentStage> agentStages,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deployment", required = false) WorkflowStackDeployment deployment
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -41,6 +45,8 @@ public record WorkflowDefinition(
      * @param resultSchema canonical resultSchema value
      * @param limits canonical limits value
      * @param agents canonical agents value
+     * @param agentStages canonical agentStages value
+     * @param deployment canonical deployment value
      */
     public WorkflowDefinition {
         java.util.Objects.requireNonNull(id, "id");
@@ -57,5 +63,6 @@ public record WorkflowDefinition(
         java.util.Objects.requireNonNull(limits, "limits");
         java.util.Objects.requireNonNull(agents, "agents");
         agents = agents == null ? null : java.util.List.copyOf(agents);
+        agentStages = agentStages == null ? null : java.util.List.copyOf(agentStages);
     }
 }

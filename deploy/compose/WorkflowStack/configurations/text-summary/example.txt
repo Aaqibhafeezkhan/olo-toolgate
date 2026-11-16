@@ -1,0 +1,2 @@
+Project update: The checkout reliability team increased the database connection pool and reduced payment timeouts.
+The change is in staging. Production rollout is planned after load testing and an error-rate review.

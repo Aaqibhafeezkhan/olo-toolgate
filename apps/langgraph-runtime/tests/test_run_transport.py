@@ -3,10 +3,11 @@
 import json
 from email.message import Message
 from io import BytesIO
+from urllib.error import HTTPError
 import unittest
 
 from toolgate_runtime.run_transport import ControlRuns, GatewayRuntime, RunTransportError
-from toolgate_runtime.runner import Candidate, RunOutcome, StepGrant
+from toolgate_runtime.runner import Candidate, Denied, RunOutcome, StepGrant
 
 
 class Response(BytesIO):
@@ -18,6 +19,20 @@ class Response(BytesIO):
 
 
 class RunTransportTests(unittest.TestCase):
+    def test_model_only_agents_get_no_tools_and_calls_still_refuse(self):
+        self.responses.append(Response(200, self.snapshot))
+        lease = self.control.claim()
+        gateway = GatewayRuntime('https://gateway.example')
+        grant = StepGrant('run-1', 'lease-1', 'AGENT', 'summary-agent', 'models', 'y' * 43)
+        def refused(request, timeout):
+            raise HTTPError(request.full_url, 403, 'Forbidden', {}, BytesIO(b'private response'))
+        gateway._opener = type('Opener', (), {'open': staticmethod(refused)})()
+        self.assertEqual((), gateway.discover_tools(lease, grant, timeout_seconds=4))
+        with self.assertRaises(Denied):
+            gateway.call_tool(lease, grant, 'files/write', {}, timeout_seconds=4)
+        with self.assertRaises(Denied):
+            gateway.infer(lease, grant, system_prompt='Summary', messages=[], tools=(), candidates=(), timeout_seconds=4)
+
     def setUp(self):
         self.control = ControlRuns("https://control.example", lambda: "workload.credential")
         self.control._opener = self
@@ -25,7 +40,7 @@ class RunTransportTests(unittest.TestCase):
         self.snapshot = {
             "runId": "run-1", "leaseId": "lease-1", "workflowId": "workflow-1", "workflowVersionId": "v1",
             "profileDigest": "sha256:" + "1" * 64, "leaseToken": "x" * 43, "message": "test",
-            "supervisorPrompt": "Delegate", "supervisorModelGroupId": "models", "contextSources": [],
+            "supervisorPrompt": "Delegate", "supervisorModelGroupId": "models", "contextSources": [], "agentStages": [],
             "limits": {"maxSteps": 4, "maxHandoffs": 1, "maxDurationSeconds": 20},
             "agents": [{"agentId": "agent-1", "modelGroupId": "models", "systemPrompt": "Handle",
                         "contextSources": [], "entryEligible": True, "delegationAllowed": True}],
@@ -46,13 +61,28 @@ class RunTransportTests(unittest.TestCase):
         self.assertEqual([
             ("https://control.example/internal/v1/runtime/claim", "Bearer workload.credential", {}, 10),
             ("https://control.example/internal/v1/runtime/runs/run-1/finish", "Bearer workload.credential",
-             {"leaseId": "lease-1", "leaseToken": "x" * 43, "state": "SUCCEEDED"}, 5),
+             {"leaseId": "lease-1", "leaseToken": "x" * 43, "state": "SUCCEEDED", "result": None, "code": None}, 5),
         ], self.requests)
 
     def test_empty_queue_and_unexpected_snapshot(self):
         self.responses.extend([Response(204, None), Response(200, dict(self.snapshot, modelOrigin="https://model.example"))])
         self.assertIsNone(self.control.claim())
         with self.assertRaisesRegex(RunTransportError, "Invalid Control run snapshot"):
+            self.control.claim()
+
+    def test_pinned_stages_are_parsed_and_obsolete_or_extended_snapshots_refused(self):
+        self.snapshot['agentStages'] = [{'agentId':'agent-1','resultMode':'MODEL'}]
+        self.responses.append(Response(200,self.snapshot))
+        lease = self.control.claim()
+        self.assertEqual(('agent-1','MODEL'),(lease.agent_stages[0].agent_id,lease.agent_stages[0].result_mode))
+        obsolete = dict(self.snapshot)
+        obsolete.pop('agentStages')
+        self.responses.append(Response(200,obsolete))
+        with self.assertRaisesRegex(RunTransportError,'Invalid Control run snapshot'):
+            self.control.claim()
+        extended = dict(self.snapshot,agentStages=[{'agentId':'agent-1','resultMode':'MODEL','code':'untrusted'}])
+        self.responses.append(Response(200,extended))
+        with self.assertRaisesRegex(RunTransportError,'Invalid Control run snapshot'):
             self.control.claim()
 
     def test_step_authorization_is_bound_to_the_claimed_run(self):

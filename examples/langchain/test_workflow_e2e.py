@@ -16,7 +16,7 @@ class WorkflowAcceptanceTests(unittest.TestCase):
                            {'subjectKind': 'WORKFLOW', 'subjectId': fixture.WORKFLOW},
                            {'subjectKind': 'AGENT', 'subjectId': fixture.AGENT}],
                            'tools': [{'subjectKind': 'AGENT', 'subjectId': fixture.AGENT,
-                                      'toolId': 'examples.hotfolder/list', 'state': 'SUCCEEDED'}]}}
+                                      'toolId': 'examples.hotfolder/read_text', 'state': 'SUCCEEDED'}]}}
 
     def test_accepts_configured_agent_and_confirmed_tool(self):
         fixture.verify_execution(self.result, 'run-1')

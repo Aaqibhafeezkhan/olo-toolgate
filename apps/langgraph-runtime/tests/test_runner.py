@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from langsmith.run_helpers import get_tracing_context
-from toolgate_runtime.runner import (Agent, Candidate, CompletionAck, CompletionUnconfirmed, ContextSource, Denied, Limits,
+from toolgate_runtime.runner import (Agent, AgentStage, Candidate, CompletionAck, CompletionUnconfirmed, ContextSource, Denied, Limits,
     OwnershipLost, RunLease, Runner, StepGrant, Tool, ToolOutcome)
 
 
@@ -89,6 +89,106 @@ class Gate:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_fixed_stages_cannot_be_skipped_by_a_supervisor_finish(self):
+        run = replace(lease(), agent_stages=(AgentStage('support-investigator', 'CONTEXT'), AgentStage('support-fixer', 'MODEL')))
+        gate = Gate(run)
+        gate.decisions[run.workflow_id] = deque([{'kind': 'finish', 'result': 'bypass'}])
+        gate.decisions['support-fixer'] = deque([{'kind': 'finish', 'result': {'summary': 'Verified summary'}}])
+        text = 'Full original content. ' * 600
+        gate.tool_outcome = ToolOutcome('SUCCEEDED', {'text': text})
+        outcome = Runner(gate).execute(run)
+        self.assertEqual(('SUCCEEDED', {'summary': 'Verified summary'}), (outcome.state, outcome.result))
+        self.assertEqual(['support-fixer'], [item[0] for item in gate.inferences])
+        self.assertEqual([('support-investigator', 'support/context', {'source': 'support'})], gate.calls)
+        received = gate.inferences[0][3][0]['content']
+        self.assertEqual(text, received['context'][0]['content']['text'])
+        self.assertEqual(run.message, received['sourcePath'])
+        self.assertEqual(1, len(gate.decisions[run.workflow_id]))
+
+    def test_fixed_stages_recheck_current_candidate_before_the_next_agent(self):
+        run = replace(lease(), agent_stages=(AgentStage('support-investigator', 'CONTEXT'), AgentStage('support-fixer', 'MODEL')))
+        gate = Gate(run)
+        original = gate.call_tool
+        def revoke(*args, **kwargs):
+            result = original(*args, **kwargs)
+            gate.agent_catalog = (Candidate('support-investigator'),)
+            return result
+        gate.call_tool = revoke
+        outcome = Runner(gate).execute(run)
+        self.assertEqual(('FAILED', 'AGENT_NOT_AVAILABLE'), (outcome.state, outcome.code))
+        self.assertEqual([], gate.inferences)
+
+    def test_fixed_stages_refuse_foreign_repeated_ineligible_and_contextless_agents(self):
+        for stages in [(AgentStage('foreign', 'MODEL'),),
+                       (AgentStage('support-investigator', 'CONTEXT'), AgentStage('support-investigator', 'MODEL')),
+                       (AgentStage('support-fixer', 'CONTEXT'),),
+                       (AgentStage('support-investigator', 'EXECUTE'),)]:
+            run = replace(lease(), agent_stages=stages)
+            gate = Gate(run)
+            outcome = Runner(gate).execute(run)
+            self.assertEqual(('FAILED', 'INVALID_STAGES'), (outcome.state, outcome.code))
+            self.assertEqual([], gate.authorizations)
+
+    def test_completed_context_handoff_preserves_full_text_without_model_copying(self):
+        run = lease(mode='PREPARE')
+        gate = Gate(run)
+        text = 'Full original file text. ' * 500
+        gate.tool_outcome = ToolOutcome('SUCCEEDED', {'exists': True, 'text': text})
+        gate.decisions[run.workflow_id] = deque([
+            {'kind': 'delegate', 'agentId': 'support-investigator', 'input': 'Read'},
+            {'kind': 'delegate', 'agentId': 'support-fixer', 'inputFromAgent': 'support-investigator'},
+            {'kind': 'finish', 'result': {'summary': 'Summary generated'}}])
+        gate.decisions['support-investigator'] = deque([{'kind': 'finish_context'}])
+        gate.decisions['support-fixer'] = deque([{'kind': 'finish', 'result': 'Summary generated'}])
+        outcome = Runner(gate).execute(run)
+        self.assertEqual('SUCCEEDED', outcome.state)
+        received = next(item[3][0]['content'] for item in gate.inferences if item[0] == 'support-fixer')
+        self.assertEqual(run.message, received['sourcePath'])
+        self.assertEqual(text, received['context'][0]['content']['text'])
+        self.assertNotIn('secret-step-token', str(received))
+        self.assertEqual(1, len(gate.calls))
+
+    def test_context_references_cannot_select_a_foreign_or_unfinished_agent(self):
+        for source in ('other-agent', 'support-investigator'):
+            run = lease()
+            gate = Gate(run)
+            gate.decisions[run.workflow_id] = deque([
+                {'kind': 'delegate', 'agentId': 'support-fixer', 'inputFromAgent': source}])
+            outcome = Runner(gate).execute(run)
+            self.assertEqual(('FAILED', 'CONTEXT_NOT_AVAILABLE'), (outcome.state, outcome.code))
+            self.assertEqual([], gate.calls)
+        run = lease()
+        gate = Gate(run)
+        gate.decisions[run.workflow_id] = deque([{'kind': 'delegate', 'agentId': 'support-fixer', 'input': 'No context'}])
+        gate.decisions['support-fixer'] = deque([{'kind': 'finish_context'}])
+        self.assertEqual('CONTEXT_NOT_AVAILABLE', Runner(gate).execute(run).code)
+
+    def test_context_bindings_use_the_pinned_message_before_agent_inference(self):
+        run = lease(mode='PREPARE')
+        source = ContextSource('support/context', {}, {'path': '/message'})
+        run = replace(run, message='inbox/issue-123.txt', agents=(replace(run.agents[0], context_sources=(source,)),))
+        gate = Gate(run)
+        gate.decisions['support'] = deque([
+            {'kind': 'delegate', 'agentId': 'support-investigator', 'input': 'untrusted model-selected path'},
+            {'kind': 'finish', 'result': {'issueId': '123'}}])
+        gate.decisions['support-investigator'] = deque([{'kind': 'finish', 'result': {'issueId': '123'}}])
+        outcome = Runner(gate).execute(run)
+        self.assertEqual('SUCCEEDED', outcome.state)
+        self.assertEqual([('support-investigator', 'support/context', {'path': 'inbox/issue-123.txt'})], gate.calls)
+        agent_inference = next(item for item in gate.inferences if item[0] == 'support-investigator')
+        self.assertTrue(any(message['role'] == 'tool' for message in agent_inference[3]))
+        self.assertEqual({}, source.arguments)
+
+    def test_context_bindings_reject_secret_paths_and_static_argument_collisions(self):
+        for source in (ContextSource('support/context', {}, {'path': '/secrets/key'}),
+                       ContextSource('support/context', {'path': 'other'}, {'path': '/message'})):
+            run = lease()
+            run = replace(run, agents=(replace(run.agents[0], context_sources=(source,)),))
+            result, gate = self.execute(run)
+            self.assertEqual('INVALID_CONTEXT', result.code)
+            self.assertEqual([], gate.calls)
+            self.assertEqual([], gate.authorizations)
+
     def execute(self, run=None, customize=None, **kwargs):
         run = run or lease()
         gate = Gate(run)

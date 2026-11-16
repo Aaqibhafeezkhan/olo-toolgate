@@ -40,7 +40,8 @@ class ContractsV2Tests(unittest.TestCase):
         return Draft202012Validator({'$ref': self.owner[name]+'#/$defs/'+name}, registry=self.registry)
 
     def test_schema_files_are_valid_versioned_and_licensed(self):
-        self.assertEqual(19, len(self.schemas))
+        self.assertEqual(20, len(self.schemas))
+        self.assertIn('workflow-decision.schema.json', self.schemas)
         names = []
         for filename, schema in self.schemas.items():
             Draft202012Validator.check_schema(schema)

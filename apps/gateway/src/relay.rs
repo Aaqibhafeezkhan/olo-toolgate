@@ -24,6 +24,7 @@ pub struct WorkflowModel {
     pub origin: String,
     pub model_id: String,
     pub credential: String,
+    pub generation: olo_toolgate_contracts::v2::WorkflowModelGeneration,
 }
 
 #[derive(Deserialize)]

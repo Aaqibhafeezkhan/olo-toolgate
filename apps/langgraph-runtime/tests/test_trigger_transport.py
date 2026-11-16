@@ -238,6 +238,22 @@ class WireTests(unittest.TestCase):
 
 
 class ListenerTests(unittest.TestCase):
+    def test_mounted_credential_is_reread_after_rotation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            token = Path(directory) / 'listener.token'
+            token.write_text('first-token', encoding='ascii')
+            def listen(control, subscription):
+                self.assertEqual(control._token(), 'first-token')
+                token.write_text('second-token', encoding='ascii')
+                self.assertEqual(control._token(), 'second-token')
+                return 0, None
+            with patch('toolgate_runtime.trigger_listener.TriggerListener') as listener, \
+                 patch('sys.stdout', new_callable=io.StringIO):
+                listener.side_effect = lambda control, subscription: type('Listener', (), {
+                    'listen_once': lambda self, **kwargs: listen(control, subscription)})()
+                self.assertEqual(main(['--control-origin', 'https://localhost', '--subscription', SUB.name,
+                    '--subscription-uid', SUB.uid, '--token-file', str(token)]), 0)
+
     def test_uid_is_checked_before_ticket_or_connection(self):
         class Recreated:
             timeout = 1

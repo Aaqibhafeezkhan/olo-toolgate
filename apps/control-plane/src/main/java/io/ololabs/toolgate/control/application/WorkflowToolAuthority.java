@@ -29,18 +29,19 @@ public final class WorkflowToolAuthority {
     public ToolContext resolve(Store.Session tx, Ids.TenantId tenant, String runId, String token, String toolId, String requestId) {
         var runtime = selection.context(tx, tenant, runId, token);
         var run = runtime.run();
+        String agentId = runtime.step().subjectId();
         if (!runtime.step().kind().equals("AGENT")) throw ManagementAccess.denied();
         var directory = tx.load();
         long now = clock.millis();
         var bindings = directory.entries().values().stream()
             .filter(entry -> entry.id().kind() == Ids.Kind.WORKLOAD_BINDING && entry.enabled())
             .map(entry -> codec.model(entry.document(), ControlWorkloadBinding.class))
-            .filter(binding -> binding.agentId().equals(run.serviceAgentId()) && binding.mode() == RequestMode.SERVICE
+            .filter(binding -> binding.agentId().equals(agentId) && binding.mode() == RequestMode.SERVICE
                 && binding.parentBindingId() == null && !Boolean.TRUE.equals(binding.needsReauthorization())
                 && binding.expiresAtUnixMs() > now).toList();
         if (bindings.size() != 1) throw ManagementAccess.denied();
         var binding = bindings.getFirst();
-        var execution = DirectoryService.executionBinding(codec, directory, run.serviceAgentId());
+        var execution = DirectoryService.executionBinding(codec, directory, agentId);
         if (execution == null) throw ManagementAccess.denied();
         long expires = Math.min(binding.expiresAtUnixMs(), tx.workflowRuns().activeLease(runId).expiresAt());
         boolean readOnly = toolId != null && readOnly(tx, toolId);
@@ -49,7 +50,7 @@ public final class WorkflowToolAuthority {
             .filter(entry -> entry.id().kind() == Ids.Kind.TOOL && entry.enabled()).map(entry -> entry.id().value())
             .sorted().limit(256).filter(id -> readOnly(tx, id)).limit(64).toList();
         return new ToolContext(new RequestContext(requestId, tenant.value(), RequestMode.SERVICE, CredentialKind.STATIC_TOKEN,
-            null, null, run.serviceAgentId(), binding.id(), List.of(), null, binding.credentialEpoch(), null, expires,
+            null, null, agentId, binding.id(), List.of(), null, binding.credentialEpoch(), null, expires,
             execution, binding.credentialSha256()), expires, readOnlyTools);
     }
 

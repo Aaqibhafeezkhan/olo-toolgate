@@ -58,6 +58,16 @@ impl Contracts {
                     .map_err(|_| "invalid contract references")?,
             );
         }
+        validators.insert(
+            "WorkflowModelDecision",
+            jsonschema::options()
+                .with_registry(&registry)
+                .build(
+                    &json!({"$schema":"https://json-schema.org/draft/2020-12/schema",
+                "$ref":"https://schemas.ololabs.io/toolgate/v2/workflow-decision.schema.json"}),
+                )
+                .map_err(|_| "invalid workflow decision schema")?,
+        );
         Ok(Self { validators })
     }
 
@@ -135,6 +145,38 @@ pub fn strict_json(bytes: &[u8]) -> Result<Value, serde_json::Error> {
 
 #[cfg(test)]
 mod revocation_tests {
+    #[test]
+    fn workflow_decisions_are_closed_and_context_sources_are_exclusive() {
+        let contracts = super::Contracts::new().unwrap();
+        for decision in [
+            serde_json::json!({"kind":"finish","result":null}),
+            serde_json::json!({"kind":"finish_context"}),
+            serde_json::json!({"kind":"delegate","agentId":"summary","input":"text"}),
+            serde_json::json!({"kind":"delegate","agentId":"summary","inputFromAgent":"reader"}),
+            serde_json::json!({"kind":"tool","toolId":"read","arguments":{"path":"inbox/a.txt"}}),
+        ] {
+            assert!(
+                contracts.valid("WorkflowModelDecision", &decision),
+                "{decision}"
+            );
+            let mut extra = decision;
+            extra["untrustedExtra"] = true.into();
+            assert!(!contracts.valid("WorkflowModelDecision", &extra));
+        }
+        for decision in [
+            serde_json::json!({"kind":"delegate","agentId":"summary","input":"text","inputFromAgent":"reader"}),
+            serde_json::json!({"kind":"delegate","agentId":"summary"}),
+            serde_json::json!({"kind":"finish"}),
+            serde_json::json!({"kind":"unknown"}),
+            serde_json::json!({"kind":"tool","toolId":"read","arguments":[]}),
+        ] {
+            assert!(
+                !contracts.valid("WorkflowModelDecision", &decision),
+                "{decision}"
+            );
+        }
+    }
+
     #[test]
     fn current_signed_delivery_models_have_closed_offline_validators() {
         let contracts = super::Contracts::new().unwrap();

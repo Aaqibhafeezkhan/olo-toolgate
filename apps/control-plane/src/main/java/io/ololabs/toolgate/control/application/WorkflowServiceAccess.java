@@ -32,6 +32,14 @@ final class WorkflowServiceAccess {
         require(scopes(directory, groupId, now), action, locator);
     }
 
+    io.ololabs.toolgate.contracts.v2.WorkflowAgentBinding agent(Directory directory,
+            io.ololabs.toolgate.contracts.v2.WorkflowDefinition workflow, String agentId, long now) {
+        var binding = workflow.agents().stream().filter(item -> item.agentId().equals(agentId)
+            && (item.entryEligible() || item.delegationAllowed())).findFirst().orElseThrow(ManagementAccess::denied);
+        require(directory, agentId, binding.agentGroupId(), workflow, now);
+        return binding;
+    }
+
     private java.util.List<EnterpriseScope> scopes(Directory directory, String groupId, long now) {
         var group = directory.entries().get(Kind.AGENT_GROUP.id(groupId));
         if (group == null || !group.enabled()) throw ManagementAccess.denied();

@@ -111,18 +111,20 @@ class Configuration(shared.Configuration):
             filename = 'bootstrap-password' + ('' if username == 'admin' else '-' + username)
             initial = docker('quickstart', ['/opt/quickstart-python/bin/python', '-c',
                 'from pathlib import Path; p=Path("/data/' + filename + '"); print(p.read_text().strip() if p.exists() else "")'])
-            path = STATE / 'console-passwords.json'
-            saved = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+            directory = STATE / 'credentials' / username
+            path = directory / 'password.txt'
             if initial:
                 password = secrets.token_urlsafe(32)
-                saved[username] = password
-                shared.private_file(path, json.dumps(saved))
+                shared.private_file(directory/'username.txt', username+'\n')
+                shared.private_file(path, password+'\n')
                 replacement = password
                 password = initial
-            elif username in saved:
-                password = saved[username]
+            elif path.is_file():
+                if (directory/'username.txt').read_text(encoding='utf-8').strip()!=username:
+                    raise ValueError('Stored console credential identity does not match')
+                password = path.read_text(encoding='utf-8').strip()
             elif not password:
-                raise ValueError('Installation password already changed; provide the existing credential in .env')
+                raise ValueError('Installation password already changed; supply the existing username.txt/password.txt in '+str(directory))
         super().login(key, username, password, replacement)
 
 

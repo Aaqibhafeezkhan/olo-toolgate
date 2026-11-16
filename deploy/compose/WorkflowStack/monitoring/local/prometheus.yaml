@@ -1,0 +1,9 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+scrape_configs:
+  - job_name: toolgate-insights
+    static_configs:
+      - targets: [insights-collector:8889]

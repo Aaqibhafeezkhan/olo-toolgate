@@ -153,7 +153,8 @@ public final class ClientReleases {
             var example = examples.get(toolId.substring(toolId.indexOf('/') + 1));
             tests.addObject().put("toolId", toolId).<ObjectNode>set("arguments", example[0]).set("expectedOutput", example[1]);
             var effect = JSON.objectNode().put("toolId", toolId).put("safety", d.path("effect").path("safety").asText("UNKNOWN"));
-            records.add(new ObjectNode[]{controlTool, extractor, effect});
+            records.add(new ObjectNode[]{controlTool, extractor, effect,
+                DeviceFileReadQualification.evidence(d, registration, runtime)});
         }
         if (!triggers.isEmpty()) {
             var registrations = document.putArray("triggers");
@@ -316,6 +317,13 @@ public final class ClientReleases {
                 String previousEvidence = tx.packages().document(evidence);
                 if (previousEvidence == null) tx.packages().saveDocument(evidence, descriptor);
                 else if (!previousEvidence.equals(descriptor)) throw Failure.conflict();
+                if (pair[3] != null) {
+                    String key = DeviceFileReadQualification.key(codec, toolId, tool.path("packageDigest").asText());
+                    String proof = codec.json(pair[3]);
+                    String previous = tx.packages().document(key);
+                    if (previous == null) tx.packages().saveDocument(key, proof);
+                    else if (!previous.equals(proof)) throw Failure.conflict();
+                }
                 changed |= put(entries, Kind.EXTRACTOR, extractor.get("id").asText(), extractor, true);
                 stored.put(toolId, node(entries.get(Kind.EXTRACTOR.id(extractor.get("id").asText())).document()));
                 boolean added = !entries.containsKey(Kind.TOOL.id(toolId));

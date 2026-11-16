@@ -24,6 +24,7 @@ RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/regi
 
 FROM ${CONTROL_IMAGE}
 USER root
+COPY --from=docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/bin/docker
 COPY apps/quickstart/requirements.txt /opt/quickstart-requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv libpq5 && \
     python3 -m venv /opt/quickstart-python && /opt/quickstart-python/bin/pip install --no-cache-dir -r /opt/quickstart-requirements.txt && \
@@ -35,6 +36,13 @@ RUN /opt/quickstart-python/bin/python /opt/quickstart-python-notices.py
 COPY --from=rust-build /usr/local/bin/olo-toolgate-gateway /usr/local/bin/olo-toolgate-tool-host /usr/local/bin/
 COPY --from=rust-build /licenses /usr/share/licenses/olo-toolgate/quickstart-rust/
 COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
+COPY deploy/compose/WorkflowStack/scripts/bootstrap.py deploy/compose/WorkflowStack/scripts/identity.py /opt/toolgate/workflow-stack/
+COPY examples/langchain/manage.py examples/langchain/packages.py /opt/toolgate/workflow-stack/operator/examples/langchain/
+COPY debug/standard/configure-debug-agent.py debug/standard/agent-mimic.py /opt/toolgate/workflow-stack/operator/debug/standard/
+COPY tools/access/presets.py /opt/toolgate/workflow-stack/operator/tools/access/
+COPY config/initial/ /opt/toolgate/workflow-stack/operator/config/initial/
+COPY packages/contracts/management-permissions.json /opt/toolgate/workflow-stack/operator/packages/contracts/management-permissions.json
+COPY VERSION /opt/toolgate/workflow-stack/operator/VERSION
 COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py apps/quickstart/audit_chain.py VERSION /opt/quickstart/
 COPY packages/contracts/management-permissions.json /opt/quickstart/management-permissions.json
 # The default deployment profile; a deployment selects another with TOOLGATE_CONTROL_PROFILE_PATH.

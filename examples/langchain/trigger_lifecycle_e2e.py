@@ -137,7 +137,7 @@ def main():
     if args.timeout < 1:
         parser.error('--timeout must be positive')
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'credentials/admin/password.txt').is_file())
     if args.checkpoint_service:
         manage.COMPOSE.extend(['-f', str(manage.HERE / 'compose.trigger-lifecycle.yaml')])
     run(config, args.device, args.package_version, args.timeout, args.checkpoint_service)

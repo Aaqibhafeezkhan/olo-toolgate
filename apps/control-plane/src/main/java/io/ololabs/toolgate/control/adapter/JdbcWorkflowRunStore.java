@@ -12,7 +12,7 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
     private static final String RUN = """
         SELECT run_id,profile_id,profile_digest,workflow_id,workflow_version_id,service_agent_id,service_agent_group_id,
             remediation_mode,created_at,key_version,document FROM control_workflow_runs
-        WHERE tenant_id=? AND state=?
+        WHERE tenant_id=?
         """;
     private final Connection connection;
     private final String tenant;
@@ -63,15 +63,24 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
     }
 
     @Override public QueuedRun queued(String id) {
-        return queryRun(RUN + " AND run_id=?", "QUEUED", id);
+        return queryRun(RUN + " AND state=? AND run_id=?", "QUEUED", id);
     }
 
     @Override public QueuedRun running(String id) {
-        return queryRun(RUN + " AND run_id=?", "RUNNING", id);
+        return queryRun(RUN + " AND state=? AND run_id=?", "RUNNING", id);
+    }
+
+    @Override public QueuedRun get(String id) { return queryRun(RUN + " AND run_id=?", id); }
+
+    @Override public String state(String id) {
+        try (var statement = statement("SELECT state FROM control_workflow_runs WHERE tenant_id=? AND run_id=?", id);
+             var rows = statement.executeQuery()) {
+            return rows.next() ? rows.getString(1) : null;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 
     @Override public QueuedRun nextQueued() {
-        return queryRun(RUN + " ORDER BY created_at,run_id LIMIT 1", "QUEUED");
+        return queryRun(RUN + " AND state=? ORDER BY created_at,run_id LIMIT 1", "QUEUED");
     }
 
     private QueuedRun queryRun(String sql, String... values) {

@@ -86,7 +86,7 @@ def delivery(config, instances):
 
 def main(drop=None):
     manage.load_environment()
-    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'console-passwords.json').exists())
+    config = manage.Configuration(manage.wait_ready(), (manage.STATE / 'credentials/admin/password.txt').is_file())
     instances = running(config)
     print('Instance Running on the device', flush=True)
     directory = manage.STATE / 'agents'

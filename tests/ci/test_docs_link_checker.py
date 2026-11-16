@@ -65,6 +65,14 @@ class MarkdownLinkCheckerTests(unittest.TestCase):
         self.write("examples/sample.txt", "sample")
         self.assertEqual(self.run_checker(), 0)
 
+    def test_workflow_private_image_cache_is_not_repository_documentation(self):
+        self.write('deploy/compose/WorkflowStack/state/demo/image-assets/README.md',
+                   '[image-internal](../../missing-from-repository.json)\n')
+        self.write('deploy/compose/WorkflowStack/configurations/demo/README.md', '# Demo\n')
+        self.assertEqual(self.run_checker(), 0)
+        self.write('deploy/compose/WorkflowStack/configurations/demo/README.md', '[broken](missing.md)\n')
+        self.assertEqual(self.run_checker(), 1)
+
     def test_nonexistent_directory_remains_a_broken_target(self):
         self.write("docs/index.md", "[missing](../missing/)\n")
         self.assertEqual(self.run_checker(), 1)

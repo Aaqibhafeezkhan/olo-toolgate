@@ -28,6 +28,11 @@ def prepare(compose, state, environment):
         '--build-arg', 'QUICKSTART_IMAGE='+image, '--output', 'type=local,dest='+str(state/'package'),
         str(ROOT)], check=True)
     core_lock(state/'package', 'inbox-watch.tgpkg', TRIGGER_PACKAGE_ID, 'examples/java-tools/inbox-watch')
+    registry(compose,state,environment)
+
+
+def registry(compose,state,environment):
+    """Provision the private registry/base-image mirror without building any package."""
     subprocess.run(compose+['up', '-d', 'registry'], check=True, cwd=HERE)
     port = environment.get('TOOLGATE_REGISTRY_PORT', '18552')
     if not port.isdigit() or not 1024 <= int(port) <= 65535:

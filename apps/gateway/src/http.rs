@@ -207,6 +207,7 @@ async fn workflow_inference(State(s): State<Arc<AppState>>, request: Request) ->
             return Err(ErrorCode::Validation);
         }
         let model = s.gateway.authority.workflow_model(&run, &token).await?;
+        let (max_tokens, temperature) = workflow_generation(&model)?;
         let origin = reqwest::Url::parse(&model.origin).map_err(|_| ErrorCode::DependencyUnavailable)?;
         let approved = std::env::var("TOOLGATE_WORKFLOW_MODEL_ORIGINS").unwrap_or_default();
         if origin.scheme() != "https" || origin.host_str().is_none() || origin.path() != "/" || !origin.username().is_empty()
@@ -227,19 +228,45 @@ async fn workflow_inference(State(s): State<Arc<AppState>>, request: Request) ->
         let response = client.post(origin.join("v1/chat/completions").map_err(|_| ErrorCode::Validation)?)
             .bearer_auth(model.credential).header("Content-Type", "application/json")
             .header("traceparent", &correlation.traceparent)
-            .body(serde_json::json!({"model":model.model_id,"messages":messages,"stream":false,"max_tokens":512,
-                "response_format":{"type":"json_object"}}).to_string())
+            .body(serde_json::json!({"model":model.model_id,"messages":messages,"stream":false,"max_tokens":max_tokens,
+                "temperature":temperature,"response_format":workflow_decision_format()?}).to_string())
             .send().await.map_err(|_| ErrorCode::DependencyUnavailable)?;
         if !response.status().is_success() { return Err(ErrorCode::DependencyUnavailable); }
         let body = crate::relay::read_workflow_body(response, 98_304).await?;
         let value = crate::validation::strict_json(&body).map_err(|_| ErrorCode::Validation)?;
         let content = value["choices"][0]["message"]["content"].as_str().ok_or(ErrorCode::Validation)?;
-        crate::validation::strict_json(content.as_bytes()).map_err(|_| ErrorCode::Validation)
+        let decision = crate::validation::strict_json(content.as_bytes()).map_err(|_| ErrorCode::Validation)?;
+        if !s.gateway.contracts.valid("WorkflowModelDecision", &decision) { return Err(ErrorCode::Validation); }
+        Ok(decision)
     }.await;
     match result {
         Ok(decision) => ([("cache-control", "no-store")], Json(decision)).into_response(),
         Err(code) => error(code, &correlation.request_id),
     }
+}
+
+/// The provider receives the same closed decision schema validated at Gateway.
+/// Decoding constrains syntax; it grants no agent, tool, context or model authority.
+fn workflow_decision_format() -> Result<Value, ErrorCode> {
+    let document: Value = serde_json::from_str(include_str!(
+        "../../../packages/contracts/rust/schemas/v2/workflow-decision.schema.json"
+    ))
+    .map_err(|_| ErrorCode::DependencyUnavailable)?;
+    Ok(serde_json::json!({"type":"json_schema","json_schema":{
+        "name":"toolgate_workflow_decision","strict":true,
+        "schema":{"oneOf":document["$defs"].as_object().ok_or(ErrorCode::DependencyUnavailable)?
+            .values().cloned().collect::<Vec<_>>()}}}))
+}
+
+fn workflow_generation(model: &crate::relay::WorkflowModel) -> Result<(u64, f64), ErrorCode> {
+    let generation = &model.generation;
+    if !(1..=4096).contains(&generation.max_output_tokens)
+        || !generation.temperature.is_finite()
+        || !(0.0..=2.0).contains(&generation.temperature)
+    {
+        return Err(ErrorCode::DependencyUnavailable);
+    }
+    Ok((generation.max_output_tokens, generation.temperature))
 }
 
 async fn public_document(s: &AppState) -> Result<crate::discovery::Document, ErrorCode> {
@@ -878,6 +905,32 @@ mod dedup_key {
 #[cfg(test)]
 mod trace_context {
     use super::{valid_declared_id, valid_tracestate};
+
+    #[test]
+    fn model_generation_is_profile_selected_and_bounded() {
+        let mut value = serde_json::json!({"origin":"https://model.example","modelId":"profile-model",
+            "credential":"fixture","generation":{"maxOutputTokens":256,"temperature":0.25}});
+        let model = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(super::workflow_generation(&model).unwrap(), (256, 0.25));
+        value["generation"]["maxOutputTokens"] = 4097.into();
+        assert!(
+            super::workflow_generation(&serde_json::from_value(value.clone()).unwrap()).is_err()
+        );
+        value.as_object_mut().unwrap().remove("generation");
+        assert!(serde_json::from_value::<crate::relay::WorkflowModel>(value).is_err());
+    }
+
+    #[test]
+    fn provider_decoding_uses_the_canonical_closed_decisions() {
+        let format = super::workflow_decision_format().unwrap();
+        assert_eq!(format["type"], "json_schema");
+        assert_eq!(format["json_schema"]["strict"], true);
+        let schema = &format["json_schema"]["schema"];
+        assert_eq!(schema["oneOf"].as_array().unwrap().len(), 5);
+        let validator = jsonschema::validator_for(schema).unwrap();
+        assert!(validator.is_valid(&serde_json::json!({"kind":"finish_context"})));
+        assert!(!validator.is_valid(&serde_json::json!({"kind":"finish_context","result":"extra"})));
+    }
 
     #[test]
     fn durable_conflicts_remain_client_conflicts() {

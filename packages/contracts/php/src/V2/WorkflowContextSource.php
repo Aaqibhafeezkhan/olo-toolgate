@@ -9,17 +9,19 @@ namespace OloLabs\ToolGate\Contracts\V2;
 final readonly class WorkflowContextSource implements \JsonSerializable {
     public function __construct(
         public string $toolId,
-        public \stdClass $arguments
+        public \stdClass $arguments,
+        public ?\stdClass $argumentBindings = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['toolId', 'arguments']) || array_diff(['toolId', 'arguments'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['toolId', 'arguments', 'argumentBindings']) || array_diff(['toolId', 'arguments'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['toolId'],
-            (object) $data['arguments']
+            (object) $data['arguments'],
+            array_key_exists('argumentBindings', $data) ? (object) $data['argumentBindings'] : null
         );
     }
 

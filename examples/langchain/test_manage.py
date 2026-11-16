@@ -15,6 +15,30 @@ from unittest.mock import patch
 import manage
 
 
+class CredentialCustodyTests(unittest.TestCase):
+    def test_bootstrap_saves_and_reuses_credentials_in_identity_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state=Path(temporary)
+            config=manage.Configuration.__new__(manage.Configuration)
+            config.bootstrap=True
+            with patch.object(manage,'STATE',state), patch.object(manage,'docker',return_value='initial'), \
+                    patch.object(manage.shared.Configuration,'login') as login:
+                config.login('admin','admin','')
+                folder=state/'credentials/admin'
+                self.assertEqual('admin', (folder/'username.txt').read_text().strip())
+                password=(folder/'password.txt').read_text().strip()
+                self.assertTrue(password)
+                self.assertNotEqual('initial',password)
+                login.assert_called_once_with('admin','admin','initial',password)
+            with patch.object(manage,'STATE',state), patch.object(manage,'docker',return_value=''), \
+                    patch.object(manage.shared.Configuration,'login') as login:
+                config.login('admin','admin','')
+                login.assert_called_once_with('admin','admin',password,None)
+                (folder/'username.txt').write_text('reviewer-1')
+                with self.assertRaisesRegex(ValueError,'identity does not match'):
+                    config.login('admin','admin','')
+
+
 LINUX = 'device-' + 'a' * 32
 WINDOWS = 'device-' + 'b' * 32
 NOW = 1_800_000_000_000

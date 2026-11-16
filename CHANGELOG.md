@@ -6,6 +6,25 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add `WorkflowStack/start.bat` with numbered profile selection and automatic
+  missing-image preparation. Add destructive `stop.bat` cleanup for owned stack
+  containers, volumes, networks and generated state/data, preserving profiles and
+  supplied models; retain `manage.bat stop` for storage-preserving shutdown.
+
+- Bundle a selectable complete workflow deployment in `deploy/compose/WorkflowStack`,
+  with issue triage and separate file/summarization agents, confirmed summary
+  delivery and input archiving, and configuration-specific operating instructions.
+  Pin ordered context/model agent stages so supervisor output cannot skip the
+  configured agents. Recheck each active agent's own grants and constrain/validate
+  model decisions with a canonical JSON schema. Include optional local monitoring and documented
+  Langfuse/LangSmith OTLP configuration without default content tracing.
+
+- Bind configured workflow context-tool arguments to the admitted message, store
+  encrypted workflow results for current tenant administrators, and optionally
+  write private worker result files. The hot-folder demo uses a configured
+  agent to read and triage issue logs, with explicit device/group/image pins for
+  the bounded Java broker-only read tier; writes remain unqualified.
+
 - Include `olo-toolgate-langgraph-runtime` in container release builds, image
   verification, SBOM/provenance and Docker Hub/GHCR publication.
 
