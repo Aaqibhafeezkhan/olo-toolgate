@@ -45,6 +45,13 @@ the same task and controls the required quality gate; plugin or analysis
 failures remain failures when analysis is requested. Use `sonar --dry-run`
 to inspect task configuration without submitting an analysis.
 
+SDK-only fixture builds use explicitly qualified root tasks and configuration
+on demand, for example `./gradlew --configure-on-demand :publishJavaSdkLocally`.
+An unqualified task selector can configure unrelated subprojects while looking
+for matching tasks. The CI SDK stage also applies
+`tools/ci/sdk-isolation.init.gradle` to reject application/analysis plugin
+requests; Control and analysis builds retain their own plugins and gates.
+
 ## Workspace Contracts
 
 Default:

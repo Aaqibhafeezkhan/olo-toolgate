@@ -5,6 +5,18 @@ This is the live progress document for issue #274 (server and client triggers). 
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.
 
+## Hosted package matrix follow-up — 2026-11-16
+
+Hosted run `43880163146` passed preflight, the shared SDK producer and every
+registered trigger-package matrix entry on `15249dc6`. A following repair scopes
+native/starter SDK preparation to the explicit root task and adds an SDK init
+guard against unrelated Quarkus/Sonar plugin resolution. A separate hosted WSS
+wire-test failure was not reproduced in 100 repetitions or the passing 62-test
+runtime suite; bounded test diagnostics are added without relaxing assertions.
+Exact checks, remaining hosted limits and the tested base are in the
+[workflow record](workflow-v1-status.md#qualified-sdk-fixtures-and-transport-diagnostics--2026-11-16).
+This closes no original module Done-when; earned progress remains **27%**.
+
 ## Package CI prerequisite repairs — 2026-11-16
 
 The two reported hosted failures were diagnosed: Gateway image construction

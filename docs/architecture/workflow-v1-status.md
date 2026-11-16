@@ -1,6 +1,30 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Qualified SDK fixtures and transport diagnostics — 2026-11-16
+
+The hosted follow-up `43880163146` at `15249dc6` passed preflight, SDK
+preparation and all three parallel package jobs. It also exposed a separate
+Linux native fixture failure: unqualified root SDK task selection configured
+Control and tried to resolve Quarkus. Core package preparation and the
+Quickstart starter now select `:publishJavaSdkLocally` explicitly with
+configuration on demand. The shared package SDK stage uses the same selection
+plus an init guard that rejects unrelated application/analysis plugins. The
+exact SDK/JSON prerequisite invocation passes with both Sonar and Quarkus
+plugin requests refused; 69 Gradle tasks are accounted for. An initial probe
+using the unqualified name still hit Control and was corrected before passing.
+
+The same run's Python foundation failed one WSS reconnect wire test with
+`CONNECTION_LOST`. This was not reproduced in 100 local repetitions; the complete
+runtime suite passes (62 tests, no skips, with OpenSSL). The test retains its
+protocol assertions/timeouts and now attaches bounded mock error/frame-count
+diagnostics on failure. This is diagnostic coverage, not a claimed production
+transport fix or proven resolution of that intermittent hosted failure.
+Three core inventory, six starter and six matrix regression tests pass, as
+does actionlint. Full hosted native/Gateway/Java/image acceptance is still pending.
+Known tested base is `15249dc6aa0b0d2a293aa63bed8efb3c2d93d7ee`; no module or
+workflow phase earns weight and the existing baseline denominators are unchanged.
+
 ## CI prerequisite repairs — 2026-11-16
 
 Run `43866210753`, Gateway job `133325695639`, built the production Gateway
