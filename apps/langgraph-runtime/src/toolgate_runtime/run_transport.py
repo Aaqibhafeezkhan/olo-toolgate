@@ -45,7 +45,7 @@ def _agent(value):
 
 def _lease(value):
     data = _record(value, "runId leaseId workflowId workflowVersionId profileDigest leaseToken message supervisorPrompt "
-                         "supervisorModelGroupId limits agents contextSources remediationMode expiresAtUnixMs agentStages graph")
+                         "supervisorModelGroupId limits agents contextSources remediationMode expiresAtUnixMs agentStages graph compilerDigest")
     validate_selection(data["graph"])
     if (not isinstance(data["leaseToken"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", data["leaseToken"])
             or type(data["expiresAtUnixMs"]) is not int or data["expiresAtUnixMs"] <= 0
@@ -59,7 +59,7 @@ def _lease(value):
     return RunLease(data["runId"], data["leaseId"], data["workflowId"], data["workflowVersionId"], data["profileDigest"],
                     data["leaseToken"], data["message"], data["supervisorPrompt"], data["supervisorModelGroupId"],
                     Limits(limits["maxSteps"], limits["maxHandoffs"], limits["maxDurationSeconds"]),
-                    tuple(map(_agent, data["agents"])), data["graph"], _contexts(data["contextSources"]), data["remediationMode"], stages)
+                    tuple(map(_agent, data["agents"])), data["graph"], data["compilerDigest"], _contexts(data["contextSources"]), data["remediationMode"], stages)
 
 
 class ControlRuns(ControlTriggers):

@@ -24,6 +24,17 @@ public final class WorkflowProfileDependencies implements WorkflowProfiles.Readi
     }
     public boolean ready(Store.Session tx, DeploymentProfile profile, String profileDigest) {
         if (profile.workflows() == null) return false;
+        var head = tx.workflowProfiles().publication(profile.profileId());
+        long generation = head == null ? 0L : head.generation();
+        for (var workflow : profile.workflows().workflows()) {
+            String raw = tx.workflowProfiles().graphBuild(profile.profileId(), profileDigest, workflow.id());
+            if (raw == null) return false;
+            var build = codec.model(raw, io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildResult.class);
+            boolean active = head != null && head.digest().equals(profileDigest);
+            if (!build.tenantId().equals(tenant.value()) || !build.profileId().equals(profile.profileId())
+                    || !build.profileDigest().equals(profileDigest) || !build.workflowId().equals(workflow.id())
+                    || !(build.generation() == generation || active && build.generation() == generation - 1)) return false;
+        }
         // Tool execution readiness cases cannot be assumed from package installation alone.
         if (profile.readiness() != null && !profile.readiness().isEmpty()) return false;
         if (!profile.packages().isEmpty()) {

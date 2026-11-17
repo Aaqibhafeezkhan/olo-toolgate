@@ -43,3 +43,21 @@ after authoritative database changes. Durable device outboxes remain required.
 README commands describe operator prerequisites and their scope before execution.
 Supported profile/tool/trigger updates do not restart core/device containers;
 new executable adapters still require trusted operator installation.
+
+Publication gates new admissions. A durable admitted run resolves its immutable
+reviewed revision through its tenant-scoped run record, including when a newer
+revision is published or unrelated deployment readiness changes. A caller cannot
+select an arbitrary historical digest. Current lease ownership, service/agent
+grants, kill state and model/tool authorization continue to apply to every step;
+retaining configuration does not retain revoked authority. Finished/cancelled
+runs cannot obtain a new executable configuration through this path.
+
+Control records complete graph build receipts under the tenant, profile revision
+and workflow. The remote mTLS compilation runs outside the database transaction;
+the final write rechecks management authority, review state and publication
+generation. Incomplete/mismatched/stale results do not replace prior receipts.
+Publication and new admission require graph preparation as well as the existing
+dependency checks. Admission pins the compiler digest in the run, independently
+of later preparation. This is compilation evidence, not device/provider readiness
+or proof that all worker replicas have reconciled. The fresh schema includes
+receipt storage and the pinned run column; no database migration is introduced.

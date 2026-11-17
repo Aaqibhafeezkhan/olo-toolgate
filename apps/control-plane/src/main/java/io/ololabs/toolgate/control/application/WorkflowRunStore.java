@@ -8,7 +8,7 @@ public interface WorkflowRunStore {
 
     record QueuedRun(String id, String profileId, String profileDigest, String workflowId, String workflowVersionId,
                      String serviceAgentId, String serviceAgentGroupId, String remediationMode, long createdAt,
-                     long keyVersion, String document) {
+                     long keyVersion, String document, String compilerDigest) {
         @Override public String toString() { return "QueuedRun[id=" + id + "]"; }
     }
     record Lease(String runId, String id, String ownerId, String tokenDigest, long expiresAt) {}

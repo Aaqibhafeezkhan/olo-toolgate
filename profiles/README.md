@@ -56,12 +56,16 @@ Product/profile versions and tool package versions are independently recorded.
 Long or platform-sensitive labels are shortened in filenames; the inventory
 retains the complete original identifiers and version.
 
-Import a bundle on **Workflows → Import workflow .olo**. Import its embedded
-packages through Control, apply referenced configuration under the existing
+Import a bundle on **Workflows → Import workflow .olo**. Importing its embedded
+packages is part of that action: all exact archives must verify through Control
+before the new workflow is staged. Apply referenced configuration under the existing
 configuration policy, restore trigger mappings, review and publish. Upload does
 not deploy packages or grant execution. Approved devices, native Python graph
 factories, model services and vault secrets still need destination provisioning.
 Imports preserve human credentials and do not restart containers.
+Prepare reviewed graphs before publication; package installation alone is not
+graph readiness. Direct JSON graph tool nodes are included in the exported
+package/reference closure as well as configured agent context tools.
 
 Foundation CI builds and retains these outputs. Development, tagged, manual
 development and immutable product publication collect the tested bytes and

@@ -72,6 +72,13 @@ def scope(profile,workflow):
     config['workflowGroups']=[item for item in config['workflowGroups'] if item['id']==workflow['workflowGroupId']]
     config['dispatchBindings']=[item for item in config['dispatchBindings'] if item['workflowId']==id]
     packages={item['toolId'].split('/')[0] for agent in config['agentDefinitions'] for item in agent.get('contextSources',[])}|{item['toolId'].split('/')[0] for item in workflow.get('contextSources',[])}
+    if workflow['graph']['packageId']=='olo.json-graph':
+        for node in workflow['graph']['config']['nodes']:
+            if node['kind']=='tool':
+                reference=node['toolRef']
+                if not isinstance(reference,str) or len(reference.split('/'))!=2 or not all(reference.split('/')):
+                    raise ValueError('JSON graph tool reference is invalid')
+                packages.add(reference.split('/')[0])
     if workflow.get('deployment'):packages.add(workflow['deployment']['source']['packageId'])
     result['packages']=[item for item in result['packages'] if item['packageId'] in packages]
     return result

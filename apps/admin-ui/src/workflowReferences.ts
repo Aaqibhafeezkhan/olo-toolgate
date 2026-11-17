@@ -1,6 +1,7 @@
 // Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 import type {DeploymentProfile} from '@olo-labs/toolgate-contracts/v2';
 import type {ConfigurationFile} from './pendingContracts';
+import {configuredToolIds} from './workflowTools';
 
 const kinds=['agents','agentGroups','roles','grants','tools','toolGroups','deviceGroups','bindings','policies','extractors'] as const;
 const emptyKinds=['teams','devices','delegations','agentDelegations','workloadBindings'] as const;
@@ -24,6 +25,7 @@ export function referencedData(profile:DeploymentProfile,snapshot:ConfigurationF
   visit(profile.workflows?.agentDefinitions.map(row=>({agentId:row.agentId,contextSources:row.contextSources})));
   visit(profile.workflows?.modelDeployments.map(row=>({toolGroupId:row.toolGroupId,deviceGroupId:row.deviceGroupId})));
   visit(profile.packages.map(row=>({tools:row.tools,deviceGroupIds:row.deviceGroupIds,bindingIds:row.bindingIds})));
+  for(const toolId of configuredToolIds(profile))wanted.get('tools')!.add(toolId);
   let changed=true;const selected=new Map<string,Map<string,Row>>(kinds.map(key=>[key,new Map()]));
   while(changed){changed=false;for(const key of kinds)for(const original of source[key]??[]){
     const sourceKind=original.sourceType==='AGENT'?'agents':original.sourceType==='ROLE'?'roles':original.sourceType==='AGENT_GROUP'?'agentGroups':undefined;

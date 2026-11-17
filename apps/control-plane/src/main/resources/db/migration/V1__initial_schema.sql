@@ -4522,10 +4522,25 @@ BEGIN
 END;$$;
 CREATE TRIGGER workflow_revision_immutable BEFORE UPDATE ON control_workflow_profile_revisions FOR EACH ROW EXECUTE FUNCTION control_workflow_revision_guard();
 
+CREATE TABLE control_workflow_graph_builds(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ profile_id varchar(128) NOT NULL, digest varchar(71) NOT NULL, workflow_id varchar(128) NOT NULL,
+ document text NOT NULL CHECK(octet_length(document)<=8192),
+ FOREIGN KEY(tenant_id,profile_id,digest) REFERENCES control_workflow_profile_revisions(tenant_id,profile_id,digest),
+ PRIMARY KEY(tenant_id,profile_id,digest,workflow_id));
+ALTER TABLE control_workflow_graph_builds ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_graph_builds FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_graph_builds USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_graph_builds AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_graph_builds FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_graph_builds TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.control_workflow_graph_builds TO toolgate_control_platform;
+
 CREATE TABLE control_workflow_runs(
  tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
  run_id varchar(128) NOT NULL, profile_id varchar(128) NOT NULL, profile_digest varchar(71) NOT NULL,
  workflow_id varchar(128) NOT NULL, workflow_version_id varchar(128) NOT NULL,
+ compiler_digest varchar(71) NOT NULL CHECK(length(compiler_digest)=71 AND substr(compiler_digest,1,7)='sha256:'),
  service_agent_id varchar(128) NOT NULL, service_agent_group_id varchar(128) NOT NULL,
  remediation_mode varchar(16) NOT NULL CHECK(remediation_mode IN('PREPARE','APPLY')),
  state varchar(24) NOT NULL CHECK(state IN('QUEUED','RUNNING','SUCCEEDED','FAILED','AWAITING_APPROVAL','CANCELLED','EXPIRED')),
@@ -4576,11 +4591,23 @@ BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id
 REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
 
+CREATE FUNCTION control_workflow_graph_builds_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_graph_builds_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_graph_builds FOR EACH ROW EXECUTE FUNCTION control_workflow_graph_builds_capacity();
+
 CREATE FUNCTION control_workflow_runs_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
 BEGIN
- IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
- IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.compiler_digest),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.compiler_digest),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
  UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
  IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;

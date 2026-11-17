@@ -1,6 +1,17 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Workflow admission across publication — 2026-11-17
+
+The next #295 slice extends its existing admission regression on SQLite and
+PostgreSQL: an admitted A run keeps A after publication of B, duplicate delivery
+still returns the original run, new admission uses B, and current agent revocation
+still refuses execution. No trigger protocol, Gateway/client interface or device
+reconfiguration lifecycle changes in this increment. No #274 module completion
+or earned-weight change: **27%** remains. See the
+[workflow checkpoint](workflow-v1-status.md#graph-preparation-and-admitted-run-hot-swap--2026-11-17)
+for known tested base, checks, limitations and outstanding work.
+
 ## Local hot-swap consumer work — 2026-11-17
 
 The user authorized delivery of this initial #295 hot-swap slice in a draft PR.

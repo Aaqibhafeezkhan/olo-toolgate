@@ -61,9 +61,12 @@ public final class WorkflowAdmissions {
             String runId = "run-" + UUID.randomUUID();
             var sealed = inputs.seal(tx, actor.tenant(), runId, target.profileDigest(), message);
             var binding = target.binding();
+            String build = tx.workflowProfiles().graphBuild(target.profileId(), target.profileDigest(), binding.workflowId());
+            if (build == null) throw ManagementAccess.denied();
+            String compiler = codec.model(build, io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildResult.class).compilerDigest();
             runs.enqueue(new WorkflowRunStore.QueuedRun(runId, target.profileId(), target.profileDigest(), binding.workflowId(),
                 binding.workflowVersionId(), binding.serviceAgentId(), binding.serviceAgentGroupId(), binding.remediationMode().name(),
-                now, sealed.keyVersion(), sealed.ciphertext()));
+                now, sealed.keyVersion(), sealed.ciphertext(), compiler));
             return record(tx, actor, requestId, request, admissionId, runId, WorkflowDispatchDisposition.ADMITTED);
         });
     }

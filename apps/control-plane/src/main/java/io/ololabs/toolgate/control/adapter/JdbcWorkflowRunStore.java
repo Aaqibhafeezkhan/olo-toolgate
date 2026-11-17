@@ -11,7 +11,7 @@ import java.sql.SQLException;
 final class JdbcWorkflowRunStore implements WorkflowRunStore {
     private static final String RUN = """
         SELECT run_id,profile_id,profile_digest,workflow_id,workflow_version_id,service_agent_id,service_agent_group_id,
-            remediation_mode,created_at,key_version,document FROM control_workflow_runs
+            remediation_mode,created_at,key_version,document,compiler_digest FROM control_workflow_runs
         WHERE tenant_id=?
         """;
     private final Connection connection;
@@ -52,12 +52,13 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
     @Override public void enqueue(QueuedRun run) {
         try (var statement = statement("""
                 INSERT INTO control_workflow_runs(tenant_id,run_id,profile_id,profile_digest,workflow_id,workflow_version_id,
-                    service_agent_id,service_agent_group_id,remediation_mode,state,document,created_at,key_version)
-                VALUES(?,?,?,?,?,?,?,?,?,'QUEUED',?,?,?)
+                    service_agent_id,service_agent_group_id,remediation_mode,state,document,created_at,key_version,compiler_digest)
+                VALUES(?,?,?,?,?,?,?,?,?,'QUEUED',?,?,?,?)
                 """, run.id(), run.profileId(), run.profileDigest(), run.workflowId(), run.workflowVersionId(),
                 run.serviceAgentId(), run.serviceAgentGroupId(), run.remediationMode(), run.document())) {
             statement.setLong(11, run.createdAt());
             statement.setLong(12, run.keyVersion());
+            statement.setString(13, run.compilerDigest());
             statement.executeUpdate();
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
@@ -86,7 +87,7 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
     private QueuedRun queryRun(String sql, String... values) {
         try (var statement = statement(sql, values); var rows = statement.executeQuery()) {
             return rows.next() ? new QueuedRun(rows.getString(1), rows.getString(2), rows.getString(3), rows.getString(4),
-                rows.getString(5), rows.getString(6), rows.getString(7), rows.getString(8), rows.getLong(9), rows.getLong(10), rows.getString(11)) : null;
+                rows.getString(5), rows.getString(6), rows.getString(7), rows.getString(8), rows.getLong(9), rows.getLong(10), rows.getString(11), rows.getString(12)) : null;
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 

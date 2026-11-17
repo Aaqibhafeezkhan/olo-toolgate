@@ -13,12 +13,11 @@ import tempfile
 import threading
 import unittest
 
-from tools.workflows.json_graph_package import package
 from toolgate_runtime.graph_packages import GraphRefused
 from toolgate_runtime.graph_runtime import GraphRuntime, ReviewedCandidate, ControlCandidates
 from toolgate_runtime.graph_server import server
 from toolgate_runtime.json_graph import cache_status, clear_cache
-from test_json_graph import spec
+from test_json_graph import spec, installed_selection
 
 
 REQUEST=dict(tenantId='tenant-a',profileId='profile',profileDigest='sha256:'+'a'*64,workflowId='flow',expectedGeneration=0)
@@ -27,7 +26,7 @@ REQUEST=dict(tenantId='tenant-a',profileId='profile',profileDigest='sha256:'+'a'
 class RuntimeBuildTests(unittest.TestCase):
     def setUp(self):
         clear_cache()
-        self.candidate=ReviewedCandidate('tenant-a','profile',REQUEST['profileDigest'],'flow',0,{**package(check=True),'config':spec()})
+        self.candidate=ReviewedCandidate('tenant-a','profile',REQUEST['profileDigest'],'flow',0,{**installed_selection(),'config':spec()})
         self.calls=[]
         def resolve(value):
             self.calls.append(deepcopy(value))
@@ -110,7 +109,7 @@ class RuntimeTlsTests(unittest.TestCase):
         self.calls=[]
         def resolve(value):
             self.calls.append(value)
-            return ReviewedCandidate('tenant-a','profile',REQUEST['profileDigest'],'flow',0,{**package(check=True),'config':spec()})
+            return ReviewedCandidate('tenant-a','profile',REQUEST['profileDigest'],'flow',0,{**installed_selection(),'config':spec()})
         self.http=server(('127.0.0.1',0),GraphRuntime(resolve),certificate=str(self.home/'localhost.crt'),
             key=str(self.home/'localhost.key'),client_ca=str(self.home/'ca.crt'),client_names=['control-builder'])
         self.thread=threading.Thread(target=self.http.serve_forever,daemon=True);self.thread.start()
@@ -149,7 +148,7 @@ class RuntimeTlsTests(unittest.TestCase):
 
     def test_control_candidate_transport_uses_strict_tls_and_exact_tenant_response(self):
         value=dict(tenantId='tenant-a',profileId='profile',profileDigest=REQUEST['profileDigest'],workflowId='flow',
-            generation=0,graph={**package(check=True),'config':spec()},agentIds=[])
+            generation=0,graph={**installed_selection(),'config':spec()},agentIds=[])
         observed=[]
         class CandidateHandler(http.server.BaseHTTPRequestHandler):
             def log_message(self,*args):pass

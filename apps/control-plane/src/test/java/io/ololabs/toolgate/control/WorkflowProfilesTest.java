@@ -52,6 +52,57 @@ final class WorkflowProfilesTest {
     private JsonNode node(Store.Reply reply) { return (JsonNode)codec.value(reply.body()); }
     private String review(String digest) { return codec.json(Map.of("profileDigest", digest)); }
     private String publish(String digest, long generation) { return codec.json(Map.of("profileDigest", digest, "expectedGeneration", generation)); }
+    private io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildResult compiled(io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildRequest request) {
+        return new io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildResult(request.tenantId(), request.profileId(), request.profileDigest(),
+            request.workflowId(), request.expectedGeneration(), "sha256:" + "a".repeat(64), "sha256:" + "b".repeat(64), List.of("fixture"), "READY");
+    }
+    @Test void sqliteGraphPreparationIsCompleteTenantScopedAndGenerationFenced() throws Exception { prepareGraphs(false); }
+    @Test void postgresGraphPreparationIsCompleteTenantScopedAndGenerationFenced() throws Exception { prepareGraphs(true); }
+    private void prepareGraphs(boolean postgres) throws Exception {
+        var rig = rig(postgres);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
+        var value = profile();
+        var second = value.path("workflows").path("workflows").get(0).deepCopy();
+        ((ObjectNode)second).put("id", "second-workflow");
+        ((ArrayNode)value.path("workflows").path("workflows")).add(second);
+        String digest = node(service.upload(rig.admin, value.toString(), "stage-graphs")).path("profileDigest").asText();
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        var prepare = new WorkflowGraphPreparation(codec, service, request -> { calls.incrementAndGet(); return compiled(request); });
+        assertEquals(409, assertThrows(Failure.class, () -> prepare.prepare(rig.admin, "support", publish(digest, 0), "draft-graphs")).status());
+        assertEquals(0, calls.get());
+        service.review(rig.admin, "support", review(digest), "review-graphs");
+        assertEquals(409, assertThrows(Failure.class, () -> prepare.prepare(rig.admin, "support", publish(digest, 1), "stale-graphs")).status());
+        assertEquals(0, calls.get());
+        var invalid = new WorkflowGraphPreparation(codec, service, request -> {
+            if (request.workflowId().equals("second-workflow")) throw Failure.unavailable();
+            return compiled(request);
+        });
+        assertThrows(Failure.class, () -> invalid.prepare(rig.admin, "support", publish(digest, 0), "partial-graphs"));
+        rig.store.transaction(rig.tenant, false, tx -> { assertNull(tx.workflowProfiles().graphBuild("support", digest, "investigate")); return null; });
+        assertEquals(2, node(prepare.prepare(rig.admin, "support", publish(digest, 0), "prepare-graphs")).size());
+        assertEquals(2, calls.get());
+        var reopened = new PostgresStore(rig.data, codec);
+        reopened.transaction(rig.tenant, false, tx -> {
+            assertEquals(digest, node(new Store.Reply(200, tx.workflowProfiles().graphBuild("support", digest, "investigate"), 0)).path("profileDigest").asText());
+            return null;
+        });
+        var foreign = TestSupport.seed(rig.store, codec, Tenants.id("other"), "foreign-owner");
+        assertEquals(404, assertThrows(Failure.class, () -> prepare.prepare(foreign, "support", publish(digest, 0), "foreign-graphs")).status());
+        var mismatched = new WorkflowGraphPreparation(codec, service, request -> compiled(
+            new io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildRequest(foreign.tenant().value(), request.profileId(), request.profileDigest(), request.workflowId(), request.expectedGeneration())));
+        assertEquals(503, assertThrows(Failure.class, () -> mismatched.prepare(rig.admin, "support", publish(digest, 0), "wrong-tenant-graphs")).status());
+        // A publication racing a remote compile cannot persist stale preparation.
+        var raced = new AtomicBoolean();
+        var racing = new WorkflowGraphPreparation(codec, service, request -> {
+            if (raced.compareAndSet(false, true)) service.publish(rig.admin, "support", publish(digest, 0), "racing-publish");
+            return compiled(request);
+        });
+        assertEquals(409, assertThrows(Failure.class, () -> racing.prepare(rig.admin, "support", publish(digest, 0), "racing-graphs")).status());
+        rig.store.transaction(rig.tenant, false, tx -> {
+            assertEquals(0, node(new Store.Reply(200, tx.workflowProfiles().graphBuild("support", digest, "investigate"), 0)).path("generation").asLong());
+            return null;
+        });
+    }
     @Test void sqliteGraphCandidateRequiresReviewedExactTenantWorkflowAndGeneration() throws Exception { graphCandidate(false); }
     @Test void postgresGraphCandidateRequiresReviewedExactTenantWorkflowAndGeneration() throws Exception { graphCandidate(true); }
 
@@ -115,7 +166,7 @@ final class WorkflowProfilesTest {
         java.util.function.Function<Store.Session, WorkflowRunStore.QueuedRun> queue = tx -> {
             var sealed = inputs.seal(tx, rig.tenant, "run-1", digest, "Private event message");
             var run = new WorkflowRunStore.QueuedRun("run-1", "support", digest, "investigate", "revision-1",
-                "automation", "automation-group", "PREPARE", 1234, sealed.keyVersion(), sealed.ciphertext());
+                "automation", "automation-group", "PREPARE", 1234, sealed.keyVersion(), sealed.ciphertext(), "sha256:" + "b".repeat(64));
             tx.workflowRuns().enqueue(run);
             tx.workflowRuns().insertAdmission(admission);
             return run;
@@ -459,6 +510,9 @@ final class WorkflowProfilesTest {
             tx.packages().saveProvisioning(new PackageStore.Provisioning("support", 3, digest, "{\"state\":\"READY\"}"));
             return null;
         });
+        assertEquals(409, assertThrows(Failure.class,
+            () -> service.publish(rig.admin, "support", publish(digest, 0), "uncompiled-graphs")).status());
+        new WorkflowGraphPreparation(codec, service, this::compiled).prepare(rig.admin, "support", publish(digest, 0), "prepare-graphs");
         assertTrue(node(service.publish(rig.admin, "support", publish(digest, 0), "publish")).path("dependenciesReady").asBoolean());
         rig.store.transaction(rig.tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());

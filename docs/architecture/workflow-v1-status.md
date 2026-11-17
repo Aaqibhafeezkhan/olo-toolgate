@@ -1,6 +1,52 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Graph preparation and admitted-run hot swap — 2026-11-17
+
+From known base `1c97ad26`, the next implementation adds an admin graph preparation
+action in both workflow editors, a fixed-installation mTLS Control-to-runtime
+client, and durable tenant/revision/workflow compiler receipts. All remote builds
+finish before one transaction rechecks authority/review/generation and records the
+complete set; failed, partial, cross-tenant and racing results retain the previous
+receipts. Production dependency checks now require these receipts for publication.
+The run ledger pins the admitted compiler digest, and JSON workers refuse a
+different compiler before graph effects. Fresh SQLite/PostgreSQL initialization
+includes the new receipt table and run column with tenant fencing and capacity
+accounting; unsupported existing stores are refused without migration.
+
+Publication now controls new admissions while queued/running work retains its
+reviewed immutable configuration. Live lease, service/agent grants, kill state
+and model/tool checks remain required. The real admission/store test demonstrates
+an A run finishing after B publication, duplicate admission returning A, new work
+using B's prompt/model, and current agent revocation still denying steps. This
+test uses deterministic dependencies, not a live model/device or full stack.
+
+Console import now verifies/stores embedded packages through Control before
+staging the candidate; a failed upload leaves the workflow unchanged. Direct
+JSON tool nodes participate in bundle package/reference closure and shared-data
+retention. The repository builder preserves their package declarations too.
+
+Hosted job `134193488132` in run `44115228272` failed on repository-only Python
+imports in installed-image tests. The tests now discover the installed graph
+factory, CI mounts the summary-profile fixture, and a test-only Docker stage
+supplies OpenSSL without adding it to production. The matching hardened image
+test command passed **102 tests with no skips** in 17.7 seconds. The earlier
+Windows runtime rerun hit the previously observed WSS fixture timeout; it is not
+reported as passing. Focused provisioned Java verification passed **25 tests**
+(23 profile cases, real mTLS transport, and the admission test exercising SQLite
+and PostgreSQL). Six profile tooling tests, four schema ownership/capacity tests,
+30 relevant UI tests including Python/console bundle interoperability, generated
+preflight/operation checks, source quality and TypeScript checking passed.
+
+The provisioned full `javaCheck` is running; no full Java/repository gate or live
+unchanged-container demo has passed for this increment. Native-factory preparation,
+runtime replica readiness, one-device
+provisioning/reconnect, persistent stack startup, external LLM routing/settings,
+device settings feedback, shared durable checkpoints, distributed cleanup and
+integrated acceptance remain outstanding. #295 stays **0/100**; no phase exit
+criteria, #274 module weight or #230 security guarantee is claimed. Next work
+is fresh placement/provisioning and stable stack wiring.
+
 ## JSON profile preflight regression — 2026-11-17
 
 Hosted run `44113630148`, job `134145766601`, tested `fd19f0d0` and failed

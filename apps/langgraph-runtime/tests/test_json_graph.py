@@ -8,11 +8,23 @@ import json
 from pathlib import Path
 import unittest
 
-from tools.workflows.json_graph_package import package
+import toolgate_runtime
 from toolgate_runtime.graph_packages import GraphPackages, GraphRefused
 from toolgate_runtime.json_graph import build_graph, cache_status, clear_cache, validate
 from toolgate_runtime.runner import Runner, Agent, ContextSource, Limits, Tool, ToolOutcome
 from test_runner import Gate, lease
+
+
+def installed_selection():
+    candidates=[]
+    for path in Path(toolgate_runtime.__file__).with_name('graphs').glob('*/manifest.json'):
+        manifest=json.loads(path.read_text(encoding='utf-8'))
+        if manifest['packageId']=='olo.json-graph' and manifest['version']=='1.0.0':
+            candidates.append(dict(packageId=manifest['packageId'],version=manifest['version'],
+                digest='sha256:'+path.parent.name,entryPoint='workflow',config={}))
+    if len(candidates)!=1:
+        raise AssertionError('Exactly one installed JSON graph factory is required')
+    return candidates[0]
 
 
 def spec(nodes=None, edges=None, output=None):
@@ -25,7 +37,7 @@ def spec(nodes=None, edges=None, output=None):
 class JsonGraphTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.selection = package(check=True)
+        cls.selection = installed_selection()
 
     def setUp(self):
         clear_cache()
@@ -39,6 +51,11 @@ class JsonGraphTests(unittest.TestCase):
     def test_json_selected_graph_executes_through_the_existing_governed_runner(self):
         outcome, gate = self.execute(spec())
         self.assertEqual(('SUCCEEDED','Please investigate.'),(outcome.state,outcome.result))
+        self.assertEqual([],gate.inferences)
+
+    def test_admitted_compiler_identity_is_required_before_any_graph_effect(self):
+        outcome, gate = self.execute(spec(), run=replace(lease(),compiler_digest='sha256:'+'0'*64))
+        self.assertEqual(('FAILED','GRAPH_COMPILER_MISMATCH'),(outcome.state,outcome.code))
         self.assertEqual([],gate.inferences)
 
     def test_supplied_summary_profile_reads_with_one_agent_then_summarizes_with_another(self):

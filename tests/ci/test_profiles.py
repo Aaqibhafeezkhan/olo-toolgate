@@ -17,6 +17,16 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class ProfileTests(unittest.TestCase):
+    def test_graph_only_tool_packages_are_kept_in_workflow_scope(self):
+        profile=json.loads((ROOT/'profiles/configurations/text-summary/workflow-profile.json').read_text(encoding='utf-8'))
+        workflow=profile['workflows']['workflows'][0]
+        workflow['graph']['config']['nodes']=[dict(id='read',kind='tool',agentId=workflow['agents'][0]['agentId'],
+            toolRef='graph.files/read',input={'toolRef':'unrelated/fake'})]
+        profile['packages']=[dict(packageId=name) for name in ('graph.files','unrelated')]
+        self.assertEqual(['graph.files'],[item['packageId'] for item in builder.scope(profile,workflow)['packages']])
+        workflow['graph']['config']['nodes'][0]['toolRef']='invalid'
+        with self.assertRaisesRegex(ValueError,'tool reference'):builder.scope(profile,workflow)
+
     def test_profile_artifact_names_are_platform_safe_and_do_not_alias_identifiers(self):
         self.assertNotEqual(builder.filename('workflow:one'),builder.filename('workflow-one'))
         self.assertNotIn(':',builder.filename('workflow:one'))

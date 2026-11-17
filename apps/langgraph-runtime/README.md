@@ -87,6 +87,48 @@ independent server evidence is still required for full qualification.
 
 ## JSON graphs and private rebuild API
 
+The admin profile lifecycle now includes **Prepare reviewed graphs**. Control
+fetches the exact reviewed document, asks its installation-selected runtime to
+compile every graph, then records all receipts in one tenant transaction after
+rechecking management authority and publication generation. Partial/failed builds
+leave previous receipts intact. Package readiness alone cannot publish a profile.
+The current rebuild endpoint supports the installed JSON factory; additional
+native-factory preparation remains to be implemented.
+
+Configure Control with these installation-owned settings, outside profiles:
+
+```text
+TOOLGATE_CONTROL_RUNTIME_BUILDER_ORIGIN=https://runtime-builder:8447
+TOOLGATE_CONTROL_RUNTIME_BUILDER_IDENTITY_PATH=/run/credentials/runtime/control-builder.p12
+TOOLGATE_CONTROL_RUNTIME_BUILDER_PASSWORD_PATH=/run/credentials/runtime/identity.password
+TOOLGATE_CONTROL_RUNTIME_BUILDER_CA_PATH=/run/credentials/runtime/runtime-ca.crt
+```
+
+Use an operator-issued Control service client certificate accepted by the runtime's
+`clientNames` and `clientCa`, and a server certificate valid for `runtime-builder`.
+Given those existing credentials, create the client identity without placing a
+password on the command line:
+
+```sh
+openssl pkcs12 -export -in credentials/runtime/control-builder.crt \
+  -inkey credentials/runtime/control-builder.key \
+  -out credentials/runtime/control-builder.p12 \
+  -passout file:credentials/runtime/identity.password
+chmod 600 credentials/runtime/control-builder.p12 credentials/runtime/identity.password
+```
+
+The identity/password must be private, protected files readable by Control; mount
+them read-only. Import does not create certificates, grants, mounts or firewall
+rules. Runtime traffic remains on the private installation network; these settings
+do not require opening an inbound host port.
+
+Each admitted run now pins the build's compiler digest. JSON workers refuse a
+different compiler before executing graph effects. Control continues a queued or
+running admitted revision after a new publication, while rechecking live step,
+lease, kill and model/tool authority. New admissions use the new publication.
+Fresh schemas and the current lease shape are required; unsupported existing
+databases/snapshots are refused without conversion.
+
 The installed `olo.json-graph` factory now compiles topology from workflow JSON.
 Get its verified selection metadata with:
 
@@ -347,3 +389,6 @@ simulated admission ledger. These prove client protocol/order/failure behavior,
 not real Control persistence, authentication/delegation enforcement, exactly-once
 business effects or real trigger-to-workflow completion. TLS tests require
 OpenSSL and explicitly skip where it is unavailable.
+The image CI gate uses the Dockerfile's `verification` stage with OpenSSL and
+runs the installed-runtime tests with read-only fixtures. The final `production`
+stage excludes that test-only executable.

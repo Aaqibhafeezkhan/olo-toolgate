@@ -22,6 +22,7 @@ public class WorkflowProfileResource {
     @Inject TriggerBootstrap triggers;
     @Inject PackageProvisioningBootstrap provisioning;
     @Inject VaultKeyBootstrap keys;
+    @Inject WorkflowGraphBootstrap graphs;
     private WorkflowProfiles service(DirectoryService.Actor actor) {
         return new WorkflowProfiles(store, codec, new WorkflowProfileDependencies(codec, Clock.systemUTC(),
             triggers.subscriptions(actor.tenant()), triggers.forTenant(actor.tenant()), actor.tenant()), keys.required());
@@ -73,5 +74,15 @@ public class WorkflowProfileResource {
     @POST @Path("{profileId}/publish") @Consumes("application/json")
     public Response publish(@PathParam("profileId") String id, String document) {
         var actor = actors.management(); return reply(service(actor).publish(actor, id, body(document), correlation.id()));
+    }
+    @POST @Path("{profileId}/graphs:prepare") @Consumes("application/json")
+    public Response prepareGraphs(@PathParam("profileId") String id, String document) {
+        var actor = actors.management();
+        // Resolve the builder only after current management authorization has succeeded.
+        var service = service(actor);
+        var request = codec.model(body(document), io.ololabs.toolgate.contracts.v2.WorkflowProfilePublishRequest.class);
+        service.document(actor, id, request.profileDigest(), true);
+        return reply(new WorkflowGraphPreparation(codec, service, graphs.builder())
+            .prepare(actor, id, document, correlation.id()));
     }
 }

@@ -2,6 +2,7 @@
 import {unzipSync} from 'fflate';
 import type {DeploymentProfile,PackageManifest,PackageVersion,WorkflowBundleConnection,WorkflowBundlePackage} from '@olo-labs/toolgate-contracts/v2';
 import type {ConfigurationFile} from './pendingContracts';
+import {configuredToolIds} from './workflowTools';
 
 export const MAX_PACKAGE_BYTES=64*1024*1024,MAX_BUNDLE_BYTES=128*1024*1024;
 export type EmbeddedPackage={metadata:WorkflowBundlePackage;bytes:Uint8Array;manifest:PackageManifest};
@@ -18,8 +19,7 @@ export function requiredPackages(profile:DeploymentProfile,references:Configurat
   }
   for(const pin of profile.packages)one(versions.filter(item=>item.packageId===pin.packageId&&item.version===pin.version&&(!pin.packageDigest||pin.packageDigest===item.packageDigest)),pin.packageId);
   for(const tool of references.tools)one(versions.filter(item=>item.manifest?.tools.some(entry=>entry.descriptor.toolId===tool.id&&(!tool.packageDigest||hex(entry.toolDescriptorDigest)===hex(tool.packageDigest)))),tool.id);
-  const context=[...(profile.workflows?.workflows.flatMap(item=>item.contextSources??[])??[]),...(profile.workflows?.agentDefinitions.flatMap(item=>item.contextSources)??[])];
-  for(const tool of context)if(!references.tools.some(item=>item.id===tool.toolId))one(versions.filter(item=>item.manifest?.tools.some(entry=>entry.descriptor.toolId===tool.toolId)),tool.toolId);
+  for(const toolId of configuredToolIds(profile))if(!references.tools.some(item=>item.id===toolId))one(versions.filter(item=>item.manifest?.tools.some(entry=>entry.descriptor.toolId===toolId)),toolId);
   for(const connection of connections)one(versions.filter(item=>item.version===connection.assignmentSpec.packageVersion&&item.manifest?.triggers?.some(entry=>entry.descriptor.triggerId===connection.assignmentSpec.trigger)),connection.assignmentSpec.trigger);
   const source=profile.workflows?.workflows[0].deployment?.source;
   if(source)one(versions.filter(item=>item.packageId===source.packageId&&item.version===source.version&&(!source.packageDigest||source.packageDigest===item.packageDigest)),source.packageId);

@@ -84,6 +84,18 @@ final class JdbcWorkflowProfileStore implements WorkflowProfileStore {
             return rows.next() ? new Ownership(rows.getString(1), rows.getString(2)) : null;
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    public String graphBuild(String profileId, String digest, String workflowId) {
+        try (var statement = statement("SELECT document FROM control_workflow_graph_builds WHERE tenant_id=? AND profile_id=? AND digest=? AND workflow_id=?", profileId, digest, workflowId);
+             var rows = statement.executeQuery()) {
+            return rows.next() ? rows.getString(1) : null;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public void graphBuild(String profileId, String digest, String workflowId, String document) {
+        try (var statement = statement("INSERT INTO control_workflow_graph_builds(tenant_id,profile_id,digest,workflow_id,document) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,profile_id,digest,workflow_id) DO UPDATE SET document=excluded.document",
+                profileId, digest, workflowId, document)) {
+            statement.executeUpdate();
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
     public void own(String kind, String id, String profileId, String definitionDigest) {
         try (var statement = statement("INSERT INTO control_workflow_profile_owners(tenant_id,resource_kind,resource_id,profile_id,definition_digest) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING", kind, id, profileId, definitionDigest)) {
             statement.executeUpdate();

@@ -41,7 +41,7 @@ public final class WorkflowModelSelection {
         if (tx.kills().effective().stream().anyMatch(kill -> "TENANT".equals(kill.scope()))) throw ManagementAccess.denied();
         var run = runs.running(runId);
         if (run == null) throw ManagementAccess.denied();
-        var config = profiles.runnableRevision(tx, tenant, run.profileId(), run.profileDigest()).workflows();
+        var config = profiles.admittedRevision(tx, tenant, run).workflows();
         var workflow = config.workflows().stream().filter(item -> item.id().equals(run.workflowId())
             && item.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
         var directory = tx.load();

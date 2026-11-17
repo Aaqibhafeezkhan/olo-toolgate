@@ -4,6 +4,7 @@ import type {DeploymentProfile,WorkflowConfiguration,WorkflowDefinition,TriggerA
 import type {ConfigurationFile} from './pendingContracts';
 import {referencedData,validateReferences} from './workflowReferences';
 import {inspectPackage,MAX_BUNDLE_BYTES,MAX_PACKAGE_BYTES,sha256,verifyPackageCoverage,type EmbeddedPackage} from './workflowPackages';
+import {graphToolIds} from './workflowTools';
 
 const MAX_PROFILE=262144,MAX_REFERENCES=2097152;
 const collections=['workflowGroups','modelGroups','modelDeployments','agentDefinitions','workflows','dispatchBindings'] as const;
@@ -37,6 +38,7 @@ export function workflowScope(profile:DeploymentProfile,id:string):DeploymentPro
   const workflowGroups=source.workflowGroups.filter(item=>item.id===workflow.workflowGroupId);
   if(workflowGroups.length!==1)fail('Workflow group is unavailable.');
   const packageIds=new Set([...(workflow.contextSources??[]),...agentDefinitions.flatMap(item=>item.contextSources)].map(item=>item.toolId.split('/')[0]));
+  for(const toolId of graphToolIds(workflow))packageIds.add(toolId.split('/')[0]);
   if(workflow.deployment)packageIds.add(workflow.deployment.source.packageId);
   const definition=copy(workflow);
   return copy({profileVersion:2,profileId:profile.profileId,packages:profile.packages.filter(item=>packageIds.has(item.packageId)),

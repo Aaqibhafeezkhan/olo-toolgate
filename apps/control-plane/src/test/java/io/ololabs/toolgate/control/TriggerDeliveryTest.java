@@ -430,6 +430,10 @@ final class TriggerDeliveryTest {
             var staged = JSON.readTree(profiles.upload(w.admin(), profile.toString(), "stage").body());
             String digest = staged.path("profileDigest").asText();
             profiles.review(w.admin(), "support", codec.json(Map.of("profileDigest", digest)), "review");
+            var graphPreparation = new WorkflowGraphPreparation(codec, profiles, build ->
+                new io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildResult(build.tenantId(), build.profileId(), build.profileDigest(),
+                    build.workflowId(), build.expectedGeneration(), "sha256:" + "b".repeat(64), "sha256:" + "c".repeat(64), List.of("fixture"), "READY"));
+            graphPreparation.prepare(w.admin(), "support", codec.json(Map.of("profileDigest", digest, "expectedGeneration", 0)), "prepare");
             profiles.publish(w.admin(), "support", codec.json(Map.of("profileDigest", digest, "expectedGeneration", 0)), "publish");
 
             sync(w, List.of(fired(w, 1, "alpha")));
@@ -505,6 +509,19 @@ final class TriggerDeliveryTest {
             assertEquals(204, leases.claim(worker, "claim-again").status());
             var leaseId = snapshot.path("leaseId").asText();
             var token = snapshot.path("leaseToken").asText();
+            // Publishing B changes new admissions, while the leased A run keeps its exact configuration.
+            var replacement = profile.deepCopy();
+            ((ObjectNode)replacement.path("workflows").path("workflows").get(0))
+                .put("versionId", "revision-2").put("systemPrompt", "Replacement supervisor");
+            ((ObjectNode)replacement.path("workflows").path("dispatchBindings").get(0)).put("workflowVersionId", "revision-2");
+            ((ObjectNode)replacement.path("workflows").path("modelDeployments").get(0)).put("modelId", "replacement-model");
+            String nextDigest = JSON.readTree(profiles.upload(w.admin(), replacement.toString(), "next-stage").body()).path("profileDigest").asText();
+            profiles.review(w.admin(), "support", codec.json(Map.of("profileDigest", nextDigest)), "next-review");
+            graphPreparation.prepare(w.admin(), "support", codec.json(Map.of("profileDigest", nextDigest, "expectedGeneration", 1)), "next-prepare");
+            profiles.publish(w.admin(), "support", codec.json(Map.of("profileDigest", nextDigest, "expectedGeneration", 1)), "next-publish");
+            var replayAfterSwap = JSON.readTree(service.admit(w.admin(), request, "duplicate-after-swap").body());
+            assertEquals(runId, replayAfterSwap.path("runId").asText());
+            assertEquals("DUPLICATE", replayAfterSwap.path("disposition").asText());
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "other", "models")));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "other")));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "other", "models")));
@@ -512,6 +529,8 @@ final class TriggerDeliveryTest {
             w.store().transaction(w.tenant(), false, tx -> {
                 var models = new WorkflowModelSelection(profiles, codec, w.clock());
                 assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText()).id());
+                assertEquals(config.path("modelDeployments").get(0).path("modelId").asText(),
+                    models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText()).modelId());
                 assertEquals(403, status(() -> new WorkflowToolAuthority(codec, models, w.clock()).resolve(tx, w.tenant(), runId,
                     summaryGrant.path("token").asText(), "files/read", "summary-no-tools")));
                 return null;
@@ -557,6 +576,22 @@ final class TriggerDeliveryTest {
             assertEquals(403, status(() -> leases.result(worker, runId)));
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "models")));
             assertEquals(403, status(() -> leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, null, "repeat-finish")));
+            sync(w, List.of(fired(w, 2, "beta")));
+            w.router().route();
+            String nextCursor = parse(session.pump()).getLast().path("cursor").asText();
+            var nextAdmission = JSON.readTree(service.admit(w.admin(), codec.json(Map.of("subscriptionUid", uid, "cursor", nextCursor)), "admit-next").body());
+            var nextSnapshot = JSON.readTree(leases.claim(worker, "claim-next").body());
+            assertEquals(nextAdmission.path("runId"), nextSnapshot.path("runId"));
+            assertEquals(nextDigest, nextSnapshot.path("profileDigest").asText());
+            assertEquals("revision-2", nextSnapshot.path("workflowVersionId").asText());
+            assertEquals("Replacement supervisor", nextSnapshot.path("supervisorPrompt").asText());
+            var nextGrant = JSON.readTree(leases.authorizeStep(worker, nextSnapshot.path("runId").asText(),
+                nextSnapshot.path("leaseId").asText(), nextSnapshot.path("leaseToken").asText(), "AGENT", "investigator", "models").body());
+            w.store().transaction(w.tenant(), false, tx -> {
+                assertEquals("replacement-model", new WorkflowModelSelection(profiles, codec, w.clock()).resolve(tx, w.tenant(),
+                    nextSnapshot.path("runId").asText(), nextGrant.path("token").asText()).modelId());
+                return null;
+            });
         }
     }
 

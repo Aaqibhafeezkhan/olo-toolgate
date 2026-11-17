@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Admitted workflow revision and compiler pin — 2026-11-17
+
+The next #295 slice separates current-publication admission from execution of a
+durable queued/running run, pins the compiler digest in that run, and requires
+tenant/generation-bound compiler receipts at production publication. Current
+leases, kills and live service/agent/model/tool authority remain mandatory.
+The focused SQLite/PostgreSQL admission test checks A/B selection, duplicate
+admission and current agent revocation; the real mTLS build transport test also
+passes. This is no completed #230 stage or full first-slice security acceptance.
+Weights, phase table and security limitations are unchanged. Actual checks and
+remaining activation/persistence/demo work are recorded in the
+[workflow checkpoint](../architecture/workflow-v1-status.md#graph-preparation-and-admitted-run-hot-swap--2026-11-17).
+
 ## Local JSON graph/compiler boundary — 2026-11-17
 
 The #295 hot-swap implementation adds a pure JSON graph compiler using existing

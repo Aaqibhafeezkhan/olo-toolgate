@@ -86,6 +86,24 @@ it('excludes unrelated models, agents and workflow groups',()=>{
   expect(workflowScope(profile,first.id)).toEqual(original);
 });
 
+it('exports graph-only tool packages and retains their shared references when another workflow is removed',async()=>{
+  const profile=mutable(original);
+  const graph=profile.workflows!.workflows[0].graph;
+  graph.packageId='olo.json-graph';
+  graph.config={schemaVersion:1,nodes:[{id:'read',kind:'tool',agentId:first.agents[0].agentId,toolRef:'graph.files/read',input:{toolRef:'unrelated.package/fake'}}],
+    edges:[{from:['START'],to:'read'},{from:['read'],to:'END'}],output:{$path:'/values/read'},outputSchema:{}};
+  profile.packages.push({packageId:'graph.files',source:'MARKETPLACE',version:'1.0.0',required:true});
+  profile.workflows!.workflows.push({...mutable(profile.workflows!.workflows[0]),id:'shared-graph'});
+  expect(workflowScope(profile,first.id).packages.map(item=>item.packageId)).toContain('graph.files');
+  const bundle=await importWorkflow('graph.olo',await exportWorkflow(profile,first.id,assignments,subscriptions));
+  expect(bundle.packages.map(item=>item.metadata.packageId)).toContain('graph.files');
+  expect(bundle.packages.map(item=>item.metadata.packageId)).not.toContain('unrelated.package');
+  expect(removeWorkflow(profile,first.id).packages.map(item=>item.packageId)).toContain('graph.files');
+  const archives=await mockWorkflowPackages(profile,assignments);
+  const withoutGraph=[];for(const archive of archives){const content=unzipSync(archive);if(JSON.parse(new TextDecoder().decode(content['toolgate-package.json'])).id!=='graph.files')withoutGraph.push(archive);}
+  await expect(packWorkflow(profile,first.id,assignments,subscriptions,snapshot,withoutGraph)).rejects.toThrow('missing');
+});
+
 it('rejects former nested tool filenames and tool archives as workflow filenames',async()=>{
   const bytes=await exportWorkflow(original,first.id,assignments,subscriptions);
   await expect(importWorkflow('tool.olotool',bytes)).rejects.toThrow();

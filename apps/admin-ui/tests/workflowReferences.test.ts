@@ -38,3 +38,12 @@ it('merges referenced tool memberships into an empty installation group without 
   const current={...snapshot,toolGroups:[{id:'tools',name:'Tools',enabled:true,revision:1,toolIds:['existing-tool']}]};
   expect(mergeReferences(incoming as ConfigurationFile,current as ConfigurationFile).toolGroups[0].toolIds).toEqual(['existing-tool','imported-tool']);
 });
+
+it('includes direct JSON graph tools and their groups without treating argument strings as references',()=>{
+  const workflow=profile.workflows!.workflows[0];
+  const changed={...profile,workflows:{...profile.workflows!,workflows:[{...workflow,graph:{...workflow.graph,packageId:'olo.json-graph',config:{nodes:[
+    {id:'read',kind:'tool',toolRef:'graph.files/read',input:{toolRef:'unrelated/fake'}}]}}}]}};
+  const data=referencedData(changed,{...snapshot,tools:[{id:'graph.files/read'},{id:'unrelated/fake'}],toolGroups:[{id:'graph-tools',toolIds:['graph.files/read']}]} as unknown as ConfigurationFile);
+  expect(data.tools.map(item=>item.id)).toEqual(['graph.files/read']);
+  expect(data.toolGroups.map(item=>item.id)).toEqual(['graph-tools']);
+});

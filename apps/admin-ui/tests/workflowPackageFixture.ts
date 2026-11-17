@@ -3,12 +3,13 @@
 import {strToU8,zipSync} from 'fflate';
 import type {DeploymentProfile,TriggerAssignment} from '@olo-labs/toolgate-contracts/v2';
 import {sha256} from '../src/workflowPackages';
+import {configuredToolIds} from '../src/workflowTools';
 
 export async function mockWorkflowPackages(profile:DeploymentProfile,assignments:readonly TriggerAssignment[]){
   const groups=new Map<string,{tools:unknown[];triggers:unknown[];version:string}>();
-  for(const item of profile.workflows!.agentDefinitions.flatMap(item=>item.contextSources)){
-    const id=item.toolId.split('/')[0],group=groups.get(id)??{tools:[],triggers:[],version:'1.0.0'};
-    group.tools.push({descriptor:{toolId:item.toolId},toolDescriptorDigest:'sha256:'+'a'.repeat(64)});groups.set(id,group);
+  for(const toolId of configuredToolIds(profile)){
+    const id=toolId.split('/')[0],group=groups.get(id)??{tools:[],triggers:[],version:'1.0.0'};
+    group.tools.push({descriptor:{toolId},toolDescriptorDigest:'sha256:'+'a'.repeat(64)});groups.set(id,group);
   }
   for(const item of assignments){const id=item.spec.trigger.split('/')[0],group=groups.get(id)??{tools:[],triggers:[],version:item.spec.packageVersion};group.triggers.push({descriptor:{triggerId:item.spec.trigger}});groups.set(id,group);}
   const result=[];

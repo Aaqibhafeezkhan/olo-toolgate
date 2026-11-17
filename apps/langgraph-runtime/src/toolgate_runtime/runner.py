@@ -81,6 +81,7 @@ class RunLease:
     limits: Limits
     agents: tuple[Agent, ...]
     graph: dict = field(repr=False)
+    compiler_digest: str
     context_sources: tuple[ContextSource, ...] = ()
     remediation_mode: Literal["PREPARE", "APPLY"] = "PREPARE"
     agent_stages: tuple[AgentStage, ...] = ()
@@ -177,6 +178,8 @@ def _validate(lease: RunLease) -> None:
         if not isinstance(value, str) or not ID.fullmatch(value):
             raise _Stop("INVALID_LEASE")
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", lease.profile_digest):
+        raise _Stop("INVALID_LEASE")
+    if not isinstance(lease.compiler_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", lease.compiler_digest):
         raise _Stop("INVALID_LEASE")
     if not isinstance(lease.lease_token, str) or not lease.lease_token:
         raise _Stop("INVALID_LEASE")
@@ -520,6 +523,10 @@ class Runner:
         self.graph_packages = GraphPackages(graph_directory)
 
     async def _graph(self, lease, execution):
+        if lease.graph['packageId'] == 'olo.json-graph':
+            from .json_graph import COMPILER_DIGEST
+            if lease.compiler_digest != COMPILER_DIGEST:
+                raise _Stop('GRAPH_COMPILER_MISMATCH')
         capabilities = _Capabilities(execution)
         context = RunContext(_Models(capabilities), _Tools(capabilities), _Agents(capabilities))
         final = None

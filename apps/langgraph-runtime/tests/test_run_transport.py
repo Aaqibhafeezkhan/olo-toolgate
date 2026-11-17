@@ -40,6 +40,7 @@ class RunTransportTests(unittest.TestCase):
         self.snapshot = {
             "runId": "run-1", "leaseId": "lease-1", "workflowId": "workflow-1", "workflowVersionId": "v1",
             "profileDigest": "sha256:" + "1" * 64, "leaseToken": "x" * 43, "message": "test",
+            "compilerDigest": "sha256:" + "2" * 64,
             "graph": {'packageId': 'toolgate.supervisor', 'version': '1.0.0', 'digest': 'sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd', 'entryPoint': 'supervisor', 'config': {}}, "supervisorPrompt": "Delegate", "supervisorModelGroupId": "models", "contextSources": [], "agentStages": [],
             "limits": {"maxSteps": 4, "maxHandoffs": 1, "maxDurationSeconds": 20},
             "agents": [{"agentId": "agent-1", "modelGroupId": "models", "systemPrompt": "Handle",
