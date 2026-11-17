@@ -2527,7 +2527,7 @@ pub enum ProfileChangeKind {
     #[serde(rename = "REMOVED")]
     Removed,
 }
-/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups.
+/// One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names eligible groups for one durably selected profile device receiving its device-runnable exports as a signed client release (ADR 026). One selected device must belong to at least one enabled group in each package group list, with no automatic failover. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProfilePackage {
@@ -2575,7 +2575,7 @@ pub struct ProfileToolActivation {
     pub tool_id: String,
     pub tool_group_id: String,
 }
-/// A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment.
+/// A client trigger assignment colocated with the profile device packages on one persistently selected eligible device. Independently managed group membership remains a live constraint.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProfileTrigger {
@@ -4862,6 +4862,8 @@ pub struct TriggerTarget {
     pub device_groups: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exclude_devices: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_device_group_sets: Option<Vec<Vec<String>>>,
 }
 /// Canonical TriggerTerminalRejectionPolicy wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

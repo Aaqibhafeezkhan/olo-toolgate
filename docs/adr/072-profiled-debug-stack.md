@@ -61,3 +61,11 @@ dependency checks. Admission pins the compiler digest in the run, independently
 of later preparation. This is compilation evidence, not device/provider readiness
 or proof that all worker replicas have reconciled. The fresh schema includes
 receipt storage and the pinned run column; no database migration is introduced.
+
+Device-local dependencies of one profile are colocated on one eligible member
+of its declared groups. Persist that selection before requesting any rollout,
+so retries and reconnects cannot create a second watcher elsewhere. A missing,
+offline, disabled, unapproved or removed selected member blocks reconciliation;
+it never causes automatic failover. Changing placement requires a future
+explicit fenced handover. Package/trigger readiness is read from exact current
+applied generations and live leases again in the publication transaction.

@@ -4522,6 +4522,19 @@ BEGIN
 END;$$;
 CREATE TRIGGER workflow_revision_immutable BEFORE UPDATE ON control_workflow_profile_revisions FOR EACH ROW EXECUTE FUNCTION control_workflow_revision_guard();
 
+CREATE TABLE control_workflow_device_placements(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ profile_id varchar(128) NOT NULL, device_id varchar(128) NOT NULL,
+ generation bigint NOT NULL CHECK(generation=1), PRIMARY KEY(tenant_id,profile_id));
+ALTER TABLE control_workflow_device_placements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_workflow_device_placements FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_workflow_device_placements USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_workflow_device_placements AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE FUNCTION control_workflow_placement_guard() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable device placement'; END;$$;
+CREATE TRIGGER placement_immutable BEFORE UPDATE ON control_workflow_device_placements FOR EACH ROW EXECUTE FUNCTION control_workflow_placement_guard();
+GRANT SELECT,INSERT ON TABLE public.control_workflow_device_placements TO toolgate_control_runtime;
+GRANT SELECT,INSERT ON TABLE public.control_workflow_device_placements TO toolgate_control_platform;
+
 CREATE TABLE control_workflow_graph_builds(
  tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
  profile_id varchar(128) NOT NULL, digest varchar(71) NOT NULL, workflow_id varchar(128) NOT NULL,
@@ -4591,6 +4604,18 @@ CREATE FUNCTION control_capacity_seed() RETURNS trigger LANGUAGE plpgsql SECURIT
 BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id);RETURN NEW;END;$$;
 REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
+
+CREATE FUNCTION control_workflow_device_placements_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.profile_id),0)+COALESCE(octet_length(NEW.device_id),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.profile_id),0)+COALESCE(octet_length(OLD.device_id),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_workflow_device_placements_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_workflow_device_placements FOR EACH ROW EXECUTE FUNCTION control_workflow_device_placements_capacity();
 
 CREATE FUNCTION control_workflow_graph_builds_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;

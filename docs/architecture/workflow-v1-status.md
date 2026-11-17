@@ -1,6 +1,52 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Durable device placement and applied readiness — 2026-11-18
+
+Known base `ab8a1de5`. Package provisioning now records one tenant/profile device
+selection before rollout and colocates its local packages and triggers there.
+The selected device must be enabled, approved, recently connected and a member
+of at least one enabled group in every required package's declared group list. Selection
+uses current Super Admin authority; cached actor flags do not suffice. Retries,
+reconnect and process reconstruction retain the selection. An offline/removed
+selection stays pending; no automatic second watcher or unfenced failover occurs.
+Fresh SQLite/PostgreSQL placement storage includes tenant fencing and capacity
+accounting; unsupported existing schemas remain rejected without migration.
+
+Generic trigger target `requiredDeviceGroupSets` restricts exact-device targets
+by independently managed group membership. A next-check-in target loss now marks
+the instance Removed and revokes the old active lease. Previously the desired
+set could shrink without explicitly revoking that lease. Provisioning requires
+exact applied package generation/version and READY reports; Running triggers
+require current configuration, Ready reports and unexpired leases on the same
+device. Publication/new admission recheck current observations instead of trusting
+a saved READY string. Profile-managed exports carry group requirements rather
+than the source's selected device; import refuses a group-wide watch before
+Control provisioning selects its destination.
+
+Validation already executed: canonical corpus seven tests, trigger bounds/size
+five tests, deployment-profile three tests, ownership/capacity four tests,
+PHP 459 v2 round trips, Rust two v2 round trips, generated preflight, source
+quality and UI type checking passed. All 311 UI tests passed (one optional test
+skipped), with coverage 87.98% statements, 84.18% branches, 86.86% functions and
+91.16% lines. Broader provisioned Java verification passed **79 Control tests**
+and **two Java contract tests** in 16m33s, including provisioning, fleet,
+trigger lifecycle/ingest/delivery, tenant RLS and capacity on their supported
+SQLite/PostgreSQL backends. After the final live-role and optional-package
+selection refinements, **13 affected Java tests** passed again against freshly
+provisioned storage. The complete UI gate/type checks also passed again after
+the final export change. The unrelated full `javaCheck` Windows fixture failure
+recorded below remains a limitation; no full repository gate or live demo pass
+is claimed.
+
+This is a component slice, not complete provisioning/activation or a live demo.
+Imported candidates still require durable automatic deployment reconciliation,
+candidate/active trigger handover isolation, provider/runtime readiness, fresh
+stack wiring, durable recovery/cleanup and unchanged-container acceptance.
+Device capability/folder permission qualification and explicit fenced
+reassignment remain incomplete. #295 stays **0/100**; #274 stays **27%** and
+no #230 stage/security-guarantee credit is earned.
+
 ## Compatible worker claiming — 2026-11-17
 
 Known base `3d94520c`. Workers now advertise their compiler digest and bounded,
@@ -1650,7 +1696,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; one-device placement and current applied-device readiness added, complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment, workflow replacement without restart, multi-workflow/shared-definition handling and admin-preserving blank reset locally exercised; complete fresh-install/cross-host qualification and release publication pending | 0% |

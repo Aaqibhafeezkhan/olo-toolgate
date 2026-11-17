@@ -41,6 +41,24 @@ public final class WorkflowProfileDependencies implements WorkflowProfiles.Readi
             var packages = tx.packages().provisioning(profile.profileId());
             if (packages == null || !packages.profileDigest().equals(profileDigest)
                     || !"READY".equals(((JsonNode)codec.value(packages.document())).path("state").asText())) return false;
+            var document = (JsonNode)codec.value(packages.document());
+            for (var requested : profile.packages()) {
+                if (!requested.required()) continue;
+                if (requested.deviceGroupIds() != null && !requested.deviceGroupIds().isEmpty()) {
+                    var statuses = java.util.stream.StreamSupport.stream(document.path("packages").spliterator(), false)
+                        .filter(p -> requested.packageId().equals(p.path("packageId").asText())).toList();
+                    if (statuses.size() != 1 || !"READY".equals(statuses.getFirst().path("state").asText())
+                            || !requested.version().equals(statuses.getFirst().path("version").asText())
+                            || new WorkflowDeviceReadiness(codec, clock).blocker(tx, profile.profileId(), requested, statuses.getFirst()) != null) return false;
+                }
+                for (var trigger : requested.triggers() == null ? java.util.List.<io.ololabs.toolgate.contracts.v2.ProfileTrigger>of() : requested.triggers()) {
+                    var devices = java.util.stream.StreamSupport.stream(document.path("packages").spliterator(), false)
+                        .filter(p -> requested.packageId().equals(p.path("packageId").asText()))
+                        .flatMap(p -> java.util.stream.StreamSupport.stream(p.path("deviceIds").spliterator(), false)).map(JsonNode::asText).toList();
+                    if (triggers == null || !triggers.enabled() || !triggers.prepared(tx, trigger.assignment(), trigger.triggerId(), requested.version(),
+                            (JsonNode)codec.value(codec.json(trigger.config())), devices)) return false;
+                }
+            }
         }
         try {
             new WorkflowConfigurations(codec).validate(codec.json(profile.workflows()), reference -> switch (reference.kind()) {

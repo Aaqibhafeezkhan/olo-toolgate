@@ -4,7 +4,7 @@ import {unzipSync,zipSync,strToU8} from 'fflate';
 import type {DeploymentProfile,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
 import type {ConfigurationFile} from '../src/pendingContracts';
 import fixture from '../../../tests/fixtures/contracts/v2/valid.json';
-import {applyWorkflow,exportWorkflow as packWorkflow,importWorkflow,removeWorkflow,workflowScope} from '../src/workflowBundle';
+import {applyWorkflow,exportWorkflow as packWorkflow,importWorkflow,removeWorkflow,workflowScope,workflowConnections,workflowAssignmentMatches} from '../src/workflowBundle';
 import {mockWorkflowPackages} from './workflowPackageFixture';
 
 type Mutable<T>=T extends Uint8Array?Uint8Array:T extends readonly (infer E)[]?Mutable<E>[]:T extends object?{-readonly [K in keyof T]:Mutable<T[K]>}:T;
@@ -17,6 +17,18 @@ const subscriptions=[{...fixture.TriggerSubscription,metadata:{...fixture.Trigge
 
 const snapshot={formatVersion:2,tenantId:'tenant-a',revision:1,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
 const exportWorkflow=async(profile:DeploymentProfile,id:string,a:TriggerAssignment[],s:TriggerSubscription[])=>packWorkflow(profile,id,a,s,snapshot,await mockWorkflowPackages(profile,a));
+
+it('exports profile group placement without copying the source device and matches a different destination device',()=>{
+  const profile=mutable(original);
+  profile.packages.push({packageId:'examples.hotfolder-watch',version:'1.0.0',source:'PREBUILT_CORE',required:true,deviceGroupIds:['finance-desktops'],triggers:[{assignment:'source',triggerId:assignments[0].spec.trigger,config:{folder:'inbox'}}]});
+  const connection=workflowConnections(profile,assignments,subscriptions)[0];
+  expect(connection.assignmentSpec.target).toEqual({executor:'CLIENT',deviceGroups:['finance-desktops'],requiredDeviceGroupSets:[['finance-desktops']]});
+  expect(JSON.stringify(connection.assignmentSpec)).not.toContain('device-42');
+  const destination=mutable(assignments[0]);destination.spec.target={executor:'CLIENT',devices:['new-device'],requiredDeviceGroupSets:[['finance-desktops']]};
+  expect(workflowAssignmentMatches(profile,destination,connection.assignmentSpec)).toBe(true);
+  destination.spec.config={folder:'different'};
+  expect(workflowAssignmentMatches(profile,destination,connection.assignmentSpec)).toBe(false);
+});
 
 it('exports one compressed workflow with its dependency closure and no README, host settings or credentials',async()=>{
   const profile=mutable(original);profile.workflows!.workflows.push({...mutable(first),id:'other'});

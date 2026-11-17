@@ -102,4 +102,16 @@ final class JdbcWorkflowProfileStore implements WorkflowProfileStore {
             if (!new Ownership(profileId, definitionDigest).equals(owner(kind, id))) throw Failure.conflict();
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    public DevicePlacement devicePlacement(String profileId) {
+        try (var statement = statement("SELECT device_id,generation FROM control_workflow_device_placements WHERE tenant_id=? AND profile_id=?", profileId);
+             var rows = statement.executeQuery()) {
+            return rows.next() ? new DevicePlacement(profileId, rows.getString(1), rows.getLong(2)) : null;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public DevicePlacement placeDevice(String profileId, String deviceId) {
+        try (var statement = statement("INSERT INTO control_workflow_device_placements(tenant_id,profile_id,device_id,generation) VALUES(?,?,?,1) ON CONFLICT DO NOTHING", profileId, deviceId)) {
+            statement.executeUpdate();
+            return devicePlacement(profileId);
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
 }

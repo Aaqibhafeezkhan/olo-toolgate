@@ -1377,7 +1377,7 @@ export interface ProfileChange {
   readonly packageDigest?: string;
 }
 export type ProfileChangeKind = "ADDED" | "CHANGED" | "REMOVED";
-/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups. */
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names eligible groups for one durably selected profile device receiving its device-runnable exports as a signed client release (ADR 026). One selected device must belong to at least one enabled group in each package group list, with no automatic failover. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups. */
 export interface ProfilePackage {
   readonly packageId: string;
   readonly source: ProfilePackageSource;
@@ -1404,7 +1404,7 @@ export interface ProfileToolActivation {
   readonly toolId: string;
   readonly toolGroupId: string;
 }
-/** A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment. */
+/** A client trigger assignment colocated with the profile device packages on one persistently selected eligible device. Independently managed group membership remains a live constraint. */
 export interface ProfileTrigger {
   readonly assignment: string;
   readonly triggerId: string;
@@ -2603,6 +2603,7 @@ export interface TriggerTarget {
   readonly devices?: ReadonlyArray<string>;
   readonly deviceGroups?: ReadonlyArray<string>;
   readonly excludeDevices?: ReadonlyArray<string>;
+  readonly requiredDeviceGroupSets?: ReadonlyArray<ReadonlyArray<string>>;
 }
 export type TriggerTerminalRejectionPolicy = "HALT" | "SKIP_AND_RECORD";
 export type TriggerTimestamp = string;

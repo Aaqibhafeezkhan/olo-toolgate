@@ -3966,5 +3966,42 @@
         "workflowId": "foreign"
       }
     }
+  ],
+  "TriggerTarget": [
+    {
+      "case": "empty required device group set",
+      "value": {
+        "executor": "CLIENT",
+        "requiredDeviceGroupSets": [
+          []
+        ]
+      }
+    },
+    {
+      "case": "duplicate groups in required set",
+      "value": {
+        "executor": "CLIENT",
+        "requiredDeviceGroupSets": [
+          [
+            "finance",
+            "finance"
+          ]
+        ]
+      }
+    },
+    {
+      "case": "duplicate required group sets",
+      "value": {
+        "executor": "CLIENT",
+        "requiredDeviceGroupSets": [
+          [
+            "finance"
+          ],
+          [
+            "finance"
+          ]
+        ]
+      }
+    }
   ]
 }

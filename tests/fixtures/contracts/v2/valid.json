@@ -3815,6 +3815,15 @@
     ],
     "excludeDevices": [
       "device-7"
+    ],
+    "requiredDeviceGroupSets": [
+      [
+        "finance-desktops",
+        "on-call"
+      ],
+      [
+        "approved-file-devices"
+      ]
     ]
   },
   "TriggerRollingUpdate": {

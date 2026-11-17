@@ -1740,6 +1740,19 @@
             "$ref": "trigger.schema.json#/$defs/TriggerExecutorId"
           },
           "maxItems": 256
+        },
+        "requiredDeviceGroupSets": {
+          "type": "array",
+          "description": "Restricts resolved targets: the device must belong to at least one enabled group in every set. This never adds a target. Used to keep exact-device placement fenced by independently managed group membership.",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {"$ref": "identifiers.schema.json#/$defs/Identifier"}
+          }
         }
       },
       "required": [

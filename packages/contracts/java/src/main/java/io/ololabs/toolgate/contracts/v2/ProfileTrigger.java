@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts.v2;
 
-/** A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment.
+/** A client trigger assignment colocated with the profile device packages on one persistently selected eligible device. Independently managed group membership remains a live constraint.
  *
  * @param assignment canonical assignment value
  * @param triggerId canonical triggerId value

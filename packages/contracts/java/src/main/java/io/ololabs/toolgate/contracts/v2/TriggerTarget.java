@@ -9,13 +9,15 @@ package io.ololabs.toolgate.contracts.v2;
  * @param devices canonical devices value
  * @param deviceGroups canonical deviceGroups value
  * @param excludeDevices canonical excludeDevices value
+ * @param requiredDeviceGroupSets canonical requiredDeviceGroupSets value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record TriggerTarget(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "executor", required = true) TriggerExecutor executor,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "devices", required = false) java.util.List<String> devices,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "deviceGroups", required = false) java.util.List<String> deviceGroups,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "excludeDevices", required = false) java.util.List<String> excludeDevices
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "excludeDevices", required = false) java.util.List<String> excludeDevices,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "requiredDeviceGroupSets", required = false) java.util.List<java.util.List<String>> requiredDeviceGroupSets
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -23,11 +25,13 @@ public record TriggerTarget(
      * @param devices canonical devices value
      * @param deviceGroups canonical deviceGroups value
      * @param excludeDevices canonical excludeDevices value
+     * @param requiredDeviceGroupSets canonical requiredDeviceGroupSets value
      */
     public TriggerTarget {
         java.util.Objects.requireNonNull(executor, "executor");
         devices = devices == null ? null : java.util.List.copyOf(devices);
         deviceGroups = deviceGroups == null ? null : java.util.List.copyOf(deviceGroups);
         excludeDevices = excludeDevices == null ? null : java.util.List.copyOf(excludeDevices);
+        requiredDeviceGroupSets = requiredDeviceGroupSets == null ? null : java.util.List.copyOf(requiredDeviceGroupSets);
     }
 }

@@ -64,6 +64,20 @@ export function removeWorkflow(profile:DeploymentProfile,id:string):DeploymentPr
   return next;
 }
 
+/** Profile placement is portable; the selected physical device belongs only to the destination installation. */
+export function portableAssignmentSpec(profile:DeploymentProfile,assignment:TriggerAssignment){
+  const spec=copy(assignment.spec);
+  const owner=profile.packages.find(item=>item.triggers?.some(trigger=>trigger.assignment===assignment.metadata.name));
+  if(owner?.deviceGroupIds?.length){
+    const local=profile.packages.filter(item=>item.deviceGroupIds?.length),required=local.filter(item=>item.required);
+    const sets=[...(required.length?required:local),owner].map(item=>[...item.deviceGroupIds!].sort());
+    spec.target={executor:'CLIENT',deviceGroups:[...owner.deviceGroupIds],requiredDeviceGroupSets:sets.filter((set,index)=>sets.findIndex(other=>same(other,set))===index)};
+  }
+  return spec;
+}
+export function workflowAssignmentMatches(profile:DeploymentProfile,assignment:TriggerAssignment,spec:Connection['assignmentSpec']){
+  return same(portableAssignmentSpec(profile,assignment),spec);
+}
 export function workflowConnections(selected:DeploymentProfile,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[]):Connection[]{
   return selected.workflows!.dispatchBindings.map(binding=>{
     const subscription=subscriptions.find(item=>item.metadata.uid===binding.subscriptionUid);
@@ -71,7 +85,7 @@ export function workflowConnections(selected:DeploymentProfile,assignments:reado
     if(!subscription||!assignment)fail('Resolve the workflow trigger mappings before export.');
     const {owner:_,...spec}=subscription.spec;
     const names=selected.workflows!.dispatchBindings.filter(item=>item.subscriptionUid===binding.subscriptionUid).map(item=>assignments.find(entry=>entry.metadata.uid===item.sourceAssignmentUid)?.metadata.name).filter((item):item is string=>Boolean(item));
-    return {id:binding.id,subscription:subscription.metadata.name,assignment:assignment.metadata.name,assignmentSpec:copy(assignment.spec),subscriptionSpec:{...copy(spec),sources:{assignments:[...new Set(names)]}}};
+    return {id:binding.id,subscription:subscription.metadata.name,assignment:assignment.metadata.name,assignmentSpec:portableAssignmentSpec(selected,assignment),subscriptionSpec:{...copy(spec),sources:{assignments:[...new Set(names)]}}};
   });
 }
 

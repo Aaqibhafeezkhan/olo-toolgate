@@ -86,3 +86,31 @@ it('does not stage or replace a workflow when an embedded package upload fails v
   expect(replace).not.toHaveBeenCalled();
   expect(screen.queryByLabelText('Imported workflow dependencies')).toBeNull();
 });
+
+it('does not broadcast an imported profile watch before Control selects the destination device',async()=>{
+  const managed=structuredClone(profile) as {packages:DeploymentProfile['packages'];workflows:NonNullable<DeploymentProfile['workflows']>};
+  const local={...profile,...managed,packages:[{packageId:'examples.hotfolder-watch',version:assignments[0].spec.packageVersion!,source:'PREBUILT_CORE' as const,required:true,deviceGroupIds:['finance-desktops'],triggers:[{assignment:assignments[0].metadata.name,triggerId:assignments[0].spec.trigger,config:assignments[0].spec.config}]}],
+    workflows:{...managed.workflows,workflows:managed.workflows.workflows.map((item,index)=>index===0?{...item,contextSources:[{toolId:'examples.hotfolder-watch/read',arguments:{}}]}:item)}};
+  const archives=await mockWorkflowPackages(local,assignments);
+  const embedded=await Promise.all(archives.map(inspectPackage));
+  const client=new ControlClient('existing-token',vi.fn());
+  vi.spyOn(client,'triggerAssignments').mockResolvedValue({items:[]});
+  vi.spyOn(client,'triggerSubscriptions').mockResolvedValue({items:[]});
+  vi.spyOn(client,'uploadServerPackage').mockImplementation(async file=>{
+    if(!(file instanceof File))throw Error('Expected package file');
+    const item=embedded.find(item=>file.name===item.metadata.packageId+'.olotool')!;
+    return {packageId:item.metadata.packageId,version:item.metadata.version,packageDigest:item.metadata.packageDigest,state:'VERIFIED',descriptorSetDigest:item.manifest.descriptorSetDigest,revision:1,uploadedAtUnixMs:0};
+  });
+  const create=vi.spyOn(client,'createTriggerAssignment');
+  const replace=vi.fn();let error:unknown;
+  render(<WorkflowTransfer client={client} profile={local} busy={false} replace={replace} run={async action=>{try{await action();}catch(value){error=value;}}}/>);
+  const bytes=await exportWorkflow(local,local.workflows.workflows[0].id,assignments,subscriptions,snapshot,archives);
+  const file=new File([new Uint8Array(bytes)],'workflow.olo');
+  Object.defineProperty(file,'arrayBuffer',{value:async()=>new Uint8Array(bytes).buffer});
+  fireEvent.change(screen.getByLabelText('Workflow .olo file'),{target:{files:[file]}});
+  fireEvent.click(screen.getByRole('button',{name:'Import workflow .olo'}));
+  await waitFor(()=>expect(replace).toHaveBeenCalledOnce());
+  fireEvent.click(screen.getByRole('button',{name:'Restore trigger connections and stage mappings'}));
+  await waitFor(()=>expect(String(error)).toContain('select the destination device'));
+  expect(create).not.toHaveBeenCalled();
+});

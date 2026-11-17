@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Workflow placement and observed-device readiness — 2026-11-18
+
+The #295 integration adds immutable tenant-fenced device placement, checks live
+administrator authority before selection, and requires exact applied package and
+trigger observations during publication/new admission. Required group sets only
+restrict trigger targets; loss of target membership revokes the old lease on the
+next existing check-in. Selection does not enable, approve or enroll a device,
+grant execution, change OS access or provide a trusted-code sandbox. The
+[workflow checkpoint](../architecture/workflow-v1-status.md#durable-device-placement-and-applied-readiness--2026-11-18)
+records actual validation and remaining activation/recovery/acceptance limits.
+No S01–S33 stage or roadmap phase is completed by this slice; overall phase,
+first-slice acceptance tables, weights and security guarantees remain unchanged.
+
 ## Capability-matched workflow claims — 2026-11-17
 
 The #295 worker now declares verified installed graph digests and compiler

@@ -788,6 +788,14 @@ public final class TriggerService {
         }
         strings(target.path("excludeDevices")).forEach(out::remove);
         out.removeIf(d -> !directory.entries().containsKey(Ids.Kind.DEVICE.id(d)));
+        for (var groups : target.path("requiredDeviceGroupSets")) {
+            var members = new HashSet<String>();
+            for (String group : strings(groups)) {
+                var entry = directory.entries().get(Ids.Kind.DEVICE_GROUP.id(group));
+                if (entry != null && entry.enabled()) members.addAll(GroupGraph.members(entry, codec));
+            }
+            out.retainAll(members);
+        }
         return out;
     }
 
@@ -1083,7 +1091,13 @@ public final class TriggerService {
         }
         var instances = resolved(directory, all, device.deviceId());
         if (instances.size() > MAX_INSTANCES_PER_CLIENT) throw Failure.conflict();
-        for (var stored : all) if (devices(directory, stored).contains(device.deviceId())) writeInstance(tx, stored, device.deviceId(), desiredState(directory, stored, device.deviceId()), false, now);
+        for (var stored : all) {
+            if (devices(directory, stored).contains(device.deviceId())) writeInstance(tx, stored, device.deviceId(), desiredState(directory, stored, device.deviceId()), false, now);
+            else if (tx.triggers().get(INSTANCE, stored.uid() + "/" + device.deviceId()) != null) {
+                writeInstance(tx, stored, device.deviceId(), new TriggerLifecycle.Desired(TriggerDesiredState.Stopped, "Assignment"), true, now);
+                revoke(tx, device.deviceId(), instanceId(stored.uid(), device.deviceId()), TriggerRevocationReason.AssignmentRemoved);
+            }
+        }
         long generation = refreshDesired(tx, device.deviceId(), instances);
         var desired = new ArrayList<TriggerDesiredInstance>();
         for (var instance : instances) desired.add(codec.model(codec.json(instance), TriggerDesiredInstance.class));
@@ -1122,6 +1136,11 @@ public final class TriggerService {
                 var lease = read(row.document());
                 String instanceId = lease.path("instanceId").asText();
                 if (current.contains(instanceId) && "ACTIVE".equals(lease.path("state").asText())) continue;
+                if (!current.contains(instanceId) && "ACTIVE".equals(lease.path("state").asText())) {
+                    revoke(tx, device.deviceId(), instanceId, TriggerRevocationReason.AssignmentRemoved);
+                    row = tx.triggers().get(LEASE, row.id());
+                    lease = read(row.document());
+                }
                 if ("REVOKED".equals(lease.path("state").asText()) && !lease.path("reported").asBoolean()) {
                     revoked.add(new TriggerRevocation(instanceId, TriggerRevocationReason.valueOf(lease.path("reason").asText())));
                     var reported = ((ObjectNode) lease.deepCopy()).put("reported", true);
@@ -1294,6 +1313,41 @@ public final class TriggerService {
         result.put("dryRun", dryRun);
         result.set("changes", JSON.valueToTree(changes));
         return reply(status, result, stored.row().revision(), io.ololabs.toolgate.contracts.v2.TriggerAssignmentResult.class);
+    }
+
+    /** Current exact configuration readiness, without changing desired state or trusting aggregate cached status. */
+    public boolean prepared(Store.Session tx, String name, String triggerId, String version, JsonNode config, java.util.Collection<String> expectedDevices) {
+        if (!enabled) return false;
+        Stored stored;
+        try { stored = existing(tx, name); }
+        catch (Failure missing) { if (missing.status() == 404) return false; throw missing; }
+        if (stored.removed() || !stored.spec().path("trigger").asText().equals(triggerId)
+                || !stored.spec().path("packageVersion").asText().equals(version)
+                || !stored.spec().path("config").equals(config)) return false;
+        var targets = devices(tx.load(), stored);
+        if (targets.isEmpty() || !targets.equals(new HashSet<>(expectedDevices))) return false;
+        long now = clock.millis(), revision = stored.assignment().path("metadata").path("configRevision").asLong();
+        for (String device : targets) {
+            var row = tx.triggers().get(INSTANCE, stored.uid() + "/" + device);
+            if (row == null) return false;
+            var instance = read(row.document()); var view = instance.path("view");
+            long seen = instance.path("lastSeenAtUnixMs").asLong();
+            String desired = desiredState(tx.load(), stored, device).state().name();
+            String phase = switch (desired) { case "Running" -> "Running"; case "Paused" -> "Paused"; case "Stopped" -> "Stopped"; default -> ""; };
+            if (seen <= 0 || seen > now || now - seen > STALE_MIN_MS || !phase.equals(view.path("phase").asText())
+                    || revision != view.path("configRevision").asLong()
+                    || !stored.document().path("packageDigest").equals(view.path("packageDigest"))) return false;
+            if (desired.equals("Running")) {
+                if (java.util.stream.StreamSupport.stream(view.path("conditions").spliterator(), false)
+                        .noneMatch(c -> "Ready".equals(c.path("type").asText()) && "True".equals(c.path("status").asText()))) return false;
+                var leaseRow = tx.triggers().get(LEASE, leaseId(device, instanceId(stored.uid(), device)));
+                if (leaseRow == null) return false;
+                var lease = read(leaseRow.document());
+                if (!"ACTIVE".equals(lease.path("state").asText()) || lease.path("expiresAtUnixMs").asLong() <= now
+                        || lease.path("configRevision").asLong() != revision) return false;
+            }
+        }
+        return true;
     }
 
     /** The resource with its status computed from its instance rows (plan 9.1). */

@@ -1,6 +1,21 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Workflow device placement and live group fencing — 2026-11-18
+
+The #295 integration adds canonical `requiredDeviceGroupSets` to restrict resolved
+targets without adding devices. Profile provisioning selects one persisted
+device, preserving live group constraints rather than broadcasting a watch to
+all members. On target loss, the next existing check-in marks the old instance
+Removed and explicitly revokes its lease. Exact current configuration readiness
+and live lease evidence are required before workflow publication/admission.
+The Gateway/client check-in protocol is unchanged; generated target consumers
+are regenerated together. Actual checks, known base and remaining distributed
+handover/demo limits are in the
+[workflow checkpoint](workflow-v1-status.md#durable-device-placement-and-applied-readiness--2026-11-18).
+This integration does not complete another #274 module or change its weights,
+Done-when criteria or baseline: **27% remains earned**.
+
 ## Parallel package build throttling repair — 2026-11-17
 
 Hosted run `44133089397` log-watch job `134217885473` hit Maven Central HTTP 429

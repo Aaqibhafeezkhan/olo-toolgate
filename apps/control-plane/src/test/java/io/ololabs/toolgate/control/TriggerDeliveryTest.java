@@ -5,6 +5,7 @@ package io.ololabs.toolgate.control;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -141,6 +142,104 @@ final class TriggerDeliveryTest {
         return codec.model("{\"instanceId\":\"" + w.instance() + "\",\"event\":" + event + "}", TriggerOutboxRecord.class);
     }
     private TriggerOutboxRecord fired(World w, long seq, String id) { return fired(w, seq, id, "{\"name\":\"" + id + "\",\"path\":\"inbox/" + id + "\",\"size\":1}"); }
+
+    @Test void workflowTriggerReadinessRequiresCurrentReportsAndLeases() throws Exception {
+        for (var backend : stores()) {
+            var w = world(backend.store(), "tenant-a", null, List.of());
+            java.util.function.BooleanSupplier ready = () -> w.store().transaction(w.tenant(), false,
+                tx -> w.triggers().prepared(tx, "inbox", "acme.watch/new-file", "1.0.0", (JsonNode)codec.value("{\"folder\":\"inbox\"}"), List.of("device-a")));
+            assertFalse(ready.getAsBoolean(), "desired state and a lease alone do not prove running");
+            String report = """
+                {"observedGeneration":1,"pending":0,"snapshot":{
+                  "snapshotGeneration":1,"snapshotDigest":"sha256:%s","page":1,"pageCount":1,"pageDigest":"sha256:%s","instances":[{
+                    "instanceId":"%s","configRevision":1,"phase":"Running",
+                    "conditions":[{"type":"Ready","status":"True","reason":"Started","lastTransitionTime":"2023-11-14T22:13:20Z"}],
+                    "counters":{"emitted":0,"rejected":0,"dropped":0,"restarts":0},"outbox":{"depth":0,"oldestAgeMs":0}
+                  }]}}
+                """.formatted("1".repeat(64), "2".repeat(64), w.instance());
+            var document = codec.model(report, TriggerSync.class);
+            w.store().transaction(w.tenant(), true, tx -> w.ingest().sync(tx, device(w, "device-a"), document, "report"));
+            assertTrue(ready.getAsBoolean());
+            assertFalse((boolean)w.store().transaction(w.tenant(), false, tx -> w.triggers().prepared(tx, "inbox", "acme.watch/new-file", "1.0.0",
+                (JsonNode)codec.value("{\"folder\":\"inbox\"}"), List.of("device-c"))), "trigger and package devices must be colocated");
+            assertFalse((boolean)w.store().transaction(w.tenant(), false, tx -> w.triggers().prepared(tx, "inbox", "acme.watch/new-file", "1.0.0",
+                (JsonNode)codec.value("{\"folder\":\"other\"}"), List.of("device-a"))));
+            w.clock().millis += 300001;
+            assertFalse(ready.getAsBoolean(), "expired leases/stale reports cannot authorize publication");
+            w.clock().millis = T0;
+            var current = w.triggers().get(w.admin(), "inbox");
+            w.triggers().patch(w.admin(), "inbox", "{\"spec\":{\"config\":{\"folder\":\"other\"}}}", "W/\"" + current.revision() + "\"", null, false, "change");
+            assertFalse((boolean)w.store().transaction(w.tenant(), false, tx -> w.triggers().prepared(tx, "inbox", "acme.watch/new-file", "1.0.0",
+                (JsonNode)codec.value("{\"folder\":\"other\"}"), List.of("device-a"))), "the old Ready report cannot satisfy new configuration");
+            var foreign = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
+            TestSupport.seed(w.store(), codec, foreign, "root");
+            assertFalse((boolean)w.store().transaction(foreign, false, tx -> w.triggers().prepared(tx, "inbox", "acme.watch/new-file", "1.0.0",
+                (JsonNode)codec.value("{\"folder\":\"inbox\"}"), List.of("device-a"))));
+        }
+    }
+
+    @Test void workflowDevicePlacementIsDurableColocatedAndDoesNotFailOver() throws Exception {
+        for (var backend : stores()) {
+            var w = world(backend.store(), "tenant-a", null, List.of());
+            TestSupport.pool(w.store(), codec, w.tenant(), "finance", "device-a", "device-c");
+            String source = """
+                {"profileVersion":2,"profileId":"device-profile","packages":[{
+                  "packageId":"acme.watch","version":"1.0.0","source":"PREBUILT_CORE","required":true,"deviceGroupIds":["finance"]}]}
+                """;
+            var profile = codec.model(source, io.ololabs.toolgate.contracts.v2.DeploymentProfile.class);
+            var placement = new WorkflowDevicePlacement(w.store(), codec, w.clock());
+            w.store().transaction(w.tenant(), true, tx -> {
+                var before = tx.load(); var entries = new HashMap<>(before.entries());
+                TestSupport.put(entries, codec, Ids.Kind.USER, new ControlUser("reader", "Reader", true, 1L, null, null, null));
+                tx.save(before, new Directory(before.revision()+1, entries)); return null;
+            });
+            var staleRole = new DirectoryService.Actor(w.tenant(), "b".repeat(64), true, true, "reader");
+            assertEquals(403, assertThrows(Failure.class, () -> placement.resolve(staleRole, profile)).status(), "cached administrator flags cannot select a device");
+            assertNull(w.store().transaction(w.tenant(), false, tx -> tx.workflowProfiles().devicePlacement(profile.profileId())));
+            long directoryRevision = w.store().transaction(w.tenant(), false, tx -> tx.load().revision());
+            var selected = placement.resolve(w.admin(), profile);
+            assertEquals("device-a", selected.deviceId()); assertNull(selected.blocker());
+            assertEquals(directoryRevision, (long)w.store().transaction(w.tenant(), false, tx -> tx.load().revision()), "selection never enables/approves devices or changes membership");
+            assertEquals(selected, new WorkflowDevicePlacement(w.store(), codec, w.clock()).resolve(w.admin(), profile));
+            var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+            try {
+                var raced = codec.model(source.replace("device-profile", "race-profile"), io.ololabs.toolgate.contracts.v2.DeploymentProfile.class);
+                var a = executor.submit(() -> placement.resolve(w.admin(), raced));
+                var b = executor.submit(() -> placement.resolve(w.admin(), raced));
+                assertEquals(a.get(15, java.util.concurrent.TimeUnit.SECONDS), b.get(15, java.util.concurrent.TimeUnit.SECONDS));
+            } finally { executor.shutdownNow(); }
+            var colocated = (ObjectNode)codec.value(source.replace("device-profile", "colocated"));
+            ((com.fasterxml.jackson.databind.node.ArrayNode)colocated.path("packages")).addObject()
+                .put("packageId", "acme.files").put("version", "1.0.0").put("source", "PREBUILT_CORE").put("required", true).putArray("deviceGroupIds").add("spare");
+            assertEquals("device-c", placement.resolve(w.admin(), codec.model(codec.json(colocated), io.ololabs.toolgate.contracts.v2.DeploymentProfile.class)).deviceId(), "one device must satisfy every package group set");
+            colocated.put("profileId", "optional-device");
+            ((ObjectNode)colocated.path("packages").get(1)).put("required", false);
+            assertEquals("device-a", placement.resolve(w.admin(), codec.model(codec.json(colocated), io.ololabs.toolgate.contracts.v2.DeploymentProfile.class)).deviceId(), "optional packages must not constrain required placement");
+            // Constrain the watch to the selected device and its independently managed group.
+            var current = w.triggers().get(w.admin(), "inbox");
+            w.triggers().patch(w.admin(), "inbox", "{\"spec\":{\"target\":{\"executor\":\"CLIENT\",\"devices\":[\"device-a\"],\"requiredDeviceGroupSets\":[[\"finance\"]]}}}",
+                "W/\"" + current.revision() + "\"", null, false, "constrain");
+            sync(w, List.of());
+            // A different connected member cannot take over when the selected device is offline.
+            w.store().transaction(w.tenant(), true, tx -> {
+                var row = tx.endpoint("device-a"); var value = (ObjectNode)codec.value(row.document()); value.put("lastSeenUnixMs", T0 - 180001);
+                tx.saveEndpoint(new Store.EndpointRecord(row.id(), row.fingerprint(), codec.json(value), row.csr(), row.reportDigest(), row.acknowledgment())); return null;
+            });
+            assertEquals("device-a", placement.resolve(w.admin(), profile).deviceId());
+            assertTrue(placement.resolve(w.admin(), profile).blocker().contains("check in"));
+            TestSupport.pool(w.store(), codec, w.tenant(), "finance", "device-c");
+            assertEquals("device-a", placement.resolve(w.admin(), profile).deviceId());
+            assertTrue(placement.resolve(w.admin(), profile).blocker().contains("reassignment"));
+            var ack = w.store().transaction(w.tenant(), true, tx -> w.ingest().sync(tx, device(w, "device-a"), new TriggerSync(0L, null, null, null, 0L), "group-removed"));
+            assertNull(ack.leases());
+            assertNotNull(ack.revoked(), "group removal fences the old watch on its next existing check-in");
+            assertEquals(w.instance(), ack.revoked().getFirst().instanceId());
+            var foreign = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
+            TestSupport.seed(w.store(), codec, foreign, "root");
+            assertNull(w.store().transaction(foreign, false, tx -> tx.workflowProfiles().devicePlacement("device-profile")));
+            assertEquals(0, (long)w.store().transaction(w.tenant(), false, tx -> tx.fleet().count(FleetStore.Kind.ROLLOUT)), "selection itself never installs a package");
+        }
+    }
 
     private long rows(World w, TriggerStore.Kind kind) { return w.store().transaction(w.tenant(), false, tx -> tx.triggers().count(kind)); }
 

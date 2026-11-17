@@ -4,7 +4,7 @@ import type {DeploymentProfile,TriggerAssignment,TriggerSubscription} from '@olo
 import {ApiError,ConfigurationPending,ControlClient} from './api';
 import type {ConfigurationFile,ImportIdentityOptions} from './pendingContracts';
 import {mergeReferences,referencedData} from './workflowReferences';
-import {applyWorkflow,exportWorkflow,importWorkflow,workflowConnections,workflowScope,type WorkflowBundle} from './workflowBundle';
+import {applyWorkflow,exportWorkflow,importWorkflow,workflowConnections,workflowScope,workflowAssignmentMatches,type WorkflowBundle} from './workflowBundle';
 import {inspectPackage,MAX_BUNDLE_BYTES,requiredPackages} from './workflowPackages';
 
 async function triggers(client:ControlClient){
@@ -54,7 +54,9 @@ export function WorkflowTransfer({client,profile,allowNew=false,busy,run,replace
         let sources=await triggers(client);
         for(const connection of imported.bundle.connections){
           const existing=sources.assignments.find(item=>item.metadata.name===connection.assignment);
-          if(existing&&JSON.stringify(existing.spec)!==JSON.stringify(connection.assignmentSpec))throw Error('An existing trigger assignment differs; resolve it before restoration.');
+          const managed=imported.bundle.profile.packages.some(item=>item.triggers?.some(trigger=>trigger.assignment===connection.assignment));
+          if(managed&&!existing)throw Error('Review this profile and provision its packages first so Control can select the destination device. Then restore trigger connections.');
+          if(existing&&!workflowAssignmentMatches(imported.bundle.profile,existing,connection.assignmentSpec))throw Error('An existing trigger assignment differs; resolve it before restoration.');
           if(!existing){await client.createTriggerAssignment({name:connection.assignment,spec:connection.assignmentSpec},crypto.randomUUID());sources=await triggers(client);}
           const subscription=sources.subscriptions.find(item=>item.metadata.name===connection.subscription);
           if(subscription&&(subscription.spec.filter!==connection.subscriptionSpec.filter||!connection.subscriptionSpec.sources.assignments.every(name=>subscription.spec.sources.assignments.includes(name))))throw Error('An existing subscription differs; shared subscriptions are not overwritten.');

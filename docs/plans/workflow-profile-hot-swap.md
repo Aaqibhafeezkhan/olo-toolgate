@@ -487,7 +487,10 @@ capabilities, approvals and network policy still determine actual availability.
 
 Implementation checkpoint (component evidence, no phase acceptance): step 1 is
 accepted. Step 2 remains pending. Step 3 has runtime subscription reconciliation;
-device placement/configuration feedback remains pending. Step 4 has JSON and
+device placement and applied package/trigger readiness are now implemented at
+the component boundary, with persisted one-device selection and group-fenced
+targets; automatic deployment reconciliation and activation handover remain
+pending. Step 4 has JSON and
 installed native-factory rebuilding, admin preparation, durable receipts and
 compiler pinning; external LLM routing and replica readiness remain pending.
 Step 5 has admitted-run A/B configuration isolation; coordinated device handover,
