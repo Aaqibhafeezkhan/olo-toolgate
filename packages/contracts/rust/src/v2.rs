@@ -2557,6 +2557,8 @@ pub enum ProfilePackageSource {
     PrebuiltCore,
     #[serde(rename = "MARKETPLACE")]
     Marketplace,
+    #[serde(rename = "BUNDLE")]
+    Bundle,
 }
 /// A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

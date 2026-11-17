@@ -23,7 +23,19 @@ final class PackageProvisioningTest {
 
     /** The mixed package (a ServerTool and a ClientTool) as the sealed core lock's only artifact. */
     private Rig rig() throws Exception {
-        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("profiles.sqlite"))), codec);
+        return rig(false);
+    }
+    private Rig rig(boolean postgres) throws Exception {
+        javax.sql.DataSource source;
+        if (postgres) {
+            String base = Objects.requireNonNull(System.getenv("CONTROL_TEST_URL")), password = Objects.requireNonNull(System.getenv("CONTROL_TEST_PASSWORD"));
+            String database = "bundle_" + UUID.randomUUID().toString().replace("-", "");
+            try (var connection = java.sql.DriverManager.getConnection(base, "control_migrator", password); var statement = connection.createStatement()) { statement.execute("CREATE DATABASE " + database); }
+            String url = base.replace("/control?", "/" + database + "?");
+            org.flywaydb.core.Flyway.configure().dataSource(url, "control_migrator", password).load().migrate();
+            var remote = new org.postgresql.ds.PGSimpleDataSource(); remote.setURL(url); remote.setUser("control_app"); remote.setPassword(password); source = remote;
+        } else source = SqliteState.open(directory.resolve("profiles.sqlite"));
+        var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(source), codec);
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var admin = TestSupport.seed(store, codec, tenant, "root");
         store.transaction(tenant, true, tx -> { var before = tx.load(); var entries = new HashMap<>(before.entries());
             TestSupport.put(entries, codec, Ids.Kind.TOOL_GROUP, new ControlToolGroup("orders-tools", "Orders", true, 1L, List.of()));
@@ -178,5 +190,29 @@ final class PackageProvisioningTest {
         var reader = new DirectoryService.Actor(rig.tenant, "b".repeat(64), true, false, "mallory");
         assertThrows(Failure.class, () -> rig.provisioning.status(reader, "orders"));
         assertThrows(Failure.class, () -> rig.provisioning.statuses(reader));
+    }
+
+    @Test void bundlePackagesNeedOnlyTheirVerifiedTenantArchiveAndNeverTheImageLockOrMarketplace() throws Exception {
+      for (boolean postgres : System.getenv("CONTROL_TEST_URL") == null ? List.of(false) : List.of(false, true)) {
+        var rig = rig(postgres); register(rig);
+        var service = new PackageProvisioning(rig.store, rig.codec, rig.packages, null, null, null, null, java.time.Clock.systemUTC());
+        String declaration = ORDERS.replace("PREBUILT_CORE", "BUNDLE").replace("\"required\":true", "\"required\":true,\"packageDigest\":\"" + rig.digest + "\"");
+        var pending = node(service.apply(rig.admin, profile(declaration)));
+        assertEquals("PENDING", pending.path("state").asText());
+        assertTrue(pending.path("packages").get(0).path("reason").asText().contains("embedded archive"));
+        assertTrue(rig.store.transaction(rig.tenant, false, tx -> tx.packages().versions(10)).isEmpty());
+        rig.packages.upload(rig.admin, ServerPackagesTest.zip(ServerPackagesTest.mixed()), "bundle-upload");
+        var ready = node(service.apply(rig.admin, profile(declaration)));
+        assertEquals("READY", ready.path("state").asText(), ready::toString);
+        assertEquals(rig.digest, ready.path("packages").get(0).path("packageDigest").asText());
+        assertEquals(ready.path("generation"), node(service.apply(rig.admin, profile(declaration))).path("generation"));
+        assertEquals(400, assertThrows(Failure.class, () -> service.apply(rig.admin, profile(ORDERS.replace("PREBUILT_CORE", "BUNDLE")))).status());
+        var wrong = node(service.apply(rig.admin, profile(declaration.replace("\"version\":\"0.1.0\"", "\"version\":\"0.2.0\""))));
+        assertEquals("FAILED", wrong.path("state").asText(), "an exact digest cannot substitute different coordinates");
+        var other = io.ololabs.toolgate.control.fixtures.Tenants.id("other");
+        var otherAdmin = TestSupport.seed(rig.store, rig.codec, other, "root");
+        String foreign = "{\"packageId\":\"acme.orders\",\"version\":\"0.1.0\",\"source\":\"BUNDLE\",\"required\":true,\"packageDigest\":\"" + rig.digest + "\"}";
+        assertEquals("PENDING", node(service.apply(otherAdmin, profile(foreign))).path("state").asText(), "verified archives are tenant fenced");
+      }
     }
 }

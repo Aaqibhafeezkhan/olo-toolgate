@@ -30,6 +30,23 @@ it('exports profile group placement without copying the source device and matche
   expect(workflowAssignmentMatches(profile,destination,connection.assignmentSpec)).toBe(false);
 });
 
+it('pins exported package declarations to verified embedded content instead of the source image inventory',async()=>{
+  const profile=mutable(original);
+  profile.packages.push({packageId:'acme.support',version:'1.0.0',source:'PREBUILT_CORE',required:true,hostIds:['host']});
+  const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);
+  const bundle=await importWorkflow('portable.olo',bytes);
+  const stored=bundle.packages.find(item=>item.metadata.packageId==='acme.support')!;
+  expect(bundle.profile.packages[0]).toMatchObject({source:'BUNDLE',packageDigest:stored.metadata.packageDigest});
+  expect(profile.packages[0].source).toBe('PREBUILT_CORE');
+  const files=unzipSync(bytes),old=JSON.parse(new TextDecoder().decode(files['workflow.json']));
+  old.packages[0].source='PREBUILT_CORE';files['workflow.json']=strToU8(JSON.stringify(old));
+  const manifest=JSON.parse(new TextDecoder().decode(files['manifest.json']));
+  const {sha256}=await import('../src/workflowPackages');manifest.sha256=await sha256(files['workflow.json']);files['manifest.json']=strToU8(JSON.stringify(manifest));
+  await expect(importWorkflow('image-dependent.olo',zipSync(files,{level:6}))).rejects.toThrow('exact embedded archive');
+  profile.packages[0].packageDigest='sha256:'+'f'.repeat(64);
+  await expect(exportWorkflow(profile,first.id,assignments,subscriptions)).rejects.toThrow('exact embedded archive');
+});
+
 it('exports one compressed workflow with its dependency closure and no README, host settings or credentials',async()=>{
   const profile=mutable(original);profile.workflows!.workflows.push({...mutable(first),id:'other'});
   const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);

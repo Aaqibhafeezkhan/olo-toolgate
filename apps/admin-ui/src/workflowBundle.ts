@@ -94,12 +94,17 @@ export async function exportWorkflow(profile:DeploymentProfile,id:string,assignm
   const connections=workflowConnections(selected,assignments,subscriptions);
   const assignmentNames=new Set(connections.map(item=>item.assignment));
   for(const entry of selected.packages)if(entry.triggers)entry.triggers=entry.triggers.filter(item=>assignmentNames.has(item.assignment));
+  if(archives.reduce((total,item)=>total+item.length,0)>MAX_BUNDLE_BYTES)fail('Embedded packages exceed 128 MiB.');
+  const packages:EmbeddedPackage[]=[];for(const archive of archives)packages.push(await inspectPackage(archive));
+  for(const pin of selected.packages){
+    const matching=packages.filter(item=>item.metadata.packageId===pin.packageId&&item.metadata.version===pin.version&&(!pin.packageDigest||pin.packageDigest===item.metadata.packageDigest));
+    if(matching.length!==1)fail('Profile package is missing its exact embedded archive: '+pin.packageId);
+    pin.source='BUNDLE';pin.packageDigest=matching[0].metadata.packageDigest;
+  }
   const bytes=strToU8(JSON.stringify(selected));
   if(bytes.length>MAX_PROFILE)fail('Workflow configuration exceeds the Control size limit.');
   const referenced=referencedData(selected,snapshot),references=strToU8(JSON.stringify(referenced));
   if(references.length>MAX_REFERENCES)fail('Referenced configuration exceeds the size limit.');
-  if(archives.reduce((total,item)=>total+item.length,0)>MAX_BUNDLE_BYTES)fail('Embedded packages exceed 128 MiB.');
-  const packages:EmbeddedPackage[]=[];for(const archive of archives)packages.push(await inspectPackage(archive));
   verifyPackageCoverage(selected,referenced,connections,packages);
   const manifest:WorkflowBundleManifest={format:'olo-workflow',version:2,workflowId:id,sha256:await sha256(bytes),referencesSha256:await sha256(references),connections,packages:packages.map(item=>item.metadata)};
   const files={'manifest.json':strToU8(JSON.stringify(manifest)),'workflow.json':bytes,'referenced-data.json':references,...Object.fromEntries(packages.map(item=>[item.metadata.path,item.bytes]))};
@@ -133,6 +138,7 @@ export async function importWorkflow(name:string,bytes:Uint8Array):Promise<Workf
   }
   if(seen.size!==3+packages.length)fail('Unlisted package archive.');
   const references=validateReferences(decode(files['referenced-data.json']));verifyPackageCoverage(profile,references,connections,packages);
+  if(profile.packages.some(pin=>pin.source!=='BUNDLE'||!packages.some(item=>item.metadata.packageId===pin.packageId&&item.metadata.version===pin.version&&item.metadata.packageDigest===pin.packageDigest)))fail('Profile package must use its exact embedded archive.');
   return {profile,connections,references,packages};
 }
 

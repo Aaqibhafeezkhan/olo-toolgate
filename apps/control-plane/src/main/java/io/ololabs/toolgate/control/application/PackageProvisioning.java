@@ -62,7 +62,7 @@ public final class PackageProvisioning {
         var ids = new HashSet<String>(); var assignments = new HashSet<String>();
         for (var p : profile.packages()) {
             if (!ids.add(p.packageId())) throw refused("The profile names " + p.packageId() + " twice");
-            if (p.source() == ProfilePackageSource.MARKETPLACE && p.packageDigest() == null) throw refused(p.packageId() + " needs an exact Marketplace package digest");
+            if (p.source() != ProfilePackageSource.PREBUILT_CORE && p.packageDigest() == null) throw refused(p.packageId() + " needs an exact package digest for " + p.source());
             var hosts = p.hostIds() == null ? List.<String>of() : p.hostIds();
             if (new HashSet<>(hosts).size() != hosts.size()) throw refused(p.packageId() + " names a Tool Host twice");
             var groups = p.deviceGroupIds() == null ? List.<String>of() : p.deviceGroupIds();
@@ -172,6 +172,10 @@ public final class PackageProvisioning {
         } else {
             digest = p.packageDigest(); status.put("packageDigest", digest);
             if (version(actor, digest) == null) {
+                if (p.source() == ProfilePackageSource.BUNDLE) {
+                    status.put("state", "PENDING").put("reason", bounded("Waiting for the verified embedded archive for " + p.packageId() + " " + p.version()));
+                    return;
+                }
                 if (marketplace == null || !marketplace.settings().enabled()) throw refused("No Marketplace is configured for " + p.packageId());
                 marketplace.install(actor, p.packageId(), p.version(), digest, "profile-market-" + hex(digest).substring(0, 32));
             }

@@ -1391,7 +1391,7 @@ export interface ProfilePackage {
   readonly bindingIds?: ReadonlyArray<string>;
   readonly triggers?: ReadonlyArray<ProfileTrigger>;
 }
-export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE";
+export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE" | "BUNDLE";
 /** A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values. */
 export interface ProfileReadinessCase {
   readonly toolId: string;

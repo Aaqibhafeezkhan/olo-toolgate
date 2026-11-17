@@ -37,6 +37,13 @@ builds reuse caches. Output is always in the ignored `profiles/bin/` directory
 unless `--output` is supplied. `--packages-dir` selects an existing collection
 of exact verified `.olotool` tool archives instead of compiling recipes.
 
+Package declarations use source `BUNDLE` and the exact digest of their embedded
+`.olotool` bytes. The target verifies/stores these archives before provisioning;
+they do not need to exist in its core image lock or Marketplace. Missing content
+stays pending with no substitution. Package verification, release signing,
+destination runtime support and independently administered permissions remain
+required. Configuration sources remain unchanged by export/build packaging.
+
 Each output `<configuration>-<workflow>-<version>.olo` is a ZIP containing:
 
 - `manifest.json`: current format version, workflow ID, configuration hashes,

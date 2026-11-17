@@ -2399,7 +2399,7 @@
     "expired": false,
     "gaps": []
   },
-  "ProfilePackageSource": "MARKETPLACE",
+  "ProfilePackageSource": "BUNDLE",
   "ProfileToolActivation": {
     "toolId": "examples.loans/evaluate",
     "toolGroupId": "MockToolGroup"

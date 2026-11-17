@@ -27,7 +27,7 @@ another file and set that variable to use a different profile with the same imag
 
 | Field | Meaning |
 |---|---|
-| `source` | `PREBUILT_CORE` resolves only to the sealed artifact in the image's core lock (`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH`); its digest comes from that lock and a declared `packageDigest` must equal it. `MARKETPLACE` downloads the exact signed release from the configured Marketplace and requires `packageDigest`; a release with another digest is refused before download. |
+| `source` | `PREBUILT_CORE` resolves only to the sealed artifact in the image's core lock (`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH`); its digest comes from that lock and a declared `packageDigest` must equal it. `MARKETPLACE` downloads the exact signed release from the configured Marketplace and requires `packageDigest`. `BUNDLE` requires the exact verified embedded archive in this tenant's package store and its digest; it never fetches a substitute. |
 | `hostIds` | Tool Hosts that receive the package's eligible ServerTool exports. ClientTool exports are never deployed to a Tool Host. |
 | `deviceGroupIds` | Eligible device groups for the package's device-runnable exports. Control persists one device per profile that belongs to at least one enabled group in every required package's group list. Watches and local file tools use this same device. An entry that activates exports needs `hostIds` or `deviceGroupIds`. |
 | `globals` | Package global values for the deployment. |
@@ -44,6 +44,15 @@ existing stores with an older fresh-schema checksum are rejected and retained;
 there is no conversion, deletion, migration or compatibility mode. Use fresh
 stores and matching current Control, SDK and profile artifacts for this branch.
 Package-only deployment profiles still use the same current version-2 contract.
+
+Portable `.olo` builds/exports use `BUNDLE` for every declared package, with the
+exact embedded archive digest. Ordinary import verifies/stores the archives
+before staging. This lets the same package deploy on another installation
+without being compiled into that installation's core lock or hosted in its
+Marketplace. Missing verified content remains PENDING; mismatched coordinates
+are refused. Existing verification, signing, permissions, runtime capabilities
+and readiness still apply. Current bundle import rejects package declarations
+that depend on an image/Marketplace source rather than their embedded content.
 
 Workflow profiles use these authenticated Control APIs:
 

@@ -1,6 +1,16 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Embedded trigger/tool package source — 2026-11-18
+
+The #295 portable bundle path now consumes exact tenant-verified embedded
+archives through source `BUNDLE`, independently of a destination's core image
+inventory or Marketplace. This changes no trigger definition verification,
+release signing, Gateway/client protocol or module completion criteria.
+Evidence and remaining deployment/handover limitations are in the
+[workflow checkpoint](workflow-v1-status.md#embedded-package-source-portability--2026-11-18).
+No module earns new weight: **27% remains earned**.
+
 ## Workflow device placement and live group fencing — 2026-11-18
 
 The #295 integration adds canonical `requiredDeviceGroupSets` to restrict resolved

@@ -86,7 +86,7 @@ class ProfileTests(unittest.TestCase):
     def test_release_collection_checks_version_source_hashes_and_embedded_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);source=root/'bin';source.mkdir();output=root/'assets'
-            data,manifest=bundle.pack(dict(workflows={'workflows':[{'id':'one'}]}),{},[],[],dict(version='1.2.3',sourceCommit='a'*40,build='1'))
+            data,manifest=bundle.pack(dict(profileVersion=2,profileId='release',packages=[],workflows={'workflows':[{'id':'one'}]}),{},[],[],dict(version='1.2.3',sourceCommit='a'*40,build='1'))
             (source/'one-1.2.3.olo').write_bytes(data)
             inventory=dict(format='olo-profiles',version='1.2.3',sourceCommit='a'*40,profiles=[dict(filename='one-1.2.3.olo',sha256=bundle.digest(data),bytes=len(data),packages=[])])
             (source/'olo-profiles-1.2.3.json').write_text(json.dumps(inventory))
@@ -108,6 +108,28 @@ class ProfileTests(unittest.TestCase):
         self.assertIn('python profiles/build.py',workflow)
         self.assertIn('foundation-stage-profiles',workflow)
         self.assertIn('tools/release/profiles.py',workflow)
+
+    def test_profile_pins_use_exact_embedded_content_without_an_image_lock(self):
+        raw=(ROOT/'tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()
+        item,_=bundle.package(raw)
+        pin=dict(packageId=item['packageId'],version=item['version'],source='PREBUILT_CORE',required=True)
+        profile=dict(profileVersion=2,profileId='portable',packages=[pin],workflows={'workflows':[{'id':'one'}]})
+        data,_=bundle.pack(profile,{},[],[raw],dict(version='1.0.0',sourceCommit='a'*40,build='test'))
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            exported=json.loads(archive.read('workflow.json'))
+        self.assertEqual('BUNDLE',exported['packages'][0]['source'])
+        self.assertEqual(item['packageDigest'],exported['packages'][0]['packageDigest'])
+        self.assertEqual('PREBUILT_CORE',profile['packages'][0]['source'],'export does not mutate build configuration')
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:files={name:archive.read(name) for name in archive.namelist()}
+        exported['packages'][0]['source']='PREBUILT_CORE';files['workflow.json']=bundle.encoded(exported)
+        metadata=json.loads(files['manifest.json']);metadata['sha256']=bundle.digest(files['workflow.json']);files['manifest.json']=bundle.encoded(metadata)
+        old=io.BytesIO()
+        with zipfile.ZipFile(old,'w',zipfile.ZIP_DEFLATED) as archive:
+            for name,value in files.items():archive.writestr(name,value)
+        with self.assertRaisesRegex(ValueError,'exact embedded archive'):bundle.verify(old.getvalue())
+        with self.assertRaisesRegex(ValueError,'exact embedded archive'):bundle.pack(profile,{},[],[],{})
+        profile['packages'][0]['packageDigest']='sha256:'+'f'*64
+        with self.assertRaisesRegex(ValueError,'exact embedded archive'):bundle.pack(profile,{},[],[raw],{})
 
 
 if __name__=='__main__':unittest.main()

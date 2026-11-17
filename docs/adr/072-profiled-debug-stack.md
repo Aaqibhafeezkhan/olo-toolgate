@@ -69,3 +69,11 @@ offline, disabled, unapproved or removed selected member blocks reconciliation;
 it never causes automatic failover. Changing placement requires a future
 explicit fenced handover. Package/trigger readiness is read from exact current
 applied generations and live leases again in the publication transaction.
+
+Portable workflow bundles declare package source `BUNDLE` with an exact digest.
+Import verifies/stores embedded archives through ordinary package validation;
+provisioning consumes only the tenant's verified stored artifact. A missing
+archive stays pending without consulting an image lock or Marketplace. This
+does not bypass package trust, release signing, management or runtime authority.
+Repository builds and console exports pin their embedded content explicitly;
+image/Marketplace source declarations inside a portable bundle are refused.

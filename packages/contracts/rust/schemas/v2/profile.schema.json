@@ -10,9 +10,10 @@
       "type": "string",
       "enum": [
         "PREBUILT_CORE",
-        "MARKETPLACE"
+        "MARKETPLACE",
+        "BUNDLE"
       ],
-      "description": "PREBUILT_CORE resolves only to the sealed core artifact in the image lock; MARKETPLACE downloads the exact signed release from the configured Marketplace."
+      "description": "PREBUILT_CORE resolves only to the sealed core artifact in the image lock; MARKETPLACE downloads the exact signed release from the configured Marketplace. BUNDLE requires the exact embedded archive already verified into the tenant package store by profile import and never fetches or substitutes another artifact."
     },
     "ProfileToolActivation": {
       "type": "object",

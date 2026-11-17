@@ -1,6 +1,17 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Embedded workflow package source — 2026-11-18
+
+The #295 `BUNDLE` source consumes only an exact already verified tenant artifact;
+it grants no upload verification, publisher trust, runtime permission or signing
+bypass. Missing content remains pending without substituting image/Marketplace
+content. SQLite/PostgreSQL tests exercise missing content, coordinate mismatch
+and tenant separation; actual checks and outstanding execution prerequisites are
+in the [workflow checkpoint](../architecture/workflow-v1-status.md#embedded-package-source-portability--2026-11-18).
+No #230 stage, overall phase/first-slice acceptance table, weight or security
+guarantee is completed or expanded by this package-source integration.
+
 ## Workflow placement and observed-device readiness — 2026-11-18
 
 The #295 integration adds immutable tenant-fenced device placement, checks live

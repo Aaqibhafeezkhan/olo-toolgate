@@ -1,6 +1,32 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Embedded package source portability — 2026-11-18
+
+Known base `fe5dcef0`. Canonical package source `BUNDLE` requires an exact digest
+already verified in the tenant package store. Missing content stays pending;
+provisioning never substitutes a sealed-core or Marketplace artifact. Repository
+profile builds and console exports pin every declared package to their embedded
+archive coordinates/digest without changing source configuration. Bundle import
+rejects image/Marketplace-dependent declarations instead of retaining an old
+bundle interpretation. Ordinary package verification, release signing, current
+management permission and runtime authorization remain required.
+
+Provisioned Java verification passed **30 Control tests and two Java contract
+tests**; the new package-source acceptance executes on SQLite and PostgreSQL,
+including missing content, reapplication, coordinate mismatch and tenant
+isolation with no core lock or Marketplace configured. Seven profile build/
+release tests, seven canonical corpus tests, three deployment-profile tests,
+PHP 459 v2 round trips, TypeScript type checks/two wire tests, generated preflight
+and source quality passed. All **312 UI tests passed**, one optional test skipped,
+with coverage gates unchanged and passing. Both Rust v2 round-trip tests passed.
+
+This closes the destination image-inventory dependency for declared embedded
+packages; it does not prove a runnable imported workflow. Destination execution
+capabilities/signing, device eligibility, durable deployment reconciliation,
+activation handover, provider readiness, fresh stack wiring, recovery/cleanup
+and the unchanged-container demo remain outstanding. #295 stays **0/100**.
+
 ## Durable device placement and applied readiness — 2026-11-18
 
 Known base `ab8a1de5`. Package provisioning now records one tenant/profile device
