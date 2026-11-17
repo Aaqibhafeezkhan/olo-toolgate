@@ -9,7 +9,7 @@ The main `.env` contains only the default selection:
 CONFIGURATION=text-summary
 ```
 
-Each `configurations/<selection>/workflow-profile.json` is the source of truth.
+Each `configurations/<selection>/workflow-profile.json` bootstraps a fresh installation.
 Inside `workflows.workflows[]`, its `deployment` block declares the runtime,
 model engine/artifact, platform images/ports, signed trigger, folders and monitoring.
 Agent definitions, model deployments, model groups, generation parameters and
@@ -62,68 +62,68 @@ platform name switch substitutes for those gates.
 
 ## Start
 
-On Windows, run `start.bat`. It opens a background local administration service
-at **http://127.0.0.1:48190/** and starts the `.env` configuration when present.
-An absent/empty selection or missing default profile starts a blank Control
-installation with an admin user and no workflows. `start.bat --blank` explicitly
-selects that blank installation. Missing
-local source-image tags are built automatically if missing; registry-qualified
-image references are pulled if missing.
-The model file and prerequisites below must be available.
+On Windows, run `start.bat`. It starts the selected `.env` bootstrap configuration
+or an empty installation when no selection exists. Open **http://127.0.0.1:48190/**;
+it serves the same Control console as the deployment's own HTTP port. Use the
+existing Control admin login. The local deployment operator remains separate at
+http://127.0.0.1:48190/operator for explicit deployment lifecycle actions.
 
 ```bat
 start.bat
-start.bat --configuration text-summary
+start.bat --configuration native-hotfolder
 start.bat --blank
 ```
 
-The explicit `--configuration` form skips the menu for unattended startup.
+In **Workflows**, open the destination working profile (or import directly on an
+empty installation), then use **Workflow import / export (.olo)**.
 
-The local stack administrator credentials are in
-`state/administrator/credentials/admin/username.txt` and `password.txt`.
-This account controls local Docker deployment and is separate from the selected
-Control installation's admin account. The portal shows the Control console URL
-and its private credential folder after startup. The stack operator UI binds
-only to loopback; the Control console remains exposed through its configured port.
+- Each ZIP-compressed `.olo` contains **one workflow**, its referenced agents,
+  model/group definitions, prompts, schemas, context, inert deployment hints,
+  signed-package references, directory configuration and named trigger declarations.
+  It contains no README, container images, model weights, databases, human
+  accounts, private keys or credential stores. The limit is 3 MiB compressed.
+- A working profile may hold multiple workflows. Import adds a workflow or
+  replaces the selected/matching workflow. The editor rereads the staged content
+  and refreshes automatically. Review and publish to activate; publication
+  refreshes the displayed revision too. These actions never call Docker or rotate
+  admin/user credentials.
+- Trigger subscription/assignment **names** are resolved to this installation's
+  UIDs. The bundle retains the declarations for missing triggers. After import,
+  preview referenced directory data and prepare its ordinary reviewed MERGE when
+  needed. Existing shared definitions are not overwritten. Owner IDs can be
+  mapped to existing users without changing those users or their memberships.
+  Restore trigger connections and stage the resolved mappings before publication.
+- The destination must supply its provider secrets, approved devices, exact signed
+  packages and trusted native graph factories/model services. Missing dependencies
+  remain readiness/setup blockers; structural import does not prove execution.
+  No Python code from an uploaded file is installed or executed.
+- Removing a workflow prunes its unshared profile definitions and mappings while
+  keeping other workflows and shared data. Existing identities, provisioned
+  assets and immutable revisions/audit are retained rather than treated as
+  workflow-owned garbage.
 
-The admin web UI lists directories under `configurations/` and supports:
+There is one application-level transfer implementation at both console URLs.
+The earlier whole-deployment `.olo` format is unsupported; it is neither converted
+nor loaded into Docker. Existing old archive files remain untouched.
 
-- **Switch profile:** stop this bundle's previous containers, retain their data,
-  then provision the selected configuration and save it as the `.env` startup
-  selection. One profile runs at a time.
-- **Replace selected profile:** enter `REPLACE <configuration-name>` to remove
-  that deployment's generated state/data and provision it fresh. Sources remain.
-- **Factory reset to blank:** enter `FACTORY RESET` to remove the active
-  deployment's generated storage and start an empty Control installation. Profile
-  sources, supplied models and the local stack administrator remain. The startup
-  selection is cleared so the next start remains blank.
-- **Export portable profile:** create a compressed `.olo` bundle (ZIP format) with profile JSON and its example,
-  graphs, signed trigger packages, the declared GGUF and exact Docker images.
-  Each export is stored in `state/administrator/exports/<configuration>/` as
-  `<configuration>.olo`. No export README or profile README is included inside or
-  beside it. Immutable graph/package artifacts retain their own verified content.
-  Download the bundle after the background operation completes.
-- **Import bundle:** choose a new configuration name and upload a trusted export.
-  Import verifies content hashes and image identities and adds the configuration;
-  switching to it is a separate action. Existing sources/models aren't overwritten.
-  Import generates a local configuration README with its trigger and input/output paths.
+**Factory reset** is an explicit destructive action in `/operator`: enter
+`FACTORY RESET`. It removes the active deployment's generated state/data and
+starts a fresh Control installation with only the existing `admin` login and
+minimal installation roles/groups. Its password verifier is preserved; no old
+workflow, model/group configuration, actor, database, session or keys are restored.
+The startup selection is cleared. The new empty console is ready to import a
+workflow `.olo`; runtime/provider prerequisites still require their normal setup.
+Factory reset is separate from workflow import and may recreate the deployment.
 
-Bundles can be large (limit 12 GiB, 1024 files). Export/import carry executable
-images/graphs and are privileged operator actions; a content hash is not publisher
-trust. Source `credentials/`, runtime databases, identities, logs and results are
-excluded. Credentials are regenerated on the destination. Supply vendor monitoring
-or external-provider secrets separately. Digest-qualified registry images may
-require access to their original registry after Docker load, since Docker archives
-do not always restore repository digest associations. The destination needs the
-same supported Docker architecture and this version of WorkflowStack. Matching
-assets/configuration reproduce workflow behavior, not identical generated text or
-external system state. Downloaded bundles contain model/image assets: keep them
-private and distribute them only when their licenses permit it.
+Referenced-data import follows the existing Control review policy. The existing
+Super Admin exception may apply it immediately; it does not create or replace
+human accounts. A second preview reports remaining differences.
 
-Startup and management failures appear in the portal; deployment details remain
-in private `state/administrator/operation.log` and the selected service logs.
-Profile switching cannot be used to merge two active profiles. Multi-profile
-merge is deferred by the current one-profile-at-a-time scope.
+The deployment operator credentials stay under
+`state/administrator/credentials/admin/`. Control's existing login files remain
+under `state/<selection>/credentials/admin/`, or `state/blank/credentials/admin/`
+after reset. Passwords are never printed. Runtime deployment details remain in
+private `state/administrator/operation.log` and the selected service logs.
 
 Use Docker's Linux engine with Compose and Python 3.12 or newer. Published-image
 deployment needs this WorkflowStack directory, its selected profile and model;
@@ -221,8 +221,9 @@ Package upgrades require a new reviewed release and explicit qualification.
 
 One workflow deployment is enabled per stack (`deployment.enabled: true`). A profile
 may retain other disabled workflow definitions when combining configurations.
-The helper deploys only the enabled workflow and its declared agent/model/group/
-dispatch dependency closure; it leaves the source document intact. Keep IDs unique
+The helper initially bootstraps the enabled workflow and its declared dependency
+closure. Subsequent starts preserve the application-managed published profile;
+they do not overwrite it with the source JSON. Keep IDs unique
 when combining scopes. Change workflow version IDs for immutable definition edits.
 Stop a deployment before removing its active workflow/profile. Removing an inactive
 scope does not activate or execute it. Deleting configuration does not delete data

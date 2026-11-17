@@ -2,31 +2,35 @@
 """Loopback-only privileged operator UI; never mount Docker access into Control."""
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import http.client
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import secrets
-import shutil
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
+from urllib.parse import urlsplit
 
 import configuration
 import lifecycle
-import profile_bundle
 
 PORT = 48190
 ORIGIN = f'http://127.0.0.1:{PORT}'
 DEFAULT_IMAGE = 'ololab/olo-toolgate-quickstart:dev'
 
 
+def linked(path):
+    return path.is_symlink() or getattr(path, 'is_junction', lambda: False)()
+
+
 def private(path, value):
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if profile_bundle.linked(path) or profile_bundle.linked(path.parent):
+    if linked(path) or linked(path.parent):
         raise ValueError('Linked operator custody')
     temporary = path.with_name(path.name + '.next')
     with open(temporary, 'w', encoding='utf-8', opener=lambda p, f: os.open(p, f, 0o600)) as stream:
@@ -39,7 +43,7 @@ class Controller:
         self.root = root.resolve()
         self.home = self.root / 'state' / 'administrator'
         for path in (self.root / 'state', self.home):
-            if profile_bundle.linked(path):
+            if linked(path):
                 raise ValueError('Linked operator custody')
         self.home.mkdir(mode=0o700, parents=True, exist_ok=True)
         if os.name == 'nt':
@@ -54,7 +58,7 @@ class Controller:
                      'WORKFLOW_ADMIN_DIRECTORY':str(self.home)}, capture_output=True, timeout=15)
             if result.returncode:
                 raise ValueError('Cannot protect local administrator custody')
-        if profile_bundle.linked(self.root / 'configurations'):
+        if linked(self.root / 'configurations'):
             raise ValueError('Linked configuration directory')
         (self.root / 'configurations').mkdir(parents=True, exist_ok=True)
         self.lock = threading.Lock()
@@ -94,21 +98,23 @@ class Controller:
         if not isinstance(name, str) or not configuration.NAME.fullmatch(name) or name in ('blank', 'administrator'):
             raise ValueError('Select a configuration directory name')
         folder = self.root / 'configurations' / name
-        if profile_bundle.linked(folder) or not folder.is_dir():
+        if linked(folder) or not folder.is_dir():
             raise ValueError('Configuration not found')
         return configuration.load(folder)
 
     def status(self):
         profiles = []
         for folder in sorted((self.root / 'configurations').iterdir()):
-            if (folder.is_dir() and not profile_bundle.linked(folder) and configuration.NAME.fullmatch(folder.name)
+            if (folder.is_dir() and not linked(folder) and configuration.NAME.fullmatch(folder.name)
                     and (folder / 'workflow-profile.json').is_file()):
                 try:
                     settings = self.selected(folder.name)
                     profiles.append(dict(name=folder.name, workflow=settings['workflowId'], valid=True))
                 except (ValueError, OSError, KeyError):
                     profiles.append(dict(name=folder.name, valid=False))
-        return dict(**self.state, busy=self.busy, configurations=profiles)
+        visible={key:value for key,value in self.state.items() if key in
+                 ('active','state','action','error','console','credentials','image','inbox','output')}
+        return dict(**visible, busy=self.busy, configurations=profiles)
 
     def command(self, *args):
         # Child output stays in private custody, never in HTTP errors or the browser.
@@ -120,6 +126,22 @@ class Controller:
         self.state.update(values)
         private(self.home / 'status.json', json.dumps(self.state))
 
+    def preserve_admin(self, scope):
+        """Preserve only the existing local admin password verifier, never its database or tokens."""
+        container=f'toolgate-workflow-{scope}-quickstart-1'
+        result=subprocess.run(['docker','exec',container,'cat','/data/identity.json'],
+                              check=True,capture_output=True,timeout=15)
+        if len(result.stdout)>16384 or not isinstance(json.loads(result.stdout),dict):
+            raise ValueError('Cannot preserve the current administrator login')
+        private(self.home/'reset-admin/identity.json',result.stdout.decode('utf-8'))
+        source=self.root/'state'/scope/'credentials/admin'
+        for filename in ('username.txt','password.txt'):
+            target=self.home/'reset-admin'/filename
+            if (source/filename).is_file():
+                private(target,(source/filename).read_text())
+            elif target.exists():
+                target.unlink()
+
     def blank(self):
         directory = self.root / 'state' / 'blank'
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -129,6 +151,8 @@ class Controller:
         document = dict(services=dict(quickstart=dict(image=image,
             ports=['0.0.0.0:48091:8080', '127.0.0.1:48451:8443'],
             environment=dict(TOOLGATE_DISABLE_ADMIN_PASSWORD='false', TOOLGATE_QUICKSTART_DATABASE_MODE='sqlite',
+                             TOOLGATE_QUICKSTART_ADMIN_ONLY='true',
+                             TOOLGATE_TRIGGERS_CONTROL_CORE_ENABLED='true',
                              TOOLGATE_CONTROL_PROFILE_PATH='/bootstrap/profile.json'),
             depends_on={'bootstrap-init':{'condition':'service_completed_successfully'}},
             volumes=['blank-data:/data', 'blank-bootstrap:/bootstrap:ro'],
@@ -141,6 +165,16 @@ class Controller:
             entrypoint=['/opt/quickstart-python/bin/python','/deployment/blank_bootstrap.py'],
             volumes=['blank-bootstrap:/bootstrap',str(self.root/'scripts')+':/deployment:ro'],
             read_only=True,cap_drop=['ALL'],security_opt=['no-new-privileges:true'])
+        preserved=self.home/'reset-admin/identity.json'
+        if preserved.is_file():
+            document['services']['credential-init']=dict(image=image,user='0:0',network_mode='none',
+                entrypoint=['/opt/quickstart-python/bin/python','/deployment/reset_admin.py'],
+                volumes=['blank-data:/data',str(self.root/'scripts')+':/deployment:ro',str(preserved)+':/input/identity.json:ro'],
+                read_only=True,cap_drop=['ALL'],cap_add=['CHOWN','DAC_OVERRIDE','FOWNER'],security_opt=['no-new-privileges:true'])
+            document['services']['quickstart']['depends_on']['credential-init']={'condition':'service_completed_successfully'}
+            for filename in ('username.txt','password.txt'):
+                source=self.home/'reset-admin'/filename
+                if source.is_file():private(directory/'credentials/admin'/filename,source.read_text())
         path = directory / 'compose.json'
         private(path, json.dumps(document))
         command = ['docker', 'compose', '--project-directory', str(self.root), '-p', 'toolgate-workflow-blank', '-f', str(path)]
@@ -151,7 +185,7 @@ class Controller:
             raise ValueError('Blank startup failed; inspect state/administrator/operation.log and blank service logs')
         # Complete first login and save console credentials separately from the operator account.
         credential = directory / 'credentials/admin/password.txt'
-        if not credential.exists():
+        if not credential.exists() and not preserved.is_file():
             result = subprocess.run(command + ['exec', '-T', 'quickstart', 'cat', '/data/bootstrap-password'],
                                     check=True, capture_output=True, text=True, timeout=15)
             password = secrets.token_urlsafe(32)
@@ -163,70 +197,56 @@ class Controller:
             private(directory / 'credentials/admin/username.txt', 'admin\n')
             private(credential, password + '\n')
         self.save(active=None, state='ready', console='http://127.0.0.1:48091/console/',
-                  credentials=str(directory / 'credentials/admin'), inbox=None, output=None, error=None)
+                  credentials=str(directory / 'credentials/admin') if credential.is_file() else None, inbox=None, output=None, error=None)
         private(self.root / '.env', 'CONFIGURATION=\n')
 
     def submit(self, action, name=None, confirmation=None, upload=None):
-        if action not in ('switch', 'replace', 'reset', 'export', 'import'):
+        if action not in ('switch', 'reset'):
             raise ValueError('Unsupported administrator action')
-        if action in ('switch', 'replace', 'export'):
+        if action in ('switch',):
             self.selected(name)
-        if action == 'import' and (not isinstance(name, str) or not configuration.NAME.fullmatch(name) or name in ('blank', 'administrator')):
-            raise ValueError('Use a new configuration directory name')
-        if action in ('replace', 'reset') and confirmation != ('REPLACE ' + name if action == 'replace' else 'FACTORY RESET'):
+        if action == 'reset' and confirmation != 'FACTORY RESET':
             raise ValueError('Enter the displayed destructive-action confirmation')
         with self.lock:
             if self.busy:
                 raise ValueError('Another administrator action is running')
             self.busy = True
-            self.save(state='working', action=action, error=None, **({'download':None} if action=='export' else {}))
+            self.save(state='working', action=action, error=None)
         self.executor.submit(self.perform, action, name, upload)
 
     def perform(self, action, name, upload):
         try:
-            if action == 'export':
-                directory = self.home / 'exports' / name
-                (directory / (name+'.olo')).unlink(missing_ok=True)
-                profile_bundle.export(self.root, name, directory / (name+'.olo'))
-                self.save(state='ready' if self.state.get('console') else 'stopped',
-                          download='/api/export', downloadName=name+'.olo', exportConfiguration=name,
-                          exportDirectory=str(directory))
-            elif action == 'import':
-                profile_bundle.install(self.root, name, upload)
-                self.save(state='ready' if self.state.get('console') else 'stopped')
+            previous = self.state.get('active')
+            if action=='reset':self.preserve_admin(previous or 'blank')
+            # Also adopt deployments started before the portal existed, without deleting storage.
+            owned = []
+            for identity, labels in lifecycle.objects('container'):
+                project = labels.get(lifecycle.PROJECT, '')
+                owner = labels.get(lifecycle.ROOT_LABEL) or labels.get(lifecycle.DIRECTORY)
+                if (project.startswith(lifecycle.PREFIX) and owner
+                        and os.path.normcase(str(Path(owner).resolve())) == os.path.normcase(str(self.root))):
+                    owned.append(identity)
+            if owned:
+                lifecycle.docker('container', 'stop', '--time', '30', *owned)
+            self.save(active=None, console=None, credentials=None, inbox=None, output=None)
+            if action == 'blank':
+                self.blank()
+            elif action == 'reset':
+                if previous:
+                    lifecycle.destroy(self.root, previous)
+                if (self.root / 'state/blank').exists():
+                    lifecycle.destroy(self.root, 'blank')
+                self.blank()
             else:
-                previous = self.state.get('active')
-                # Also adopt deployments started before the portal existed, without deleting storage.
-                owned = []
-                for identity, labels in lifecycle.objects('container'):
-                    project = labels.get(lifecycle.PROJECT, '')
-                    owner = labels.get(lifecycle.ROOT_LABEL) or labels.get(lifecycle.DIRECTORY)
-                    if (project.startswith(lifecycle.PREFIX) and owner
-                            and os.path.normcase(str(Path(owner).resolve())) == os.path.normcase(str(self.root))):
-                        owned.append(identity)
-                if owned:
-                    lifecycle.docker('container', 'stop', '--time', '30', *owned)
-                self.save(active=None, console=None, credentials=None, inbox=None, output=None)
-                if action == 'blank':
-                    self.blank()
-                elif action == 'reset':
-                    if previous:
-                        lifecycle.destroy(self.root, previous)
-                    if (self.root / 'state/blank').exists():
-                        lifecycle.destroy(self.root, 'blank')
-                    self.blank()
-                else:
-                    settings = self.selected(name)
-                    if action == 'replace':
-                        lifecycle.destroy(self.root, name)
-                    self.command('deploy', '--configuration', name)
-                    platform = settings['deployment']['platform']
-                    self.save(active=name, state='ready', image=platform['quickstartImage'], error=None,
-                        console=f'http://127.0.0.1:{platform["httpPort"]}/console/',
-                        credentials=str(self.root / 'state' / name / 'credentials/admin'),
-                        inbox=str(self.root / 'data' / name / settings['fileAgent']['inbox']) if settings['fileAgent'] else None,
-                        output=str(self.root / 'data' / name / settings['fileAgent']['output']) if settings['fileAgent'] else None)
-                    private(self.root / '.env', 'CONFIGURATION='+name+'\n')
+                settings = self.selected(name)
+                self.command('deploy', '--configuration', name)
+                platform = settings['deployment']['platform']
+                self.save(active=name, state='ready', image=platform['quickstartImage'], error=None,
+                    console=f'http://127.0.0.1:{platform["httpPort"]}/console/',
+                    credentials=str(self.root / 'state' / name / 'credentials/admin'),
+                    inbox=str(self.root / 'data' / name / settings['fileAgent']['inbox']) if settings['fileAgent'] else None,
+                    output=str(self.root / 'data' / name / settings['fileAgent']['output']) if settings['fileAgent'] else None)
+                private(self.root / '.env', 'CONFIGURATION='+name+'\n')
         except Exception as failure:
             self.save(state='failed', error=str(failure) if isinstance(failure, ValueError) else
                       'Operation failed. Inspect state/administrator/operation.log and the selected service logs.')
@@ -269,12 +289,64 @@ class Handler(BaseHTTPRequestHandler):
             raise PermissionError('Refresh your administrator session')
         return session
 
+    def proxy(self):
+        """Same-origin console facade. Control still authenticates and authorizes every API call."""
+        origin=self.server.controller.state.get('console')
+        if not self.path.startswith(('/console/','/api/control/','/api/quickstart/','/health/')):
+            self.send(404,dict(error='Not found'))
+            return
+        if self.headers.get('Host')!=f'127.0.0.1:{PORT}' or not origin:
+            self.send(503,dict(error='Control is starting'))
+            return
+        target=urlsplit(origin)
+        if target.scheme!='http' or target.hostname!='127.0.0.1' or not target.port:
+            self.send(503,dict(error='Control origin unavailable'))
+            return
+        if self.command!='GET' and self.headers.get('Origin')!=ORIGIN:
+            self.send(403,dict(error='Same-origin requests required'))
+            return
+        length=int(self.headers.get('Content-Length','0'))
+        if not 0<=length<=2*1024*1024:
+            self.send(413,dict(error='Request too large'))
+            return
+        skipped={'host','connection','transfer-encoding','content-length','origin','referer','x-workflowstack-csrf'}
+        headers={key:value for key,value in self.headers.items() if key.lower() not in skipped}
+        if self.headers.get('Cookie'):
+            cookies=SimpleCookie(self.headers['Cookie'])
+            if 'workflow_stack' in cookies:del cookies['workflow_stack']
+            headers['Cookie']='; '.join(value.OutputString() for value in cookies.values())
+        if self.headers.get('Origin'):headers['Origin']=f'http://127.0.0.1:{target.port}'
+        if self.headers.get('Referer'):headers['Referer']=f'http://127.0.0.1:{target.port}/console/'
+        connection=http.client.HTTPConnection('127.0.0.1',target.port,timeout=60)
+        try:
+            connection.request(self.command,self.path,body=self.rfile.read(length) if length else None,headers=headers)
+            response=connection.getresponse()
+            self.send_response(response.status)
+            for key,value in response.getheaders():
+                if key.lower() not in ('connection','transfer-encoding'):
+                    if key.lower()=='set-cookie' and value.startswith('workflow_stack='):continue
+                    self.send_header(key,value)
+            self.end_headers()
+            while data:=response.read(65536):self.wfile.write(data)
+        except (OSError,http.client.HTTPException):
+            # No retry of mutations, and no upstream bodies/credentials in errors.
+            self.close_connection=True
+        finally:connection.close()
+
     def do_GET(self):
         if self.headers.get('Host') != f'127.0.0.1:{PORT}':
             self.send(403, dict(error='Invalid host'))
             return
         try:
-            if self.path == '/':
+            if self.path.startswith(('/console/','/api/control/','/api/quickstart/','/health/')):
+                self.proxy()
+            elif self.path=='/':
+                if self.server.controller.state.get('console'):
+                    self.send_response(302);self.send_header('Location','/console/#workflows');self.end_headers()
+                else:
+                    data=b'<html><head><meta http-equiv="refresh" content="3"></head><body>Starting Control. <a href="/operator">Stack operator</a></body></html>'
+                    self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
+            elif self.path == '/operator':
                 data = (Path(__file__).with_name('admin.html')).read_bytes()
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
@@ -285,23 +357,6 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == '/api/status':
                 session = self.session()
                 self.send(200, dict(**self.server.controller.status(), csrf=session[0]))
-            elif self.path == '/api/export':
-                self.session()
-                if self.server.controller.busy or not self.server.controller.state.get('download'):
-                    raise ValueError('No completed export is available')
-                name = self.server.controller.state.get('exportConfiguration','')
-                if not configuration.NAME.fullmatch(name):
-                    raise ValueError('No completed export is available')
-                filename = name+'.olo'
-                path = self.server.controller.home / 'exports' / name / filename
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/zip')
-                self.send_header('Content-Disposition', 'attachment; filename="'+filename+'"')
-                self.send_header('Content-Length', str(path.stat().st_size))
-                self.send_header('Cache-Control', 'no-store')
-                self.end_headers()
-                with path.open('rb') as stream:
-                    shutil.copyfileobj(stream, self.wfile)
             else:
                 self.send(404, dict(error='Not found'))
         except PermissionError as failure:
@@ -310,35 +365,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send(400, dict(error='Request unavailable'))
 
     def do_POST(self):
+        if self.path.startswith(('/api/control/','/api/quickstart/')):
+            self.proxy()
+            return
         if self.headers.get('Host') != f'127.0.0.1:{PORT}' or self.headers.get('Origin') != ORIGIN:
             self.send(403, dict(error='Same-origin requests required'))
             return
         try:
             length = int(self.headers.get('Content-Length', '-1'))
-            if self.path == '/api/import':
-                self.session(mutate=True)
-                name = self.headers.get('X-Configuration-Name', '')
-                if not configuration.NAME.fullmatch(name) or not 0 < length <= profile_bundle.MAX_BUNDLE:
-                    raise ValueError('Use a valid name and a bundle at most 12 GiB')
-                controller = self.server.controller
-                if not self.headers.get('X-Bundle-Filename', '').endswith('.olo'):
-                    raise ValueError('Import a .olo profile bundle')
-                path = controller.home / ('upload-' + secrets.token_hex(12) + '.olo')
-                try:
-                    with path.open('xb') as stream:
-                        remaining = length
-                        while remaining:
-                            chunk = self.rfile.read(min(remaining, 1024 * 1024))
-                            if not chunk:
-                                raise ValueError('Incomplete upload')
-                            stream.write(chunk)
-                            remaining -= len(chunk)
-                    controller.submit('import', name, upload=path)
-                except Exception:
-                    path.unlink(missing_ok=True)
-                    raise
-                self.send(202, dict(accepted=True))
-                return
             if not 0 < length <= 8192:
                 raise ValueError('Invalid request size')
             document = json.loads(self.rfile.read(length))
@@ -363,6 +397,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send(401, dict(error=str(failure)))
         except (ValueError, TypeError, KeyError):
             self.send(400, dict(error='Invalid request or administrator operation already running'))
+
+    def do_PUT(self):self.proxy()
+    def do_DELETE(self):self.proxy()
+    def do_PATCH(self):self.proxy()
 
 
 def serve(root, selection):
@@ -415,7 +453,7 @@ def shutdown(root):
         post('/api/shutdown', {}, result['csrf'])
         for _ in range(30):
             try:
-                with opener.open(ORIGIN,timeout=.3) as response:response.read(1)
+                with opener.open(ORIGIN+'/operator',timeout=.3) as response:response.read(1)
             except OSError:
                 return
             time.sleep(.1)

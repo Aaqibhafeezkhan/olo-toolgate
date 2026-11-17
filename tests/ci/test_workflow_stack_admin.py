@@ -15,12 +15,12 @@ import urllib.error
 import urllib.request
 import zipfile
 from types import SimpleNamespace
+from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / 'deploy/compose/WorkflowStack'
 sys.path.insert(0, str(BUNDLE / 'scripts'))
 import admin_server
-import profile_bundle
 
 
 class StackAdminTests(unittest.TestCase):
@@ -33,11 +33,6 @@ class StackAdminTests(unittest.TestCase):
         (self.root / 'models/model.gguf').write_bytes(b'mocked model bytes')
         self.controller = admin_server.Controller(self.root)
         self.addCleanup(lambda: self.controller.executor.shutdown(wait=True))
-
-    def image(self, *args):
-        if args[:2] == ('image', 'save'):
-            Path(args[3]).write_bytes(b'mocked Docker image archive')
-        return 'sha256:' + 'a' * 64
 
     def test_authentication_rejects_wrong_password_and_throttles(self):
         with self.assertRaises(PermissionError):
@@ -114,10 +109,11 @@ class StackAdminTests(unittest.TestCase):
         self.controller.state['active'] = 'first'
         with patch.object(admin_server.lifecycle, 'objects', return_value=[]), \
                 patch.object(admin_server.lifecycle, 'destroy') as destroy, \
-                patch.object(self.controller, 'blank') as blank:
+                patch.object(self.controller, 'blank') as blank, patch.object(self.controller,'preserve_admin') as preserve:
             self.controller.perform('reset', None, None)
         destroy.assert_called_once_with(self.root, 'first')
         blank.assert_called_once()
+        preserve.assert_called_once_with('first')
         self.assertTrue((self.root / 'configurations/first/workflow-profile.json').is_file())
         with self.assertRaises(ValueError):
             self.controller.submit('reset', confirmation='incorrect')
@@ -136,6 +132,8 @@ class StackAdminTests(unittest.TestCase):
         service = document['services']['quickstart']
         self.assertIn('blank-bootstrap:/bootstrap:ro', service['volumes'])
         self.assertEqual('/bootstrap/profile.json', service['environment']['TOOLGATE_CONTROL_PROFILE_PATH'])
+        self.assertEqual('true', service['environment']['TOOLGATE_QUICKSTART_ADMIN_ONLY'])
+        self.assertEqual('true', service['environment']['TOOLGATE_TRIGGERS_CONTROL_CORE_ENABLED'])
         self.assertEqual('0:0', document['services']['bootstrap-init']['user'])
         self.assertEqual('service_completed_successfully', service['depends_on']['bootstrap-init']['condition'])
         self.assertEqual('ready', self.controller.state['state'])
@@ -152,75 +150,57 @@ class StackAdminTests(unittest.TestCase):
         self.assertIsNone(self.controller.state['active'])
         self.assertEqual(('failed', 'Startup refused'), (self.controller.state['state'], self.controller.state['error']))
 
-    def export(self):
-        output = self.root / 'portable.olo'
-        with patch.object(profile_bundle, 'docker', side_effect=self.image):
-            profile_bundle.export(self.root, 'first', output)
-        return output
+    def test_console_proxy_keeps_control_auth_and_does_not_forward_operator_credentials(self):
+        observed=[]
+        class Upstream(BaseHTTPRequestHandler):
+            def log_message(self,*_):pass
+            def do_GET(self):
+                observed.append(dict(self.headers))
+                self.send_response(200 if self.headers.get('Authorization')=='Bearer control-token' else 401)
+                self.send_header('Content-Length','2');self.end_headers();self.wfile.write(b'{}')
+        upstream=ThreadingHTTPServer(('127.0.0.1',0),Upstream)
+        threading.Thread(target=upstream.serve_forever,daemon=True).start()
+        self.addCleanup(upstream.server_close);self.addCleanup(upstream.shutdown)
+        self.controller.state['console']=f'http://127.0.0.1:{upstream.server_address[1]}/console/'
+        server=ThreadingHTTPServer(('127.0.0.1',0),admin_server.Handler);server.controller=self.controller
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        port=server.server_address[1];origin=f'http://127.0.0.1:{port}'
+        opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with patch.object(admin_server,'PORT',port),patch.object(admin_server,'ORIGIN',origin):
+            with self.assertRaises(urllib.error.HTTPError) as error:opener.open(origin+'/api/control/v1/admin-session')
+            self.assertEqual(401,error.exception.code)
+            request=urllib.request.Request(origin+'/api/control/v1/admin-session',headers={
+                'Authorization':'Bearer control-token','Cookie':'workflow_stack=operator-secret; toolgate-session=control-cookie',
+                'X-WorkflowStack-CSRF':'operator-csrf'})
+            with opener.open(request) as response:self.assertEqual(200,response.status)
+            self.assertNotIn('operator-secret',str(observed[-1]));self.assertNotIn('operator-csrf',str(observed[-1]))
+            self.assertIn('control-cookie',str(observed[-1]))
+            with self.assertRaises(urllib.error.HTTPError) as error:
+                opener.open(urllib.request.Request(origin+'/api/control/v1/workflow-profiles',b'{}',{'Origin':'https://evil.example'}))
+            self.assertEqual(403,error.exception.code)
 
-    def test_round_trip_preserves_profile_graph_assets_model_and_image_identities(self):
-        private = self.root / 'configurations/first/credentials'
-        private.mkdir()
-        (private / 'password.txt').write_text('not exported')
-        output = self.export()
-        with zipfile.ZipFile(output) as archive:
-            self.assertFalse(any('credentials' in name for name in archive.namelist()))
-            self.assertIn('models/model.gguf', archive.namelist())
-            self.assertIn('images.tar', archive.namelist())
-            self.assertNotIn('README.md', archive.namelist())
-            self.assertNotIn('configuration/README.md', archive.namelist())
-            self.assertFalse((output.parent / 'README.md').exists())
-            self.assertTrue(all(item.compress_type == zipfile.ZIP_DEFLATED for item in archive.infolist()))
-        with patch.object(profile_bundle, 'docker', side_effect=self.image):
-            profile_bundle.install(self.root, 'imported', output)
-        for path in (self.root / 'configurations/first').rglob('*'):
-            if path.is_file() and 'credentials' not in path.parts and path.name != 'README.md':
-                self.assertEqual(path.read_bytes(), (self.root / 'configurations/imported' / path.relative_to(self.root / 'configurations/first')).read_bytes())
-        self.assertIn('../../data/imported/inbox/', (self.root / 'configurations/imported/README.md').read_text())
-        with self.assertRaises(ValueError):
-            profile_bundle.install(self.root, 'first', output)
+    def test_workflow_bundles_never_use_deployment_actions(self):
+        for action in ('import','export','replace'):
+            with self.subTest(action=action),self.assertRaisesRegex(ValueError,'Unsupported'):
+                self.controller.submit(action,'first')
 
-    def test_import_refuses_tampering_before_loading_images(self):
-        output = self.export()
-        rewritten = self.root / 'tampered.olo'
-        with zipfile.ZipFile(output) as source, zipfile.ZipFile(rewritten, 'w') as target:
-            for info in source.infolist():
-                target.writestr(info.filename, b'changed' if info.filename == 'models/model.gguf' else source.read(info.filename))
-        with patch.object(profile_bundle, 'docker') as docker, self.assertRaisesRegex(ValueError, 'digest'):
-            profile_bundle.install(self.root, 'tampered', rewritten)
-        docker.assert_not_called()
-        self.assertFalse((self.root / 'configurations/tampered').exists())
-
-    def test_import_rejects_traversal_duplicate_and_symlink_entries(self):
-        output = self.export()
-        for bad in ('../outside', 'configuration/workflow-profile.json', 'configuration/link'):
-            rewritten = self.root / 'bad.olo'
-            with zipfile.ZipFile(output) as source, zipfile.ZipFile(rewritten, 'w') as target:
-                for info in source.infolist():
-                    target.writestr(info, source.read(info.filename))
-                info = zipfile.ZipInfo(bad)
-                if bad.endswith('/link'):
-                    info.external_attr = 0o120777 << 16
-                target.writestr(info, b'outside')
-            with patch.object(profile_bundle, 'docker') as docker, self.assertRaises(ValueError):
-                profile_bundle.install(self.root, 'rejected', rewritten)
-            docker.assert_not_called()
-
-    def test_import_refuses_conflicting_model_without_overwriting(self):
-        output = self.export()
-        (self.root / 'models/model.gguf').write_bytes(b'other model')
-        with patch.object(profile_bundle, 'docker') as docker, self.assertRaisesRegex(ValueError, 'different content'):
-            profile_bundle.install(self.root, 'different', output)
-        docker.assert_not_called()
-        self.assertEqual(b'other model', (self.root / 'models/model.gguf').read_bytes())
-
-    def test_portable_operations_require_the_olo_extension(self):
-        with patch.object(profile_bundle, 'docker') as docker:
-            with self.assertRaisesRegex(ValueError, '.olo'):
-                profile_bundle.export(self.root, 'first', self.root / 'profile.zip')
-            with self.assertRaisesRegex(ValueError, '.olo'):
-                profile_bundle.install(self.root, 'other', self.root / 'profile.zip')
-        docker.assert_not_called()
+    def test_reset_preserves_the_actual_admin_verifier_without_logging_it(self):
+        credential=self.root/'state/first/credentials/admin'
+        credential.mkdir(parents=True)
+        (credential/'username.txt').write_text('admin')
+        (credential/'password.txt').write_text('existing-password')
+        verifier=b'{"salt":"test-salt","hash":"test-verifier","mustChangePassword":false}'
+        with patch.object(admin_server.subprocess,'run',return_value=SimpleNamespace(stdout=verifier)) as command:
+            self.controller.preserve_admin('first')
+        command.assert_called_once()
+        self.assertEqual(verifier,(self.controller.home/'reset-admin/identity.json').read_bytes())
+        self.assertEqual('existing-password',(self.controller.home/'reset-admin/password.txt').read_text())
+        self.assertFalse((self.controller.home/'operation.log').exists())
+        (credential/'password.txt').unlink()
+        with patch.object(admin_server.subprocess,'run',return_value=SimpleNamespace(stdout=verifier)):
+            self.controller.preserve_admin('first')
+        self.assertFalse((self.controller.home/'reset-admin/password.txt').exists())
 
 
 if __name__ == '__main__':

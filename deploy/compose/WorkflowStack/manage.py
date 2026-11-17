@@ -285,6 +285,21 @@ def profile(operator,settings,state):
     document['workflows']['dispatchBindings']=configuration.resolve(document['workflows']['dispatchBindings'],
         {'${SUBSCRIPTION_UID}':subscription,'${ASSIGNMENT_UID}':assignment})
     workflows=document['workflows']
+    # Mounted JSON bootstraps a fresh installation. Restarting a configured stack
+    # must not overwrite workflow data subsequently managed through Control.
+    after=''
+    for _ in range(21):
+        published=config.api('/api/control/v1/workflow-profiles/published?limit=50'+('&afterProfileId='+after if after else ''))
+        head=next((item for item in published if item['profileId']==document['profileId']),None)
+        if head:
+            operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(
+                profileId=head['profileId'],profileDigest=head['digest'],workflowIds=[settings['workflowId']])))
+            operator.shared.private_file(state/'workflow/worker/listener.json',json.dumps(dict(name=settings['subscription'],uid=subscription)))
+            if settings['fileAgent'] is not None:qualify_reader(operator,config,state)
+            return config
+        if len(published)<50:break
+        after=published[-1]['profileId']
+    else:raise ValueError('Workflow publication catalog exceeds the bootstrap lookup limit')
     # Each declared agent/group is independently administered. Only the original file agent has MCP grants.
     role='configured-workflow-service'
     config.upsert('roles',dict(id=role,name='Configured workflow service',revision=1,enabled=True,
@@ -325,7 +340,7 @@ def profile(operator,settings,state):
                 raise ValueError('Configured profile dependencies did not become ready; inspect provisioning status')
             time.sleep(2)
     config.api(base+'/'+document['profileId']+'/publish',{**digest,'expectedGeneration':staged['generation']})
-    operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(profileDigest=staged['profileDigest'],
+    operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(profileId=document['profileId'],profileDigest=staged['profileDigest'],
         workflowIds=[item['id'] for item in workflows['workflows']])))
     operator.shared.private_file(state/'workflow/worker/listener.json',json.dumps(dict(name=settings['subscription'],uid=subscription)))
     if settings['fileAgent'] is not None:qualify_reader(operator,config,state)
@@ -425,7 +440,7 @@ def main():
             # Keep the privileged operator outside containers, with a hidden background process.
             import urllib.request
             try:
-                with urllib.request.urlopen(admin_server.ORIGIN,timeout=2) as response:
+                with urllib.request.urlopen(admin_server.ORIGIN+'/operator',timeout=2) as response:
                     response.read(1)
             except OSError:
                 home=HERE/'state/administrator'
@@ -439,12 +454,13 @@ def main():
                 deadline=time.monotonic()+20
                 while time.monotonic()<deadline:
                     try:
-                        with urllib.request.urlopen(admin_server.ORIGIN,timeout=1) as response:response.read(1)
+                        with urllib.request.urlopen(admin_server.ORIGIN+'/operator',timeout=1) as response:response.read(1)
                         break
                     except OSError:time.sleep(.2)
                 else:raise ValueError('Administrator UI did not start; inspect state/administrator/server.log')
             print('WorkflowStack administration: '+admin_server.ORIGIN)
-            print('Administrator credentials: '+str(HERE/'state/administrator/credentials/admin'))
+            print('Control admin credentials: '+str(HERE/'state'/(selection or 'blank')/'credentials/admin'))
+            print('Advanced operator credentials: '+str(HERE/'state/administrator/credentials/admin'))
             print('Startup runs in the background; inspect its status in the administration UI.')
             return
         if args.command=='destroy':

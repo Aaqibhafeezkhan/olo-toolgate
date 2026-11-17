@@ -18,6 +18,6 @@ if (!process.argv.includes('--metadata-only')) {
 }
 const dist = join(root,'apps/admin-ui/dist');
 writeFileSync(join(dist,'LICENSE.txt'),readFileSync(join(root,'LICENSE'),'utf8'));
-writeFileSync(join(dist,'THIRD-PARTY-NOTICES.txt'),['react','react-dom','scheduler'].map(name => `${name}\n${readFileSync(join(root,'node_modules',name,'LICENSE'),'utf8')}`).join('\n\n'));
+writeFileSync(join(dist,'THIRD-PARTY-NOTICES.txt'),['react','react-dom','scheduler','fflate'].map(name => `${name}\n${readFileSync(join(root,'node_modules',name,'LICENSE'),'utf8')}`).join('\n\n'));
 const assets = readdirSync(join(dist,'assets')).sort().map(file => ({file:`assets/${file}`,sha256:createHash('sha256').update(readFileSync(join(dist,'assets',file))).digest('hex')}));
 writeFileSync(join(dist,'release.json'),JSON.stringify({version:readFileSync(join(root,'VERSION'),'utf8').trim(),contracts:readFileSync(join(root,'packages/contracts/VERSION'),'utf8').trim(),assets},null,2)+'\n');

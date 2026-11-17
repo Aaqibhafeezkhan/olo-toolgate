@@ -232,8 +232,10 @@ def prepare(data, tenant, issuer, key, atomic):
                     policies=[], devices=[], roles=[], deviceGroups=[], agentGroups=[], toolGroups=[], grants=[],
                     delegations=[], agentDelegations=[], bindings=[], extractors=[], workloadBindings=[],
                     identityBindings=[], deviceEvidence=[])
-    administrators = ['admin', 'reviewer-1', 'reviewer-2']
-    subjects = administrators + ['test-readonly', 'test-readwrite', 'test-admin']
+    mode=os.environ.get('TOOLGATE_QUICKSTART_ADMIN_ONLY','false')
+    if mode not in ('true','false'):raise Refused('Invalid admin-only initialization mode')
+    administrators = ['admin'] if mode=='true' else ['admin', 'reviewer-1', 'reviewer-2']
+    subjects = administrators if mode=='true' else administrators + ['test-readonly', 'test-readwrite', 'test-admin']
     snapshot['users'] = [dict(id=user, name='Quickstart '+user, enabled=user in administrators, revision=1) for user in subjects]
     snapshot['users'][0]['email'] = admin_email
     snapshot['teams'] = [dict(id='team-default', name='Default team', enabled=True, revision=1,
@@ -268,6 +270,10 @@ def prepare(data, tenant, issuer, key, atomic):
                                 revision=1, toolGroupId='default-tools', deviceGroupId='default-devices',
                                 actions=['invoke'], allowedPackageDigests=[],
                                 requireOnline=True, ownerDependency=False)]
+    if mode=='true':
+        snapshot['agents']=[]
+        snapshot['agentGroups']=[]
+        snapshot['bindings']=[]
     installation = json.loads(json.dumps(snapshot))
     installed = initialize(snapshot, tenant, issuer, now)
     # The packet carries only installation records; Control applies the file's records as its own first import.

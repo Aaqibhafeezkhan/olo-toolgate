@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import {createContext,useContext,useEffect,useState,type ReactNode,type Dispatch,type SetStateAction} from 'react';
 import type {DeploymentProfile,WorkflowConfiguration,WorkflowDefinition,WorkflowProfileStatus,TriggerDefinitionRecord,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
-import {ControlClient} from './api';
+import {ApiError,ControlClient} from './api';
 import {Failure} from './Failure';
 import {EditorDialog} from './EditorDialog';
 import {ProfileFields,initialField,profileSchema,type FieldOptions} from './ProfileFields';
 import {Table} from './Table';
 import {JsonTextEditor} from './JsonTextEditor';
+import {WorkflowTransfer} from './WorkflowTransfer';
+import {removeWorkflow} from './workflowBundle';
 
 export const workflowPages={'workflow-trigger-packages':'Trigger packages',workflows:'Workflows',workflowGroups:'Workflow groups','workflow-models':'Models','workflow-dispatch':'Trigger mappings','workflow-profiles':'Profiles','agent-configuration':'Models & prompts','agent-workflow-mappings':'Workflow mappings'} as const;
 export type WorkflowPage=keyof typeof workflowPages;
@@ -63,7 +65,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
     return {...next,workflows:{...next.workflows,workflows,dispatchBindings}};
   }
   function editWorkflows(entries:readonly WorkflowDefinition[]){
-    if(w.profile&&config)edit(reviseProfile({...w.profile,workflows:{...config,workflows:entries}}));
+    if(w.profile&&config){let profile=w.profile;for(const removed of config.workflows.filter(item=>!entries.some(entry=>entry.id===item.id)))profile=removeWorkflow(profile,removed.id);edit(reviseProfile({...profile,workflows:{...profile.workflows!,workflows:entries}}));}
   }
   async function load(entry:WorkflowProfileStatus){const [profile,status]=await Promise.all([client.workflowProfileDocument(entry.profileId,entry.profileDigest),client.workflowProfileStatus(entry.profileId,entry.profileDigest)]);setWorkspace({profile,base:profile,status,baseStatus:status,dirty:false,epoch:w.epoch+1});}
   async function stage(){const status=await client.stageWorkflowProfile(w.profile!);setWorkspace({...w,status,baseStatus:status,base:w.profile,dirty:false});setAttempt(a=>a+1);setNotice('Staged exact profile revision. Review before provisioning or publication.');}
@@ -126,12 +128,14 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
         <button disabled={busy} onClick={()=>void run(async()=>setWorkspace({...w,status:await client.workflowProfileStatus(w.status!.profileId,w.status!.profileDigest)}))}>Refresh lifecycle status</button>
         <button disabled={busy||w.status.state!=='DRAFT'} onClick={()=>void run(async()=>setWorkspace({...w,status:await client.reviewWorkflowProfile(w.status!.profileId,w.status!.profileDigest)}))}>Review exact revision</button>
         <button disabled={busy||w.status.state==='DRAFT'} onClick={()=>void run(async()=>{const result=await client.provisionWorkflowProfile(w.status!.profileId,w.status!.profileDigest);setWorkspace({...w,status:await client.workflowProfileStatus(w.status!.profileId,w.status!.profileDigest)});setNotice(`Package provisioning: ${result.state}`);})}>Provision reviewed packages</button>
-        <button disabled={busy||w.status.state!=='REVIEWED'||!w.status.dependenciesReady} onClick={()=>void run(async()=>setWorkspace({...w,status:await client.publishWorkflowProfile(w.status!.profileId,w.status!.profileDigest,w.status!.generation)}))}>Publish reviewed revision</button>
+        <button disabled={busy||w.status.state!=='REVIEWED'||!w.status.dependenciesReady} onClick={()=>void run(async()=>{const published=await client.publishWorkflowProfile(w.status!.profileId,w.status!.profileDigest,w.status!.generation);await load(published);setAttempt(a=>a+1);setNotice('Published workflow configuration. The editor has refreshed.');})}>Publish reviewed revision</button>
       </>:<p>Stage the working profile before review or publication.</p>}
     </section>}
     {w.profile&&page==='workflow-profiles'&&<section className="guidance"><h2>Profile properties</h2><JsonTextEditor key={`json-${w.epoch}`} label="Profile JSON" value={w.profile} disabled={busy} apply={value=>edit(reviseProfile(value as unknown as DeploymentProfile))}/><form id="workflow-profile-fields" className="workflow-profile-editor" onSubmit={e=>{e.preventDefault();void run(stage);}}><fieldset disabled={busy}><ProfileFields key={w.epoch} value={w.profile} change={value=>edit(value as DeploymentProfile)}/></fieldset></form></section>}
     {w.profile&&page==='workflow-trigger-packages'&&<TriggerPackages client={client} busy={busy} packages={w.profile.packages} change={value=>edit({...w.profile!,packages:value as unknown as DeploymentProfile['packages']})}/>}
+    {page==='workflows'&&<WorkflowTransfer client={client} profile={w.profile} allowNew={catalog?.length===0} busy={busy||w.dirty} run={run} replace={async profile=>{const expected=w.baseStatus?.generation??0;const status=await client.stageWorkflowProfile(profile);if(status.generation!==expected)throw new ApiError(409,'STALE_PROFILE');await load(status);setAttempt(a=>a+1);setNotice('Imported workflow and refreshed the staged profile. Review and publish to activate it. Containers and credentials are unchanged.');}}/>}
     {w.profile&&config&&<>
+
       {page==='workflowGroups'&&<><Collection title="Workflow groups" definition="WorkflowGroupDefinition" items={config.workflowGroups} change={value=>editConfig('workflowGroups',value)} disabled={busy}/><p>Assign workflows to groups using each workflow’s workflowGroupId on the Workflows page.</p></>}
       {page==='workflows'&&<Collection title="Workflows" definition="WorkflowDefinition" items={config.workflows} change={value=>editWorkflows(value as unknown as WorkflowDefinition[])} disabled={busy}/>}
       {page==='workflow-models'&&models}
