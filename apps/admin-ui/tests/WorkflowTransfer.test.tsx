@@ -38,6 +38,7 @@ it('replaces and rereads the staged workflow, then refreshes publication without
   const client=new ControlClient('existing-token',vi.fn(),transport);
   const embedded=await Promise.all((await mockWorkflowPackages(profile,assignments)).map(inspectPackage));
   const upload=vi.spyOn(client,'uploadServerPackage').mockImplementation(async file=>{
+    if(!(file instanceof File))throw Error('Workflow imports must upload a named tool archive');
     const item=embedded.find(item=>file.name===item.metadata.packageId+'.olotool')!;
     expect(current).toBe(profile);
     return {packageId:item.metadata.packageId,version:item.metadata.version,packageDigest:item.metadata.packageDigest,state:'VERIFIED',descriptorSetDigest:item.manifest.descriptorSetDigest,revision:1,uploadedAtUnixMs:0};

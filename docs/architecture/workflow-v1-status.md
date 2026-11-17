@@ -5,7 +5,7 @@
 
 Known base `a8085a05`. Run `44133089397` job `134216198993` failed TypeScript
 checking because the workflow-transfer upload test treated its `Blob` parameter
-as a `File` without narrowing. The fixture now explicitly requires the named
+as a `File` without narrowing. The tracked `WorkflowTransfer.test.tsx` fixture now explicitly requires the named
 archive the import action produces. The complete local UI gate passed TypeScript,
 309 UI tests (one optional bundle test skipped), coverage, production Vite build
 and reproducible packaging. Coverage was 87.98% statements, 84.18% branches,
