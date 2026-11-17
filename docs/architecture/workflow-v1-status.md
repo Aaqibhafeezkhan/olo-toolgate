@@ -1,6 +1,38 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Blank initialization and administrative API scripts — 2026-11-18
+
+Known base `a479b783`. Fresh `debug/profiled` Compose initialization now requests
+one password-protected administrator, disables automatic profile bootstrap and
+does not seed sealed-core packages. Existing initialized state is not reset or
+converted. The accepted plan now explicitly requires blank-first startup and
+permits administrator-authenticated backend scripts for explicit device
+enablement, verified-key approval and group membership; profile import must
+never imply these decisions.
+
+`tools/admin/control.py` supplies a standard-library HTTPS API client with private
+bearer/CA files, bounded JSON/exact `.olotool` inputs, explicit idempotency and
+revision headers, preserved HTTP 202 pending status, redirect refusal and no
+automatic effect retries. It calls existing Control APIs without Docker or
+database access. Operator instructions include private-folder ACLs and separate
+revision-guarded device requests. This generic transport is not a durable `.olo`
+import/prepare/activation orchestrator; console transfer still has the separate
+dependency preparation steps documented below.
+
+Validation passed: ten administrative transport/Compose tests (including real
+trusted/untrusted TLS, denied effects, redirect refusal and bounded responses),
+13 Quickstart initialization/restart tests, four Windows debug-management tests,
+Compose configuration validation and source quality. The first Windows debug
+run exceeded its old 30-second fixture limit; the generator harness now allows
+90 seconds and all four tests passed in 42 seconds. No application gate was
+disabled. The launcher still builds/recreates
+the old debug composition, and no new full stack or unchanged-container demo
+has run. Durable deployment reconciliation/activation handover, fresh generic
+stack wiring, external provider routing/readiness, recovery/cleanup and remaining
+graph features remain open. #295 remains **0/100**; #274 remains **27%**; this
+slice earns no #230 stage/security acceptance credit.
+
 ## Expiring compatible worker presence — 2026-11-18
 
 Known base `78042804`. Canonical `WorkflowWorkerCapabilities` now carries one

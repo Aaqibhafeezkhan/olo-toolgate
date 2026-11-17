@@ -83,7 +83,9 @@ exit $LASTEXITCODE
                    TEST_DEBUG_FOCUSED='1' if focused else '0')
         result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass',
                                  '-File', str(self.harness)], cwd=self.root/'debug/profiled',
-                                env=env, capture_output=True, text=True, timeout=30)
+                                # Regeneration now covers more than 1,500 bindings;
+                                # Windows process startup/antivirus can exceed 30s.
+                                env=env, capture_output=True, text=True, timeout=90)
         calls = [json.loads(line) for line in log.read_text(encoding='utf-8-sig').splitlines()]
         return result, calls
 

@@ -11,7 +11,12 @@ services:
     security_opt: [no-new-privileges:true]
     stop_grace_period: 35s
     environment:
-      TOOLGATE_DISABLE_ADMIN_PASSWORD: ${TOOLGATE_DISABLE_ADMIN_PASSWORD:-true}
+      # Fresh installations start with one password-protected administrator.
+      # Profile content and package provisioning arrive through authenticated APIs.
+      TOOLGATE_DISABLE_ADMIN_PASSWORD: 'false'
+      TOOLGATE_QUICKSTART_ADMIN_ONLY: 'true'
+      TOOLGATE_CONTROL_PROFILE_PATH: ''
+      TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: ''
       TOOLGATE_QUICKSTART_DATABASE_MODE: sqlite
       TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS: 'true'
       TOOLGATE_GATEWAY_NAME: ${TOOLGATE_GATEWAY_NAME:-Debug Gateway}

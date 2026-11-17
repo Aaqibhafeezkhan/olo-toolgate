@@ -18,6 +18,22 @@ revision from the running console. Existing containers and identities remain in
 place. New runs use the activated revision; existing runs retain their admitted
 revision and finish against it.
 
+**First startup is always blank:** create only a password-protected administrator
+and the installation's infrastructure/trust metadata. Do not discover, select or
+seed a workflow from repository configuration folders, and do not preinstall a
+scenario's packages. An administrator imports a `.olo` after sign-in. Restarting
+an initialized installation preserves its data; blank startup is not a reset.
+
+The Admin UI and authenticated operator scripts use the same backend API
+operations for bundle upload, preparation, review, activation and device
+management. Scripts may explicitly enable a named enrolled device, approve its
+verified key and assign group membership under the administrator's current
+authority. These remain separate, revision-guarded actions; importing a profile
+does not perform them implicitly. Honor pending configuration review, refusals,
+idempotency and concurrency checks rather than bypassing them through Docker,
+database edits or a local privileged issuer. Enrollment itself still happens on
+the device. Scripts cannot create host permissions, mounts or ports remotely.
+
 The unit of import/export and replacement remains **one workflow** with its
 referenced data and exact `.olotool` packages. Other workflows can coexist.
 Replacing one workflow must preserve shared references. A future whole-installation

@@ -1,5 +1,13 @@
 # Local debug stack
 
+Fresh installations now initialize **only one password-protected administrator**,
+with no workflow profile or sealed-core package bootstrap. Import a workflow
+`.olo` through the running Admin UI. This is first initialization only: restart
+does not erase an existing installation or replace its accounts and workflows.
+Authenticated scripts can use the same backend device/provisioning APIs; see
+[administrative API scripting](../../tools/admin/README.md). Device enablement,
+approval and membership remain explicit, separate administrative actions.
+
 The directory consolidation is in progress. The scripts below still implement
 the existing debug deployment and can replace containers. They do not yet provide
 the accepted persistent-device profile hot-swap flow. Track that implementation
