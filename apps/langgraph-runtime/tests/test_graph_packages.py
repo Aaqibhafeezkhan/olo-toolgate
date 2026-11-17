@@ -78,6 +78,20 @@ class NativeGraphTests(unittest.TestCase):
         self.assertEqual(("second", 1), (outcome.result["prefix"], outcome.result["count"]))
         self.assertFalse(any(name.startswith("_toolgate_graph_") for name in sys.modules))
 
+    def test_claim_inventory_verifies_bytes_without_executing_factories_or_requiring_run_config(self):
+        self.manifest['factories']['summary']['configSchema']={'type':'object','required':['prefix'],'properties':{'prefix':{'type':'string'}}}
+        selection=self.package("raise AssertionError('Inventory must not execute Python')\n"+PURE_GRAPH)
+        registry=GraphPackages(self.installed)
+        self.assertIn(selection['digest'],registry.installed_digests())
+        source=self.installed/selection['digest'][7:]/'graph.py'
+        source.write_text('Corrupt installed package',encoding='utf-8')
+        self.assertNotIn(selection['digest'],registry.installed_digests())
+
+    def test_claim_inventory_refuses_an_unbounded_installation_directory(self):
+        for index in range(257):(self.installed/str(index)).mkdir(parents=True)
+        with self.assertRaisesRegex(GraphRefused,'GRAPH_INVENTORY_LIMIT'):
+            GraphPackages(self.installed).installed_digests()
+
     def test_concurrent_runs_receive_their_own_input_and_factory_config(self):
         selection = self.package()
         def invoke(index):

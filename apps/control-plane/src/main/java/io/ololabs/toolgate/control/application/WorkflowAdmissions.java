@@ -66,7 +66,7 @@ public final class WorkflowAdmissions {
             String compiler = codec.model(build, io.ololabs.toolgate.contracts.v2.WorkflowGraphBuildResult.class).compilerDigest();
             runs.enqueue(new WorkflowRunStore.QueuedRun(runId, target.profileId(), target.profileDigest(), binding.workflowId(),
                 binding.workflowVersionId(), binding.serviceAgentId(), binding.serviceAgentGroupId(), binding.remediationMode().name(),
-                now, sealed.keyVersion(), sealed.ciphertext(), compiler));
+                now, sealed.keyVersion(), sealed.ciphertext(), compiler, target.workflow().graph().digest()));
             return record(tx, actor, requestId, request, admissionId, runId, WorkflowDispatchDisposition.ADMITTED);
         });
     }

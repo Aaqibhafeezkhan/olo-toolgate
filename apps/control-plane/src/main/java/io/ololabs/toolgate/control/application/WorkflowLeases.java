@@ -53,13 +53,17 @@ public final class WorkflowLeases {
         @Override public String toString() { return "Snapshot[runId=" + runId + "]"; }
     }
 
-    public Store.Reply claim(DirectoryService.Actor worker, String requestId) {
+    public Store.Reply claim(DirectoryService.Actor worker, String compilerDigest, List<String> graphDigests, String requestId) {
         Ids.valid(requestId);
+        if (compilerDigest == null || graphDigests == null) throw Failure.validation();
+        // Validate the same canonical capability declaration used by the authenticated HTTP adapter.
+        var capabilities = codec.model(codec.json(Map.of("compilerDigest", compilerDigest, "graphDigests", graphDigests)),
+            io.ololabs.toolgate.contracts.v2.WorkflowRunClaimRequest.class);
         return store.transaction(worker.tenant(), true, tx -> {
             var runs = tx.workflowRuns();
             long now = clock.millis();
             runs.expire(now);
-            var run = runs.nextQueued();
+            var run = runs.nextQueued(capabilities.compilerDigest(), capabilities.graphDigests());
             if (run == null) return new Store.Reply(204, null, 0);
             WorkflowConfiguration config;
             WorkflowDefinition workflow;
@@ -67,6 +71,7 @@ public final class WorkflowLeases {
                 config = profiles.admittedRevision(tx, worker.tenant(), run).workflows();
                 workflow = config.workflows().stream().filter(candidate -> candidate.id().equals(run.workflowId())
                     && candidate.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
+                if (!workflow.graph().digest().equals(run.graphDigest())) throw Failure.unavailable();
                 access.require(tx.load(), run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
             } catch (Failure denied) {
                 if (denied.status() != 403) throw denied;

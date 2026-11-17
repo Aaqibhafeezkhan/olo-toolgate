@@ -40,7 +40,7 @@
     "packages/contracts/schemas/v2/trigger.schema.json": "6230d9966e4d4d734e4dce19af60904ab7efdf1b599f673723aa60294509a22b",
     "packages/contracts/schemas/v2/workflow-bundle.schema.json": "3fcaa2254b3284c64269e5fef362dd8b7d4e8dbd9d547ea44b3c89d0613cf391",
     "packages/contracts/schemas/v2/workflow-decision.schema.json": "f89d999aa3958a2b325fca073550fe77da3897d3e34d82f601c1f3689d9cf753",
-    "packages/contracts/schemas/v2/workflow.schema.json": "f8902879505583fcd346ec9d51c757bc850965e12bab906ed77ed38a997a13fa"
+    "packages/contracts/schemas/v2/workflow.schema.json": "864859fdb0f6046085e2c87be6e367cbdd7afc6b53ad43d986464f3d14a87ab2"
   },
   "generatorSha256": "97c8ba972f69933485098cf6ffdf8596c4bf1655603fd9c1d0026a23ccadd493",
   "outputs": [
@@ -801,6 +801,7 @@
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowProfileState.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowProfileStatus.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowRemediationMode.java",
+    "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowRunClaimRequest.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackDeployment.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackFolderAgent.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowStackModelEngine.java",
@@ -1567,6 +1568,7 @@
     "packages/contracts/php/src/V2/WorkflowProfileState.php",
     "packages/contracts/php/src/V2/WorkflowProfileStatus.php",
     "packages/contracts/php/src/V2/WorkflowRemediationMode.php",
+    "packages/contracts/php/src/V2/WorkflowRunClaimRequest.php",
     "packages/contracts/php/src/V2/WorkflowStackDeployment.php",
     "packages/contracts/php/src/V2/WorkflowStackFolderAgent.php",
     "packages/contracts/php/src/V2/WorkflowStackModelEngine.php",

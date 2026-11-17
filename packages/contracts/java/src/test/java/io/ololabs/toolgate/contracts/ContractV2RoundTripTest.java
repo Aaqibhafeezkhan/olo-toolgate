@@ -467,6 +467,7 @@ final class ContractV2RoundTripTest {
         "WorkflowProfileState",
         "WorkflowProfileStatus",
         "WorkflowRemediationMode",
+        "WorkflowRunClaimRequest",
         "WorkflowStackDeployment",
         "WorkflowStackFolderAgent",
         "WorkflowStackModelEngine",

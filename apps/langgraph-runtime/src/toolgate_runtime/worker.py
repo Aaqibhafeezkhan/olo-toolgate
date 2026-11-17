@@ -80,7 +80,7 @@ def main(argv=None):
             return stream.read(8193).strip()
 
     try:
-        control = ControlRuns(args.control_origin, credential, ca_file=args.control_ca_file)
+        control = ControlRuns(args.control_origin, credential, ca_file=args.control_ca_file,graph_directory=args.graph_directory)
         gateway = GatewayRuntime(args.gateway_origin, ca_file=args.gateway_ca_file)
         while True:
             lease = control.claim()

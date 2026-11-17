@@ -1,6 +1,18 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Capability-matched workflow claims — 2026-11-17
+
+The #295 worker now declares verified installed graph digests and compiler
+identity before Control selects an admitted run. Wrong/empty capabilities leave
+work queued; the client rechecks the returned identity. This grants no authority
+to install arbitrary code or bypass current leases/grants. Provisioned selected
+Java tests and the hardened image tests passed within the recorded scope; see
+the [workflow checkpoint](../architecture/workflow-v1-status.md#compatible-worker-claiming--2026-11-17).
+No #230 stage/phase/first-slice acceptance or security-guarantee weight changes;
+overall and acceptance tables remain unchanged. Durable worker readiness and
+full distributed hot-swap acceptance remain outstanding.
+
 ## Temporary dependency-risk acceptance — 2026-11-17
 
 At the user's request, CI temporarily accepts the exact Picomatch 4.0.7

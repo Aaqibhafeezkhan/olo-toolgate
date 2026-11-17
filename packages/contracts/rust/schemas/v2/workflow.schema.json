@@ -1342,6 +1342,29 @@
         "compilerDigest",
         "features"
       ]
+    },
+    "WorkflowRunClaimRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority.",
+      "properties": {
+        "compilerDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "graphDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "identifiers.schema.json#/$defs/Digest"
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "compilerDigest",
+        "graphDigests"
+      ]
     }
   }
 }

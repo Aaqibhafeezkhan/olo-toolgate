@@ -4541,6 +4541,7 @@ CREATE TABLE control_workflow_runs(
  run_id varchar(128) NOT NULL, profile_id varchar(128) NOT NULL, profile_digest varchar(71) NOT NULL,
  workflow_id varchar(128) NOT NULL, workflow_version_id varchar(128) NOT NULL,
  compiler_digest varchar(71) NOT NULL CHECK(length(compiler_digest)=71 AND substr(compiler_digest,1,7)='sha256:'),
+ graph_digest varchar(71) NOT NULL CHECK(length(graph_digest)=71 AND substr(graph_digest,1,7)='sha256:'),
  service_agent_id varchar(128) NOT NULL, service_agent_group_id varchar(128) NOT NULL,
  remediation_mode varchar(16) NOT NULL CHECK(remediation_mode IN('PREPARE','APPLY')),
  state varchar(24) NOT NULL CHECK(state IN('QUEUED','RUNNING','SUCCEEDED','FAILED','AWAITING_APPROVAL','CANCELLED','EXPIRED')),
@@ -4555,7 +4556,7 @@ CREATE TABLE control_workflow_runs(
  FOREIGN KEY(tenant_id,profile_id,profile_digest) REFERENCES control_workflow_profile_revisions(tenant_id,profile_id,digest),
  FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version),
  PRIMARY KEY(tenant_id,run_id));
-CREATE INDEX control_workflow_runs_queue ON control_workflow_runs(tenant_id,state,created_at,run_id);
+CREATE INDEX control_workflow_runs_queue ON control_workflow_runs(tenant_id,state,compiler_digest,graph_digest,created_at,run_id);
 CREATE INDEX control_workflow_runs_expiry ON control_workflow_runs(tenant_id,state,lease_expires_at);
 CREATE TABLE control_workflow_admissions(
  tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
@@ -4606,8 +4607,8 @@ CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_work
 CREATE FUNCTION control_workflow_runs_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
 BEGIN
- IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.compiler_digest),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
- IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.compiler_digest),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.compiler_digest),0)+COALESCE(octet_length(NEW.graph_digest),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.compiler_digest),0)+COALESCE(octet_length(OLD.graph_digest),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
  UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
  IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;

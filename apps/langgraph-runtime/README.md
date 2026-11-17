@@ -396,3 +396,11 @@ OpenSSL and explicitly skip where it is unavailable.
 The image CI gate uses the Dockerfile's `verification` stage with OpenSSL and
 runs the installed-runtime tests with read-only fixtures. The final `production`
 stage excludes that test-only executable.
+
+Workers advertise the current compiler digest and verified installed graph-package
+digests in every `POST /internal/v1/runtime/claim` body. Control leaves incompatible
+runs queued. The bounded inventory verifies package bytes without importing graph
+factories; `--graph-directory` adds operator-installed packages to the built-in
+inventory. Empty inventories claim no work. A worker checks the returned lease
+against its advertised identities before execution. This protects queue selection;
+it does not yet provide a durable worker-presence/readiness barrier for publication.

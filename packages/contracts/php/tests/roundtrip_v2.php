@@ -463,6 +463,7 @@ $models = [
     'WorkflowProfileState',
     'WorkflowProfileStatus',
     'WorkflowRemediationMode',
+    'WorkflowRunClaimRequest',
     'WorkflowStackDeployment',
     'WorkflowStackFolderAgent',
     'WorkflowStackModelEngine',

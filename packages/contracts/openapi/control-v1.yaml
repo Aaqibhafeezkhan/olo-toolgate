@@ -9,6 +9,27 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /internal/v1/runtime/claim:
+    post:
+      operationId: claimCompatibleWorkflowRun
+      security:
+      - runtimeServiceToken: []
+      summary: Lease an admitted run matching the worker compiler and verified installed graph inventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowRunClaimRequest
+      responses:
+        '200':
+          description: Private immutable leased run snapshot; no provider credentials included
+        '204':
+          description: No compatible queued run; incompatible work remains queued
+        '400':
+          description: Invalid or obsolete worker capability declaration
+        '401':
+          description: Direct TLS and verified tenant runtime identity required
   /internal/v1/runtime/graph-candidates/{profileId}/{digest}/{workflowId}:
     parameters:
     - {name: profileId, in: path, required: true, schema: {type: string}}

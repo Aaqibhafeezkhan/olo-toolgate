@@ -5724,5 +5724,11 @@
     "features": [
       "value"
     ]
+  },
+  "WorkflowRunClaimRequest": {
+    "compilerDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "graphDigests": [
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ]
   }
 }

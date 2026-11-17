@@ -2880,6 +2880,11 @@ export interface WorkflowProfileStatus {
   readonly reviewedBy?: string;
 }
 export type WorkflowRemediationMode = "PREPARE" | "APPLY";
+/** Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority. */
+export interface WorkflowRunClaimRequest {
+  readonly compilerDigest: string;
+  readonly graphDigests: ReadonlyArray<string>;
+}
 /** Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority. */
 export interface WorkflowStackDeployment {
   readonly enabled: boolean;

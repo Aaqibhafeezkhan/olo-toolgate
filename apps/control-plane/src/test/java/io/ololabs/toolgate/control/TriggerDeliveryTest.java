@@ -486,7 +486,7 @@ final class TriggerDeliveryTest {
             var runId = admitted.path("runId").asText();
             w.store().transaction(w.tenant(), false, tx -> {
                 var run = tx.workflowRuns().queued(runId);
-                assertEquals(runId, tx.workflowRuns().nextQueued().id());
+                assertEquals(runId, tx.workflowRuns().nextQueued("sha256:" + "c".repeat(64), List.of(config.path("workflows").get(0).path("graph").path("digest").asText())).id());
                 assertEquals("investigate", run.workflowId());
                 assertEquals(digest, run.profileDigest());
                 assertEquals("alpha", new WorkflowRunInputs(codec, keys).open(tx, w.tenant(), run));
@@ -499,14 +499,25 @@ final class TriggerDeliveryTest {
 
             var worker = new DirectoryService.Actor(w.tenant(), DirectoryService.digest("runtime-worker"), false);
             var leases = new WorkflowLeases(w.store(), codec, w.clock(), profiles, keys);
-            var claim = leases.claim(worker, "claim");
+            var compiler = "sha256:" + "c".repeat(64);
+            var graphs = List.of(config.path("workflows").get(0).path("graph").path("digest").asText());
+            assertEquals(204, leases.claim(worker, "sha256:" + "0".repeat(64), graphs, "wrong-compiler").status());
+            assertEquals(204, leases.claim(worker, compiler, List.of("sha256:" + "0".repeat(64)), "wrong-graph").status());
+            assertEquals(204, leases.claim(worker, compiler, List.of(), "no-graphs").status());
+            assertEquals(400, status(() -> leases.claim(worker, compiler, List.of(graphs.getFirst(), graphs.getFirst()), "duplicate-graphs")));
+            assertEquals(400, status(() -> leases.claim(worker, "bad", graphs, "malformed-compiler")));
+            w.store().transaction(w.tenant(), false, tx -> {
+                assertEquals("QUEUED", tx.workflowRuns().state(runId), "incompatible requests must not consume or fail the run");
+                return null;
+            });
+            var claim = leases.claim(worker, compiler, graphs, "claim");
             assertEquals(200, claim.status());
             var snapshot = JSON.readTree(claim.body());
             assertEquals(runId, snapshot.path("runId").asText());
             assertEquals("alpha", snapshot.path("message").asText());
             assertEquals("investigator", snapshot.path("agents").path(0).path("agentId").asText());
             assertFalse(claim.body().contains("https://models.example"));
-            assertEquals(204, leases.claim(worker, "claim-again").status());
+            assertEquals(204, leases.claim(worker, compiler, graphs, "claim-again").status());
             var leaseId = snapshot.path("leaseId").asText();
             var token = snapshot.path("leaseToken").asText();
             // Publishing B changes new admissions, while the leased A run keeps its exact configuration.
@@ -580,7 +591,7 @@ final class TriggerDeliveryTest {
             w.router().route();
             String nextCursor = parse(session.pump()).getLast().path("cursor").asText();
             var nextAdmission = JSON.readTree(service.admit(w.admin(), codec.json(Map.of("subscriptionUid", uid, "cursor", nextCursor)), "admit-next").body());
-            var nextSnapshot = JSON.readTree(leases.claim(worker, "claim-next").body());
+            var nextSnapshot = JSON.readTree(leases.claim(worker, compiler, graphs, "claim-next").body());
             assertEquals(nextAdmission.path("runId"), nextSnapshot.path("runId"));
             assertEquals(nextDigest, nextSnapshot.path("profileDigest").asText());
             assertEquals("revision-2", nextSnapshot.path("workflowVersionId").asText());

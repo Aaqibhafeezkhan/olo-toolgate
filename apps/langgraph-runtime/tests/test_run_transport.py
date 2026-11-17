@@ -8,6 +8,8 @@ import unittest
 
 from toolgate_runtime.run_transport import ControlRuns, GatewayRuntime, RunTransportError
 from toolgate_runtime.runner import Candidate, Denied, RunOutcome, StepGrant
+from toolgate_runtime.compiler_identity import COMPILER_DIGEST
+from toolgate_runtime.graph_packages import GraphPackages
 
 
 class Response(BytesIO):
@@ -40,7 +42,7 @@ class RunTransportTests(unittest.TestCase):
         self.snapshot = {
             "runId": "run-1", "leaseId": "lease-1", "workflowId": "workflow-1", "workflowVersionId": "v1",
             "profileDigest": "sha256:" + "1" * 64, "leaseToken": "x" * 43, "message": "test",
-            "compilerDigest": "sha256:" + "2" * 64,
+            "compilerDigest": COMPILER_DIGEST,
             "graph": {'packageId': 'toolgate.supervisor', 'version': '1.0.0', 'digest': 'sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd', 'entryPoint': 'supervisor', 'config': {}}, "supervisorPrompt": "Delegate", "supervisorModelGroupId": "models", "contextSources": [], "agentStages": [],
             "limits": {"maxSteps": 4, "maxHandoffs": 1, "maxDurationSeconds": 20},
             "agents": [{"agentId": "agent-1", "modelGroupId": "models", "systemPrompt": "Handle",
@@ -61,7 +63,7 @@ class RunTransportTests(unittest.TestCase):
         ack = self.control.finish(lease, RunOutcome("SUCCEEDED"), timeout_seconds=5)
         self.assertEqual("SUCCEEDED", ack.state)
         self.assertEqual([
-            ("https://control.example/internal/v1/runtime/claim", "Bearer workload.credential", {}, 10),
+            ("https://control.example/internal/v1/runtime/claim", "Bearer workload.credential", {'compilerDigest':COMPILER_DIGEST,'graphDigests':list(GraphPackages().installed_digests())}, 10),
             ("https://control.example/internal/v1/runtime/runs/run-1/finish", "Bearer workload.credential",
              {"leaseId": "lease-1", "leaseToken": "x" * 43, "state": "SUCCEEDED", "result": None, "code": None}, 5),
         ], self.requests)
@@ -71,6 +73,13 @@ class RunTransportTests(unittest.TestCase):
         self.assertIsNone(self.control.claim())
         with self.assertRaisesRegex(RunTransportError, "Invalid Control run snapshot"):
             self.control.claim()
+
+    def test_claim_rejects_a_snapshot_for_an_unadvertised_compiler_or_graph(self):
+        for snapshot in ({**self.snapshot,'compilerDigest':'sha256:'+'0'*64},
+                {**self.snapshot,'graph':{**self.snapshot['graph'],'digest':'sha256:'+'0'*64}}):
+            self.responses.append(Response(200,snapshot))
+            with self.assertRaisesRegex(RunTransportError,'Invalid Control run snapshot'):
+                self.control.claim()
 
     def test_graph_less_or_malformed_snapshots_are_not_current_leases(self):
         for graph in (None, {}, {**self.snapshot["graph"], "entryPoint": "../../source.py"}):

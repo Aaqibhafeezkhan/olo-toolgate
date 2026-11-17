@@ -1,6 +1,29 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Compatible worker claiming — 2026-11-17
+
+Known base `3d94520c`. Workers now advertise their compiler digest and bounded,
+verified installed graph-package digests on each authenticated claim. Control
+selects only queued runs with matching pinned identities; incompatible work
+stays queued rather than being consumed by the wrong worker. Fresh SQLite and
+PostgreSQL run storage includes the admitted graph digest and matching queue
+index/capacity accounting. Canonical JSON/OpenAPI and generated consumers change
+together; empty inventories claim nothing and obsolete bodyless requests are
+refused. Inventory verification does not execute installed factories, and the
+worker also refuses returned capabilities outside its advertised set.
+
+Focused provisioned Java verification passed 25 tests, including wrong compiler,
+wrong graph and empty-inventory queue preservation on SQLite/PostgreSQL.
+The hardened runtime image passed 108 tests without skips. Canonical corpus
+tests (seven), PHP v2 round trips (459 models), Rust v2 round trips (two),
+generated preflight (1585 files), schema ownership/capacity (four tests) and
+source quality passed. These are component checks, not live replica readiness
+or the unchanged-container demo. Full Java remains limited by the Windows
+POSIX-permission fixture failure recorded below. #295 remains **0/100**.
+Next work is device placement/applied readiness and fresh stack provisioning;
+publication still lacks a durable compatible-worker presence barrier.
+
 ## Temporary npm audit exception — 2026-11-17
 
 Known tested base `3f18a6f9`. Run `44135588000`, job `134225730423`, failed

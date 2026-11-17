@@ -12,7 +12,8 @@ from urllib.request import Request
 from .runner import Agent, AgentStage, Candidate, CompletionAck, ContextSource, Denied, ID, Limits, OwnershipLost, RunLease, StepGrant, Tool, ToolOutcome
 from .trigger_bridge import _constant, _object
 from .trigger_transport import ControlTriggers
-from .graph_packages import validate_selection
+from .graph_packages import GraphPackages, validate_selection
+from .compiler_identity import COMPILER_DIGEST
 
 
 class RunTransportError(Exception):
@@ -65,6 +66,10 @@ def _lease(value):
 class ControlRuns(ControlTriggers):
     """Reuse the Control TLS policy with a separate workload credential."""
 
+    def __init__(self,*args,graph_directory=None,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.graph_packages=GraphPackages(graph_directory)
+
     def _runtime_request(self, path, payload, *, timeout_seconds, allow_empty=False):
         try:
             token = self._token()
@@ -97,11 +102,15 @@ class ControlRuns(ControlTriggers):
             raise RunTransportError("Control runtime request failed") from None
 
     def claim(self):
-        value = self._runtime_request("claim", {}, timeout_seconds=self.timeout, allow_empty=True)
+        graphs=self.graph_packages.installed_digests()
+        value = self._runtime_request("claim", {'compilerDigest':COMPILER_DIGEST,'graphDigests':list(graphs)}, timeout_seconds=self.timeout, allow_empty=True)
         if value is None:
             return None
         try:
-            return _lease(value)
+            lease=_lease(value)
+            if lease.compiler_digest!=COMPILER_DIGEST or lease.graph['digest'] not in graphs:
+                raise ValueError('Unmatched run capabilities')
+            return lease
         except (ValueError, TypeError):
             raise RunTransportError("Invalid Control run snapshot") from None
 

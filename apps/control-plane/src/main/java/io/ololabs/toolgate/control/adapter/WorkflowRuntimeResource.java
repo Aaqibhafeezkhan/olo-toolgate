@@ -42,10 +42,12 @@ public class WorkflowRuntimeResource {
             triggers.subscriptions(actor.tenant()), triggers.forTenant(actor.tenant()), actor.tenant()), vault);
     }
 
-    @POST @Path("claim") @RolesAllowed(ROLE)
-    public Response claim() {
+    @POST @Path("claim") @Consumes("application/json") @RolesAllowed(ROLE)
+    public Response claim(String document) {
         var worker = worker();
-        return reply(leases(worker).claim(worker, correlation.id()));
+        if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 16384) throw Failure.validation();
+        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowRunClaimRequest.class);
+        return reply(leases(worker).claim(worker, request.compilerDigest(), request.graphDigests(), correlation.id()));
     }
 
     @GET @Path("graph-candidates/{profileId}/{digest}/{workflowId}") @RolesAllowed(ROLE)
