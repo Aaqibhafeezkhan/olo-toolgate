@@ -2761,6 +2761,43 @@ export interface WorkflowFinishDecision {
   readonly kind: "finish";
   readonly result: unknown;
 }
+/** Control-authorized immutable candidate reference. Contains no arbitrary Python, paths, secrets or live clients. */
+export interface WorkflowGraphBuildRequest {
+  readonly tenantId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly expectedGeneration: number;
+}
+/** Compilation receipt; this neither publishes configuration nor grants runtime authority. */
+export interface WorkflowGraphBuildResult {
+  readonly tenantId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly generation: number;
+  readonly specificationDigest: string;
+  readonly compilerDigest: string;
+  readonly features: ReadonlyArray<string>;
+  readonly state: "READY";
+}
+/** Reviewed immutable graph candidate read by a verified tenant runtime service. Carries configuration only, never execution credentials. */
+export interface WorkflowGraphCandidate {
+  readonly tenantId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly generation: number;
+  readonly graph: WorkflowGraphSelection;
+  readonly agentIds: ReadonlyArray<string>;
+}
+/** Actual JSON compiler features and disposable cache statistics. This is not a readiness or execution grant. */
+export interface WorkflowGraphCapabilities {
+  readonly entries: number;
+  readonly capacity: 128;
+  readonly compilerDigest: string;
+  readonly features: ReadonlyArray<string>;
+}
 /** Pinned operator-installed native LangGraph factory. Configuration grants no runtime authority. */
 export interface WorkflowGraphSelection {
   readonly packageId: string;
@@ -2774,6 +2811,35 @@ export interface WorkflowGroupDefinition {
   readonly id: string;
   readonly displayName: string;
 }
+/** Boolean branch destinations in the configured graph. */
+export interface WorkflowJsonBranchRoutes {
+  readonly true: string;
+  readonly false: string;
+}
+/** One edge or explicit all-predecessor join. START and END are reserved boundary names. */
+export interface WorkflowJsonEdge {
+  readonly from: ReadonlyArray<string>;
+  readonly to: string;
+}
+/** Versioned, bounded JSON topology for the installed generic LangGraph compiler. Structure alone establishes no execution authority. */
+export interface WorkflowJsonGraph {
+  readonly schemaVersion: 1;
+  readonly nodes: ReadonlyArray<WorkflowJsonNode>;
+  readonly edges: ReadonlyArray<WorkflowJsonEdge>;
+  readonly output: Record<string, unknown>;
+  readonly outputSchema: Record<string, unknown>;
+}
+/** Pure node declaration; per-run capabilities are injected by the runtime, never captured in topology. */
+export interface WorkflowJsonNode {
+  readonly id: string;
+  readonly kind: WorkflowJsonNodeKind;
+  readonly input: Record<string, unknown>;
+  readonly agentId?: string;
+  readonly toolRef?: string;
+  readonly resultMode?: WorkflowAgentResultMode;
+  readonly routes?: WorkflowJsonBranchRoutes;
+}
+export type WorkflowJsonNodeKind = "value" | "agent" | "model" | "tool" | "branch";
 /** An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner. */
 export interface WorkflowModelDeployment {
   readonly id: string;

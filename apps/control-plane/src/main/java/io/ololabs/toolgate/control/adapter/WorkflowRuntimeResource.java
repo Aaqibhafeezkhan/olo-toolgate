@@ -48,6 +48,15 @@ public class WorkflowRuntimeResource {
         return reply(leases(worker).claim(worker, correlation.id()));
     }
 
+    @GET @Path("graph-candidates/{profileId}/{digest}/{workflowId}") @RolesAllowed(ROLE)
+    public Response graphCandidate(@PathParam("profileId") String profileId, @PathParam("digest") String digest,
+            @PathParam("workflowId") String workflowId, @QueryParam("expectedGeneration") Long expectedGeneration) {
+        var worker = worker();
+        if (expectedGeneration == null) throw Failure.validation();
+        return reply(profiles(worker, Clock.systemUTC(), keys.required()).graphCandidate(worker,
+            profileId, digest, workflowId, expectedGeneration));
+    }
+
     @POST @Path("runs/{runId}/finish") @Consumes("application/json") @RolesAllowed(ROLE)
     public Response finish(@PathParam("runId") String runId, String document) {
         var worker = worker();

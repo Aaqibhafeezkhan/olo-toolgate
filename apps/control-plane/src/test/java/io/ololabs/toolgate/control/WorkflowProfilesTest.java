@@ -52,6 +52,32 @@ final class WorkflowProfilesTest {
     private JsonNode node(Store.Reply reply) { return (JsonNode)codec.value(reply.body()); }
     private String review(String digest) { return codec.json(Map.of("profileDigest", digest)); }
     private String publish(String digest, long generation) { return codec.json(Map.of("profileDigest", digest, "expectedGeneration", generation)); }
+    @Test void sqliteGraphCandidateRequiresReviewedExactTenantWorkflowAndGeneration() throws Exception { graphCandidate(false); }
+    @Test void postgresGraphCandidateRequiresReviewedExactTenantWorkflowAndGeneration() throws Exception { graphCandidate(true); }
+
+    private void graphCandidate(boolean postgres) throws Exception {
+        var rig = rig(postgres);
+        var service = new WorkflowProfiles(rig.store, codec, (tx, p, digest) -> true, keys());
+        String digest = node(service.upload(rig.admin, profile().toString(), "graph-stage")).path("profileDigest").asText();
+        var worker = new DirectoryService.Actor(rig.tenant, "a".repeat(64), false);
+        assertEquals(409, assertThrows(Failure.class, () -> service.graphCandidate(worker, "support", digest, "investigate", 0)).status());
+        service.review(rig.admin, "support", review(digest), "graph-review");
+        var first = node(service.graphCandidate(worker, "support", digest, "investigate", 0));
+        assertEquals(rig.tenant.value(), first.path("tenantId").asText());
+        assertEquals(digest, first.path("profileDigest").asText());
+        assertEquals("investigate", first.path("workflowId").asText());
+        assertTrue(first.path("graph").isObject());
+        assertEquals(profile().path("workflows").path("workflows").get(0).path("agents").size(),first.path("agentIds").size());
+        assertFalse(first.has("workflows"));
+        assertFalse(first.has("credential"));
+        assertEquals(404, assertThrows(Failure.class, () -> service.graphCandidate(worker, "support", digest, "missing", 0)).status());
+        var foreign = TestSupport.seed(rig.store, codec, Tenants.id("other"), "foreign-owner");
+        assertEquals(404, assertThrows(Failure.class, () -> service.graphCandidate(foreign, "support", digest, "investigate", 0)).status());
+        service.publish(rig.admin, "support", publish(digest, 0), "graph-publish");
+        assertEquals(409, assertThrows(Failure.class, () -> service.graphCandidate(worker, "support", digest, "investigate", 0)).status());
+        assertEquals(1, node(service.graphCandidate(worker, "support", digest, "investigate", 1)).path("generation").asLong());
+    }
+
     @Test void sqliteLifecycleIsAtomicAndPublishedSeparately() throws Exception { lifecycle(false); }
     @Test void postgresLifecycleIsAtomicAndPublishedSeparately() throws Exception { lifecycle(true); }
     @Test void sqliteCatalogIsPagedPrivateAndTenantScoped() throws Exception { catalog(false); }

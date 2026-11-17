@@ -9,6 +9,28 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /internal/v1/runtime/graph-candidates/{profileId}/{digest}/{workflowId}:
+    parameters:
+    - {name: profileId, in: path, required: true, schema: {type: string}}
+    - {name: digest, in: path, required: true, schema: {type: string}}
+    - {name: workflowId, in: path, required: true, schema: {type: string}}
+    - {name: expectedGeneration, in: query, required: true, schema: {type: integer, minimum: 0, maximum: 9007199254740991}}
+    get:
+      operationId: getRuntimeGraphCandidate
+      security:
+      - runtimeServiceToken: []
+      description: Direct TLS and the verified toolgate-workflow-runtime service role are required. Returns only a reviewed immutable graph from the credential's tenant, with a current publication generation check. No model/provider secret or execution grant is returned.
+      responses:
+        '200':
+          description: Reviewed candidate for compilation
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowGraphCandidate
+        '401': {description: Verified runtime service credential and direct TLS required}
+        '403': {description: Incorrect service role}
+        '404': {description: Candidate or workflow unavailable in this tenant}
+        '409': {description: Candidate is unreviewed or publication generation changed}
   /api/control/v1/workflow-runs/{runId}:
     parameters:
     - {name: runId, in: path, required: true, schema: {type: string}}
@@ -11651,6 +11673,11 @@ paths:
                 $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
 components:
   securitySchemes:
+    runtimeServiceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Verified tenant service JWT with toolgate-workflow-runtime role, accepted only over direct TLS.
     adminAccessToken:
       type: http
       scheme: bearer

@@ -83,6 +83,9 @@ def expected():
     quickstart_api = ROOT/'packages/contracts/openapi/quickstart-v1.yaml'
     if quickstart_api.exists():
         outputs[quickstart_api] = re.sub(r'^  version: .*', f'  version: {product}', quickstart_api.read_text(encoding='utf-8'), flags=re.M)
+    runtime_api = ROOT/'packages/contracts/openapi/runtime-v1.yaml'
+    if runtime_api.exists():
+        outputs[runtime_api] = re.sub(r'^  version: .*', f'  version: {product}', runtime_api.read_text(encoding='utf-8'), flags=re.M)
     for proposed in (ROOT/'packages/contracts/openapi/proposed').glob('*.proposed.yaml'):
         outputs[proposed] = re.sub(r'^  version: .*', f'  version: {product}', proposed.read_text(encoding='utf-8'), flags=re.M)
     return outputs

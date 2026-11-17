@@ -1,6 +1,20 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Local JSON graph/compiler boundary — 2026-11-17
+
+The #295 hot-swap implementation adds a pure JSON graph compiler using existing
+run-scoped model/tool/agent adapters. A private mTLS rebuild API reauthorizes
+against a reviewed, tenant-bound Control candidate and exact generation, without
+executing workflow effects or issuing authority. Compilation/cache tests and
+SQLite/PostgreSQL candidate-read negatives passed within their recorded scope.
+This introduces no Python sandbox, native-effect recovery guarantee or completed
+#230 stage/phase/first-slice acceptance. Existing phase weights and security
+limitations remain unchanged. The user authorized draft-PR delivery; complete activation,
+external persistence and new-stack runtime acceptance remain outstanding. See the
+[workflow checkpoint](../architecture/workflow-v1-status.md#accepted-hot-swap-plan-local-implementation-started--2026-11-17)
+for known base, actual checks and remaining work.
+
 
 ## Tool/profile extension split checkpoint — 2026-11-17
 

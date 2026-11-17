@@ -5133,6 +5133,53 @@ pub struct WorkflowFinishDecision {
     pub kind: String,
     pub result: serde_json::Value,
 }
+/// Control-authorized immutable candidate reference. Contains no arbitrary Python, paths, secrets or live clients.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowGraphBuildRequest {
+    pub tenant_id: String,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub workflow_id: String,
+    pub expected_generation: u64,
+}
+/// Compilation receipt; this neither publishes configuration nor grants runtime authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowGraphBuildResult {
+    pub tenant_id: String,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub workflow_id: String,
+    pub generation: u64,
+    pub specification_digest: String,
+    pub compiler_digest: String,
+    pub features: Vec<String>,
+    #[serde(deserialize_with = "const_workflow_graph_build_result_state")]
+    pub state: String,
+}
+/// Reviewed immutable graph candidate read by a verified tenant runtime service. Carries configuration only, never execution credentials.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowGraphCandidate {
+    pub tenant_id: String,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub workflow_id: String,
+    pub generation: u64,
+    pub graph: WorkflowGraphSelection,
+    pub agent_ids: Vec<String>,
+}
+/// Actual JSON compiler features and disposable cache statistics. This is not a readiness or execution grant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowGraphCapabilities {
+    pub entries: u64,
+    #[serde(deserialize_with = "const_workflow_graph_capabilities_capacity")]
+    pub capacity: u64,
+    pub compiler_digest: String,
+    pub features: Vec<String>,
+}
 /// Pinned operator-installed native LangGraph factory. Configuration grants no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -5149,6 +5196,61 @@ pub struct WorkflowGraphSelection {
 pub struct WorkflowGroupDefinition {
     pub id: String,
     pub display_name: String,
+}
+/// Boolean branch destinations in the configured graph.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowJsonBranchRoutes {
+    pub r#true: String,
+    pub r#false: String,
+}
+/// One edge or explicit all-predecessor join. START and END are reserved boundary names.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowJsonEdge {
+    pub from: Vec<String>,
+    pub to: String,
+}
+/// Versioned, bounded JSON topology for the installed generic LangGraph compiler. Structure alone establishes no execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowJsonGraph {
+    #[serde(deserialize_with = "const_workflow_json_graph_schema_version")]
+    pub schema_version: u64,
+    pub nodes: Vec<WorkflowJsonNode>,
+    pub edges: Vec<WorkflowJsonEdge>,
+    pub output: std::collections::BTreeMap<String, serde_json::Value>,
+    pub output_schema: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Pure node declaration; per-run capabilities are injected by the runtime, never captured in topology.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowJsonNode {
+    pub id: String,
+    pub kind: WorkflowJsonNodeKind,
+    pub input: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result_mode: Option<WorkflowAgentResultMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routes: Option<WorkflowJsonBranchRoutes>,
+}
+/// Canonical WorkflowJsonNodeKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkflowJsonNodeKind {
+    #[serde(rename = "value")]
+    Value,
+    #[serde(rename = "agent")]
+    Agent,
+    #[serde(rename = "model")]
+    Model,
+    #[serde(rename = "tool")]
+    Tool,
+    #[serde(rename = "branch")]
+    Branch,
 }
 /// An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -5427,6 +5529,9 @@ const_field!(
 );
 const_field!(const_workflow_delegate_decision_kind, String, "delegate");
 const_field!(const_workflow_finish_decision_kind, String, "finish");
+const_field!(const_workflow_graph_build_result_state, String, "READY");
+const_field!(const_workflow_graph_capabilities_capacity, u64, 128);
+const_field!(const_workflow_json_graph_schema_version, u64, 1);
 const_field!(
     const_workflow_stack_model_engine_engine,
     String,

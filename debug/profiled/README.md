@@ -1,5 +1,11 @@
 # Local debug stack
 
+The directory consolidation is in progress. The scripts below still implement
+the existing debug deployment and can replace containers. They do not yet provide
+the accepted persistent-device profile hot-swap flow. Track that implementation
+and its unexecuted end-to-end acceptance in the
+[workflow status](../../docs/architecture/workflow-v1-status.md).
+
 The current Clients table combines registered devices and pending requests, with device names, registered users and detail tooltips. Enable/Disable and Approve/Deapprove are independent; approval may be timed or explicitly unlimited. Quickstart separately registers the fixed executor, HotFolder and REST forwarding. Redeploy without deleting toolgate-debug_data. Download the rebuilt Windows installer for the current certificate recovery behavior; existing device approval deadlines are not automatically extended.
 
 See [Device registry and tool-call controls](../../docs/control-plane/device-registry.md).
@@ -54,7 +60,7 @@ execution engine.
 Inspect a device with `docker logs toolgate-device-linux-001` or
 `docker exec toolgate-device-linux-001 /usr/local/lib/olo-toolgate/olo-toolgate-client health`.
 Stop it with `docker stop toolgate-device-linux-001`; `create-devices.bat -Count 1`
-starts it again. `debug/standard/stop.bat` stops the server stack only. Device identities
+starts it again. `debug/profiled/stop.bat` stops the server stack only. Device identities
 survive container restarts and removal while their named volumes are retained.
 
 Requires Docker Desktop running Linux containers, Git, Node.js/npm, Python 3.11+
@@ -104,7 +110,7 @@ login is disabled by default for this local debug stack, using the default admin
 identity so user-specific flows continue to work. To test password login, set
 `TOOLGATE_DISABLE_ADMIN_PASSWORD=false` in your environment before launching a
 script, then read bootstrap credentials using
-`docker compose -p toolgate-debug -f debug/standard/compose.yaml logs quickstart`.
+`docker compose -p toolgate-debug -f debug/profiled/compose.yaml logs quickstart`.
 Ports bind only to localhost.
 The public endpoint configuration advertises `https://localhost:18450`, matching
 the debug TLS port mapping. Enroll Device displays this address beside the downloads
@@ -115,8 +121,8 @@ public CA, as described in the Quickstart guide; certificate validation stays on
 For an unpublished extension, click Connect and follow its Load unpacked steps.
 
 Validate Docker/Compose configuration without building:
-`powershell -NoProfile -File debug/standard/manage.ps1 start -ValidateOnly`.
-Inspect failures with `docker compose -p toolgate-debug -f debug/standard/compose.yaml logs`.
+`powershell -NoProfile -File debug/profiled/manage.ps1 start -ValidateOnly`.
+Inspect failures with `docker compose -p toolgate-debug -f debug/profiled/compose.yaml logs`.
 No script deletes volumes; back up `/data` before testing migrations.
 
 Run `setup-agent-mimic.bat` or `agent-mimic.bat` to call an already configured,
@@ -190,7 +196,7 @@ deployment.
 Right-click the tray icon and choose **View messages sent / received** for the
 live client log (Windows administrator access is required for the protected
 state folder). It retains at most 100 entries / 64 KiB. Server packet diagnostics
-are available with `docker compose -p toolgate-debug -f debug/standard/compose.yaml logs -f quickstart`;
+are available with `docker compose -p toolgate-debug -f debug/profiled/compose.yaml logs -f quickstart`;
 look for `protocol_packet`, `SEND`, and `RECEIVE`. Messages include the route,
 request IDs, status, poll sequence, configuration digest/counts and tool/job state.
 Enrollment codes, certificates, leases, credentials, tool arguments and outputs

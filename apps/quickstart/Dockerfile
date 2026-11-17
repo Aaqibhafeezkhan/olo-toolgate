@@ -38,7 +38,7 @@ COPY --from=rust-build /licenses /usr/share/licenses/olo-toolgate/quickstart-rus
 COPY tools/enterprise/restore.py /opt/quickstart/enterprise_restore.py
 COPY deploy/compose/WorkflowStack/scripts/bootstrap.py deploy/compose/WorkflowStack/scripts/identity.py /opt/toolgate/workflow-stack/
 COPY examples/langchain/manage.py examples/langchain/packages.py /opt/toolgate/workflow-stack/operator/examples/langchain/
-COPY debug/standard/configure-debug-agent.py debug/standard/agent-mimic.py /opt/toolgate/workflow-stack/operator/debug/standard/
+COPY debug/profiled/configure-debug-agent.py debug/profiled/agent-mimic.py /opt/toolgate/workflow-stack/operator/debug/profiled/
 COPY tools/access/presets.py /opt/toolgate/workflow-stack/operator/tools/access/
 COPY config/initial/ /opt/toolgate/workflow-stack/operator/config/initial/
 COPY packages/contracts/management-permissions.json /opt/toolgate/workflow-stack/operator/packages/contracts/management-permissions.json

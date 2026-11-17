@@ -85,6 +85,88 @@ It excludes prompts, arguments, model/tool results and credentials. The summary
 is scoped to one run and bounded by its step limit. These are worker observations;
 independent server evidence is still required for full qualification.
 
+## JSON graphs and private rebuild API
+
+The installed `olo.json-graph` factory now compiles topology from workflow JSON.
+Get its verified selection metadata with:
+
+```sh
+python tools/workflows/json_graph_package.py --check
+```
+
+Set that selection's `config` to a graph such as:
+
+```json
+{
+  "schemaVersion": 1,
+  "nodes": [
+    {"id": "summarize", "kind": "agent", "agentId": "your-configured-agent", "input": {"$path": "/message"}}
+  ],
+  "edges": [
+    {"from": ["START"], "to": "summarize"},
+    {"from": ["summarize"], "to": "END"}
+  ],
+  "output": {"$path": "/values/summarize"},
+  "outputSchema": {"type": "object"}
+}
+```
+
+`agentId` must be bound in the reviewed workflow. Nodes currently support
+`value`, `agent`, `model`, `tool` and `branch`; edges support static parallel
+execution, explicit all-predecessor joins and recursion-bounded loops. Expressions
+support `$path`, `$literal`, `$eq`, `$lt`, `$and`, `$or` and numeric `$add`.
+No Python expressions/import paths are evaluated from the profile. All actual
+model/tool/agent operations still use the run-scoped governed adapters.
+
+The shared compiler cache contains only pure topology and copied JSON, with no
+run credentials or adapters. Cache eviction does not terminate a running graph.
+Native installed factories retain their existing isolated loading semantics.
+Subgraphs, dynamic fan-out and durable interrupt/resume are **not implemented by
+this JSON compiler yet** and are refused, rather than silently ignored.
+
+The new [private runtime API](../../packages/contracts/openapi/runtime-v1.yaml)
+provides rebuild, actual capabilities and cache eviction. Start its service with
+an installation-owned configuration file:
+
+```sh
+python -m toolgate_runtime.graph_server --configuration /run/credentials/runtime-api.json
+```
+
+The file declares `host`, `port`, server `certificate`/`key`, `clientCa`, allowed
+Control certificate `clientNames`, `controlOrigin`, `controlCaFile` and a `readers`
+map from tenant IDs to workload-token file paths. Paths and private credentials
+are supplied by the operator, outside workflow bundles. There is no anonymous
+or plain-HTTP mode. Use a dedicated service CA/client identity; do not publish
+this internal API as an unauthenticated Internet endpoint.
+
+`POST /internal/runtime/v1/graphs:rebuild` accepts the canonical candidate
+reference (`tenantId`, `profileId`, `profileDigest`, `workflowId`,
+`expectedGeneration`). The service fetches the exact reviewed graph from
+Control's direct-TLS runtime-service endpoint and checks tenant, workflow,
+generation and bound agents before compiling. Every call reauthorizes, including
+cache hits. The receipt means **compiled**, not published, deployed or runnable;
+the full provisioning/activation barrier and console integration are pending.
+Model hosting remains external. This component does not create folders, change
+permissions, open firewall ports or provision model services.
+
+## Dynamic subscription listener
+
+The listener can follow the current caller's authorized active subscriptions:
+
+```sh
+python -m toolgate_runtime.trigger_listener --control-origin https://control.example \
+  --follow-subscriptions --token-file /run/credentials/listener.token \
+  --ca-file /run/credentials/control-ca.crt
+```
+
+The token must have current subscription/admission authority. The listener reads
+the complete bounded catalog, adds/removes sessions and drains a removed UID
+before replacing the same subscription name. It never chooses workflows from
+event data, generates acknowledgements without admission, or uses a local event
+deduplication flag. Control's durable admission is the workflow consumer's
+duplicate/in-progress boundary. `scheduled` statistics count listener loops,
+not proof that every underlying stream is connected or a device trigger healthy.
+
 ## Install and verify outside containers
 
 The Python CI group runs `python tools/workflows/check.py` in an isolated

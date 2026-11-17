@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add initial JSON workflow topology compilation, a private mTLS graph rebuild
+  API and dynamic authorized subscription reconciliation. Move debug helpers into
+  `debug/profiled`. Automatic profile hot-swap deployment remains in progress.
+
 - Build versioned workflow profiles from `profiles/configurations/` using
   `profiles/build.sh` or `profiles/build.bat`, with output and package inventories
   in `profiles/bin/` and verified publication as release assets. Workflow bundles

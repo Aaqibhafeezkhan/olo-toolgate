@@ -6,6 +6,14 @@ profile: workflow/agent/model JSON, referenced directory definitions, logical
 trigger connections and exact tool-package source recipes. Each folder has its
 own README and, for a file use case, an input example. Secrets are never sources.
 
+The supplied configurations now declare execution order in `workflow.graph.config`
+using the installed `olo.json-graph` factory. Edit its nodes, edges and output
+expressions to change the topology; agent definitions supply the governed model
+and tool capabilities. The compiler supports value, agent, model, tool, branching,
+static joins and bounded loops. Compilation does not provision devices or make a
+profile runnable. Automatic hot-swap deployment is still being implemented; see
+the [live workflow status](../docs/architecture/workflow-v1-status.md).
+
 From any directory on Windows:
 
 ```bat

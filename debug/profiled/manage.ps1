@@ -65,7 +65,7 @@ try {
     Invoke-Checked $python $candidateArguments
     Invoke-Checked docker ($compose + @('up', '-d', '--wait', '--wait-timeout', '150', '--force-recreate', '--pull', 'never'))
     Write-Host 'ToolGate debug console: http://127.0.0.1:18090/console/'
-    Write-Host 'Bootstrap credentials: docker compose -p toolgate-debug -f debug/standard/compose.yaml logs quickstart'
+    Write-Host 'Bootstrap credentials: docker compose -p toolgate-debug -f debug/profiled/compose.yaml logs quickstart'
     Start-Process 'http://127.0.0.1:18090/console/'
 } catch {
     Write-Host $_ -ForegroundColor Red

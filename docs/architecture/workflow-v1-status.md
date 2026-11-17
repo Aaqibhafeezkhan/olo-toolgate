@@ -1,6 +1,113 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Accepted hot-swap plan: local implementation started — 2026-11-17
+
+The user accepted the seven proposed decisions and authorized implementation.
+The user authorized committing and pushing this slice and opening a draft PR.
+Known tested base is `da948bb6`; the following source digest identifies the local
+implementation checked before delivery, without inventing a commit SHA. The local
+source manifest covers 156 changed/new/deleted paths, excluding these three live
+status documents. Its SHA-256 is
+`2657a2c8f70ba870917be6ab7f4f08d44ba7ccc34bf7b042c7a986524c93bf14`
+(`build/hotswap-source-manifest.json`, ignored local evidence).
+
+Implemented initial graph/runtime scope: canonical JSON topology/build contracts,
+an installed generic JSON compiler selected through the existing governed Runner,
+pure bounded compiled-topology caching, an mTLS-only rebuild/capabilities/eviction
+API, and a direct-TLS tenant-runtime candidate read endpoint in Control requiring
+an exact reviewed digest/workflow/publication generation. Rebuild fetches the
+candidate using a workload credential and does not publish or execute effects.
+Initial JSON operations support value, agent, model, tool, boolean branching,
+static parallel joins and recursion-bounded loops. Subgraphs, dynamic fan-out,
+durable interrupts/resume, complete graph feature validation and the final
+provisioning/activation barrier remain outstanding.
+
+The listener now has a dynamic authorized-catalog mode with pagination/resource
+bounds, multiple subscription sessions, cancellable reads and same-name UID
+replacement after draining. The deployment listener no longer selects its source
+from a startup `listener.json`. Control's durable duplicate admission and the
+existing trigger supervisor reconfigure lifecycle are being reused, not replaced
+by in-memory event suppression or a second Gateway transport.
+
+Executed local checks: 11 JSON compiler/Runner tests, 10 build/API tests (including
+real mutual TLS and verified HTTPS candidate transport), 5 subscription tests
+and 7 canonical v2 tests passed. The final complete runtime rerun passed all
+101 tests in 85.9 seconds, including the final HTTPS transport test.
+The supplied text-summary topology executed through the real Runner with
+deterministic mock tool/model adapters, verifying read-agent then summary-agent
+order. This is not a live device/provider demo. All five bundles rebuilt; both
+built-profile UI interoperability tests passed. TypeScript/Vite built successfully.
+Generation/fixtures verified 1,583 binding files; both Rust round-trip tests and
+458 PHP model checks passed. The private API compiles without publishing a
+workflow, and its standalone cache is not a readiness receipt for every worker.
+
+The provisioned full Java check failed on Windows in
+`KillSwitchTest.separateOperatorMtlsListenerCommitsOnlyAcceptedOfflineQuorum`
+(`UnsupportedOperationException` for POSIX permissions; enterprise suite:
+449 tests, one failure). `WorkflowProfilesTest` passed all 21 cases, including
+the new SQLite/PostgreSQL reviewed-candidate/tenant/generation cases. Repository
+discovery also stopped on the Windows symlink privilege error in the device
+startup test (483 tests, 11 skipped, one error). These broad gates are not green.
+Preflight, source quality, documentation links and generated checks passed within
+their executed scope. This evidence does not establish end-to-end hot-swap.
+
+The debug-directory move is still incomplete as a provisioning delivery. Fresh
+group-based package provisioning, admin-only startup of the consolidated stack,
+external model/monitoring installation settings, applied device configuration
+feedback, reader qualification, provider routing, external durable persistence,
+distributed cleanup and UI activation are not delivered by the compiler slice.
+No new stack/demo has run. #295 remains **0/100**, #274 remains **27%**; no #230
+stage, first-slice acceptance or security claim earns credit. Next work is the
+fresh provisioning and stable stack path, followed by the remaining acceptance
+cases. No legacy provisioning fallback or format/store conversion is authorized.
+
+## Profile hot-swap planning checkpoint — 2026-11-17
+
+Implementation is paused at the user's request. The proposed
+[hot-swap plan](../plans/workflow-profile-hot-swap.md) separates workflow data
+from installation environment and manually edited monitoring settings, defines
+readiness/activation and in-flight draining, and lists current repository blockers
+and required end-to-end evidence. Local debug-directory moves/reference edits
+have started but are incomplete, uncommitted and unpushed; no new stack or
+hot-swap acceptance has executed. The plan now explicitly requires one persistent
+device with dynamic trigger-status/event lists over check-in, live folder/tool
+reconfiguration, a protected graph rebuild API, external LLM connection types
+and agent/provider sequencing, external durable state and coordinated database/
+cache cleanup. Model hosting and all container/monitoring infrastructure belong
+to the user/cloud operations. It also requires ready-to-run operator README
+commands and lists the fixed protocol/security/runtime boundaries that remain.
+These are proposed requirements only; no implementation or new tests ran for
+this plan revision. The profile also carries every required tool/trigger archive,
+its settings and group-based placement policy. Import is planned to provision one
+eligible device and reconcile packages, subscriptions and workflow wiring; an
+offline/missing eligible device leaves the candidate pending until it can reconcile.
+Group membership does not bypass approval, capabilities or host prerequisites.
+New devices must be explicitly enabled and assigned device-group membership by
+the user/administrator; profile import must not perform either action or approve
+the device automatically. This remains a plan requirement, not delivered behavior.
+Tool/trigger packages are planned to declare folder defaults editable in the
+admin UI; saving sends a desired configuration generation through Gateway to the
+device, which reports applied/pending/refused status without restart. Users own
+folder creation, permissions and mounts; saving configuration does not change them.
+The user requires a new provisioning flow with no backward compatibility:
+current contracts/fresh schemas only, no old bootstrap/restart fallback, aliases,
+readers, migrations or conversions. Unsupported stores/inputs are rejected and
+preserved; current-schema retries, crash recovery and reconnect remain required.
+No additional use-case constant is identified at plan review beyond the recorded
+replacement work; actual end-to-end acceptance remains unexecuted.
+The plan now proposes concrete decisions for seven open points: consumer-owned
+durable duplicate/in-progress handling over at-least-once delivery; a versioned
+package prepare/apply lifecycle; a JSON graph compiler/capability matrix; durable
+provisioning readiness barriers; external PostgreSQL plus a device outbox volume;
+database-outbox cache invalidation; and an initial OpenAI-compatible LLM adapter
+with single/fallback/sequential routing. These are design proposals only. No
+implementation, verification or delivery credit is claimed for this revision.
+Tested base remains `da948bb6`; this planning
+checkpoint earns no #295 weight (**0/100**), #274 module credit or #230 security
+claim. Next work is plan review before resuming implementation. No commit or push
+is authorized for these local changes.
+
 
 ## Distinct archive extensions and foundation repair — 2026-11-17
 
@@ -1692,8 +1799,8 @@ completion remains **0 / 100 = 0%**. Keep #297 draft.
 
 ### Mounted HotFolder debug lab (2026-11-11)
 
-Based on `7a83d6c6`, relocated the existing debug scripts to `debug/standard`
-and added the [mounted HotFolder bring-up](../../debug/hotfolder/README.md).
+Based on `7a83d6c6`, relocated the existing debug scripts to `debug/profiled`
+and added the [mounted HotFolder bring-up](../../debug/profiled/README.md).
 Standard Compose project, ports, and data volume are unchanged. The HotFolder
 lab reuses the existing signed inbox trigger/profile and LangGraph example in
 its own `toolgate-hotfolder` project. It builds the endpoint from source, mounts

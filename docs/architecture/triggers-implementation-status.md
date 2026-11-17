@@ -1,6 +1,20 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Local hot-swap consumer work — 2026-11-17
+
+The user authorized delivery of this initial #295 hot-swap slice in a draft PR.
+Its runtime listener now reconciles the caller's complete authorized
+subscription catalog, with bounded pagination/session counts, cancellable reads,
+multiple sessions and same-name UID draining/replacement. Existing Gateway/client
+check-in, trigger event and durable admission interfaces are unchanged. Five
+focused catalog/reconciliation tests passed; the final broader runtime rerun
+passed 101 tests. This is consumer-side
+component evidence, not native PUSH/device reconfiguration or a complete demo.
+No #274 module Done-when or weight changes: **27% remains earned**. See the
+[workflow checkpoint](workflow-v1-status.md#accepted-hot-swap-plan-local-implementation-started--2026-11-17)
+for implemented scope, known base, limits and outstanding work.
+
 
 ## Tool/profile extension split and foundation repair — 2026-11-17
 
@@ -182,7 +196,7 @@ documentation and source checks. The Compose acceptance run was not repeated
 on the merge result.
 
 Local mounted-folder validation on the #297 integration branch: the
-[HotFolder debug lab](../../debug/hotfolder/README.md) ran in its own WSL Docker
+[HotFolder debug lab](../../debug/profiled/README.md) ran in its own WSL Docker
 project. The running Linux device watched `inbox/` under a host bind mount,
 not just an internal named volume. A separate producer wrote a synthetic root-owned
 mode 0600 file through the mount; the signed trigger reached `Running` and the

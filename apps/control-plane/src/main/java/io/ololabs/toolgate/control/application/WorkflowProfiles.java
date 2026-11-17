@@ -153,6 +153,25 @@ public final class WorkflowProfiles {
             return new Store.Reply(200, codec.json(statuses), 0);
         });
     }
+    /** Read-only reviewed candidate for a verified tenant runtime service; no secrets or execution authority. */
+    public Store.Reply graphCandidate(DirectoryService.Actor worker, String id, String digest, String workflowId, long expectedGeneration) {
+        Ids.valid(workflowId);
+        if (expectedGeneration < 0 || expectedGeneration > 9007199254740991L) throw Failure.validation();
+        // Called only by the verified runtime-service adapter, never by public profile authors.
+        return store.transaction(worker.tenant(), false, tx -> {
+            var revision = revision(tx, worker.tenant(), id, digest);
+            if (!revision.state().equals("REVIEWED")) throw Failure.conflict();
+            var head = tx.workflowProfiles().publication(id);
+            long generation = head == null ? 0L : head.generation();
+            if (generation != expectedGeneration) throw Failure.conflict();
+            var value = profile(documents.open(tx, worker.tenant(), revision));
+            var workflow = value.workflows().workflows().stream().filter(item -> item.id().equals(workflowId)).findFirst()
+                .orElseThrow(() -> new Failure(ErrorCode.NOT_FOUND, 404, "Graph candidate unavailable"));
+            return new Store.Reply(200, codec.json(new WorkflowGraphCandidate(worker.tenant().value(), id, digest,
+                workflowId, generation, workflow.graph(), workflow.agents().stream().map(WorkflowAgentBinding::agentId).toList())), generation);
+        });
+    }
+
     /** Reviewed document retrieval stays behind current management authorization; prompts are private configuration. */
     public Store.Reply document(DirectoryService.Actor actor, String id, String digest, boolean reviewed) {
         return store.transaction(actor.tenant(), false, tx -> {

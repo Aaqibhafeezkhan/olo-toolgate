@@ -76,12 +76,6 @@
             "delegationAllowed": false
           }
         ],
-        "agentStages": [
-          {
-            "agentId": "log-diagnoser",
-            "resultMode": "MODEL"
-          }
-        ],
         "deployment": {
           "enabled": true,
           "runtime": {
@@ -206,12 +200,54 @@
           }
         },
         "graph": {
-          "packageId": "examples.native-summary",
+          "packageId": "olo.json-graph",
           "version": "1.0.0",
-          "digest": "sha256:f046bc990e87b35d2019e20d43df5ea4b5c04966bdda280015759c452489e7c9",
-          "entryPoint": "summary",
+          "digest": "sha256:06bc07f47b9269ab4f3c9b0c1f7c589e288a914352c656ecf9596ab9ea587e63",
+          "entryPoint": "workflow",
           "config": {
-            "agentId": "log-diagnoser"
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "id": "stage-1",
+                "kind": "agent",
+                "agentId": "log-diagnoser",
+                "resultMode": "MODEL",
+                "input": {
+                  "$path": "/message"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "from": [
+                  "START"
+                ],
+                "to": "stage-1"
+              },
+              {
+                "from": [
+                  "stage-1"
+                ],
+                "to": "END"
+              }
+            ],
+            "output": {
+              "$path": "/values/stage-1"
+            },
+            "outputSchema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "summary"
+              ],
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                }
+              }
+            }
           }
         }
       }

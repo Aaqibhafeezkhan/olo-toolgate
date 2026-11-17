@@ -96,6 +96,52 @@ class ControlTriggers:
                 or not isinstance(value.get("status"), dict) or value["status"].get("phase") != "Active"):
             raise ListenerFailure(Reason.SUBSCRIPTION_CHANGED)
 
+    def active_subscriptions(self, *, maximum=64, catalog_limit=512):
+        """Fetch one complete authorized catalog before changing listener ownership.
+
+        Single-item pages stay inside the existing stream-sized response bound,
+        even for large subscription filters/source lists. No partial catalog is
+        treated as an authoritative deletion list.
+        """
+        if type(maximum) is not int or type(catalog_limit) is not int or not 1 <= maximum <= 256 or not maximum <= catalog_limit <= 4096:
+            raise ValueError('Invalid subscription catalog bounds')
+        active, names, uids, cursors = [], set(), set(), set()
+        deadline = time.monotonic() + 30
+        token = None
+        for _ in range(catalog_limit):
+            path = '/api/control/v1/triggers/subscriptions?pageSize=1'
+            if token:
+                path += '&pageToken=' + urllib.parse.quote(token, safe='')
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ListenerFailure(Reason.CONNECTION_LOST)
+            page = self._request('GET', path, timeout_seconds=remaining)
+            if set(page) - {'items','nextPageToken'} or not isinstance(page.get('items'), list) or len(page['items']) > 1:
+                raise ListenerFailure(Reason.INVALID_FRAME)
+            for item in page['items']:
+                if (not isinstance(item,dict) or item.get('apiVersion')!='toolgate.olo/v1' or item.get('kind')!='TriggerSubscription'
+                        or not isinstance(item.get('metadata'),dict) or not isinstance(item.get('status'),dict)):
+                    raise ListenerFailure(Reason.INVALID_FRAME)
+                try:
+                    sub = Subscription(item['metadata']['name'],item['metadata']['uid'])
+                except (KeyError,ValueError):
+                    raise ListenerFailure(Reason.INVALID_FRAME) from None
+                if sub.name in names or sub.uid in uids:
+                    raise ListenerFailure(Reason.INVALID_FRAME)
+                names.add(sub.name)
+                uids.add(sub.uid)
+                if item['status'].get('phase')=='Active':
+                    active.append(sub)
+                    if len(active)>maximum:
+                        raise ListenerFailure(Reason.INVALID_FRAME)
+            token = page.get('nextPageToken')
+            if token is None:
+                return tuple(active)
+            if not isinstance(token,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,256}',token) or token in cursors:
+                raise ListenerFailure(Reason.INVALID_FRAME)
+            cursors.add(token)
+        raise ListenerFailure(Reason.INVALID_FRAME)
+
     def ticket(self):
         value = self._request("POST", "/api/control/v1/triggers/stream/tickets", {})
         ticket = value.get("ticket")
@@ -134,11 +180,13 @@ class TriggerListener:
     def __init__(self, control: ControlTriggers, subscription: Subscription):
         self.control, self.subscription = control, subscription
 
-    def listen_once(self, *, max_events: int | None = None, idle_timeout: float | None = None) -> tuple[int, DispatchReceipt | None]:
+    def listen_once(self, *, max_events: int | None = None, idle_timeout: float | None = None, stop_event=None) -> tuple[int, DispatchReceipt | None]:
         if max_events is not None and (type(max_events) is not int or max_events < 1):
             raise ValueError("max_events must be a positive integer")
         if idle_timeout is not None and not 0 < idle_timeout <= 3600:
             raise ValueError("idle_timeout must be positive and at most 3600 seconds")
+        if stop_event is not None and stop_event.is_set():
+            return 0,None
         self.control.verify_subscription(self.subscription)
         ticket = self.control.ticket()
         bridge = TriggerBridge(self.subscription, self.control, timeout_seconds=self.control.timeout)
@@ -151,7 +199,11 @@ class TriggerListener:
                 # Omit resumeAfter: only the durable server-side cursor is authoritative after ACK loss.
                 connection.send(json.dumps({"type": "subscribe", "subscription": self.subscription.name}))
                 while max_events is None or processed < max_events:
+                    if stop_event is not None and stop_event.is_set():
+                        return processed,last
                     remaining = self.control.timeout if deadline is None else min(self.control.timeout, deadline - time.monotonic())
+                    if stop_event is not None:
+                        remaining = min(remaining, .25)
                     if remaining <= 0:
                         raise ListenerFailure(Reason.CONNECTION_LOST)
                     try:
