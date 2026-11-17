@@ -1,0 +1,31 @@
+{
+  "format": 1,
+  "packageId": "toolgate.supervisor",
+  "version": "1.0.0",
+  "runtimeApi": 1,
+  "dependencies": {
+    "langgraph": "1.2.20"
+  },
+  "capabilities": [
+    "json-state",
+    "agents"
+  ],
+  "factories": {
+    "supervisor": {
+      "file": "graph.py",
+      "function": "build_graph",
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "resultKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "outputSchema": {}
+    }
+  }
+}

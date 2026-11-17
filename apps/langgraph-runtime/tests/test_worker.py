@@ -56,7 +56,7 @@ class ExecutionEvidenceTests(unittest.TestCase):
     def test_explicit_result_logging_is_private_and_never_overwrites_a_run(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder) / 'results'
-            lease = SimpleNamespace(run_id='run-1', workflow_id='triage')
+            lease = SimpleNamespace(run_id='run-1', workflow_id='triage', graph={'packageId':'example.graph','version':'1.0.0','digest':'sha256:'+'a'*64,'entryPoint':'run'})
             log_result(directory, lease, RunOutcome('SUCCEEDED', {'issueId': 'issue-123'}))
             path = directory / 'run-1.json'
             self.assertEqual({'issueId': 'issue-123'}, json.loads(path.read_text())['result'])

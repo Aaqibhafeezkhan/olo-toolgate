@@ -40,7 +40,7 @@ class RunTransportTests(unittest.TestCase):
         self.snapshot = {
             "runId": "run-1", "leaseId": "lease-1", "workflowId": "workflow-1", "workflowVersionId": "v1",
             "profileDigest": "sha256:" + "1" * 64, "leaseToken": "x" * 43, "message": "test",
-            "supervisorPrompt": "Delegate", "supervisorModelGroupId": "models", "contextSources": [], "agentStages": [],
+            "graph": {'packageId': 'toolgate.supervisor', 'version': '1.0.0', 'digest': 'sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd', 'entryPoint': 'supervisor', 'config': {}}, "supervisorPrompt": "Delegate", "supervisorModelGroupId": "models", "contextSources": [], "agentStages": [],
             "limits": {"maxSteps": 4, "maxHandoffs": 1, "maxDurationSeconds": 20},
             "agents": [{"agentId": "agent-1", "modelGroupId": "models", "systemPrompt": "Handle",
                         "contextSources": [], "entryEligible": True, "delegationAllowed": True}],
@@ -56,6 +56,7 @@ class RunTransportTests(unittest.TestCase):
         self.responses.extend([Response(200, self.snapshot), Response(200, {"runId": "run-1", "leaseId": "lease-1", "state": "SUCCEEDED"})])
         lease = self.control.claim()
         self.assertEqual("agent-1", lease.agents[0].agent_id)
+        self.assertEqual(self.snapshot["graph"], lease.graph)
         ack = self.control.finish(lease, RunOutcome("SUCCEEDED"), timeout_seconds=5)
         self.assertEqual("SUCCEEDED", ack.state)
         self.assertEqual([
@@ -67,6 +68,17 @@ class RunTransportTests(unittest.TestCase):
     def test_empty_queue_and_unexpected_snapshot(self):
         self.responses.extend([Response(204, None), Response(200, dict(self.snapshot, modelOrigin="https://model.example"))])
         self.assertIsNone(self.control.claim())
+        with self.assertRaisesRegex(RunTransportError, "Invalid Control run snapshot"):
+            self.control.claim()
+
+    def test_graph_less_or_malformed_snapshots_are_not_current_leases(self):
+        for graph in (None, {}, {**self.snapshot["graph"], "entryPoint": "../../source.py"}):
+            self.responses.append(Response(200, {**self.snapshot, "graph": graph}))
+            with self.assertRaisesRegex(RunTransportError, "Invalid Control run snapshot"):
+                self.control.claim()
+        obsolete = dict(self.snapshot)
+        del obsolete["graph"]
+        self.responses.append(Response(200, obsolete))
         with self.assertRaisesRegex(RunTransportError, "Invalid Control run snapshot"):
             self.control.claim()
 

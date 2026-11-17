@@ -18,13 +18,14 @@ final readonly class WorkflowDefinition implements \JsonSerializable {
         public \stdClass $resultSchema,
         public WorkflowExecutionLimits $limits,
         public array $agents,
+        public WorkflowGraphSelection $graph,
         public ?array $agentStages = null,
         public ?WorkflowStackDeployment $deployment = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['id', 'versionId', 'workflowGroupId', 'modelGroupId', 'systemPrompt', 'contextSources', 'parameterSchema', 'resultSchema', 'limits', 'agents', 'agentStages', 'deployment']) || array_diff(['id', 'versionId', 'workflowGroupId', 'modelGroupId', 'systemPrompt', 'contextSources', 'parameterSchema', 'resultSchema', 'limits', 'agents'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['id', 'versionId', 'workflowGroupId', 'modelGroupId', 'systemPrompt', 'contextSources', 'parameterSchema', 'resultSchema', 'limits', 'agents', 'agentStages', 'deployment', 'graph']) || array_diff(['id', 'versionId', 'workflowGroupId', 'modelGroupId', 'systemPrompt', 'contextSources', 'parameterSchema', 'resultSchema', 'limits', 'agents', 'graph'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
@@ -38,6 +39,7 @@ final readonly class WorkflowDefinition implements \JsonSerializable {
             (object) $data['resultSchema'],
             WorkflowExecutionLimits::fromArray($data['limits']),
             array_map(static fn ($item) => WorkflowAgentBinding::fromArray($item), $data['agents']),
+            WorkflowGraphSelection::fromArray($data['graph']),
             array_key_exists('agentStages', $data) ? array_map(static fn ($item) => WorkflowAgentStage::fromArray($item), $data['agentStages']) : null,
             array_key_exists('deployment', $data) ? WorkflowStackDeployment::fromArray($data['deployment']) : null
         );

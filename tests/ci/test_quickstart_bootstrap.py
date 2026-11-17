@@ -71,6 +71,15 @@ class QuickstartBootstrapTests(unittest.TestCase):
         self.key.public_key().verify(base64.urlsafe_b64decode(signature + '='*(-len(signature) % 4)),
                                      b'OLO ToolGate recovery v1\n' + canonical, padding.PKCS1v15(), hashes.SHA256())
 
+    def test_admin_only_initialization_has_no_fixture_users_or_workflow_actors(self):
+        with patch.dict(os.environ,{'TOOLGATE_QUICKSTART_ADMIN_ONLY':'true'}):
+            packet,_=self.prepare()
+        snapshot=json.loads(packet.read_text())['authorization']['snapshot']
+        self.assertEqual(['admin'],[row['id'] for row in snapshot['users']])
+        for field in ('agents','agentGroups','bindings','tools','grants','policies','delegations','workloadBindings'):
+            self.assertEqual([],snapshot[field],field)
+        self.assertEqual(['admin'],[row['userId'] for row in snapshot['identityBindings']])
+
     def test_restart_preserves_original_review_after_database_creation(self):
         first = self.prepare()
         originals = [path.read_bytes() for path in first[1:]]

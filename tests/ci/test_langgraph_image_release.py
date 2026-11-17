@@ -4,6 +4,7 @@
 import json
 import os
 from pathlib import Path
+import shlex
 import unittest
 from unittest.mock import patch
 
@@ -14,6 +15,25 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class LangGraphImageReleaseTests(unittest.TestCase):
+    def test_image_suite_preserves_repository_layout_and_native_graph_fixtures(self):
+        jobs = yaml.safe_load((ROOT/'.github/workflows/images.yml').read_text())['jobs']
+        script = '\n'.join(step.get('run', '') for step in jobs['langgraph-runtime']['steps'])
+        command, = [shlex.split(line) for line in script.splitlines()
+                    if '-m unittest discover' in line]
+        options = command[:command.index('--entrypoint')]
+        mounts = [options[index + 1] for index, arg in enumerate(options) if arg == '-v']
+        self.assertCountEqual(mounts, [
+            '$PWD/apps/langgraph-runtime/tests:/workspace/apps/langgraph-runtime/tests:ro',
+            '$PWD/tools/workflows:/workspace/tools/workflows:ro',
+            '$PWD/examples/native-graphs:/workspace/examples/native-graphs:ro',
+        ])
+        self.assertEqual('/workspace/apps/langgraph-runtime/tests', command[command.index('-s') + 1])
+        for mount in mounts:
+            source = mount.split(':')[0].replace('$PWD', str(ROOT))
+            self.assertTrue(Path(source).is_dir(), source)
+        self.assertIn('--read-only', command)
+        self.assertEqual('none', command[command.index('--network') + 1])
+
     def test_image_evidence_is_required_and_manual_build_saves_the_image(self):
         jobs = yaml.safe_load((ROOT/'.github/workflows/images.yml').read_text())['jobs']
         self.assertIn('langgraph-runtime', jobs['verify']['needs'])

@@ -1,0 +1,48 @@
+{
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "formatVersion": 1,
+  "date": "2026-11-17",
+  "knownTestedBase": "b511426aec2a00c516527ae6c6d386b111cbac7a",
+  "scope": "Local source-built stack acceptance; drivers independently compared worker outcomes with Control. Not remote deployment attestation or full roadmap qualification.",
+  "runs": [
+    {
+      "configuration": "native-log",
+      "runId": "run-7a84bd2b-a563-4720-a720-a5b1a64d372c",
+      "state": "SUCCEEDED",
+      "graph": {
+        "packageId": "examples.native-summary",
+        "version": "1.0.0",
+        "digest": "sha256:f046bc990e87b35d2019e20d43df5ea4b5c04966bdda280015759c452489e7c9",
+        "entryPoint": "summary"
+      },
+      "runtimeImageId": "sha256:5865fefb5027e0c013c3e3c430e6eaedb163609fc0e1f68f881714bb0b9665b3",
+      "resultArtifactSha256": "c00604846b3846f45a8c783c3bc4e544cb5f16ef2f34ee19697f38a1d3510dfd",
+      "verificationArtifact": "deploy/compose/WorkflowStack/state/native-log/verification/run-7a84bd2b-a563-4720-a720-a5b1a64d372c.json"
+    },
+    {
+      "configuration": "native-hotfolder",
+      "runId": "run-4585538b-b7f4-4547-a83b-a17710255c46",
+      "state": "SUCCEEDED",
+      "graph": {
+        "packageId": "toolgate.supervisor",
+        "version": "1.0.0",
+        "digest": "sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd",
+        "entryPoint": "supervisor"
+      },
+      "runtimeImageId": "sha256:5865fefb5027e0c013c3e3c430e6eaedb163609fc0e1f68f881714bb0b9665b3",
+      "resultArtifactSha256": "d9bac37dcf26523f4a17ba02b1ee69ce385c5b51e35639e18beb4d9625065c2d",
+      "verificationArtifact": "deploy/compose/WorkflowStack/state/native-hotfolder/verification/run-4585538b-b7f4-4547-a83b-a17710255c46.json"
+    }
+  ],
+  "limitations": [
+    "Graph Python is operator-installed trusted code, not sandboxed tenant code.",
+    "No native durable checkpoint/interrupt resume or automatic effect retry.",
+    "Protected operations are serialized per run.",
+    "Image publication and complete hosted CI remain separate qualification."
+  ],
+  "sourceManifest": {
+    "sha256": "78adfd21d9d5a4a8f52e86ddc2050cbde8f70a0a8c5f1a15e3a31972f40f45ae",
+    "fileCount": 50,
+    "method": "Sorted changed non-document source path + NUL + SHA-256 of LF-normalized content + newline; documentation/evidence excluded."
+  }
+}

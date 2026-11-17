@@ -108,6 +108,17 @@ final class WorkflowConfigurationsTest {
         var node = config(); ((ObjectNode)node.path("workflows").get(0).path("limits")).put("maxSteps", 0);
         assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
     }
+    @Test void graphSelectionIsRequiredAndPinsConfigurationWithoutGrantingAuthority() throws Exception {
+        var node = config();
+        var workflow = (ObjectNode)node.path("workflows").get(0);
+        var graph = workflow.remove("graph");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        workflow.set("graph", graph);
+        ((ObjectNode)graph).put("digest", "unverified");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        ((ObjectNode)graph).put("digest", "sha256:" + "a".repeat(64));
+        assertEquals("sha256:" + "a".repeat(64), VALIDATOR.validate(node.toString(), r -> true).workflows().getFirst().graph().digest());
+    }
     @Test void wrongVersionNoEntryAndInvalidLimitsDeny() throws Exception {
         var node = config(); ((ObjectNode)node.path("dispatchBindings").get(0)).put("workflowVersionId", "wrong");
         String wrongVersion = node.toString(); assertThrows(Failure.class, () -> VALIDATOR.validate(wrongVersion, r -> true));

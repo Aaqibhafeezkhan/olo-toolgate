@@ -12,6 +12,7 @@ from urllib.request import Request
 from .runner import Agent, AgentStage, Candidate, CompletionAck, ContextSource, Denied, ID, Limits, OwnershipLost, RunLease, StepGrant, Tool, ToolOutcome
 from .trigger_bridge import _constant, _object
 from .trigger_transport import ControlTriggers
+from .graph_packages import validate_selection
 
 
 class RunTransportError(Exception):
@@ -44,7 +45,8 @@ def _agent(value):
 
 def _lease(value):
     data = _record(value, "runId leaseId workflowId workflowVersionId profileDigest leaseToken message supervisorPrompt "
-                         "supervisorModelGroupId limits agents contextSources remediationMode expiresAtUnixMs agentStages")
+                         "supervisorModelGroupId limits agents contextSources remediationMode expiresAtUnixMs agentStages graph")
+    validate_selection(data["graph"])
     if (not isinstance(data["leaseToken"], str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", data["leaseToken"])
             or type(data["expiresAtUnixMs"]) is not int or data["expiresAtUnixMs"] <= 0
             or not isinstance(data["agents"], list) or not 1 <= len(data["agents"]) <= 32):
@@ -57,7 +59,7 @@ def _lease(value):
     return RunLease(data["runId"], data["leaseId"], data["workflowId"], data["workflowVersionId"], data["profileDigest"],
                     data["leaseToken"], data["message"], data["supervisorPrompt"], data["supervisorModelGroupId"],
                     Limits(limits["maxSteps"], limits["maxHandoffs"], limits["maxDurationSeconds"]),
-                    tuple(map(_agent, data["agents"])), _contexts(data["contextSources"]), data["remediationMode"], stages)
+                    tuple(map(_agent, data["agents"])), data["graph"], _contexts(data["contextSources"]), data["remediationMode"], stages)
 
 
 class ControlRuns(ControlTriggers):

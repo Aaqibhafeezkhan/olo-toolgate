@@ -1,0 +1,40 @@
+{
+  "format": 1,
+  "packageId": "examples.native-summary",
+  "version": "1.0.0",
+  "runtimeApi": 1,
+  "dependencies": {
+    "langgraph": "1.2.20"
+  },
+  "capabilities": [
+    "json-state",
+    "agents",
+    "async"
+  ],
+  "factories": {
+    "summary": {
+      "file": "graph.py",
+      "function": "build_graph",
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agentId"
+        ],
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "resultKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "outputSchema": {}
+    }
+  }
+}

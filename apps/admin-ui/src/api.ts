@@ -178,6 +178,7 @@ export class ControlClient {
     return this.send(operations.createTriggerStreamTicket,{signal});
   }
   triggerSubscriptions(signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionPage>{return this.send(operations.listTriggerSubscriptions,{signal});}
+  createTriggerSubscription(body:import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionCreate,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscription>{return this.send(operations.createTriggerSubscription,{body,key});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
   serverDeployments(signal?:AbortSignal):Promise<PackageDeploymentPage>{return this.send(operations.listServerPackageDeployments,{signal});}
   /** The exact .tgpkg bytes; Control verifies them before storing anything. */

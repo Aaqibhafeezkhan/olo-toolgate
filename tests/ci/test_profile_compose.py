@@ -21,6 +21,27 @@ RUN='run-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 
 
 class ProfileComposeTests(unittest.TestCase):
+    def test_deployment_restart_preserves_application_managed_profile(self):
+        spec=importlib.util.spec_from_file_location('profile_restart_manager',ROOT/'deploy/compose/WorkflowStack/manage.py')
+        manager=importlib.util.module_from_spec(spec);spec.loader.exec_module(manager)
+        settings=configuration.load(ROOT/'deploy/compose/WorkflowStack/configurations/text-summary')
+        operator=Mock();config=operator.Configuration.return_value
+        source=settings['deployment']['source']
+        live='sha256:'+'b'*64
+        def api(path,*args):
+            if path.endswith('/subscriptions/'+settings['subscription']):return dict(metadata=dict(uid='subscription-uid'),spec=dict(filter=source['eventFilter'],sources=dict(assignments=[settings['assignment']])))
+            if path.endswith('/assignments/'+settings['assignment']):return dict(metadata=dict(uid='assignment-uid'))
+            if '/workflow-profiles/published?' in path:return [dict(profileId=settings['document']['profileId'],digest=live,generation=9)]
+            raise AssertionError(path)
+        config.api.side_effect=api
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary,patch.object(manager,'wait_trigger'),patch.object(manager,'qualify_reader'):
+            manager.profile(operator,settings,Path(temporary))
+        config.upsert.assert_not_called()
+        writes=operator.shared.private_file.call_args_list
+        self.assertTrue(any(json.loads(call.args[1]).get('profileDigest')==live for call in writes))
+        self.assertTrue(all(len(call.args)==1 for call in config.api.call_args_list))
+
     def test_trigger_identity_configuration_and_filter_are_profile_data_without_folder_adapter(self):
         profile=deepcopy(self.settings['document'])
         deployment=profile['workflows']['workflows'][0]['deployment']
