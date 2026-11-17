@@ -4,6 +4,7 @@
   "exceptions": [
     {
       "advisory": "GHSA-fc5q-39xc-vjpf",
+      "cve": "CVE-2026-112366",
       "package": "picomatch",
       "versions": ["4.0.7"],
       "affectedRange": "<=4.0.7",

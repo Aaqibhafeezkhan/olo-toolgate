@@ -53,6 +53,16 @@ full distributed hot-swap acceptance remain outstanding.
 
 ## Temporary dependency-risk acceptance — 2026-11-17
 
+2026-11-18 follow-up (known base `f997222d`): the source Trivy gate now applies
+the same original-expiry exception to CVE alias `CVE-2026-112366`, restricted to
+the root npm lockfile, exact package/version, unchanged HIGH severity, affected
+status and absence of a fixed version. No image or license finding is waived.
+Eight npm tests, ten source-classification tests, replay of the actual CI
+artifact and a fresh live source Trivy scan passed; evidence is tracked in the
+[workflow checkpoint](../architecture/workflow-v1-status.md#trivy-identity-for-the-existing-temporary-exception--2026-11-18).
+No S01–S33 stage, overall phase/first-slice acceptance table or execution-security
+claim changes; the exception continues to accept unresolved dependency risk.
+
 At the user's request, CI temporarily accepts the exact Picomatch 4.0.7
 advisory `GHSA-fc5q-39xc-vjpf` until 2026-12-17. Raw findings remain retained;
 other high/critical advisories and invalid/expired exception results fail the

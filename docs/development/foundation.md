@@ -103,6 +103,16 @@ and update the lockfile when the upstream fix becomes available; review any
 remaining exception before expiry. Policy regression tests run with
 `python -m unittest discover -s tests/ci -p test_npm_audit.py -v`.
 
+The source Trivy gate uses the same reviewed policy for its CVE alias
+`CVE-2026-112366`: only npm `picomatch` 4.0.7 in the root `package-lock.json`,
+with HIGH severity, affected status, no published fixed version and an unexpired
+review can be accepted. Other versions, targets, advisories, severity changes,
+available fixes and all license findings remain blocking. `full.json` retains
+the original scanner report; `temporarily-accepted.json` lists the accepted
+findings separately. This does not waive runtime image findings. Reproduce with
+`python tools/source_scan.py`; classification tests use
+`python -m unittest discover -s tests/ci -p test_source_scan.py -v`.
+
 The full gate validates versions, generated drift, headers and npm licenses,
 offline schemas/compatibility/security fixtures, Java tests and publication,
 Rust tests/fmt/clippy, TypeScript type tests/build/JSON transport, PHP DTO round

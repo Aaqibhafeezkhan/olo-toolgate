@@ -16,9 +16,10 @@ SEVERITIES={'info','low','moderate','high','critical'}
 def exceptions(value):
     if not isinstance(value,dict) or set(value)-{'$comment','formatVersion','exceptions'} or value.get('formatVersion')!=1 or not isinstance(value.get('exceptions'),list):raise ValueError('Invalid npm exception policy')
     result={}
-    fields={'advisory','package','versions','affectedRange','severity','created','expires','reason'}
+    fields={'advisory','cve','package','versions','affectedRange','severity','created','expires','reason'}
     for entry in value['exceptions']:
         if set(entry)!=fields or not re.fullmatch(r'GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}',entry['advisory']):raise ValueError('Invalid advisory exception')
+        if not re.fullmatch(r'CVE-\d{4}-\d{4,}',entry['cve']):raise ValueError('Invalid advisory CVE')
         if not isinstance(entry['versions'],list) or not entry['versions'] or any(not re.fullmatch(r'\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?',version) for version in entry['versions']):raise ValueError('Only exact exception versions are allowed')
         start,end=date.fromisoformat(entry['created']),date.fromisoformat(entry['expires'])
         if not 1<=(end-start).days<=30 or len(entry['reason'].strip())<40 or entry['severity'] not in SEVERITIES:raise ValueError('Invalid exception review window')

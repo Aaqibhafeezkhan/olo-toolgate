@@ -66,7 +66,7 @@ class NpmAuditTests(unittest.TestCase):
     def test_malformed_reports_and_broad_or_indefinite_exceptions_fail(self):
         for report in ({'auditReportVersion':1,'vulnerabilities':{}},{'auditReportVersion':2,'error':{'message':'offline'}},[]):
             with self.assertRaises(ValueError):evaluate(report,self.lock,self.policy,today=TODAY)
-        for change in ({'versions':['*']},{'expires':'2028-01-01'},{'reason':'skip'},{'unknown':True}):
+        for change in ({'versions':['*']},{'expires':'2028-01-01'},{'reason':'skip'},{'unknown':True},{'cve':'CVE-*'}):
             policy=deepcopy(self.policy);policy['exceptions'][0].update(change)
             with self.assertRaises(ValueError):exceptions(policy)
 

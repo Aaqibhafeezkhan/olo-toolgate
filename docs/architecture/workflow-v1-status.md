@@ -1,6 +1,29 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Trivy identity for the existing temporary exception — 2026-11-18
+
+Known base `f997222d`. CI run `44157956377`, scan job `134321768231`, failed
+because Trivy reports the already accepted Picomatch advisory as
+`CVE-2026-112366`. GitHub's advisory API confirms it is the same
+`GHSA-fc5q-39xc-vjpf`, with no patched version advertised. The shared exception
+policy now records both identities. Source classification accepts only npm
+Picomatch 4.0.7 in the root lockfile, with HIGH severity, affected status, no
+available fixed version and the original 2026-12-17 expiry. Raw findings remain
+in `full.json`; accepted findings are separated from blocking/historical
+findings. No new advisory, image or license exception is introduced.
+
+Eight npm policy tests and ten source-scan tests passed. Reclassification of
+the downloaded failing CI artifact produced zero blocking targets, one
+temporarily accepted target and one historical target, preserving raw findings.
+A fresh live source Trivy scan passed with zero blocking targets, one accepted
+target and one historical target, preserving all reports. Source quality and
+diff checks also passed. Java job `134322529497` failed resolving the Quarkus
+plugin before tests; its explicit rerun was cancelled when the newer push
+superseded it. Java CI remains unverified; no build gate was weakened. This unresolved dependency
+risk earns no #295 weight (**0/100**), #274 module weight (**27%** unchanged) or
+#230 execution-security claim. Full hot-swap acceptance remains outstanding.
+
 ## Blank initialization and administrative API scripts — 2026-11-18
 
 Known base `a479b783`. Fresh `debug/profiled` Compose initialization now requests

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Historical evidence stays visible without weakening active or license gates."""
 from contextlib import contextmanager
+from copy import deepcopy
+from datetime import date
 import hashlib
 import io
 import json
@@ -23,6 +25,48 @@ def report(*results):
 
 
 class SourceScanTests(unittest.TestCase):
+    def test_exact_reviewed_cve_is_visible_without_changing_raw_findings(self):
+        policy=json.loads(source_scan.POLICY.read_text(encoding='utf-8'))
+        finding=dict(VulnerabilityID='CVE-2026-112366',PkgName='picomatch',InstalledVersion='4.0.7',
+                     Status='affected',Severity='HIGH')
+        raw=report(dict(Target='package-lock.json',Type='npm',Vulnerabilities=[finding]))
+        original=deepcopy(raw)
+        filtered,accepted=source_scan.temporary_findings(raw,policy,today=date(2026,11,18))
+        self.assertEqual(raw,original)
+        self.assertEqual([],source_scan.split_findings(filtered,set())[0])
+        self.assertEqual([finding],accepted[0]['Vulnerabilities'])
+
+    def test_changed_identity_version_severity_scope_status_or_available_fix_remains_blocking(self):
+        policy=json.loads(source_scan.POLICY.read_text(encoding='utf-8'))
+        finding=dict(VulnerabilityID='CVE-2026-112366',PkgName='picomatch',InstalledVersion='4.0.7',
+                     Status='affected',Severity='HIGH')
+        changes=({'VulnerabilityID':'CVE-other'},{'PkgName':'other'},{'InstalledVersion':'4.0.8'},
+                 {'Severity':'CRITICAL'},{'FixedVersion':'4.0.8'},{'Status':'unknown'})
+        for change in changes:
+            with self.subTest(change=change):
+                raw=report(dict(Target='package-lock.json',Type='npm',Vulnerabilities=[dict(finding,**change)]))
+                filtered,accepted=source_scan.temporary_findings(raw,policy,today=date(2026,11,18))
+                self.assertFalse(accepted)
+                self.assertTrue(source_scan.split_findings(filtered,set())[0])
+        for target,kind in (('other/package-lock.json','npm'),('package-lock.json','other')):
+            raw=report(dict(Target=target,Type=kind,Vulnerabilities=[finding]))
+            filtered,accepted=source_scan.temporary_findings(raw,policy,today=date(2026,11,18))
+            self.assertFalse(accepted)
+            self.assertTrue(source_scan.split_findings(filtered,set())[0])
+
+    def test_temporary_exception_expires_and_never_suppresses_a_license(self):
+        policy=json.loads(source_scan.POLICY.read_text(encoding='utf-8'))
+        finding=dict(VulnerabilityID='CVE-2026-112366',PkgName='picomatch',InstalledVersion='4.0.7',
+                     Status='affected',Severity='HIGH')
+        license=dict(Name='forbidden-fixture',Severity='CRITICAL')
+        raw=report(dict(Target='package-lock.json',Type='npm',Vulnerabilities=[finding],Licenses=[license]))
+        filtered,accepted=source_scan.temporary_findings(raw,policy,today=date(2026,11,18))
+        self.assertTrue(accepted)
+        self.assertEqual([license],source_scan.split_findings(filtered,set())[0][0]['Licenses'])
+        filtered,accepted=source_scan.temporary_findings(raw,policy,today=date(2026,12,18))
+        self.assertFalse(accepted)
+        self.assertEqual([finding],source_scan.split_findings(filtered,set())[0][0]['Vulnerabilities'])
+
     def test_same_vulnerability_in_active_dependencies_still_blocks(self):
         raw=report(dict(Target=HISTORICAL,Vulnerabilities=[VULNERABILITY]),
                    dict(Target='tool-sdk/java-sdk/protocol/gradle.lockfile',Vulnerabilities=[VULNERABILITY]),
