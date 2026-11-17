@@ -57,6 +57,18 @@ Executed local evidence:
   devices. No accounts or credentials were imported. Other actors remain subject
   to the existing configuration review policy.
 
+Post-restoration acceptance on `b1a1dc00806b4bd71372807d241e97030c5fc478`:
+the original deployment is ready, its existing admin password authenticates, and
+Control still publishes the imported `ad5fe8893780` revision with one workflow and
+its shared agent/model definitions. Fresh file drops completed as
+`run-f543cbbd-fd08-45b5-8824-44e9f81bc7c1` and
+`run-7f74609c-91b2-4669-85f6-484281e406c5`; Control independently returned SUCCEEDED
+and its outcomes matched both the worker records and projected output files.
+The older local acceptance helper expected an LLM-produced `result.sourcePath`
+and waited despite successful delivery; it was stopped and superseded by that
+Control/message/output verification. No product fallback or compatibility path
+was added. The normal configured agent made the governed `read_text` call.
+
 Verification executed: **299 UI tests / 46 files** and the UI coverage gate pass;
 the UI type/build and Quickstart image build pass. Focused transfer/management
 tests: **20 passed**. Workflow Python discovery: **38 passed with one Linux-only
