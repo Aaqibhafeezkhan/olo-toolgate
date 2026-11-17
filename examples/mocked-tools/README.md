@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Mocked tool examples
 
-Seven tool packages for high-demand business use cases, each returning fixed, fictional data. Use them to design and demo an agent flow (look up, decide, explain, act) before any real system is connected, to test prompts and approvals in ToolGate against predictable answers, or as the starting contract for a real integration. They are built with the ToolGate Java Tool SDK exactly like the [Java example tools](../java-tools/README.md), with unit tests, `@Example` self-tests and a fat-jar `.olo` each.
+Seven tool packages for high-demand business use cases, each returning fixed, fictional data. Use them to design and demo an agent flow (look up, decide, explain, act) before any real system is connected, to test prompts and approvals in ToolGate against predictable answers, or as the starting contract for a real integration. They are built with the ToolGate Java Tool SDK exactly like the [Java example tools](../java-tools/README.md), with unit tests, `@Example` self-tests and a fat-jar `.olotool` each.
 
 **All people, accounts, records and numbers are made up. Nothing here is financial, medical, legal or insurance advice.**
 
@@ -22,7 +22,7 @@ The database example, which queries a real (embedded) database rather than retur
 As for the [Java example tools](../java-tools/README.md#build-and-test): publish the SDK and build the `toolgate` CLI once, then here:
 
 ```sh
-./gradlew check toolgatePackage     # every example: tests, @Example self-tests, build/toolgate/<example>-0.1.0.olo
+./gradlew check toolgatePackage     # every example: tests, @Example self-tests, build/toolgate/<example>-0.1.0.olotool
 cd fraud-detection
 cp toolgate.dev.example.json toolgate.dev.json
 toolgate dev                        # serve it over stdio to an MCP client

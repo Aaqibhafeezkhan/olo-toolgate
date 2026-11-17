@@ -30,7 +30,7 @@ other trigger packages, with no provider account or credentials.
 
 ```sh
 toolgate check    # the unit tests and both @TriggerExample self-tests
-toolgate pack     # build/toolgate/hotfolder-watch-0.1.0.olo with triggers/new-file.json
+toolgate pack     # build/toolgate/hotfolder-watch-0.1.0.olotool with triggers/new-file.json
 ```
 
 [`HotfolderWatchTest`](src/test/java/io/ololabs/examples/hotfolderwatch/HotfolderWatchTest.java) drives the trigger with `ToolHarness.trigger("new-file")` through the real trigger runtime and its stdio frames: several checks over a changing folder, a failed listing, retryable and terminal rejections, and a restart from the committed checkpoint.

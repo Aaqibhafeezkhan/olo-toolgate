@@ -25,29 +25,29 @@ fn fixture(name: &str) -> String {
 
 #[test]
 fn verify_exit_codes() {
-    let (code, out) = toolgate(&["verify", &fixture("valid.olo")]);
+    let (code, out) = toolgate(&["verify", &fixture("valid.olotool")]);
     assert_eq!(0, code, "{out}");
     assert!(out.starts_with("packageDigest sha256:"));
-    let (code, out) = toolgate(&["verify", &fixture("zip-slip.olo")]);
+    let (code, out) = toolgate(&["verify", &fixture("zip-slip.olotool")]);
     assert_eq!(1, code);
     assert!(out.contains("rejected: unsafe entry path"), "{out}");
     assert_eq!(2, toolgate(&["verify"]).0);
 }
 
 #[test]
-fn package_commands_accept_only_olo_file_names() {
-    assert_eq!(2, toolgate(&["verify", "unsupported.tgpkg"]).0);
-    assert_eq!(2, toolgate(&["validate", "unsupported.tgpkg"]).0);
-    assert_eq!(
-        2,
-        toolgate(&["pack", "staging", "--output", "unsupported.tgpkg"]).0
-    );
+fn package_commands_accept_only_olotool_file_names() {
+    for name in ["unsupported.tgpkg", "workflow.olo"] {
+        assert_eq!(2, toolgate(&["verify", name]).0);
+        assert_eq!(2, toolgate(&["validate", name]).0);
+        assert_eq!(2, toolgate(&["schema", name]).0);
+        assert_eq!(2, toolgate(&["pack", "staging", "--output", name]).0);
+    }
 }
 
 #[test]
 fn pack_then_validate() {
     let dir = stage("cli", &source_manifest(), ARTIFACT);
-    let output = dir.join("out.olo").display().to_string();
+    let output = dir.join("out.olotool").display().to_string();
     let (code, packed) = toolgate(&["pack", &dir.display().to_string(), "-o", &output]);
     assert_eq!(0, code, "{packed}");
     let (code, validated) = toolgate(&["validate", &output]);
@@ -105,7 +105,7 @@ fn pack_writes_the_tool_schema_beside_the_package() {
         r#"{"generatedBy":"toolgate-sdk-java","tools":{"orders.lookup":{"phrasings":["where is order {orderId}"]}}}"#,
     )
     .unwrap();
-    let output = dir.join("acme.orders-1.4.0.olo");
+    let output = dir.join("acme.orders-1.4.0.olotool");
     let (code, packed) = toolgate(&[
         "pack",
         &dir.display().to_string(),
@@ -172,7 +172,7 @@ fn pack_writes_generated_annotations_beside_the_package_and_removes_stale_ones()
     let out = dir.parent().unwrap().join("schema-beside-out");
     let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(&out).unwrap();
-    let output = out.join("acme.orders-1.4.0.olo");
+    let output = out.join("acme.orders-1.4.0.olotool");
     let (code, packed) = toolgate(&[
         "pack",
         &dir.display().to_string(),
@@ -222,7 +222,7 @@ fn pack_refuses_hand_written_annotations() {
         r#"{"tools":{"orders.lookup":{"phrasings":["where is order {orderId}"]}}}"#,
     )
     .unwrap();
-    let output = dir.join("acme.orders-1.4.0.olo");
+    let output = dir.join("acme.orders-1.4.0.olotool");
     let (code, out) = toolgate(&[
         "pack",
         &dir.display().to_string(),

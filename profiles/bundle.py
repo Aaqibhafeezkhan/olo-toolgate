@@ -42,7 +42,7 @@ def package(data):
     manifest=json.loads(files['toolgate-package.json'])
     if manifest['schemaVersion']!=2:raise ValueError('Unsupported package format')
     identity=digest(checksums)
-    return dict(packageId=manifest['id'],version=manifest['version'],packageDigest=identity,sha256=digest(data),bytes=len(data),path='packages/'+identity[7:]+'.olo'),manifest
+    return dict(packageId=manifest['id'],version=manifest['version'],packageDigest=identity,sha256=digest(data),bytes=len(data),path='packages/'+identity[7:]+'.olotool'),manifest
 
 
 def pack(profile,references,connections,archives,build):
@@ -76,7 +76,7 @@ def verify(data):
     if digest(files['workflow.json'])!=manifest['sha256'] or digest(files['referenced-data.json'])!=manifest['referencesSha256']:raise ValueError('Profile checksum mismatch')
     allowed={'manifest.json','workflow.json','referenced-data.json'}
     for item in manifest['packages']:
-        if not re.fullmatch(r'packages/[a-f0-9]{64}\.olo',item['path']) or item['path'] in allowed:raise ValueError('Invalid package path')
+        if not re.fullmatch(r'packages/[a-f0-9]{64}\.olotool',item['path']) or item['path'] in allowed:raise ValueError('Invalid package path')
         if package(files[item['path']])[0]!=item:raise ValueError('Package inventory mismatch')
         allowed.add(item['path'])
     if set(files)!=allowed:raise ValueError('Unexpected bundle content')

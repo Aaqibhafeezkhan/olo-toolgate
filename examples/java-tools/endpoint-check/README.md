@@ -25,7 +25,7 @@ One deployment checks one service. Deploy the package again with another `Servic
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # then edit it; never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/endpoint-check-0.1.0.olo
+toolgate pack                                     # build/toolgate/endpoint-check-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

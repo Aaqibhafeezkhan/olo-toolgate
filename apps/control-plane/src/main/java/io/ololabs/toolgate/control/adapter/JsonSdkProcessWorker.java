@@ -80,7 +80,7 @@ public final class JsonSdkProcessWorker implements SdkBuildWorker {
                     process.destroyForcibly();
                 }
             }
-            byte[] packaged = bounded(output.resolve("package.olo"), PackageArchive.MAX_PACKAGE_BYTES);
+            byte[] packaged = bounded(output.resolve("package.olotool"), PackageArchive.MAX_PACKAGE_BYTES);
             byte[] exported = bounded(output.resolve("source.zip"), 131072);
             PackageArchive.validate(packaged);
             if (!Arrays.equals(exported, JsonSdk.sourceArchive(canonical))) throw new IOException("SDK source export does not match its project");

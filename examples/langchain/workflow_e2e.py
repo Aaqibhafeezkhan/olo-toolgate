@@ -112,7 +112,7 @@ def provision(config):
 
 def prepare_runtime(config, subscription):
     """Explicit operator provisioning for this isolated, local Quickstart demo."""
-    release = packages.publish(config, manage.STATE / 'package/hotfolder.olo')
+    release = packages.publish(config, manage.STATE / 'package/hotfolder.olotool')
     device = manage.linux_status()['deviceId']
     image = release['image'].rsplit('@', 1)[1]
     pin = device + '@' + manage.DEVICE_GROUP + '@' + image

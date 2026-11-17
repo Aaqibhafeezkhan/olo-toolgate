@@ -29,7 +29,7 @@ Linux and macOS `.tar.gz` distributions are also attached. Prefer filenames cont
 ### Workflow profiles and tool packages
 
 Versioned workflow `.olo` assets include their referenced configuration and exact
-required tool/trigger `.olo` archives. The attached `olo-profiles-<artifact-version>.json`
+required tool/trigger `.olotool` archives. The attached `olo-profiles-<artifact-version>.json`
 records each workflow, product/profile version, source commit, package versions,
 digests and byte sizes. Use its filenames to select the matching release assets.
 Import a workflow on the console Workflows page, then import/deploy its embedded

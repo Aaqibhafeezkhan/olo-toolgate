@@ -12,7 +12,7 @@ import org.apache.maven.plugin.MojoFailureException;
 
 /**
  * {@code toolgate:package}, in {@code package} after the jar: stages the package under {@code target/toolgate/staging}
- * and packs it with the {@code toolgate} CLI into {@code target/toolgate/<artifactId>-<version>.olo}.
+ * and packs it with the {@code toolgate} CLI into {@code target/toolgate/<artifactId>-<version>.olotool}.
  */
 public class PackageMojo extends AbstractToolGateMojo {
     @Override
@@ -33,7 +33,7 @@ public class PackageMojo extends AbstractToolGateMojo {
             }
         }
         args.add("--pack");
-        args.add(new File(out, project.getArtifactId() + "-" + project.getVersion() + ".olo").getPath());
+        args.add(new File(out, project.getArtifactId() + "-" + project.getVersion() + ".olotool").getPath());
         int exit = fork(buildClasspath(), BUILD_MAIN, args, Map.of(), false);
         if (exit != 0) throw new MojoFailureException("toolgate package failed; see the lines above");
     }

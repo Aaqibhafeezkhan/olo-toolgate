@@ -181,8 +181,8 @@ export class ControlClient {
   createTriggerSubscription(body:import('@olo-labs/toolgate-contracts/v2').TriggerSubscriptionCreate,key:string):Promise<import('@olo-labs/toolgate-contracts/v2').TriggerSubscription>{return this.send(operations.createTriggerSubscription,{body,key});}
   serverPackages(signal?:AbortSignal):Promise<PackageVersionPage>{return this.send(operations.listServerPackageVersions,{signal});}
   serverDeployments(signal?:AbortSignal):Promise<PackageDeploymentPage>{return this.send(operations.listServerPackageDeployments,{signal});}
-  /** The exact .olo bytes; Control verifies them before storing anything. */
-  uploadServerPackage(file:Blob):Promise<PackageVersion>{if(file instanceof File&&!file.name.endsWith('.olo'))throw new ApiError(400,'PACKAGE_EXTENSION');return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
+  /** The exact .olotool bytes; Control verifies them before storing anything. */
+  uploadServerPackage(file:Blob):Promise<PackageVersion>{if(file instanceof File&&!file.name.endsWith('.olotool'))throw new ApiError(400,'PACKAGE_EXTENSION');return this.send(operations.uploadServerPackage,{raw:file,contentType:'application/vnd.ololabs.toolgate.package+zip',timeoutMs:120000});}
   async exportServerPackage(digest:string):Promise<Uint8Array>{
     if(!/^sha256:[a-f0-9]{64}$/.test(digest))throw new ApiError(400,'PACKAGE_DIGEST');
     const signal=AbortSignal.any([this.lifetime.signal,AbortSignal.timeout(120000)]);

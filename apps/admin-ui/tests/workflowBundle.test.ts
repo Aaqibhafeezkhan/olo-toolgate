@@ -23,7 +23,9 @@ it('exports one compressed workflow with its dependency closure and no README, h
   const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);
   const files=unzipSync(bytes);
   expect(Object.keys(files).filter(name=>!name.startsWith('packages/')).sort()).toEqual(['manifest.json','referenced-data.json','workflow.json']);
-  expect(Object.keys(files).filter(name=>name.startsWith('packages/'))).toHaveLength(2);
+  const tools=Object.keys(files).filter(name=>name.startsWith('packages/'));
+  expect(tools).toHaveLength(2);
+  expect(tools.every(name=>name.endsWith('.olotool'))).toBe(true);
   const bundle=await importWorkflow('working.olo',bytes);
   expect(bundle.profile.workflows!.workflows.map(item=>item.id)).toEqual([first.id]);
   expect(bundle.profile.workflows!.agentDefinitions).toEqual(original.workflows!.agentDefinitions);
@@ -82,4 +84,18 @@ it('excludes unrelated models, agents and workflow groups',()=>{
   profile.workflows!.modelDeployments.push({...profile.workflows!.modelDeployments[0],id:'unused'});
   profile.workflows!.workflowGroups.push({id:'unused',displayName:'Unused'});
   expect(workflowScope(profile,first.id)).toEqual(original);
+});
+
+it('rejects former nested tool filenames and tool archives as workflow filenames',async()=>{
+  const bytes=await exportWorkflow(original,first.id,assignments,subscriptions);
+  await expect(importWorkflow('tool.olotool',bytes)).rejects.toThrow();
+  for(const extension of ['.olo','.tgpkg']){
+    const files=unzipSync(bytes);
+    const manifest=JSON.parse(new TextDecoder().decode(files['manifest.json']));
+    const previous=manifest.packages[0].path;
+    const obsolete=previous.replace(/\.olotool$/,extension);
+    files[obsolete]=files[previous];delete files[previous];
+    manifest.packages[0].path=obsolete;files['manifest.json']=strToU8(JSON.stringify(manifest));
+    await expect(importWorkflow('workflow.olo',zipSync(files))).rejects.toThrow();
+  }
 });

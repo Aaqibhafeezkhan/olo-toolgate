@@ -27,16 +27,16 @@ sources and a Gradle cache, with no Docker socket or host credential directory.
 First builds need network access for pinned tooling/dependencies. Subsequent
 builds reuse caches. Output is always in the ignored `profiles/bin/` directory
 unless `--output` is supplied. `--packages-dir` selects an existing collection
-of exact verified `.olo` tool archives instead of compiling recipes.
+of exact verified `.olotool` tool archives instead of compiling recipes.
 
 Each output `<configuration>-<workflow>-<version>.olo` is a ZIP containing:
 
 - `manifest.json`: current format version, workflow ID, configuration hashes,
   exact package inventory, product version, source commit and build identifier;
 - `workflow.json` and `referenced-data.json`;
-- `packages/<package-digest>.olo`: the exact required tool/trigger archives.
+- `packages/<package-digest>.olotool`: the exact required tool/trigger archives.
 
-Tool and profile archives both use **`.olo`**, distinguished by their manifests.
+Tool archives use **`.olotool`**; workflow/profile archives use **`.olo`**.
 The old tool extension is unsupported. No profile README is added. Embedded
 package bytes, including any package-owned documentation/signatures, remain
 unchanged. SHA-256 establishes integrity, not publisher trust or authorization.

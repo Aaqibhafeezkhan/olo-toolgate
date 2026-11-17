@@ -38,15 +38,15 @@ def source_package(recipe,folder,cache,prebuilt):
     if key in cache:return cache[key]
     candidates=[]
     if 'file' in recipe:
-        if not recipe['file'].endswith('.olo'):raise ValueError('Tool package inputs must use .olo')
+        if not recipe['file'].endswith('.olotool'):raise ValueError('Tool package inputs must use .olotool')
         candidates=[inside(folder,recipe['file'])]
-    elif prebuilt:candidates=sorted(prebuilt.rglob('*.olo'))
+    elif prebuilt:candidates=sorted(prebuilt.rglob('*.olotool'))
     else:
         project=inside(ROOT,recipe['project']);task=recipe['task']
         if not re.fullmatch(r':[A-Za-z0-9-]+:toolgatePackage',task):raise ValueError('Unsupported Gradle package task')
         wrapper=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
         subprocess.run([str(wrapper),'-p',str(project),'-PtoolgateSdkRepo='+str(ROOT/'build/sdk-repo'),task],cwd=ROOT,check=True)
-        candidates=sorted((project/task.split(':')[1]/'build/toolgate').glob('*.olo'))
+        candidates=sorted((project/task.split(':')[1]/'build/toolgate').glob('*.olotool'))
     matches=[]
     for path in candidates:
         try:

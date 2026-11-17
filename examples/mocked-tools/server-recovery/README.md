@@ -14,7 +14,7 @@ Scenario: payments-api on app-02 was killed by the out-of-memory killer after re
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/server-recovery-0.1.0.olo
+toolgate pack                                     # build/toolgate/server-recovery-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

@@ -14,7 +14,7 @@ Employees E-100 (engineering manager), E-101 and E-102 (engineers reporting to E
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/hr-helpdesk-0.1.0.olo
+toolgate pack                                     # build/toolgate/hr-helpdesk-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

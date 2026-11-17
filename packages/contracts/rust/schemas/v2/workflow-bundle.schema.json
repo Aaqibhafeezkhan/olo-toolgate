@@ -63,7 +63,7 @@
         },
         "path": {
           "type": "string",
-          "pattern": "^packages/[a-f0-9]{64}\\.olo$"
+          "pattern": "^packages/[a-f0-9]{64}\\.olotool$"
         }
       },
       "required": [

@@ -48,7 +48,7 @@ export function TriggerAssignments({client}:{client:ControlClient}){
 
   return <section className="guidance">
     <div className="page-heading"><h2>Trigger assignments</h2><button onClick={()=>refresh(value=>value+1)}>Refresh assignments</button></div>
-    {canImport&&<label>Upload trigger package<input type="file" accept=".olo" disabled={uploading} onChange={event=>{
+    {canImport&&<label>Upload trigger package<input type="file" accept=".olotool" disabled={uploading} onChange={event=>{
       const file=event.currentTarget.files?.[0];
       event.currentTarget.value='';
       if(file)void upload(file);

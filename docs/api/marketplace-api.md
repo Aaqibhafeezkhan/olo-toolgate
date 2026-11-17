@@ -18,7 +18,7 @@ Base: `${MARKETPLACE_BASE_URL}/api/toolgate/v1`. Only `AVAILABLE` versions appea
 | `GET /catalog?page=1&limit=20&q=&category=&runtime=&tag=&publisher=` | `CatalogPage`: one item per package, latest available version | `400 INVALID_REQUEST` |
 | `GET /tools/{packageId}` | `PackageVersions`: every available version, newest first, plus delisted ones with `delisted: true` | `404 NOT_FOUND` |
 | `GET /tools/{packageId}/{version}` | `VersionDetail`, including for a delisted version (`delisted: true`, no `downloadUrl`) | `404 NOT_FOUND` |
-| `GET /tools/{packageId}/{version}/package` | The exact `.olo` bytes, `application/vnd.ololabs.toolgate.package+zip`, `Cache-Control: public, max-age=300, must-revalidate`, `ETag` = `archiveSha256` | `404 NOT_FOUND`, `410 DELISTED` |
+| `GET /tools/{packageId}/{version}/package` | The exact `.olotool` bytes, `application/vnd.ololabs.toolgate.package+zip`, `Cache-Control: public, max-age=300, must-revalidate`, `ETag` = `archiveSha256` | `404 NOT_FOUND`, `410 DELISTED` |
 | `GET /tools/{packageId}/{version}/release` | `ReleaseRecord` | `404 NOT_FOUND`, `410 DELISTED` |
 | `GET /publishers/{slug}` | `Publisher` with its available packages | `404 NOT_FOUND` |
 | `GET /media/{mediaId}` | `image/png` or `image/jpeg`, at most 1 MiB | `404 NOT_FOUND` |

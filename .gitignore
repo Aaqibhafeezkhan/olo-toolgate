@@ -244,11 +244,12 @@ deploy/compose/WorkflowStack/monitoring/collector-vendors.yaml
 deploy/compose/WorkflowStack/monitoring/credentials.env
 
 *.olo
+*.olotool
 .seed
 
 # Generated build identity; version.json is the tracked source of truth.
 /release.json
 
 /profiles/bin/
-!tests/fixtures/packages/cases/*.olo
-!tool-sdk/conformance/fixtures/packages/*.olo
+!tests/fixtures/packages/cases/*.olotool
+!tool-sdk/conformance/fixtures/packages/*.olotool

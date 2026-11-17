@@ -2,12 +2,12 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkflowStack deployment operator</title>
 <style>body{font:16px system-ui;background:#f3f5f8;color:#182337;max-width:880px;margin:40px auto;padding:0 20px}section{background:white;border:1px solid #d6dce5;border-radius:12px;padding:24px;margin:20px 0}label{display:block;margin:14px 0}input,select,button{font:inherit;padding:9px;border:1px solid #a8b2c0;border-radius:5px}button{cursor:pointer;margin:6px 10px 6px 0;background:#173d74;color:white}button:disabled{opacity:.5;cursor:wait}input[type=password]{width:330px;max-width:90%}.danger{background:#9e2727}#message{white-space:pre-wrap}small{display:block;color:#475569;margin:10px 0}a{color:#18478a}</style></head>
-<body><h1>WorkflowStack deployment operator</h1><p>Advanced deployment lifecycle. Manage workflow data and .olo files in the Control console.</p>
+<body><h1>WorkflowStack deployment operator</h1><p>Advanced deployment lifecycle. Manage workflow data and .olotool files in the Control console.</p>
 <section id="login"><h2>Local stack administrator</h2><p>Use the credentials in <code>state/administrator/credentials/admin/</code>. This account manages Docker deployments; the Control console has its own credentials.</p>
 <form id="signin"><label>Username <input id="username" autocomplete="username" value="admin" required></label><label>Password <input id="password" type="password" autocomplete="current-password" required></label><button>Sign in</button></form></section>
 <p role="status" id="message"></p>
 <div id="management" hidden><section><h2>Current deployment</h2><p id="current"></p><a id="console" target="_blank" rel="noopener" hidden>Open Control admin console</a><p id="credentials"></p><p id="folders"></p><button id="refresh">Refresh</button></section>
-<section><h2>Workflow configuration</h2><a href="/console/#workflows">Open workflows: import / export .olo, add or remove workflows</a><p>Workflow changes use the current Control installation. They do not restart containers or change login credentials.</p></section>
+<section><h2>Workflow configuration</h2><a href="/console/#workflows">Open workflows: import / export .olotool, add or remove workflows</a><p>Workflow changes use the current Control installation. They do not restart containers or change login credentials.</p></section>
 <section><h2>Factory reset</h2><p>Factory reset removes the active installation data and opens a blank Control installation. The current admin password is preserved. Configuration sources and model files remain.</p><label>Confirmation <input id="confirmation" placeholder="FACTORY RESET"></label><button id="reset" class="danger">Factory reset to blank</button></section></div>
 <script>
 let csrf='',timer,wasBusy=false;

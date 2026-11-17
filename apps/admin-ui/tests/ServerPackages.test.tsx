@@ -20,7 +20,7 @@ it('separates import and deployment controls using current server decisions',asy
  expect(screen.queryByText('Manage workflow profile')).toBeNull();
  fireEvent.change(screen.getByLabelText('Version'),{target:{value:digest}});
  expect((screen.getByRole('button',{name:'Deploy'}) as HTMLButtonElement).disabled).toBe(true);
- expect((screen.getByLabelText('Package file (.olo)') as HTMLInputElement).disabled).toBe(false);
+ expect((screen.getByLabelText('Package file (.olotool)') as HTMLInputElement).disabled).toBe(false);
  fireEvent.submit(screen.getByRole('button',{name:'Deploy'}).closest('form')!);
  expect(fetcher.mock.calls.some(([,init])=>init?.method==='POST')).toBe(false);
 });
@@ -37,8 +37,8 @@ it('uploads the exact bytes and deploys with the declared values',async()=>{
  });
  vi.stubGlobal('fetch',profiled(fetcher));render(<ServerPackages client={new ControlClient('token',vi.fn())}/>);
  await screen.findByText('acme.orders/greet');
- const file=new File([new Uint8Array([80,75,5,6])],'orders.olo');
- fireEvent.change(screen.getByLabelText('Package file (.olo)'),{target:{files:[file]}});
+ const file=new File([new Uint8Array([80,75,5,6])],'orders.olotool');
+ fireEvent.change(screen.getByLabelText('Package file (.olotool)'),{target:{files:[file]}});
  // jsdom cannot give a file input a value, so submit the form directly.
  fireEvent.submit(screen.getByRole('button',{name:'Upload and verify'}).closest('form')!);
  await screen.findByText('Verified acme.orders 0.1.0.');

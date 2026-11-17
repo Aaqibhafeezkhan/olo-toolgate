@@ -7,7 +7,7 @@
 //! `modelValidation` test prompts a dataset builder keeps out of training). Annotations are
 //! declared on the tools themselves (`@Training`, `training(...)`, a `"training"` block) and the SDK
 //! build generates `training/annotations.json` from them; a hand-written file is refused, so the
-//! hints cannot drift from the tools. It is written beside the `.olo`, never inside it, so
+//! hints cannot drift from the tools. It is written beside the `.olotool`, never inside it, so
 //! packages and their digests do not change.
 
 use crate::{strict_json, Error};
@@ -37,13 +37,13 @@ const CONSTRAINTS: [&str; 9] = [
     "items",
 ];
 
-/// Where the tool schema of `package` goes: `x.olo` gives `x.tool-schema.json`.
+/// Where the tool schema of `package` goes: `x.olotool` gives `x.tool-schema.json`.
 pub fn path_for(package: &Path) -> PathBuf {
     let name = package
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("package");
-    let stem = name.strip_suffix(".olo").unwrap_or(name);
+    let stem = name.strip_suffix(".olotool").unwrap_or(name);
     package.with_file_name(format!("{stem}.tool-schema.json"))
 }
 
@@ -96,7 +96,7 @@ fn hand_written(path: &Path) -> Error {
     ))
 }
 
-/// Where the annotations of a built package go: `training/annotations.json` beside the `.olo`, where the
+/// Where the annotations of a built package go: `training/annotations.json` beside the `.olotool`, where the
 /// dataset builder looks for them.
 pub fn beside(package: &Path) -> PathBuf {
     package

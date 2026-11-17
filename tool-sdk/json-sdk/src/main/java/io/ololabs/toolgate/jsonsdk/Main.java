@@ -29,7 +29,7 @@ public final class Main {
                 return;
             }
             Path output = Path.of(args.length > 2 ? args[2] : root.resolve("build/toolgate/" + project.id() + "-" + project.version()
-                    + (args[0].equals("source") ? ".source.zip" : ".olo")).toString()).toAbsolutePath().normalize();
+                    + (args[0].equals("source") ? ".source.zip" : ".olotool")).toString()).toAbsolutePath().normalize();
             if (args[0].equals("source")) {
                 Files.createDirectories(output.getParent()); Files.write(output, JsonSdk.sourceArchive(source));
             } else {

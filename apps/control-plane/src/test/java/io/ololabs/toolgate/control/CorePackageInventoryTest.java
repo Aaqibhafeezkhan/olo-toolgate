@@ -33,8 +33,8 @@ class CorePackageInventoryTest {
         var lock = json.createObjectNode().put("schemaVersion", 1).put("sdkVersion", JsonProject.sdkVersion());
         lock.putArray("packages").addObject().put("project", "any-project").put("sdk", "java-gradle")
                 .put("id", manifest.path("id").asText()).put("version", manifest.path("version").asText())
-                .put("artifact", "example.olo").put("artifactSha256", Canonical.sha256(bytes).substring(7)).put("packageDigest", verified.packageDigest());
-        Files.write(directory.resolve("example.olo"), bytes);
+                .put("artifact", "example.olotool").put("artifactSha256", Canonical.sha256(bytes).substring(7)).put("packageDigest", verified.packageDigest());
+        Files.write(directory.resolve("example.olotool"), bytes);
         return lock;
     }
     private Path write(ObjectNode lock) throws Exception {
@@ -45,7 +45,7 @@ class CorePackageInventoryTest {
         assertEquals(1, loaded.size()); assertArrayEquals(bytes, loaded.getFirst().bytes());
         loaded.getFirst().bytes()[0] = 0;
         assertArrayEquals(bytes, loaded.getFirst().bytes());
-        Files.write(directory.resolve("example.olo"), new byte[]{1, 2});
+        Files.write(directory.resolve("example.olotool"), new byte[]{1, 2});
         assertThrows(IOException.class, loaded.getFirst()::bytes);
         assertThrows(IOException.class, () -> CorePackageInventory.load(lock));
     }
@@ -53,7 +53,7 @@ class CorePackageInventoryTest {
         byte[] bytes = artifact();
         for (String field : new String[]{"artifact", "id", "version", "packageDigest"}) {
             var lock = inventory(bytes); var entry = (ObjectNode)lock.path("packages").get(0);
-            entry.put(field, field.equals("artifact") ? "../example.olo" : "unexpected");
+            entry.put(field, field.equals("artifact") ? "../example.olotool" : "unexpected");
             var path = write(lock); assertThrows(IOException.class, () -> CorePackageInventory.load(path), field);
         }
         var lock = inventory(bytes); lock.withArray("packages").add(lock.path("packages").get(0).deepCopy());

@@ -19,7 +19,7 @@ Build with a current published SDK repository/version and `toolgate` CLI:
 gradle -PtoolgateSdkRepo=<sdk-repository> -PtoolgateSdkVersion=<sdk-version> toolgatePackage
 ```
 
-Copy the resulting `.olo` to the chosen configuration's `packages/` folder.
+Copy the resulting `.olotool` to the chosen configuration's `packages/` folder.
 The profile must pin its package digest, declare this trigger/config/event filter,
 and map `/body` to its own workflow message. It needs no folder-delivery adapter.
 Once the stack is ready, a test writes the signal file into the enrolled device's

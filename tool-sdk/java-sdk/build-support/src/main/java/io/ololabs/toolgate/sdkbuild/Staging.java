@@ -36,7 +36,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Writes the staging directory {@code toolgate pack} turns into a {@code .olo} (tool-sdk/cli/README.md): the
+ * Writes the staging directory {@code toolgate pack} turns into a {@code .olotool} (tool-sdk/cli/README.md): the
  * {@code toolgate-package.json} source manifest and one self-contained executable, {@code artifacts/tool.jar}, a fat
  * jar of the tool jar and every runtime dependency whose {@code Main-Class} is the standalone runtime's {@code Main}.
  * Digests are left to the packer. A device needs only a JRE: the Tool Host runs it with {@code java -cp tool.jar Main},

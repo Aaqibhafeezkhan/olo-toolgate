@@ -94,7 +94,7 @@ export async function importWorkflow(name:string,bytes:Uint8Array):Promise<Workf
   if(!name.endsWith('.olo')||bytes.length>MAX_BUNDLE_BYTES||bytes.length<22)fail();
   const seen=new Set<string>();let expanded=0;
   const files=unzipSync(bytes,{filter:entry=>{
-    const artifact=/^packages\/[a-f0-9]{64}\.olo$/.test(entry.name);
+    const artifact=/^packages\/[a-f0-9]{64}\.olotool$/.test(entry.name);
     const limit=artifact?MAX_PACKAGE_BYTES:entry.name==='referenced-data.json'?MAX_REFERENCES:entry.name==='workflow.json'?MAX_PROFILE:262144;
     if(!artifact&&!['manifest.json','workflow.json','referenced-data.json'].includes(entry.name)||seen.has(entry.name)||seen.size>=35||entry.compression!==8||entry.originalSize>limit||(expanded+=entry.originalSize)>256*1024*1024)fail('Unsupported or oversized workflow archive.');
     seen.add(entry.name);return true;
@@ -112,7 +112,7 @@ export async function importWorkflow(name:string,bytes:Uint8Array):Promise<Workf
   if(connections.length!==config.dispatchBindings.length||new Set(connections.map(item=>item.id)).size!==connections.length||connections.some(item=>!object(item)||Object.keys(item).sort().join(',')!=='assignment,assignmentSpec,id,subscription,subscriptionSpec'||!identity(item.id)||!identity(item.assignment)||!identity(item.subscription)||!object(item.assignmentSpec)||!object(item.subscriptionSpec)||!config.dispatchBindings.some(binding=>binding.id===item.id)))fail();
   const packages:EmbeddedPackage[]=[];
   for(const item of manifest.packages){
-    if(!object(item)||typeof item.path!=='string'||!/^packages\/[a-f0-9]{64}\.olo$/.test(item.path)||!files[item.path])fail('Missing package archive.');
+    if(!object(item)||typeof item.path!=='string'||!/^packages\/[a-f0-9]{64}\.olotool$/.test(item.path)||!files[item.path])fail('Missing package archive.');
     const entry=await inspectPackage(files[item.path]);if(!same(entry.metadata,item)||packages.some(prior=>prior.metadata.path===item.path))fail('Package inventory verification failed.');packages.push(entry);
   }
   if(seen.size!==3+packages.length)fail('Unlisted package archive.');

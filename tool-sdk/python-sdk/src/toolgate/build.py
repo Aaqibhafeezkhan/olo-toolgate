@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Deterministic executable staging; the existing Rust CLI remains the single .olo packager."""
+"""Deterministic executable staging; the existing Rust CLI remains the single .olotool packager."""
 from __future__ import annotations
 
 import contextlib
@@ -159,7 +159,7 @@ def pack(root=None, output=None):
     from .descriptor.project import load_project
     project = load_project(root)
     staging = stage(project.root)
-    destination = Path(output or project.build_dir / (project.name + "-" + project.version + ".olo"))
+    destination = Path(output or project.build_dir / (project.name + "-" + project.version + ".olotool"))
     cli = os.environ.get("TOOLGATE_CLI", "toolgate")
     subprocess.run([cli, "pack", str(staging), "--output", str(destination)], check=True, stdout=sys.stderr)
     subprocess.run([cli, "validate", str(destination)], check=True, stdout=sys.stderr)

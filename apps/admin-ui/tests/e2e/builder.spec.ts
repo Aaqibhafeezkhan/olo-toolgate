@@ -21,7 +21,7 @@ test('author a canonical SDK project and download its package and source',async(
  await page.getByRole('button',{name:'Build package'}).click();await expect(page.getByRole('status').filter({hasText:'Build queued.'})).toBeVisible();
  await page.getByRole('button',{name:'Close editor'}).click();
  const packageButton=page.getByRole('button',{name:/Download package /}).first();await expect(packageButton).toBeVisible({timeout:150000});
- const packageDownload=page.waitForEvent('download');await packageButton.click();expect((await packageDownload).suggestedFilename()).toBe('tool-package.olo');
+ const packageDownload=page.waitForEvent('download');await packageButton.click();expect((await packageDownload).suggestedFilename()).toBe('tool-package.olotool');
  const sourceDownload=page.waitForEvent('download');await page.getByRole('button',{name:/Download source /}).first().click();expect((await sourceDownload).suggestedFilename()).toBe('tool-source.zip');
  expect(await page.locator('body').innerText()).not.toContain(credentials.admin);
 });

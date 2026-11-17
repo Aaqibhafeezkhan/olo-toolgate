@@ -8,7 +8,7 @@ operation set to Java SDK source and uses the existing annotation processor,
 example checks, runtime staging and canonical Rust package CLI. Executable
 behavior is installed only as a verified package.
 
-Builder exports exactly two artifacts: the standard `.olo` and one canonical
+Builder exports exactly two artifacts: the standard `.olotool` and one canonical
 source-project ZIP. Identical source and pinned SDK/toolchain produce identical
 package bytes. Generated Java, descriptors and manifests are build artifacts,
 not a second authoring/export format.

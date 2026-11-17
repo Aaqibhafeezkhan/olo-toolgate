@@ -26,7 +26,7 @@ pub struct Adapter {
     check: &'static [&'static str],
     /// Builds the package into [`Adapter::output`].
     package: &'static [&'static str],
-    /// Where the package build writes the `.olo`, relative to the project.
+    /// Where the package build writes the `.olotool`, relative to the project.
     pub output: &'static str,
 }
 
@@ -215,7 +215,7 @@ impl Run<'_> {
         self.status(self.adapter.check, "the check")
     }
 
-    /// Builds the package and returns the newest `.olo` in the adapter's output directory.
+    /// Builds the package and returns the newest `.olotool` in the adapter's output directory.
     pub fn package(&self) -> Result<PathBuf, Error> {
         self.status(self.adapter.package, "the package build")?;
         let output = self.dir.join(self.adapter.output);
@@ -223,12 +223,15 @@ impl Run<'_> {
             .map_err(|e| Error::Invalid(format!("{}: {e}", output.display())))?
             .filter_map(Result::ok)
             .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|x| x == "olo"))
+            .filter(|p| p.extension().is_some_and(|x| x == "olotool"))
             .filter_map(|p| Some((p.metadata().ok()?.modified().ok()?, p)))
             .collect();
         packages.sort();
         packages.pop().map(|(_, p)| p).ok_or_else(|| {
-            Error::Invalid(format!("the build wrote no .olo to {}", output.display()))
+            Error::Invalid(format!(
+                "the build wrote no .olotool to {}",
+                output.display()
+            ))
         })
     }
 

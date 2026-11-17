@@ -12,7 +12,7 @@ remain separate M7/M8 work.
 
 Build with `../gradlew :log-watch:check :log-watch:toolgatePackage` from this
 directory after publishing the SDK locally and installing the ToolGate CLI.
-The output is `build/toolgate/log-watch-0.1.0.olo`.
+The output is `build/toolgate/log-watch-0.1.0.olotool`.
 
 Install that reviewed artifact into the selected configuration's `packages/`
 folder and pin its package digest in the workflow's `deployment.source`.

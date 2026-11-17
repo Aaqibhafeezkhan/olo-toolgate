@@ -24,7 +24,7 @@ Globals unless marked. Set them in `toolgate.dev.json` for development, as `TOOL
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # then edit it; never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/csv-query-0.1.0.olo
+toolgate pack                                     # build/toolgate/csv-query-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

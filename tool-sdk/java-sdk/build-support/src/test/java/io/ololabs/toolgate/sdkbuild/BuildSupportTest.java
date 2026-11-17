@@ -192,15 +192,15 @@ class BuildSupportTest {
         assertEquals(null, Packer.cli(Map.of("PATH", "")));
         assertEquals("/opt/tg", Packer.cli(Map.of("TOOLGATE_CLI", "/opt/tg")));
         IllegalStateException missing = assertThrows(IllegalStateException.class,
-                () -> Packer.pack(Path.of("staging"), Path.of("out.olo"), Map.of("PATH", "")));
+                () -> Packer.pack(Path.of("staging"), Path.of("out.olotool"), Map.of("PATH", "")));
         assertTrue(missing.getMessage().contains("toolgate CLI was not found"), missing.getMessage());
         IllegalStateException absent = assertThrows(IllegalStateException.class,
-                () -> Packer.pack(Path.of("staging"), Files.createTempDirectory("x").resolve("out.olo"), Map.of("TOOLGATE_CLI", "/nonexistent/toolgate")));
+                () -> Packer.pack(Path.of("staging"), Files.createTempDirectory("x").resolve("out.olotool"), Map.of("TOOLGATE_CLI", "/nonexistent/toolgate")));
         assertTrue(absent.getMessage().contains("cannot run the toolgate CLI"), absent.getMessage());
         String cli = System.getProperty("toolgate.cli", "");
         assumeTrue(!cli.isEmpty() && Files.isExecutable(Path.of(cli)), "the toolgate CLI is built (set TOOLGATE_CLI)");
         Path staging = Staging.stage(appJar(), List.of(library("a.jar")), "1.0.0", Files.createTempDirectory("toolgate-pack"));
-        Path file = staging.resolveSibling("acme.stock-1.0.0.olo");
+        Path file = staging.resolveSibling("acme.stock-1.0.0.olotool");
         String digests = Packer.pack(staging, file, Map.of("TOOLGATE_CLI", cli));
         assertTrue(Files.size(file) > 0);
         assertTrue(digests.contains("packageDigest"), digests);

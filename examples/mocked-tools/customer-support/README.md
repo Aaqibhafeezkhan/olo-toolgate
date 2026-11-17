@@ -12,7 +12,7 @@ Customers C-501 (gold) and C-502 (standard). Orders: O-9001 delivered, O-9002 la
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/customer-support-0.1.0.olo
+toolgate pack                                     # build/toolgate/customer-support-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

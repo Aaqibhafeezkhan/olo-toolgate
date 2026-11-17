@@ -32,7 +32,7 @@ There are no fixed watch IDs, versions, config keys or event filters in the
 deployment operator or canonical source model.
 
 To adopt an external package using supported executor capabilities, place its
-`.olo` in `configurations/<selection>/packages/` and pin its `packageDigest`
+`.olotool` in `configurations/<selection>/packages/` and pin its `packageDigest`
 (`sha256:` plus the SHA-256 of its `CHECKSUMS.sha256` bytes) in `deployment.source`.
 Use the digest emitted by `toolgate pack`. The selected package/version must
 match exactly. Only the selected artifact enters bootstrap custody. Review the
@@ -80,7 +80,7 @@ empty installation), then use **Workflow import / export (.olo)**.
 - Each ZIP-compressed `.olo` contains **one workflow**, its referenced agents,
   model/group definitions, prompts, schemas, context, inert deployment hints,
   directory configuration, named trigger declarations and exact required tool/trigger
-  `.olo` archives. No profile README, container images, model weights, databases,
+  `.olotool` archives. No profile README, container images, model weights, databases,
   human accounts, private keys or credential stores are added. Embedded package
   contents are preserved byte for byte. The limit is 128 MiB compressed, with
   Control's existing 64 MiB ceiling per tool archive.
@@ -107,8 +107,8 @@ empty installation), then use **Workflow import / export (.olo)**.
 
 There is one application-level transfer implementation at both console URLs.
 Repository authoring/build sources are in [profiles](../../../profiles/README.md),
-with versioned outputs under `profiles/bin/`. Tool and workflow archives both use
-`.olo`, distinguished by their manifests. Only profile bundle format 2 is accepted.
+with versioned outputs under `profiles/bin/`. Tool archives use `.olotool`; workflow/profile archives use
+`.olo`. Only profile bundle format 2 is accepted.
 The earlier configuration-only and whole-deployment formats are unsupported; neither is converted
 nor loaded into Docker. Existing old archive files remain untouched.
 

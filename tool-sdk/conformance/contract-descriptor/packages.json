@@ -28,7 +28,7 @@
         "Accepted at every hop with the digest in expected.json"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/valid.olo",
+        "tool-sdk/conformance/fixtures/packages/valid.olotool",
         "tool-sdk/conformance/fixtures/packages/expected.json"
       ],
       "status": "authored"
@@ -54,7 +54,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/zip-slip.olo"
+        "tool-sdk/conformance/fixtures/packages/zip-slip.olotool"
       ],
       "status": "authored"
     },
@@ -79,7 +79,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/absolute-path.olo"
+        "tool-sdk/conformance/fixtures/packages/absolute-path.olotool"
       ],
       "status": "authored"
     },
@@ -104,7 +104,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/backslash.olo"
+        "tool-sdk/conformance/fixtures/packages/backslash.olotool"
       ],
       "status": "authored"
     },
@@ -129,7 +129,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/drive-letter.olo"
+        "tool-sdk/conformance/fixtures/packages/drive-letter.olotool"
       ],
       "status": "authored"
     },
@@ -154,7 +154,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/duplicate-entry.olo"
+        "tool-sdk/conformance/fixtures/packages/duplicate-entry.olotool"
       ],
       "status": "authored"
     },
@@ -179,7 +179,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/case-collision.olo"
+        "tool-sdk/conformance/fixtures/packages/case-collision.olotool"
       ],
       "status": "authored"
     },
@@ -204,7 +204,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/nfc-collision.olo"
+        "tool-sdk/conformance/fixtures/packages/nfc-collision.olotool"
       ],
       "status": "authored"
     },
@@ -229,7 +229,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/symlink.olo"
+        "tool-sdk/conformance/fixtures/packages/symlink.olotool"
       ],
       "status": "authored"
     },
@@ -254,7 +254,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/encrypted-entry.olo"
+        "tool-sdk/conformance/fixtures/packages/encrypted-entry.olotool"
       ],
       "status": "authored"
     },
@@ -279,7 +279,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/zip-bomb-ratio.olo"
+        "tool-sdk/conformance/fixtures/packages/zip-bomb-ratio.olotool"
       ],
       "status": "authored"
     },
@@ -304,7 +304,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/data-outside-central-directory.olo"
+        "tool-sdk/conformance/fixtures/packages/data-outside-central-directory.olotool"
       ],
       "status": "authored"
     },
@@ -329,7 +329,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/unlisted-file.olo"
+        "tool-sdk/conformance/fixtures/packages/unlisted-file.olotool"
       ],
       "status": "authored"
     },
@@ -354,7 +354,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/missing-listed-file.olo"
+        "tool-sdk/conformance/fixtures/packages/missing-listed-file.olotool"
       ],
       "status": "authored"
     },
@@ -379,7 +379,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-crlf.olo"
+        "tool-sdk/conformance/fixtures/packages/checksums-crlf.olotool"
       ],
       "status": "authored"
     },
@@ -404,7 +404,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-unsorted.olo"
+        "tool-sdk/conformance/fixtures/packages/checksums-unsorted.olotool"
       ],
       "status": "authored"
     },
@@ -429,7 +429,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-uppercase-hex.olo"
+        "tool-sdk/conformance/fixtures/packages/checksums-uppercase-hex.olotool"
       ],
       "status": "authored"
     },
@@ -454,7 +454,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-comment.olo"
+        "tool-sdk/conformance/fixtures/packages/checksums-comment.olotool"
       ],
       "status": "authored"
     },
@@ -479,7 +479,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-blank-line.olo"
+        "tool-sdk/conformance/fixtures/packages/checksums-blank-line.olotool"
       ],
       "status": "authored"
     },
@@ -504,7 +504,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/manifest-digest-mismatch.olo"
+        "tool-sdk/conformance/fixtures/packages/manifest-digest-mismatch.olotool"
       ],
       "status": "authored"
     },

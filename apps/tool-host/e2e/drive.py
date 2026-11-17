@@ -1,8 +1,8 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 """Runs a packaged tool through a real Tool Host: a fake Control and a fake upstream on loopback,
-a permit signed with a throwaway key, and the .olo, service profile and globals placed in the
-content store under their digests. Usage: drive.py <tool-host binary> <package.olo> <out dir>."""
+a permit signed with a throwaway key, and the .olotool, service profile and globals placed in the
+content store under their digests. Usage: drive.py <tool-host binary> <package.olotool> <out dir>."""
 
 import base64
 import hashlib
@@ -100,7 +100,7 @@ def main():
     with zipfile.ZipFile(PACKAGE) as z:
         package_digest = "sha256:" + hashlib.sha256(z.read("CHECKSUMS.sha256")).hexdigest()
         manifest = json.loads(z.read("toolgate-package.json"))
-    open(os.path.join(store, "packages", package_digest[7:] + ".olo"), "wb").write(data)
+    open(os.path.join(store, "packages", package_digest[7:] + ".olotool"), "wb").write(data)
 
     control_port, upstream_port = serve(), serve()
     tool = {t["descriptor"]["toolId"].rsplit("/", 1)[-1]: t for t in manifest["tools"]}

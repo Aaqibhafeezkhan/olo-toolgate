@@ -8749,7 +8749,7 @@ paths:
   /api/control/v1/packages/uploads:
     post:
       operationId: uploadServerPackage
-      description: Super Admin only. Uploads a .olo built by `toolgate pack`. Control
+      description: Super Admin only. Uploads a .olotool built by `toolgate pack`. Control
         applies the packager's archive rules, CHECKSUMS, artifact and descriptor digests,
         stores the exact bytes and answers the verified version. Uploading the same
         bytes again answers 200 with the stored version.

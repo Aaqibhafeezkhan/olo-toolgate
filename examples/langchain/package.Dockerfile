@@ -27,6 +27,6 @@ RUN --mount=type=cache,id=toolgate-langchain-gradle,target=/root/.gradle \
     ./gradlew --no-daemon --configure-on-demand publishJavaSdkLocally && \
     cd examples/java-tools && ./gradlew --no-daemon -PtoolgateSdkRepo=/src/build/sdk-repo :hotfolder:toolgatePackage :hotfolder-watch:toolgatePackage
 FROM scratch
-COPY --from=build /src/examples/java-tools/hotfolder/build/toolgate/hotfolder-0.1.0.olo /hotfolder.olo
+COPY --from=build /src/examples/java-tools/hotfolder/build/toolgate/hotfolder-0.1.0.olotool /hotfolder.olotool
 # The hot-folder trigger (issue #274): a trigger-only package the deployment profile releases and assigns.
-COPY --from=build /src/examples/java-tools/hotfolder-watch/build/toolgate/hotfolder-watch-0.1.0.olo /hotfolder-watch.olo
+COPY --from=build /src/examples/java-tools/hotfolder-watch/build/toolgate/hotfolder-watch-0.1.0.olotool /hotfolder-watch.olotool

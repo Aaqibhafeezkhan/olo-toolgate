@@ -27,7 +27,7 @@ class ImageAssetsTests(unittest.TestCase):
 
     def test_external_package_selection_requires_exact_profile_pin(self):
         directory=self.root/'configuration/packages';directory.mkdir(parents=True)
-        artifact=directory/'unrelated-name.olo'
+        artifact=directory/'unrelated-name.olotool'
         with zipfile.ZipFile(artifact,'w') as archive:
             archive.writestr('toolgate-package.json',json.dumps(dict(id='acme.new-watch',version='2.1.0',sdk={'version':'1'})))
             archive.writestr('CHECKSUMS.sha256','bounded fixture metadata')
@@ -48,8 +48,8 @@ class ImageAssetsTests(unittest.TestCase):
         packages=[]
         for name in ('hotfolder','hotfolder-watch'):
             data=name.encode()
-            (self.assets/'packages'/(name+'.olo')).write_bytes(data)
-            packages.append(dict(id='examples.'+name,artifact=name+'.olo',version='0.1.0',
+            (self.assets/'packages'/(name+'.olotool')).write_bytes(data)
+            packages.append(dict(id='examples.'+name,artifact=name+'.olotool',version='0.1.0',
                 sdkVersion='1',packageDigest='sha256:'+'a'*64,artifactSha256=hashlib.sha256(data).hexdigest()))
         self.manifest=dict(formatVersion=2,packages=packages)
         self.manifest_path=self.assets/'packages/manifest.json'
@@ -63,7 +63,7 @@ class ImageAssetsTests(unittest.TestCase):
 
     def test_changed_artifacts_and_unknown_format_are_refused(self):
         image_assets.validate(self.assets)
-        (self.assets/'packages/hotfolder.olo').write_bytes(b'changed')
+        (self.assets/'packages/hotfolder.olotool').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError,'digest mismatch'):image_assets.validate(self.assets)
         self.manifest['formatVersion']=0
         self.manifest_path.write_text(json.dumps(self.manifest))
@@ -78,7 +78,7 @@ class ImageAssetsTests(unittest.TestCase):
         manager.prepare_packages(operator,settings,state,['compose'],self.assets)
         operator.packages.prepare.assert_not_called()
         operator.packages.registry.assert_called_once_with(['compose'],state,os.environ)
-        self.assertEqual(b'hotfolder-watch',(state/'package/bootstrap/trigger.olo').read_bytes())
+        self.assertEqual(b'hotfolder-watch',(state/'package/bootstrap/trigger.olotool').read_bytes())
 
     @unittest.skipUnless(hasattr(os,'getuid') and os.getuid()==0,'Linux root-owned volume test')
     def test_bootstrap_updates_current_format_but_refuses_unknown_storage(self):
@@ -89,7 +89,7 @@ class ImageAssetsTests(unittest.TestCase):
         output=self.root/'bootstrap'
         bootstrap.initialize(self.assets/'packages',profile,output)
         bootstrap.initialize(self.assets/'packages',profile,output)
-        self.assertEqual(b'hotfolder-watch',(output/'core/hotfolder-watch.olo').read_bytes())
+        self.assertEqual(b'hotfolder-watch',(output/'core/hotfolder-watch.olotool').read_bytes())
         self.assertEqual(0o644,(output/'profile/trigger.json').stat().st_mode&0o777)
         output.chmod(0o777)
         with self.assertRaisesRegex(ValueError,'root-owned'):

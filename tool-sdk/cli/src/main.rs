@@ -18,16 +18,16 @@ Project commands (run in a tool project, or name its directory):
   toolgate dev [<dir>] [--http <host:port>] [--digests]
                                                   Build and serve the tools as an MCP server (stdio by default)
   toolgate check [<dir>]                          Compile, run the tests and every example
-  toolgate pack [<dir>] [-o <file.olo>]         Build the package and validate it; also writes
+  toolgate pack [<dir>] [-o <file.olotool>]         Build the package and validate it; also writes
                                                   <file>.tool-schema.json for training tool-calling models
   toolgate guide                                  Print the guide to building tools with the SDK
 
 Package commands:
-  toolgate pack <staging-dir> [-o <file.olo>]   Build a package from a staging directory
-  toolgate validate <file.olo | dir>            Archive rules plus manifest, descriptor and digest checks;
+  toolgate pack <staging-dir> [-o <file.olotool>]   Build a package from a staging directory
+  toolgate validate <file.olotool | dir>            Archive rules plus manifest, descriptor and digest checks;
                                                   a project directory runs check
-  toolgate verify <file.olo>                    Archive rules only, as every hop runs them
-  toolgate schema <file.olo | staging-dir> [--annotations <file>] [-o <file>]
+  toolgate verify <file.olotool>                    Archive rules only, as every hop runs them
+  toolgate schema <file.olotool | staging-dir> [--annotations <file>] [-o <file>]
                                                   Write the tool schema used to train tool-calling models
   toolgate digest <descriptor.json>...            toolDescriptorDigest of each, and the set digest
   toolgate canonical <descriptor.json>            Print the canonical (NFC + RFC 8785) bytes
@@ -60,7 +60,10 @@ enum Failure {
 }
 
 fn package_filename(path: &Path) -> Result<(), Failure> {
-    if path.extension().is_some_and(|extension| extension == "olo") {
+    if path
+        .extension()
+        .is_some_and(|extension| extension == "olotool")
+    {
         Ok(())
     } else {
         Err(Failure::Usage)
@@ -211,7 +214,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
                 written.len(),
                 dir.display()
             );
-            println!("next:\n  cd {}\n  toolgate dev      serve the tools over stdio\n  toolgate check    run the tests and every example\n  toolgate pack     build the .olo", dir.display());
+            println!("next:\n  cd {}\n  toolgate dev      serve the tools over stdio\n  toolgate check    run the tests and every example\n  toolgate pack     build the .olotool", dir.display());
             if options.sdk_repository.is_none() {
                 println!("{}", starter.local_sdk_note);
             }
@@ -269,7 +272,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
                     None => {
                         let manifest = strict_json(&std::fs::read(dir.join(package::MANIFEST))?)?;
                         PathBuf::from(format!(
-                            "{}-{}.olo",
+                            "{}-{}.olotool",
                             manifest["id"].as_str().unwrap_or("package"),
                             manifest["version"].as_str().unwrap_or("0.0.0")
                         ))

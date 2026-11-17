@@ -210,7 +210,7 @@ configuration. Replacement refreshes the editor; review and publish activate it.
 Imports never restart containers or alter login credentials. Multiple workflows
 can share definitions; removal prunes only unshared profile definitions.
 
-Bundles include exact required tool and trigger `.olo` archives. Console export
+Bundles include exact required tool and trigger `.olotool` archives. Console export
 requires current package.read authority and available verified package content;
 missing or ambiguous packages fail the export. Import embedded packages through
 the displayed action before their normal deployment/activation. Current bundle

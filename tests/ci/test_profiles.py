@@ -25,8 +25,8 @@ class ProfileTests(unittest.TestCase):
     def test_file_recipe_builds_a_workflow_and_repins_its_descriptor_boundary(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);folder=root/'source';folder.mkdir();output=root/'bin';output.mkdir()
-            raw=(ROOT/'tests/fixtures/packages/cases/valid-deflated.olo').read_bytes();metadata,manifest=bundle.package(raw)
-            (folder/'tool.olo').write_bytes(raw)
+            raw=(ROOT/'tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes();metadata,manifest=bundle.package(raw)
+            (folder/'tool.olotool').write_bytes(raw)
             config=deepcopy(json.loads((ROOT/'tests/fixtures/contracts/v2/valid.json').read_text())['WorkflowConfiguration'])
             config['dispatchBindings']=[]
             for agent in config['agentDefinitions']:agent['contextSources']=[]
@@ -34,7 +34,7 @@ class ProfileTests(unittest.TestCase):
             config['agentDefinitions'][0]['contextSources']=[dict(toolId=tool['descriptor']['toolId'],arguments={})]
             profile=dict(profileVersion=2,profileId='file-source',packages=[],workflows=config)
             refs=dict(tools=[dict(id=tool['descriptor']['toolId'],packageDigest='a'*64)],bindings=[dict(allowedPackageDigests=['a'*64])])
-            for name,data in [('workflow-profile.json',profile),('referenced-data.json',refs),('connections.json',[]),('build.json',dict(packages=[dict(packageId=metadata['packageId'],version=metadata['version'],file='tool.olo')]))]:
+            for name,data in [('workflow-profile.json',profile),('referenced-data.json',refs),('connections.json',[]),('build.json',dict(packages=[dict(packageId=metadata['packageId'],version=metadata['version'],file='tool.olotool')]))]:
                 (folder/name).write_text(json.dumps(data))
             rows=builder.build(folder,output,'1.2.3','b'*40,'test',{},None)
             self.assertEqual(1,len(rows))
@@ -42,19 +42,31 @@ class ProfileTests(unittest.TestCase):
                 actual=json.loads(archive.read('referenced-data.json'))
                 self.assertEqual(metadata['version'],actual['tools'][0]['version'])
                 self.assertEqual([tool['toolDescriptorDigest'].removeprefix('sha256:')],actual['bindings'][0]['allowedPackageDigests'])
-            with self.assertRaisesRegex(ValueError,'must use .olo'):
-                builder.source_package(dict(packageId='x',version='1.0.0',file='obsolete.tgpkg'),folder,{},None)
+            self.assertTrue(rows[0]['filename'].endswith('.olo'))
+            for name in ('obsolete.tgpkg','workflow.olo'):
+                with self.assertRaisesRegex(ValueError,'must use .olotool'):
+                    builder.source_package(dict(packageId='x',version='1.0.0',file=name),folder,{},None)
 
     def test_embedded_package_bytes_round_trip_and_tampering_is_rejected(self):
-        package=(ROOT/'tests/fixtures/packages/cases/valid-deflated.olo').read_bytes()
+        package=(ROOT/'tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()
         item,manifest=bundle.package(package)
         profile=dict(profileVersion=2,profileId='test',packages=[],workflows={'workflows':[{'id':'workflow'}]})
         data,inventory=bundle.pack(profile,{},[],[package],dict(version='1.0.0',sourceCommit='a'*40,build='local'))
         self.assertEqual([item],inventory['packages'])
+        self.assertTrue(item['path'].endswith('.olotool'))
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             self.assertEqual(package,archive.read(item['path']))
             self.assertFalse(any('readme' in name.lower() for name in archive.namelist()))
             entries={name:archive.read(name) for name in archive.namelist()}
+        for extension in ('.olo','.tgpkg'):
+            obsolete=item['path'].removesuffix('.olotool')+extension
+            renamed=dict(entries);renamed[obsolete]=renamed.pop(item['path'])
+            metadata=deepcopy(inventory);metadata['packages'][0]['path']=obsolete
+            renamed['manifest.json']=json.dumps(metadata).encode()
+            archive_bytes=io.BytesIO()
+            with zipfile.ZipFile(archive_bytes,'w',zipfile.ZIP_DEFLATED) as archive:
+                for name,value in renamed.items():archive.writestr(name,value)
+            with self.assertRaisesRegex(ValueError,'package path'):bundle.verify(archive_bytes.getvalue())
         entries[item['path']]=b'tampered'
         output=io.BytesIO()
         with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as archive:

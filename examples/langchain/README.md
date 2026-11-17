@@ -56,7 +56,7 @@ docker compose run --rm -T agent --target linux --smoke
 On Windows, `deploy.bat -Target linux` performs deployment; `execute.bat -Target
 linux -Smoke` runs the smoke test against it. `start.bat` combines both steps.
 
-Preparation builds `hotfolder.olo`, mirrors the approved digest-pinned JRE to
+Preparation builds `hotfolder.olotool`, mirrors the approved digest-pinned JRE to
 the local registry and writes the client-image settings in `.state/client-images.env`.
 Setup logs in using the isolated installation's real credentials, verifies the
 Linux enrollment fingerprint before approval, copies only PUBLIC release and

@@ -43,6 +43,6 @@ COPY --from=gateway /usr/local/bin/olo-toolgate-tool-host /usr/local/bin/olo-too
 COPY --from=gateway /usr/local/bin/toolgate /usr/local/bin/toolgate
 COPY --from=inventory --chown=65532:65532 /src/build/core-mcp/ /opt/toolgate/core-mcp/
 COPY --from=inventory /src/tool-sdk/json-sdk/build/install/toolgate-json-sdk/ /opt/toolgate/json-sdk/
-COPY --from=inventory /src/examples/mocked-tools/server-recovery/build/toolgate/server-recovery-0.1.0.olo /opt/toolgate/ui-tour/server-recovery-0.1.0.olo
+COPY --from=inventory /src/examples/mocked-tools/server-recovery/build/toolgate/server-recovery-0.1.0.olotool /opt/toolgate/ui-tour/server-recovery-0.1.0.olotool
 LABEL io.olo.qualification.owner="olo-knowledge" io.olo.qualification.gateway-profile="dev"
 USER 65532:65532

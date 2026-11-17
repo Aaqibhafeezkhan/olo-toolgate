@@ -1,6 +1,59 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+
+## Distinct archive extensions and foundation repair — 2026-11-17
+
+Delivered on `feature/workflow-enhancement`, in one combined commit at the user's
+request. Tools (including trigger packages) use **`.olotool`**; workflow/profile
+bundles retain **`.olo`** and embed `packages/<digest>.olotool`. SDKs, CLI, console
+upload/download, client caches, image inputs, fixtures and publication globs follow
+that split. Former `.tgpkg` and shared `.olo` tool filenames are rejected; there
+are no aliases or conversion paths. Trigger API versions, namespace identifiers,
+wire media types and package-byte integrity/authorization remain unchanged.
+[ADR 071](../adr/071-profile-builds-and-embedded-packages.md) records the decision.
+
+Hosted [job 133983308294](https://github.com/olo-labs/olo-toolgate/actions/runs/44059834466/job/133983308294)
+failed because its contract gate still expected 20 schemas after the workflow
+bundle schema made 21. The assertion now checks 21 and explicitly requires the
+workflow bundle schema; its seven focused tests pass.
+
+Executed checks on the source inventory below:
+
+- All five profile builds succeeded using exact prebuilt tool inputs; both
+  built-profile console acceptance and Python/TypeScript interoperability passed.
+- UI: 306 passed, one built-artifact test skipped in the ordinary run and executed
+  separately above; coverage, TypeScript and production build passed.
+- Profile tooling: 5 passed; Python SDK: 83 passed. Both fixture generators
+  verified all 79 tool archives. Generated-contract/fixture and UI operation
+  checks passed (1,565 generated bindings), as did source quality and preflight.
+- Rust formatting and CLI/Tool Host library/integration suites passed: 182 tests,
+  14 existing ignored cases, in pinned
+  Rust Alpine with Python/OpenSSL available. Existing ignored cases stay ignored;
+  this is not whole-workspace security acceptance.
+- Isolated SQLite/PostgreSQL package tests passed (13 ServerPackages tests and
+  the Postgres integration scenario). The broad Java attempt lacked PostgreSQL
+  configuration and also hit the existing Windows POSIX-permission enterprise
+  test failure; it is not passing full `javaCheck` evidence.
+- `python tools/check.py` reached 483 CI tests with 11 skips and one Windows
+  symlink-privilege error. Windows contract discovery additionally hit two
+  symlink errors and a scorecard log-newline assertion; the stale schema count
+  is fixed and its focused rerun passes. Full Linux contract discovery passed: **183 tests, two expected skips** on a
+  staged-source snapshot in container-native storage. The slower shared-mount
+  duplicate was stopped after the native run passed. Markdown links and staged
+  PR/secret policies also passed.
+
+No weight changes: #295 remains **0/100**, #274 remains **27%**, and no #230
+stage/phase or first-slice security acceptance is earned. Native graph factories,
+models, secrets, device approval and complete profile/runtime readiness remain
+prerequisites; this change does not execute a new end-to-end workflow. The running
+stack/storage was preserved. Hosted CI/publication for this commit is pending.
+
+Tested base: `4c31a89ffcf787190f8465195fd03c5a1898abc4`; 309-path normalized source SHA-256:
+`07a194a025061ab3d7fa3a28f3e446312f4ddad3c2ca0589565f69a512604135`.
+The inventory includes deleted names, hashes LF-normalized UTF-8 or raw binary
+bytes, and excludes the three live status documents to avoid self-reference.
+
 ## Buildable profiles and embedded tool archives — 2026-11-17
 
 Unweighted extension on `feature/workflow-enhancement`, with delivery directly to
@@ -14,14 +67,14 @@ Delivered: `profiles/configurations/` owns five supplied editable profile build
 inputs and per-configuration READMEs. `profiles/build.bat` and `build.sh` produce
 versioned workflow `.olo` files, a product/source/package version inventory and
 checksums in ignored `profiles/bin/`. Local native tooling or an isolated Docker
-toolchain builds the declared tool recipes; prebuilt `.olo` inputs are supported.
+toolchain builds the declared tool recipes; prebuilt `.olotool` inputs are supported.
 The container build uses an export of non-ignored source inputs, not private
 stack state, host credentials or a Docker socket. File-only recipes do not need
 the Java/Rust build toolchain.
 
-Both tool and workflow archives use `.olo`, distinguished by their manifests.
+Tool archives now use `.olotool`; workflow/profile archives use `.olo`.
 The SDKs, CLI, builder downloads, client cache filenames, fixture filenames and
-publication paths use that extension exclusively. There is no extension alias,
+publication paths use `.olotool` exclusively for tools. There is no extension alias,
 store migration or old profile-bundle reader. The prior raw tool ZIP contract
 is still canonical PackageManifest v2; profile bundle format 2 adds exact nested
 tool/trigger archives, inventory hashes, identities and versions. No README is

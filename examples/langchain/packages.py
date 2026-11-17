@@ -27,7 +27,7 @@ def prepare(compose, state, environment):
     subprocess.run(['docker', 'build', '--platform', 'linux/amd64', '-f', str(HERE/'package.Dockerfile'),
         '--build-arg', 'QUICKSTART_IMAGE='+image, '--output', 'type=local,dest='+str(state/'package'),
         str(ROOT)], check=True)
-    core_lock(state/'package', 'hotfolder-watch.olo', TRIGGER_PACKAGE_ID, 'examples/java-tools/hotfolder-watch')
+    core_lock(state/'package', 'hotfolder-watch.olotool', TRIGGER_PACKAGE_ID, 'examples/java-tools/hotfolder-watch')
     registry(compose,state,environment)
 
 
@@ -66,7 +66,7 @@ def registry(compose,state,environment):
     (state/'client-images.env').write_text(''.join(k+'='+v+'\n' for k,v in settings.items()), encoding='utf-8')
 
 
-def core_lock(directory, name='hotfolder-watch.olo', package_id=None, project='examples/java-tools/hotfolder-watch'):
+def core_lock(directory, name='hotfolder-watch.olotool', package_id=None, project='examples/java-tools/hotfolder-watch'):
     """A sealed core lock naming the built trigger package, for the hot-folder profile (compose.triggers.yaml).
 
     Control resolves a PREBUILT_CORE profile entry only from such a lock, with the same fields and digests as

@@ -14,7 +14,7 @@ it('imports Python-built profiles and verifies console exports with the Python r
   const root=resolve(process.cwd(),'../..');
   const work=mkdtempSync(join(tmpdir(),'olo-profile-interop-'));
   try{
-    const bytes=new Uint8Array(readFileSync(join(root,'tests/fixtures/packages/cases/valid-deflated.olo')));
+    const bytes=new Uint8Array(readFileSync(join(root,'tests/fixtures/packages/cases/valid-deflated.olotool')));
     const embedded=await inspectPackage(bytes);
     const profile=structuredClone({profileVersion:2,profileId:'interop',packages:[],workflows:fixture.WorkflowConfiguration}) as unknown as DeploymentProfile;
     const config=JSON.parse(JSON.stringify(profile.workflows)) as NonNullable<DeploymentProfile['workflows']>;
@@ -22,7 +22,7 @@ it('imports Python-built profiles and verifies console exports with the Python r
     const references={formatVersion:2,tenantId:'destination',revision:0,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
     writeFileSync(join(work,'profile.json'),JSON.stringify(selected));writeFileSync(join(work,'references.json'),JSON.stringify(references));
     const python=process.platform==='win32'?'python':'python3';
-    execFileSync(python,['-c',"import json,sys;from pathlib import Path;from profiles.bundle import pack;p=Path(sys.argv[1]);data,_=pack(json.loads((p/'profile.json').read_text()),json.loads((p/'references.json').read_text()),[],[Path('tests/fixtures/packages/cases/valid-deflated.olo').read_bytes()],dict(version='1.0.0',sourceCommit='a'*40,build='test'));(p/'python.olo').write_bytes(data)",work],{cwd:root});
+    execFileSync(python,['-c',"import json,sys;from pathlib import Path;from profiles.bundle import pack;p=Path(sys.argv[1]);data,_=pack(json.loads((p/'profile.json').read_text()),json.loads((p/'references.json').read_text()),[],[Path('tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()],dict(version='1.0.0',sourceCommit='a'*40,build='test'));(p/'python.olo').write_bytes(data)",work],{cwd:root});
     const loaded=await importWorkflow('python.olo',new Uint8Array(readFileSync(join(work,'python.olo'))));
     expect(loaded.packages[0].bytes).toEqual(bytes);
     expect(loaded.profile.workflows!.workflows).toHaveLength(1);

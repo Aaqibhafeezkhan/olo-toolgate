@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Fourteen example packages built with the ToolGate Java Tool SDK. Each directory is one package: one @ToolPackage,
-// one fat jar, one .olo. They share this build only so `./gradlew check` tests them all at once; copy any one of
+// one fat jar, one .olotool. They share this build only so `./gradlew check` tests them all at once; copy any one of
 // them out with this file's repositories and it builds on its own.
 //
 // The SDK comes from the local Maven repository (`./gradlew publishJavaSdkToMavenLocal` at the repository root) until

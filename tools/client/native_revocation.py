@@ -76,7 +76,7 @@ class NativeFixture:
         cli=Path(os.environ["TOOLGATE_CLI"]).resolve(strict=True) if os.environ.get("TOOLGATE_CLI") else target/"debug/toolgate"
         for command in ("check","pack"):
             self.run([str(cli),command,str(project)],env=env,capture_output=True,text=True)
-        archives=list((project/"build/toolgate").glob("*.olo"))
+        archives=list((project/"build/toolgate").glob("*.olotool"))
         assert len(archives)==1,archives
         self.run([str(cli),"validate",str(archives[0])],capture_output=True)
         with zipfile.ZipFile(archives[0]) as archive:

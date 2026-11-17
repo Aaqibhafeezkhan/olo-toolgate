@@ -24,8 +24,8 @@ mkdir -p "$out"
 java="$(command -v java)"
 request='{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
 count=0
-for package in "$here"/java-tools/*/build/toolgate/*.olo "$here"/mocked-tools/*/build/toolgate/*.olo; do
-  name="$(basename "$package" .olo)"
+for package in "$here"/java-tools/*/build/toolgate/*.olotool "$here"/mocked-tools/*/build/toolgate/*.olotool; do
+  name="$(basename "$package" .olotool)"
   "$TOOLGATE_CLI" verify "$package" >/dev/null
   mkdir -p "$out/$name"
   (cd "$out/$name" && jar xf "$package" artifacts/tool.jar)

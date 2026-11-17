@@ -409,7 +409,7 @@ def provision(args):
     device = selection['deviceId']
     configure_package_device()
     wait_device(config, device)
-    release = packages.publish(config, STATE/'package/hotfolder.olo')
+    release = packages.publish(config, STATE/'package/hotfolder.olotool')
     selected = [{'tool': tool} for tool in config.all('tools') if tool['id'] in TOOLS]
     if {profile['tool']['id'] for profile in selected} != TOOLS:
         raise ValueError('The client release did not register the required HotFolder tools')

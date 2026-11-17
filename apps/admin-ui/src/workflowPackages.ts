@@ -47,7 +47,7 @@ export async function inspectPackage(bytes:Uint8Array):Promise<EmbeddedPackage>{
   const manifest=JSON.parse(text.decode(files['toolgate-package.json'])) as PackageManifest;
   if(manifest.schemaVersion!==2||typeof manifest.id!=='string'||typeof manifest.version!=='string')throw Error('Unsupported tool package.');
   const packageDigest=await sha256(files['CHECKSUMS.sha256']);
-  return {metadata:{packageId:manifest.id,version:manifest.version,packageDigest,sha256:await sha256(bytes),bytes:bytes.length,path:'packages/'+hex(packageDigest)+'.olo'},bytes,manifest};
+  return {metadata:{packageId:manifest.id,version:manifest.version,packageDigest,sha256:await sha256(bytes),bytes:bytes.length,path:'packages/'+hex(packageDigest)+'.olotool'},bytes,manifest};
 }
 
 export function verifyPackageCoverage(profile:DeploymentProfile,references:ConfigurationFile,connections:readonly WorkflowBundleConnection[],packages:readonly EmbeddedPackage[]){

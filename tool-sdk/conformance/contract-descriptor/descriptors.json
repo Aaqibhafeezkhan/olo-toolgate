@@ -147,7 +147,7 @@
         "Adding signatures does not change it"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/valid.olo",
+        "tool-sdk/conformance/fixtures/packages/valid.olotool",
         "tool-sdk/conformance/fixtures/packages/expected.json"
       ],
       "status": "authored"

@@ -30,11 +30,12 @@ it('cancels an oversized streamed archive before assembling a download',async()=
   await expect(new ControlClient('token',vi.fn(),send).exportServerPackage(digest)).rejects.toMatchObject({status:413});
   expect(cancel).toHaveBeenCalledOnce();
 });
-it('accepts .olo package uploads and rejects obsolete named files before sending bytes',async()=>{
+it('accepts .olotool package uploads and rejects obsolete named files before sending bytes',async()=>{
   const transport=vi.fn<typeof fetch>().mockResolvedValue(new Response('{}',{headers:{'Content-Type':'application/json'}}));
   const client=new ControlClient('token',vi.fn(),transport);
   expect(()=>client.uploadServerPackage(new File(['bytes'],'old.tgpkg'))).toThrow(ApiError);
+  expect(()=>client.uploadServerPackage(new File(['bytes'],'workflow.olo'))).toThrow(ApiError);
   expect(transport).not.toHaveBeenCalled();
-  await client.uploadServerPackage(new File(['bytes'],'tool.olo'));
+  await client.uploadServerPackage(new File(['bytes'],'tool.olotool'));
   expect(transport).toHaveBeenCalledOnce();
 });

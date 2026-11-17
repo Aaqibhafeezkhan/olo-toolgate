@@ -336,7 +336,7 @@ jobs:
           build/trigger-package-tests/
           ${{ matrix.package }}/build/test-results/
           ${{ matrix.package }}/build/reports/
-          ${{ matrix.package }}/build/toolgate/*.olo
+          ${{ matrix.package }}/build/toolgate/*.olotool
         if-no-files-found: warn
         retention-days: 7
   scans:

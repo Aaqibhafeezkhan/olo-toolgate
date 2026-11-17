@@ -6,7 +6,11 @@ Status: accepted. Extends ADR 070 with a fresh bundle format; no compatibility r
 The repository-level `profiles/` directory owns editable configuration folders,
 portable build entry points and ignored `bin/` outputs. A profile build produces
 one versioned `.olo` per workflow, a version/source/package inventory and checksums.
-Each archive carries the exact required `.olo` bytes, including trigger packages.
+Each archive carries the exact required `.olotool` bytes, including trigger packages.
+Tool packages use `.olotool`; workflow/profile bundles use `.olo`. Tool entry
+points reject former `.olo` and `.tgpkg` filenames without conversion. Embedded
+archives use `packages/<digest>.olotool`. The unreleased format remains version 2
+with this fresh contract; old nested names are rejected.
 Release jobs retain tested profile outputs in foundation evidence and publish
 those same bytes alongside other versioned release assets.
 
