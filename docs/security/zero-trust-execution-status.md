@@ -1,6 +1,17 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Temporary dependency-risk acceptance — 2026-11-17
+
+At the user's request, CI temporarily accepts the exact Picomatch 4.0.7
+advisory `GHSA-fc5q-39xc-vjpf` until 2026-12-17. Raw findings remain retained;
+other high/critical advisories and invalid/expired exception results fail the
+npm gate. This is an unresolved dependency risk, not a security remediation or
+completed #230 stage. Overall phase and first-slice acceptance tables, weights
+and execution-security claims are unchanged. Known base, eight policy tests,
+live npm audit results and remaining work are recorded in the
+[workflow checkpoint](../architecture/workflow-v1-status.md#temporary-npm-audit-exception--2026-11-17).
+
 ## Installed compiler identity follow-up — 2026-11-17
 
 The #295 runtime now prepares explicitly installed native factories through its

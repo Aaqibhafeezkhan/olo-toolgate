@@ -1,6 +1,27 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Temporary npm audit exception — 2026-11-17
+
+Known tested base `3f18a6f9`. Run `44135588000`, job `134225730423`, failed
+on Picomatch advisory `GHSA-fc5q-39xc-vjpf`. At the user's request, the npm
+gate temporarily accepts that exact high-severity advisory for installed
+Picomatch **4.0.7**, including dependent findings whose reachable advisories
+are all covered. The exception expires **2026-12-17**. This accepts an unresolved
+dependency risk; it does not remediate the vulnerability. New advisories,
+different installed versions, changed advisory scope, an advertised Picomatch
+fix, expired exceptions and unverifiable audit results remain blocking.
+
+Eight focused policy tests passed, including peer-dependency cycles, unrelated
+findings, malformed responses, expiry and available-fix refusal. A live npm
+audit retained all six high findings and the gate passed under this exception.
+CI preserves the raw audit and decision in `source-scan-findings`; other
+dependency, license and secret gates are unchanged. No full scan-suite or
+hosted rerun pass is claimed. Remove the exception and update the lockfile when
+the upstream fix is available, or review it before expiry. #295 remains
+**0/100**; the hot-swap implementation and live acceptance work listed below
+remain outstanding.
+
 ## UI test typing and Maven throttling repairs — 2026-11-17
 
 Known base `a8085a05`. Run `44133089397` job `134216198993` failed TypeScript

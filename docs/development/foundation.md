@@ -86,7 +86,22 @@ the inventory retains the declared expression. Unknown expressions still fail.
 BSD-only Python classifiers remain explicitly labeled as family evidence, not
 an inferred SPDX revision. Generated Javadoc contains JDK assets under the
 GPL classpath exception; it is a separate classifier artifact, not runtime code.
-Source scans exclude ignored build/dependency caches. No advisory is suppressed.
+Source scans exclude ignored build/dependency caches. The npm high/critical gate
+uses `tools/security/npm_audit.py` and the reviewed, expiring exceptions in
+`tools/security/npm-audit-exceptions.json`. The temporary Picomatch 4.0.7
+exception for `GHSA-fc5q-39xc-vjpf` expires on 2026-12-17. It accepts unresolved
+risk until an upstream fix is available; it does not fix the dependency.
+Dependent findings are accepted only when every reachable advisory is covered.
+Other advisories, changed versions or scope, an advertised Picomatch fix,
+expired exceptions and unverifiable reports still block the gate. Dependency,
+license and secret scans continue to run.
+
+Run `python tools/security/npm_audit.py` to reproduce the npm decision. Raw
+findings and the decision are saved under `build/source-scan/` and uploaded by
+CI as `source-scan-findings`, including when the gate fails. Remove the exception
+and update the lockfile when the upstream fix becomes available; review any
+remaining exception before expiry. Policy regression tests run with
+`python -m unittest discover -s tests/ci -p test_npm_audit.py -v`.
 
 The full gate validates versions, generated drift, headers and npm licenses,
 offline schemas/compatibility/security fixtures, Java tests and publication,
