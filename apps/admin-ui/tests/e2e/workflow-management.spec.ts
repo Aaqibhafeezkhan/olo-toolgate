@@ -15,7 +15,7 @@ async function connect(page:Page,role:string){
     const path=new URL(route.request().url()).pathname;
     let body:unknown={items:[]};
     if(path.endsWith('/admin-session'))body={role,permissions:['agent.read','agent_group.read','package.read']};
-    if(path.endsWith('/workflow-profiles')){catalogRequests++;body=[status];}
+    if(path.endsWith('/workflow-profiles')){catalogRequests++;body=route.request().method()==='POST'?{...status,state:'DRAFT'}:[status];}
     if(path.includes('/revisions/'))body=path.endsWith('/document')?profile:status;
     await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
   });
@@ -56,4 +56,25 @@ test('scoped administrators cannot open the workflow catalog via a deep link',as
   await expect(page.getByRole('heading',{name:'Access unavailable'})).toBeVisible();
   await expect(page.getByRole('link',{name:'Workflow groups'})).toHaveCount(0);
   expect(requests()).toBe(0);
+});
+
+test('basic JSON editor stages the graph config with a new workflow revision',async({page})=>{
+  await connect(page,'SUPER_ADMIN');
+  await page.locator('nav summary').filter({hasText:/^Workflows$/}).click();
+  await page.getByRole('link',{name:'Workflows',exact:true}).click();
+  await page.getByRole('button',{name:'Open support aaaaaaaaaaaa'}).click();
+  const workflow=configuration.workflows[0];
+  await page.getByRole('button',{name:`Edit ${workflow.id} JSON`,exact:true}).click();
+  const editor=page.getByRole('dialog',{name:'Edit workflows JSON'});
+  await editor.getByLabel('Workflows JSON').fill('{');
+  await editor.getByRole('button',{name:'Apply Workflows JSON to draft'}).click();
+  await expect(editor.getByRole('alert')).toBeVisible();
+  await editor.getByLabel('Workflows JSON').fill(JSON.stringify({...workflow,graph:{...workflow.graph,config:{resultKey:'edited'}}}));
+  await editor.getByRole('button',{name:'Apply Workflows JSON to draft'}).click();
+  const request=page.waitForRequest(req=>req.method()==='POST'&&new URL(req.url()).pathname.endsWith('/workflow-profiles'));
+  await page.getByRole('button',{name:'Stage profile revision'}).click();
+  const posted=(await request).postDataJSON();
+  expect(posted.workflows.workflows[0].graph.config).toEqual({resultKey:'edited'});
+  expect(posted.workflows.workflows[0].versionId).not.toBe(workflow.versionId);
+  expect(posted.workflows.dispatchBindings[0].workflowVersionId).toBe(posted.workflows.workflows[0].versionId);
 });

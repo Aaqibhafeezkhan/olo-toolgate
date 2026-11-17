@@ -114,7 +114,7 @@ services:
   workflow-worker:
     image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
     network_mode: service:registry
-    command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --result-directory, /results]
+    command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --result-directory, /results, --graph-directory, /configuration/graphs]
     volumes:
       - ./state/${CONFIGURATION:-issue-triage}/workflow/worker:/custody:ro
       - ./state/${CONFIGURATION:-issue-triage}/workflow/results:/results

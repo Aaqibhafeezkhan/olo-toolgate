@@ -48,7 +48,8 @@ public final class WorkflowLeases {
                             String leaseToken, String message, String supervisorPrompt, String supervisorModelGroupId,
                             WorkflowExecutionLimits limits, List<AgentSnapshot> agents, List<WorkflowContextSource> contextSources,
                             String remediationMode, long expiresAtUnixMs,
-                            List<io.ololabs.toolgate.contracts.v2.WorkflowAgentStage> agentStages) {
+                            List<io.ololabs.toolgate.contracts.v2.WorkflowAgentStage> agentStages,
+                            io.ololabs.toolgate.contracts.v2.WorkflowGraphSelection graph) {
         @Override public String toString() { return "Snapshot[runId=" + runId + "]"; }
     }
 
@@ -81,7 +82,7 @@ public final class WorkflowLeases {
             var lease = new WorkflowRunStore.Lease(run.id(), "lease-" + UUID.randomUUID(), worker.id(), DirectoryService.digest(token), expires);
             var snapshot = new Snapshot(run.id(), lease.id(), run.workflowId(), run.workflowVersionId(), run.profileDigest(),
                 token, message, workflow.systemPrompt(), workflow.modelGroupId(), workflow.limits(), agents, workflow.contextSources(),
-                run.remediationMode(), expires, workflow.agentStages() == null ? List.of() : workflow.agentStages());
+                run.remediationMode(), expires, workflow.agentStages() == null ? List.of() : workflow.agentStages(), workflow.graph());
             runs.claim(lease);
             tx.audit(worker.id(), "WORKFLOW_RUN_CLAIM", "workflow-run:" + run.id(), 1, requestId, run.profileDigest().substring(7));
             return new Store.Reply(200, codec.json(snapshot), 0);

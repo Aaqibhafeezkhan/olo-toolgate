@@ -17,6 +17,7 @@ package io.ololabs.toolgate.contracts.v2;
  * @param agents canonical agents value
  * @param agentStages canonical agentStages value
  * @param deployment canonical deployment value
+ * @param graph canonical graph value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record WorkflowDefinition(
@@ -31,7 +32,8 @@ public record WorkflowDefinition(
     @com.fasterxml.jackson.annotation.JsonProperty(value = "limits", required = true) WorkflowExecutionLimits limits,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agents", required = true) java.util.List<WorkflowAgentBinding> agents,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "agentStages", required = false) java.util.List<WorkflowAgentStage> agentStages,
-    @com.fasterxml.jackson.annotation.JsonProperty(value = "deployment", required = false) WorkflowStackDeployment deployment
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "deployment", required = false) WorkflowStackDeployment deployment,
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "graph", required = true) WorkflowGraphSelection graph
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
@@ -47,6 +49,7 @@ public record WorkflowDefinition(
      * @param agents canonical agents value
      * @param agentStages canonical agentStages value
      * @param deployment canonical deployment value
+     * @param graph canonical graph value
      */
     public WorkflowDefinition {
         java.util.Objects.requireNonNull(id, "id");
@@ -64,5 +67,6 @@ public record WorkflowDefinition(
         java.util.Objects.requireNonNull(agents, "agents");
         agents = agents == null ? null : java.util.List.copyOf(agents);
         agentStages = agentStages == null ? null : java.util.List.copyOf(agentStages);
+        java.util.Objects.requireNonNull(graph, "graph");
     }
 }

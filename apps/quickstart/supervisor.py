@@ -60,7 +60,9 @@ def direct_tls(path):
 
 
 # Standard installation logins; initialize-file users and claimed pool accounts are added by local_users().
-BASE_USERS = ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
+ADMIN_ONLY = os.environ.get('TOOLGATE_QUICKSTART_ADMIN_ONLY','false')
+if ADMIN_ONLY not in ('true','false'):raise ValueError('Invalid admin-only initialization mode')
+BASE_USERS = ('admin',) if ADMIN_ONLY=='true' else ('admin', 'reviewer-1', 'reviewer-2', 'test-readonly', 'test-readwrite', 'test-admin')
 CLAIM_PATH = '/api/quickstart/v1/demo-accounts/claim'
 CREDENTIALS_LOCK = threading.RLock()
 CLAIM_LOCK = threading.Lock()

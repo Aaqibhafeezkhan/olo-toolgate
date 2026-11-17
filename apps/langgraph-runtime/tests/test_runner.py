@@ -20,7 +20,7 @@ def lease(prefix="support", mode="APPLY", *, limits=None):
         (Agent(f"{prefix}-investigator", f"{prefix}-investigator-model", f"{prefix} investigator prompt",
                (ContextSource(f"{prefix}/context", {"source": prefix}),)),
          Agent(f"{prefix}-fixer", f"{prefix}-fixer-model", f"{prefix} fixer prompt")),
-        remediation_mode=mode)
+        graph={'packageId': 'toolgate.supervisor', 'version': '1.0.0', 'digest': 'sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd', 'entryPoint': 'supervisor', 'config': {}}, remediation_mode=mode)
 
 
 class Gate:

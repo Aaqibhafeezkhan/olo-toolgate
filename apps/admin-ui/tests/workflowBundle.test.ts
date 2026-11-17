@@ -1,0 +1,74 @@
+// Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+import {expect,it} from 'vitest';
+import {unzipSync,zipSync,strToU8} from 'fflate';
+import type {DeploymentProfile,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
+import type {ConfigurationFile} from '../src/pendingContracts';
+import fixture from '../../../tests/fixtures/contracts/v2/valid.json';
+import {applyWorkflow,exportWorkflow as packWorkflow,importWorkflow,removeWorkflow,workflowScope} from '../src/workflowBundle';
+
+type Mutable<T>=T extends readonly (infer E)[]?Mutable<E>[]:T extends object?{-readonly [K in keyof T]:Mutable<T[K]>}:T;
+const mutable=<T,>(value:T):Mutable<T>=>JSON.parse(JSON.stringify(value)) as Mutable<T>;
+const original={profileVersion:2,profileId:'test-profile',packages:[],workflows:mutable(fixture.WorkflowConfiguration)} as DeploymentProfile;
+const first=original.workflows!.workflows[0];
+const binding=original.workflows!.dispatchBindings[0];
+const assignments=[{...fixture.TriggerAssignment,metadata:{...fixture.TriggerAssignment.metadata,uid:binding.sourceAssignmentUid,name:'source'}}] as TriggerAssignment[];
+const subscriptions=[{...fixture.TriggerSubscription,metadata:{...fixture.TriggerSubscription.metadata,uid:binding.subscriptionUid,name:'events'}}] as TriggerSubscription[];
+
+const snapshot={formatVersion:2,tenantId:'tenant-a',revision:1,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
+const exportWorkflow=(profile:DeploymentProfile,id:string,a:TriggerAssignment[],s:TriggerSubscription[])=>packWorkflow(profile,id,a,s,snapshot);
+
+it('exports one compressed workflow with its dependency closure and no README, host settings or credentials',async()=>{
+  const profile=mutable(original);profile.workflows!.workflows.push({...mutable(first),id:'other'});
+  const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);
+  const files=unzipSync(bytes);
+  expect(Object.keys(files).sort()).toEqual(['manifest.json','referenced-data.json','workflow.json']);
+  const bundle=await importWorkflow('working.olo',bytes);
+  expect(bundle.profile.workflows!.workflows.map(item=>item.id)).toEqual([first.id]);
+  expect(bundle.profile.workflows!.agentDefinitions).toEqual(original.workflows!.agentDefinitions);
+  expect(bundle.profile.workflows!.modelDeployments).toEqual(original.workflows!.modelDeployments);
+  expect(bundle.connections[0]).toMatchObject({id:binding.id,assignment:'source',subscription:'events'});
+  expect(bundle.connections[0].assignmentSpec).toEqual(assignments[0].spec);
+});
+it('replaces one workflow, repins its version and resolves trigger names in the destination',async()=>{
+  const bundle=mutable(await importWorkflow('working.olo',await exportWorkflow(original,first.id,assignments,subscriptions)));
+  bundle.profile.workflows!.workflows[0].systemPrompt='Imported configuration';
+  const next=applyWorkflow(original,bundle,first.id,[{metadata:{uid:'destination-source',name:'source'}}] as TriggerAssignment[],[{metadata:{uid:'destination-events',name:'events'}}] as TriggerSubscription[]);
+  expect(next.workflows!.workflows[0].systemPrompt).toBe('Imported configuration');
+  expect(next.workflows!.workflows[0].versionId).not.toBe(first.versionId);
+  expect(next.workflows!.dispatchBindings[0]).toMatchObject({subscriptionUid:'destination-events',sourceAssignmentUid:'destination-source',workflowVersionId:next.workflows!.workflows[0].versionId});
+  expect(original.workflows!.workflows[0]).toEqual(first);
+});
+it('preserves shared definitions and removes only the deleted workflow and its exclusive definitions',()=>{
+  const profile=mutable(original);
+  const agent=mutable(profile.workflows!.agentDefinitions[0]);agent.agentId='exclusive-agent';
+  const second={...mutable(first),id:'second',agents:[{...first.agents[0],agentId:agent.agentId}],agentStages:undefined};
+  profile.workflows!.workflows.push(second);profile.workflows!.agentDefinitions.push(agent);
+  const next=removeWorkflow(profile,'second');
+  expect(next.workflows!.workflows).toEqual([first]);
+  expect(next.workflows!.agentDefinitions).toEqual(original.workflows!.agentDefinitions);
+  expect(next.workflows!.modelGroups).toEqual(profile.workflows!.modelGroups);
+  const empty=removeWorkflow(next,first.id);
+  expect(empty.workflows).toEqual({workflows:[],dispatchBindings:[],agentDefinitions:[],modelDeployments:[],modelGroups:[],workflowGroups:[]});
+});
+it('refuses an implicit change to a definition used by another workflow',async()=>{
+  const profile=mutable(original);profile.workflows!.workflows.push({...mutable(first),id:'other'});
+  const bundle=mutable(await importWorkflow('working.olo',await exportWorkflow(original,first.id,assignments,subscriptions)));
+  bundle.profile.workflows!.agentDefinitions[0].systemPrompt='Changed shared agent';
+  expect(()=>applyWorkflow(profile,bundle,first.id,assignments,subscriptions)).toThrow('Shared agentDefinitions');
+});
+it('rejects tampering, unsupported stack archives, traversal, wrong extensions and oversized bundles',async()=>{
+  const bytes=await exportWorkflow(original,first.id,assignments,subscriptions),files=unzipSync(bytes);
+  files['workflow.json']=strToU8('{}');
+  await expect(importWorkflow('working.olo',zipSync(files))).rejects.toThrow('verification');
+  await expect(importWorkflow('working.olo',zipSync({'../workflow.json':strToU8('{}')}))).rejects.toThrow();
+  await expect(importWorkflow('working.olo',zipSync({'images.tar':new Uint8Array(1)}))).rejects.toThrow();
+  await expect(importWorkflow('working.zip',bytes)).rejects.toThrow();
+  await expect(importWorkflow('working.olo',new Uint8Array(3145729))).rejects.toThrow();
+});
+it('excludes unrelated models, agents and workflow groups',()=>{
+  const profile=mutable(original);
+  profile.workflows!.agentDefinitions.push({...profile.workflows!.agentDefinitions[0],agentId:'unused'});
+  profile.workflows!.modelDeployments.push({...profile.workflows!.modelDeployments[0],id:'unused'});
+  profile.workflows!.workflowGroups.push({id:'unused',displayName:'Unused'});
+  expect(workflowScope(profile,first.id)).toEqual(original);
+});

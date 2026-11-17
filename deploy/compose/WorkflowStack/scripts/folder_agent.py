@@ -11,6 +11,7 @@ import ssl
 import stat
 import time
 import urllib.request
+import urllib.error
 
 import configuration
 
@@ -64,6 +65,8 @@ class ControlResults:
             raise ValueError('Use the local direct TLS Control origin')
         self.origin,self.custody=origin,custody
         self.binding=json.loads(read_regular(custody/'delivery.json',8192))
+        if set(self.binding)!={'profileId','profileDigest','workflowIds'} or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}',self.binding['profileId']):
+            raise ValueError('UNSUPPORTED_DELIVERY_BINDING')
         context=ssl.create_default_context(cafile=str(custody/'gateway-ca.crt'))
         context.verify_flags &= ~getattr(ssl,'VERIFY_X509_STRICT',0)
         self.opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect(),urllib.request.HTTPSHandler(context=context))
@@ -79,8 +82,21 @@ class ControlResults:
             if len(raw)>49152:
                 raise ValueError('INVALID_RESULT')
             value=json.loads(raw)
-            if value.get('profileDigest')!=self.binding['profileDigest'] or value.get('workflowId') not in self.binding['workflowIds']:
+            if value.get('workflowId') not in self.binding['workflowIds'] or not re.fullmatch(r'sha256:[a-f0-9]{64}',value.get('profileDigest','')):
                 raise ValueError('FOREIGN_WORKFLOW')
+            request=urllib.request.Request(self.origin+'/api/control/v1/workflow-profiles/published/'+self.binding['profileId']+'/'+value['profileDigest'],
+                headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+            try:
+                with self.opener.open(request,timeout=10) as publication:
+                    current=publication.read(262145)
+                    if len(current)>262144:raise ValueError('INVALID_PUBLICATION')
+                    workflows=json.loads(current).get('workflows',[])
+            except urllib.error.HTTPError as failure:
+                if failure.code in (403,404):raise ValueError('FOREIGN_WORKFLOW') from None
+                raise
+            if not any(item.get('id')==value['workflowId'] and item.get('versionId')==value.get('workflowVersionId') for item in workflows):
+                raise ValueError('FOREIGN_WORKFLOW')
+            self.binding['profileDigest']=value['profileDigest']
             return value
 
 

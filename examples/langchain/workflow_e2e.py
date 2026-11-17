@@ -85,7 +85,7 @@ def provision(config):
                 '"priority":"HIGH or MEDIUM or LOW","nextAction":"one concrete investigation action","sourcePath":"the original file path"}}. '
                 'Do not invent an issue ID. Do not use mutation tools.'),
             contextSources=[dict(toolId='examples.hotfolder/read_text', arguments={}, argumentBindings={'path': '/message'})], outputSchema={})],
-        workflows=[dict(id=WORKFLOW, versionId=WORKFLOW_VERSION, workflowGroupId='hotfolder', modelGroupId='hotfolder-models',
+        workflows=[dict(id=WORKFLOW, versionId=WORKFLOW_VERSION, graph={'packageId': 'toolgate.supervisor', 'version': '1.0.0', 'digest': 'sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd', 'entryPoint': 'supervisor', 'config': {}}, workflowGroupId='hotfolder', modelGroupId='hotfolder-models',
             systemPrompt=('You route issue logs. First delegate to langchain-linux-agent and put the original input file path verbatim '
                 'in the input string. Do not substitute instructions for the path. After receiving its result, '
                 'finish and copy ALL FIVE fields from the agent result object unchanged into result. '

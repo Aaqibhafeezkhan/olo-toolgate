@@ -201,3 +201,18 @@ unfinished workflow execution path.
 The **Tool builder** route authors bounded code/schema/AI metadata, displays
 designated-client results and prepares immutable packages for signed deployment.
 See [production/debug instructions](../../docs/client/tool-builder.md).
+
+## Workflow bundles
+
+The Workflows page imports and exports one compressed .olo workflow bundle,
+including its local definitions, named trigger connections and referenced directory
+configuration. Replacement refreshes the editor; review and publish activate it.
+Imports never restart containers or alter login credentials. Multiple workflows
+can share definitions; removal prunes only unshared profile definitions.
+
+Referenced directory additions use the existing reviewed MERGE flow. Map owners
+to existing users, provision provider secrets and approved devices, and install
+the exact signed packages and trusted graph factories separately. Model weights
+and Docker images are not embedded. No README is added to the bundle. See the
+[WorkflowStack operator guide](../../deploy/compose/WorkflowStack/README.md) for
+local startup, credentials and factory reset.

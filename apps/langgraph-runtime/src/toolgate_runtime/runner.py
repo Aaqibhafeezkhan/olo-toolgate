@@ -1,17 +1,20 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Fixed LangGraph executor for ToolGate-resolved runs; no provider or tool transport lives here."""
+"""Profile-selected native LangGraph execution through existing governed adapters."""
 from __future__ import annotations
 
 from copy import deepcopy
+import asyncio
 from dataclasses import dataclass, field
 import json
 import re
 import time
+import threading
 from typing import Callable, Literal, Protocol, TypedDict
 
-from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
+from .graph_api import JsonTooLarge, RunContext, json_value
+from .graph_packages import GraphPackages, GraphRefused, validate_selection
 
 MAX_VALUE_BYTES = 96 * 1024
 ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$")
@@ -77,6 +80,7 @@ class RunLease:
     supervisor_model_group_id: str
     limits: Limits
     agents: tuple[Agent, ...]
+    graph: dict = field(repr=False)
     context_sources: tuple[ContextSource, ...] = ()
     remediation_mode: Literal["PREPARE", "APPLY"] = "PREPARE"
     agent_stages: tuple[AgentStage, ...] = ()
@@ -159,15 +163,15 @@ class _State(TypedDict):
 
 def _json(value: object) -> object:
     try:
-        raw = json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
-        if len(raw) > MAX_VALUE_BYTES:
-            raise _Stop("VALUE_TOO_LARGE")
-        return json.loads(raw)
+        return json_value(value, max_bytes=MAX_VALUE_BYTES)
+    except JsonTooLarge:
+        raise _Stop("VALUE_TOO_LARGE") from None
     except (TypeError, ValueError, UnicodeError, RecursionError):
         raise _Stop("INVALID_JSON") from None
 
 
 def _validate(lease: RunLease) -> None:
+    validate_selection(lease.graph)
     for value in (lease.run_id, lease.lease_id, lease.workflow_id, lease.workflow_version_id,
                   lease.supervisor_model_group_id):
         if not isinstance(value, str) or not ID.fullmatch(value):
@@ -423,9 +427,133 @@ class _Execution:
         return {"agent_messages": messages, "agent_context_loaded": True}
 
 
+class _Capabilities:
+    """Per-run serialized adapters for Control's current single-active-step ledger."""
+    def __init__(self, execution):
+        self.execution = execution
+        self.lock = threading.RLock()
+        self.fatal = None
+
+    def guarded(self, operation, *args):
+        with self.lock:
+            if self.fatal is not None:
+                raise self.fatal
+            try:
+                return operation(*args)
+            except (_Stop, Denied, OwnershipLost) as failure:
+                self.fatal = failure
+                raise
+
+    def admit(self, agent_id):
+        execution = self.execution
+        execution.consume()
+        execution.candidates(execution.grant(None))
+        agent = execution.agents.get(agent_id) if isinstance(agent_id, str) else None
+        if agent is None or agent_id not in execution.current_candidates:
+            raise _Stop("AGENT_NOT_AVAILABLE")
+        if execution.handoffs >= execution.lease.limits.max_handoffs:
+            raise _Stop("HANDOFF_LIMIT")
+        execution.handoffs += 1
+        return agent
+
+    def agent(self, agent_id, value, mode):
+        if mode not in ("MODEL", "CONTEXT"):
+            raise _Stop("INVALID_RESULT_MODE")
+        agent = self.admit(agent_id)
+        execution = self.execution
+        messages = execution.context(agent, [{"role": "user", "content": _json(value)}])
+        if mode == "CONTEXT":
+            if not agent.context_sources:
+                raise _Stop("CONTEXT_NOT_AVAILABLE")
+            return _json({"message": execution.lease.message, "context": execution.context_results[agent.agent_id]})
+        while True:
+            decision = execution.infer(agent, messages)
+            if set(decision) == {"kind", "result"} and decision["kind"] == "finish":
+                return _json(decision["result"])
+            if (set(decision) != {"kind", "toolId", "arguments"} or decision["kind"] != "tool"
+                    or not isinstance(decision["toolId"], str) or not isinstance(decision["arguments"], dict)):
+                raise _Stop("INVALID_MODEL_DECISION")
+            value = execution.call(agent, decision["toolId"], decision["arguments"])
+            messages = _json(messages + [{"role": "assistant", "content": decision},
+                {"role": "tool", "toolId": decision["toolId"], "content": value}])
+
+
+class _Agents:
+    def __init__(self, capabilities):
+        self._capabilities = capabilities
+
+    async def invoke(self, agent_id, value, *, result_mode="MODEL"):
+        return await asyncio.to_thread(self._capabilities.guarded, self._capabilities.agent, agent_id, value, result_mode)
+
+    def _advance(self, state):
+        # Only the installed built-in graph uses this current supervisor implementation.
+        return self._capabilities.guarded(self._capabilities.execution.advance, state)
+
+
+class _Models:
+    def __init__(self, capabilities):
+        self._capabilities = capabilities
+
+    async def invoke(self, agent_id, messages):
+        def operation():
+            if not isinstance(messages, list):
+                raise _Stop("INVALID_MESSAGES")
+            return self._capabilities.execution.infer(self._capabilities.admit(agent_id), _json(messages))
+        return await asyncio.to_thread(self._capabilities.guarded, operation)
+
+
+class _Tools:
+    def __init__(self, capabilities):
+        self._capabilities = capabilities
+
+    async def call(self, agent_id, tool_ref, arguments):
+        def operation():
+            if not isinstance(tool_ref, str) or not isinstance(arguments, dict):
+                raise _Stop("INVALID_TOOL_CALL")
+            return self._capabilities.execution.call(self._capabilities.admit(agent_id), tool_ref, _json(arguments))
+        return await asyncio.to_thread(self._capabilities.guarded, operation)
+
+
 class Runner:
-    def __init__(self, toolgate: ToolGate, *, clock: Callable[[], float] = time.monotonic):
+    def __init__(self, toolgate: ToolGate, *, clock: Callable[[], float] = time.monotonic, graph_directory=None):
         self.toolgate, self.clock = toolgate, clock
+        self.graph_packages = GraphPackages(graph_directory)
+
+    async def _graph(self, lease, execution):
+        capabilities = _Capabilities(execution)
+        context = RunContext(_Models(capabilities), _Tools(capabilities), _Agents(capabilities))
+        final = None
+        with self.graph_packages.load(lease.graph) as (graph, output_schema):
+            async for kind, update in graph.astream({"message": lease.message},
+                    {"recursion_limit": lease.limits.max_steps + 4, "callbacks": []},
+                    context=context, stream_mode=["updates", "values"]):
+                execution.remaining()
+                if capabilities.fatal is not None:
+                    raise capabilities.fatal
+                if isinstance(update, dict) and "__interrupt__" in update:
+                    raise _Stop("GRAPH_INTERRUPTS_UNSUPPORTED")
+                update = _json(update)
+                if kind == "values":
+                    final = update
+            if capabilities.fatal is not None:
+                raise capabilities.fatal
+            if not isinstance(final, dict) or "result" not in final:
+                raise _Stop("GRAPH_RESULT_REQUIRED")
+            if not output_schema.is_valid(final["result"]):
+                raise _Stop("GRAPH_OUTPUT_SCHEMA")
+            # Recheck current workflow ownership/authority even for pure-computation graphs.
+            execution.grant(None)
+            return RunOutcome("SUCCEEDED", _json(final["result"]))
+
+    async def _bounded_graph(self, lease, execution):
+        deadline = asyncio.timeout(execution.remaining())
+        try:
+            async with deadline:
+                return await self._graph(lease, execution)
+        except TimeoutError:
+            if deadline.expired():
+                raise _Stop("TIME_LIMIT") from None
+            raise
 
     def execute(self, lease: RunLease) -> RunOutcome:
         # Capture one pinned input snapshot; never let adapters mutate the caller's configuration.
@@ -433,24 +561,16 @@ class Runner:
         try:
             _validate(lease)
             execution = _Execution(self.toolgate, lease, self.clock)
-            graph = StateGraph(_State)
-            graph.add_node("advance", execution.advance)
-            graph.add_edge(START, "advance")
-            graph.add_conditional_edges("advance", lambda s: END if s["outcome"] else "advance", ["advance", END])
-            # No checkpointer, provider SDK, dynamic imports, or external content tracing.
             with tracing_context(enabled=False):
-                state = graph.compile().invoke({"phase": "supervisor", "active_agent": None,
-                    "supervisor_messages": [{"role": "user", "content": lease.message}],
-                    "agent_messages": [], "supervisor_context_loaded": False,
-                    "agent_context_loaded": False, "outcome": None},
-                    {"recursion_limit": lease.limits.max_steps + 4, "callbacks": []})
-            outcome = state["outcome"]
+                outcome = asyncio.run(self._bounded_graph(lease, execution))
         except OwnershipLost:
             raise OwnershipLost("Run ownership was lost") from None
         except _Stop as stopped:
             outcome = RunOutcome(stopped.state, code=stopped.code)
         except Denied:
             outcome = RunOutcome("FAILED", code="DENIED")
+        except GraphRefused as failure:
+            outcome = RunOutcome("FAILED", code=str(failure))
         except Exception:
             # Transport exceptions may contain tokens, prompts or provider bodies. Do not copy them into results.
             outcome = RunOutcome("FAILED", code="RUNTIME_ERROR")

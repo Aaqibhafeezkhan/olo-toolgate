@@ -440,6 +440,7 @@ $models = [
     'WorkflowDispatchRequest',
     'WorkflowExecutionLimits',
     'WorkflowFinishDecision',
+    'WorkflowGraphSelection',
     'WorkflowGroupDefinition',
     'WorkflowModelDeployment',
     'WorkflowModelGeneration',

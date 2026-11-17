@@ -1,5 +1,43 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Generic ToolGate runtime — execution and trigger foundations
+# Generic ToolGate runtime â€” execution and trigger foundations
+
+Phase 1 adds required profile `graph` selection: packageId, version, canonical
+manifest digest, named entryPoint and JSON config. The same declaration is pinned
+in the claimed run. The worker loads a fresh native StateGraph from an
+operator-installed immutable directory. Graph-less profiles/leases are refused;
+there is no fallback or migration. Existing `agentStages` belongs to the installed
+supervisor package, not to the generic native graph loader.
+
+Graph factories import `RunContext` from `toolgate_runtime.graph_api`, return an
+uncompiled `StateGraph(..., context_schema=RunContext)` and receive only a private
+static JSON snapshot. Native async nodes call `runtime.context.agents.invoke`,
+`models.invoke` or `tools.call`. Current Control/Gateway authority is rechecked;
+protected operations are serialized within a run for the current one-active-step
+ledger. Unknown/denied outcomes latch and cannot be hidden by a graph exception
+handler. Application state/results are bounded JSON. Package code is trusted
+operator-installed Python, **not** sandboxed tenant code.
+
+Use `python tools/workflows/graph_package.py <sources> <configuration>/graphs`
+to install a directory and obtain its profile selection. Each package declares
+exact installed dependency versions, source hashes, factory schemas and required
+capabilities. No per-run pip installation occurs. The worker uses
+`--graph-directory /configuration/graphs`. Preflight with
+`python -m toolgate_runtime.graph_packages --profile <profile.json> --workflow <id>
+--graph-directory <graphs>` before startup. This validates installed content and
+configuration, not model credentials or a completed workflow.
+
+The `native-hotfolder` and `native-log` stack configurations demonstrate two
+trigger sources and different native packages on one image. The independent
+[summary package](../../examples/native-graphs/summary/README.md) illustrates the
+public author API. The existing UI has basic profile/workflow/agent JSON text
+boxes: apply to the draft, stage, review and publish. Source/deployment changes
+must use fresh stores for the new required contract.
+
+Persistent checkpoints, native interrupt resume, automatic effect retry,
+concurrent protected steps and untrusted-code upload are Phase 2. Packages that
+request unsupported capabilities are refused before import. Additional native
+factory forms must be explicitly qualified before use; this first version
+requires an unbound StateGraph. A native graph must finish with a JSON `result`.
 
 For the complete selectable local deployment, use
 [`WorkflowStack`](../../deploy/compose/WorkflowStack/README.md). Its configurations include
@@ -20,7 +58,7 @@ An agent with configured context reads can return `{"kind":"finish_context"}`
 to finish with those confirmed tool values and the admitted source path. The
 supervisor can delegate using
 `{"kind":"delegate","agentId":"target","inputFromAgent":"completed-source"}`.
-The fixed runner copies that completed result within the same run after checking
+The built-in supervisor copies that completed result within the same run after checking
 candidate eligibility; foreign/unfinished references fail closed. No adapter
 credential enters the transferred context. This permits full file handoff within
 the inference response budget. Every tool/model request retains current server
@@ -32,10 +70,10 @@ JSON. The approved model backend must support the `json_schema` response format.
 These syntax constraints do not authorize a delegation or tool call; current
 profile eligibility and server grants still decide each step.
 
-This package runs one fixed LangGraph supervisor/agent loop against a supplied
+The built-in package runs the existing LangGraph supervisor/agent loop against a supplied
 `ToolGate` adapter. Workflows, agent IDs, explicit models, prompts, context tools,
 eligibility, remediation mode and execution limits come from a leased snapshot.
-The graph has no use-case IDs, provider keys, provider clients, arbitrary imports
+The built-in graph has no use-case IDs, provider keys, provider clients, arbitrary imports
 or executable profile expressions. It does not union different agents' tools.
 
 The worker uses the Control lease API and the Gateway model and MCP endpoints.

@@ -5136,7 +5136,14 @@
             "entryEligible": true,
             "delegationAllowed": true
           }
-        ]
+        ],
+        "graph": {
+          "packageId": "toolgate.supervisor",
+          "version": "1.0.0",
+          "digest": "sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd",
+          "entryPoint": "supervisor",
+          "config": {}
+        }
       }
     ],
     "dispatchBindings": [
@@ -5192,7 +5199,14 @@
         "entryEligible": true,
         "delegationAllowed": true
       }
-    ]
+    ],
+    "graph": {
+      "packageId": "toolgate.supervisor",
+      "version": "1.0.0",
+      "digest": "sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd",
+      "entryPoint": "supervisor",
+      "config": {}
+    }
   },
   "WorkflowDispatchBinding": {
     "id": "ticket-created",
@@ -5551,5 +5565,12 @@
     "prometheus": "prom/prometheus:v3.2.1",
     "grafana": "grafana/grafana:12.1.0",
     "tempo": "grafana/tempo:2.7.2"
+  },
+  "WorkflowGraphSelection": {
+    "packageId": "toolgate.supervisor",
+    "version": "1.0.0",
+    "digest": "sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd",
+    "entryPoint": "supervisor",
+    "config": {}
   }
 }

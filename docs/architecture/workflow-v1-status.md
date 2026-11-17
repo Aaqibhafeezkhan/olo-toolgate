@@ -1,6 +1,352 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Workflow-level .olo transfer and empty reset — 2026-11-17
+
+Unweighted delivery on `feature/native-langgraph-phase1`, targeting
+`feature/workflow-enhancement`. Tested source base:
+`a9f2a9127dde5f9f234e359c8f3a9e27244f53a7`. [ADR 070](../adr/070-workflow-olo-transfer.md)
+supersedes the whole-deployment archive described in the historical section below.
+The weighted baseline remains **0/100**. No #230 stage, #274 module or complete
+#295 phase earns credit from this slice.
+
+Delivered: the normal Control Workflows page and the local port 48190 facade
+share workflow-level ZIP-compressed `.olo` import/export. A bundle carries one
+workflow's agent/model/group definitions, prompts/context, package references,
+named trigger connections and referenced directory configuration. Its three JSON
+entries have bounded sizes and verified content hashes; no README is added.
+Import stages an immutable revision and reloads the editor. Existing review and
+publication activate it. Multiple workflows can coexist; replacement/removal
+prunes only unshared profile definitions, preserving other workflows and shared
+definitions. No workflow transfer calls Docker or changes human credentials.
+
+Referenced directory additions use the existing reviewed MERGE operation, map
+owners to existing users, preserve shared definitions and merge group membership
+without removing existing members. Trigger connections resolve by logical names
+to destination UIDs. Conflicting shared definitions are refused. Whole-deployment
+archive import/export and implicit replacement are removed, without a compatibility
+reader. Historical revisions/audit and provisioned identities/assets are retained.
+
+Factory reset destroys the active generated deployment storage and initializes
+fresh protected storage with only its existing admin password verifier retained.
+The blank installation has one human admin, no workflow revisions, agents or
+enrolled devices, and the minimum built-in installation roles/groups. Old
+database, sessions, signing keys and workflow state are not restored. Blank
+deployments explicitly enable the existing generic trigger service, allowing
+trigger configuration before a bootstrap package is selected. Deployment sources
+and shared model files remain. Ordinary import and publication use no reset.
+
+Executed local evidence:
+
+- Browser export produced a 6,052-byte `.olo` containing only manifest, workflow
+  and referenced-data JSON, with independently checked hashes and no README.
+- Browser replacement refreshed the JSON editor and was reviewed/published.
+  Primary stack container IDs were unchanged during transfer/publication. The
+  resulting real hotfolder run `run-61387a6d-45be-4a5f-a19b-e09edf7dcdbf`
+  SUCCEEDED with its configured agent, governed file read and projected result,
+  at publication `sha256:ad5fe88937808399ff885b80ed0aa498cb951257642beaf3c4d37fbf11487a1f`.
+- Browser import/publication of a second workflow retained both workflows;
+  deleting it and publishing retained the shared agent/model definitions.
+- Factory reset of a separate demonstration deployment completed. Login with
+  the retained admin password succeeded; Control returned one user and zero
+  workflow revisions, agents and devices. The original deployment's storage
+  was retained. Fresh workflow import staged and refreshed the editor; reference
+  preview found 32 referenced configuration changes. Import through the existing
+  Super Admin configuration policy applied those records; a subsequent preview
+  reported zero changes. Control still returned one human admin and no enrolled
+  devices. No accounts or credentials were imported. Other actors remain subject
+  to the existing configuration review policy.
+
+Post-restoration acceptance on `b1a1dc00806b4bd71372807d241e97030c5fc478`:
+the original deployment is ready, its existing admin password authenticates, and
+Control still publishes the imported `ad5fe8893780` revision with one workflow and
+its shared agent/model definitions. Fresh file drops completed as
+`run-f543cbbd-fd08-45b5-8824-44e9f81bc7c1` and
+`run-7f74609c-91b2-4669-85f6-484281e406c5`; Control independently returned SUCCEEDED
+and its outcomes matched both the worker records and projected output files.
+The older local acceptance helper expected an LLM-produced `result.sourcePath`
+and waited despite successful delivery; it was stopped and superseded by that
+Control/message/output verification. No product fallback or compatibility path
+was added. The normal configured agent made the governed `read_text` call.
+
+Verification executed: **299 UI tests / 46 files** and the UI coverage gate pass;
+the UI type/build and Quickstart image build pass. Focused transfer/management
+tests: **20 passed**. Workflow Python discovery: **38 passed with one Linux-only
+test skipped on Windows**; final operator checks: **11 passed**. Profile Compose:
+**15 passed**; admin-only bootstrap: **13 passed**. Linux Quickstart: **55 passed**.
+Metadata/generated contracts (1,556 files), source quality and relative Markdown
+links pass. The full repository check reached **478 CI tests**, then stopped with
+10 errors/11 skips: eight Windows cp1252 release-note errors, one unavailable
+Windows symlink privilege, and a 30-second debug-start fixture timeout. The four
+debug-management tests passed on focused rerun. The full repository gate is not
+claimed passing.
+
+Known tested source manifest: 23 changed source/test/build files, sorted relative
+path + NUL + LF-normalized SHA-256 (or `deleted`) + newline, SHA-256
+`4c9195283f2ee4ecdca2e08171635960ffda56768cf2e398be91985eadbbdbbd`.
+This identifies tested source bytes, not an upcoming commit SHA.
+
+Limits/next work: destination provider secrets, approved devices, exact signed
+packages, trusted graph factories and model services still require provisioning.
+The bundle does not include Docker images/model weights or install uploaded
+Python. Deployment hints are inert data during app import. Structural transfer
+does not establish a runnable profile on an unprepared host or identical model
+output. Folder delivery checks the run's exact workflow/version against the
+current publication; that lookup is not atomic with later filesystem effects or
+revocation and earns no #230 native-write guarantee. Complete #295 readiness,
+cross-host qualification, scoped provisioning and Phase 2 security acceptance
+remain outstanding. Hosted CI and registry publication are not established by
+these local checks.
+
+## Standalone runtime image CI repair — 2026-11-17
+
+Tested source base: `facc77cd9457a301112c583bba6426bd6ea8592e` on
+`feature/native-langgraph-phase1`, targeting `feature/workflow-enhancement`.
+The [failed image job](https://github.com/olo-labs/olo-toolgate/actions/runs/43963175809/job/133651017291)
+mounted runtime tests at `/tests`, breaking the repository-relative native graph
+packager import (`IndexError: 3`). The image test command now mounts tests,
+packaging tools and native graph examples read-only under `/workspace`, preserving
+their repository layout. The installed runtime remains the code under test;
+the image, network isolation and container restrictions are unchanged. A CI
+regression test checks discovery, fixture mounts and isolation options.
+
+Executed on Windows with Docker Linux containers: fresh image build passed;
+the original mount reproduced the reported import failure; corrected discovery
+ran **75 tests successfully with 10 OpenSSL-dependent TLS skips**. Both worker
+and trigger-listener CLI checks and `pip check` passed. The three focused image
+release regression tests passed. Metadata/generated bindings, source quality and
+diff whitespace checks passed. The job's Trivy 0.61.1 HIGH/CRITICAL scan passed
+against the rebuilt image.
+
+Broader Windows checks: both `python -m unittest discover -s tests/ci -v` and
+`python tools/check.py` reached 476 CI tests with 9 errors and 11 skips. Eight
+errors were existing release-note reads using Windows cp1252 against UTF-8 text;
+the other was the LangChain device fixture's missing Windows symlink privilege
+(`WinError 1314`). The repository check stopped there, before its later component
+gates. These unrelated host failures were not changed by this CI mount repair;
+the full repository gate is not claimed as passing.
+
+This repairs CI test infrastructure only. The weighted baseline remains **0/100**;
+no #230 stage, #274 module, roadmap phase or runtime security guarantee earns new
+credit. Next work: hosted CI confirmation and the existing Phase 2 acceptance
+scope. Image publication and full end-to-end acceptance are not established by
+these local checks.
+
+## Local stack administration and portable profiles — 2026-11-17
+
+Historical delivery: the whole-deployment archive and single-workflow restrictions
+in this section are superseded by ADR 070 and the workflow transfer update above.
+Its evidence records the earlier implementation, not the current bundle format.
+
+Unweighted delivery on `feature/native-langgraph-phase1`, source base
+`eb7ef0034b0baf9160ca4aba843c0f611d965b2f`. The existing 100-point baseline and
+earned **0/100** remain unchanged; no #230 stage or #274 module earns credit.
+[ADR 069](../adr/069-workflow-stack-administration.md) records the local operator
+boundary. This is a local evaluation feature, not hosted release qualification.
+
+Delivered: a loopback-only administrator web UI outside Control and the runtime;
+an absent/empty startup selection brings up an empty Control installation with
+an admin user. A configured selection provisions its workflow. Administrators
+can switch profiles while retaining prior storage, replace a selected deployment
+with fresh storage, and reset the active deployment to blank. Confirmations,
+serialized actions, visible failure states, expiring sessions, same-origin/CSRF
+checks and private operator credentials guard these local Docker operations.
+The operator account is separate from each Control console account. Switching
+persists the startup selection; blank reset clears it. Only one profile runs at
+a time. Multi-profile merge is deferred by the user's narrowed scope.
+
+Portable exports are ZIP-compressed `.olo` bundles in
+`state/administrator/exports/<configuration>/<configuration>.olo`. They include
+profile JSON, the input example, graph/trigger artifacts, exact GGUF bytes and
+Docker image archives/identities. No extra export README or profile README is
+included; import generates local trigger/input/output instructions. Immutable
+package contents remain intact. Import validates bounded archive paths, file
+types, inventory, hashes and image identities before registering a new
+configuration. Existing configurations/models are not overwritten. Databases,
+identities, runtime results and credentials are excluded. Vendor secrets need
+separate provisioning. Matching assets reproduce configured behavior, not
+identical nondeterministic output or external provider state. Digest associations
+and platform base images can require the original registries; this is not an
+offline-host or cross-architecture acceptance claim.
+
+Actual local evidence:
+
+- Browser authentication and configuration listing passed; a real browser switch
+  selected an imported configuration and started its fresh deployment.
+- Original configured file execution: Control-confirmed
+  `run-73c05be5-6623-4042-b876-3ccec8759aa1` SUCCEEDED with its configured agent,
+  governed file read and projected result.
+- A real 2,008,674,453-byte portable ZIP export/import carried five Docker image
+  identities and the model into `portable-hotfolder`. This initial acceptance
+  preceded the requested `.olo` extension/compression change.
+- The imported profile then completed Control-confirmed
+  `run-4622c2c0-7a19-49b0-aad7-a8138ac22f98` SUCCEEDED with its configured agent
+  and a new result in its own data directory. No mock supplied that model result.
+- Reset removed the imported deployment's state/data while retaining the original
+  deployment's storage. The first blank startup correctly failed protected
+  custody validation on a Windows host-mounted file. The fix initializes a
+  root-owned Docker volume and mounts it read-only into Control. Actual blank
+  console login then returned SUPER_ADMIN and zero workflow profile revisions.
+
+The final compressed `.olo` was also uploaded through the authenticated operator
+API and imported successfully as `portable-olo`; it was not activated. Its
+1,977,718,390 bytes have SHA-256
+`0f53dca4f946de130d8864f0b471e8542cde525ce6ef09a3804693ca19237caa`.
+All ZIP entries use DEFLATE; every exported payload hash was independently
+checked; the bundle has four payload files, five image identities and zero
+README entries. No extra README was written alongside it. Import generated the
+new configuration's local README. These two generated demonstration configuration
+directories remain local and are not added to the PR.
+
+The original `native-hotfolder` deployment was restored through the browser UI;
+the portal reports ready, its console remains on port 62391, and `.env` now
+persists `CONFIGURATION=native-hotfolder`. The completed `.olo` download remains
+available in the portal. Browser verification confirmed this final state and no
+README download. No unrelated local stack was removed.
+
+Final focused verification: **24 local operator/lifecycle tests** pass on Windows
+with no skips; Linux runs the same 24 tests successfully with one Windows batch
+fixture skipped. **14 existing profile/folder-delivery tests** pass. Coverage
+includes origin/session/CSRF rejection, exact destructive confirmation, scoped
+cleanup, private password login, blank protected bootstrap, startup selection,
+compressed round trips, wrong extensions, tampering, path traversal, duplicate
+entries, links and conflicting models. Metadata/generated bindings and source
+quality pass. The relative Markdown link check passed (2922 files before the
+local generated configuration READMEs; final recheck: 2923 files). Full repository, full Java/UI product
+gates, hosted CI and another physical Docker host are not claimed by these
+focused operator checks. No full #295 acceptance or new runtime sandbox/effect
+guarantee is credited. Original Phase 1 / Phase 2 limitations remain unchanged.
+
+Known tested source manifest: six operator/UI/test source files, SHA-256
+`b341252b5fabe53d1c887f1cf647af365165ca760d1de22db8b00541cce27ae5`
+(sorted repository-relative path + NUL + LF-normalized file hash + newline).
+This identifies tested source bytes, not an invented upcoming commit SHA.
+
+## Native LangGraph Phase 1 — 2026-11-17
+
+CI repair on tested base `0831631127a42eb513d5d13a351e7c73361621e7`:
+run [43944102244](https://github.com/olo-labs/olo-toolgate/actions/runs/43944102244)
+failed its Python gate because `Path` sorting uses host-specific case rules.
+The Windows-generated manifest listed `graph.py` before `README.md`; Linux
+rebuilt the opposite order and correctly rejected differing installed bytes.
+Packaging now explicitly sorts portable relative path strings, and both checked-in
+manifests use that order. Package IDs, canonical manifest digests and graph source
+hashes are unchanged. Immutable-content rejection remains enforced. Regression
+tests check ordering, checked-in package parity and rejection of changed content.
+Windows workflow tooling: 16 tests passed with one symlink-privilege skip. Linux
+package checks and dependency consistency passed; runtime discovery ran 75 tests
+successfully with 10 TLS tests skipped because this image lacks OpenSSL. Metadata,
+Linux workflow tooling (16 tests, no skips) and mocked workflow acceptance
+(3 tests) also passed. Metadata, generated bindings and source quality checks
+passed. The original scan job's
+Maven HTTP 429 failure cleared on rerun; all other executed jobs in that run
+passed. Hosted acceptance of this repair and image publication remain pending;
+no baseline weight, runtime security claim or Phase 2 scope changes.
+
+Branch: `feature/native-langgraph-phase1`, targeting `feature/workflow-enhancement`.
+The user requested a two-phase delivery: one minimal end-to-end PR with basic
+JSON text boxes and profile/configuration switching; advanced safety/recovery,
+rich editors and exhaustive corner cases move to Phase 2. The implementation
+and critique are in [plan.md](../../plan.md) and [ADR 068](../adr/068-native-graph-packages.md).
+
+### Baseline changes
+
+Native graph authoring is an explicit unweighted extension to the existing
+100-point #295 baseline. Phase 1 and Phase 2 are feature delivery scopes, not
+new earned roadmap phases. The denominator stays 100; earned #295 progress
+stays **0/100**, and no #230 stage or #274 module earns credit (#274 remains
+27%). Existing runtime authority and unknown-outcome behavior are not deferred.
+
+| Feature phase | Scope | Status |
+|---|---|---|
+| Phase 1 | Required JSON graph selection; operator-installed native factories; per-run governed adapters; basic profile/workflow/agent JSON text boxes; two trigger-to-result deployments on one image | Implemented and locally exercised; hosted CI/release qualification separate |
+| Phase 2 | Persistent checkpoints/interrupt resume; durable effect replay; untrusted package isolation/upload; concurrent protected steps; richer editor/preview/monitoring and exhaustive cases | Not implemented; unsupported capabilities refused |
+
+Delivered: canonical `WorkflowGraphSelection` and generated bindings; the
+selection is pinned in the Control lease and required by the worker. Graph
+manifests pin factory sources, schemas and dependencies. Fresh StateGraph
+factories receive static JSON snapshots, and `Runtime.context` supplies governed
+agent/model/tool adapters. The existing supervisor is an installed package;
+the independent async summary package uses the same loader. There is no
+workflow-name switch or new Gateway-to-client/trigger protocol. Protected
+adapter operations are serialized for Control's current one-active-step ledger.
+Unknown/denied outcomes latch even if graph code catches their exceptions.
+Old graph-less profiles/leases are refused without conversion.
+
+The current application does not supply a graph-code sandbox, native checkpoint
+service or universal effect ledger. Those proposed mechanisms were not copied
+into Phase 1. Installing Python is privileged operator work; digest checking
+is content verification, not publisher trust or tenant-code isolation. The typed
+Python API ships with the existing runtime rather than a new unpackaged Python
+file under contracts. Canonical wire models remain in packages/contracts.
+
+Executed local acceptance on source base
+`b511426aec2a00c516527ae6c6d386b111cbac7a`:
+
+- `native-log`: `run-7a84bd2b-a563-4720-a720-a5b1a64d372c`, Control-confirmed
+  SUCCEEDED. INFO noise caused no workflow; two ERROR records triggered
+  log-watch -> independent native summary graph -> configured `log-diagnoser`.
+  Model result: `{"summary":"Database pool exhausted"}`.
+- Switched to `native-hotfolder`: `run-4585538b-b7f4-4547-a83b-a17710255c46`,
+  Control-confirmed SUCCEEDED with a governed file read and projected triage
+  JSON output. The selected profile leaves the original input unarchived.
+- Both worker containers used image
+  `sha256:5865fefb5027e0c013c3e3c430e6eaedb163609fc0e1f68f881714bb0b9665b3`.
+  Source-built common Quickstart image:
+  `sha256:bfa3244819c3ae2b4bc3a86cd6dd1a43daf447568eedb1a9662a6401afd56358`.
+  Switching profiles/packages required no runtime rebuild between these runs.
+  New configurations use isolated storage/ports; other user stacks/storage were
+  not removed. The hot-folder stack remains available on port 62391.
+- Runtime: **75 tests pass, no skips** in Linux, including native async,
+  branches/parallel joins, subgraphs, per-run config/module isolation and
+  actual denied/unknown adapter outcomes. Windows initially skipped 10 TLS
+  tests; the Linux run includes them. Early byte-limit/timeout classification
+  and result-log fixture errors were corrected before this pass.
+- UI: type check/build, **16 component tests** and **3 browser tests** pass.
+  JSON edits explicitly apply to the same draft; workflow edits repin versions
+  and update dispatch references. Browser APIs are mocked: this verifies editor
+  requests, not live server publication. Real deployment publication above used
+  the existing Control APIs through the operator. The first browser attempt
+  used Quickstart's username/password page with a token-login fixture; using
+  the correct fixture resolved it without changing product authentication.
+- Control: **12 configuration tests**, **19 workflow profile tests** (SQLite
+  and provisioned PostgreSQL), **4 Java contract tests** and Quarkus build pass.
+  Profile tests were run with the implementation before the additional config
+  rejection test; the final 12-test config run passed separately. Rust v2
+  round trips (2 tests) and PHP v2 round trips/constants (445 models) pass.
+- **14 Compose/profile** and **8 CI workflow-contract** tests pass. Generated
+  bindings/fixtures/version checks, source quality, preflight and staged secret
+  regressions pass. The common Quickstart image was built from current source.
+
+Broader checks: the full 183-test contract suite on Windows encountered the
+known two symlink-privilege errors and scorecard environment failure (2 skips).
+A Linux read-only run had a drift-test write failure and a source-mutated-during-
+qualification failure; both affected tests passed when rerun with writable,
+stable sources (2 tests). This is not a single clean full-suite run. The broad
+PostgreSQL-backed `javaCheck --continue` was attempted, encountered the known
+Windows POSIX-permission failure in the operator mTLS fixture, and was stopped;
+no full Java-gate or final full-suite totals are claimed. Final focused config
+and contract checks passed afterward. Hosted CI, release image publication and
+complete #295/#274/#230 qualification remain outstanding.
+
+The [redacted local evidence record](../testing/evidence/native-langgraph-phase1.json)
+contains graph/image identities and result-artifact hashes, not credentials or
+private result payloads. Tested changed-source manifest: **50 non-document
+files**, SHA-256
+`78adfd21d9d5a4a8f52e86ddc2050cbde8f70a0a8c5f1a15e3a31972f40f45ae`
+(sorted changed source path + NUL + LF-normalized content hash + newline;
+documentation/evidence excluded). It identifies tested working sources, not
+an invented upcoming commit SHA or remote deployment attestation.
+
+Limitations: state remains JSON-compatible; packages requesting native durable
+checkpoints/resume are refused. Physical image/folder/credential/package and
+local delivery-binding changes require operator provisioning; publishing JSON
+alone is not Docker orchestration or package installation. Control's existing
+dependency readiness is not a fleet-wide graph-package readiness guarantee;
+startup additionally preflights installed graph content/configuration. The UI
+is a basic text editor, not a schema-complete IDE or graph canvas. Phase 2 must
+qualify those advanced services before advertising them.
+
 ## Qualified SDK fixtures and transport diagnostics — 2026-11-16
 
 The hosted follow-up `43880163146` at `15249dc6` passed preflight, SDK
@@ -888,10 +1234,10 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Generic package-selected fresh deployment is locally exercised; full phase remains pending. | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
-| V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment and two-profile local acceptance delivered; complete fresh-install scenarios, Linux gates and release publication pending | 0% |
+| V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment, workflow replacement without restart, multi-workflow/shared-definition handling and admin-preserving blank reset locally exercised; complete fresh-install/cross-host qualification and release publication pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
 V1.2 carries the largest share because admission, runtime identity, model proxy,
@@ -916,7 +1262,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 | Phase | Required acceptance summary | Delivered scope / evidence | Remaining work |
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
-| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete property editor, dedicated workflow/group/agent screens and tenant-scoped revision discovery implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
+| V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete property editor, dedicated workflow/group/agent screens, tenant-scoped revision discovery and workflow-level .olo transfer with referenced-data preparation implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
 | V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | One-agent admission/lease/step/model/MCP transport; live supervisor inference and agent context attempt stop at unknown outcome; per-run metadata regression coverage | Confirmed tool finality and agent completion, message admission, two-agent execution and complete runtime authorization qualification |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Listener plus Control binding/admission/queue path; real trigger and duplicate receipt retain admission/run IDs; worker records FAILED on unknown tool outcome | Qualify successful trigger-to-result, live disable/revocation/forgery denials and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | 16-scenario controller, one-agent live fixture, and standalone runtime image/release evidence gate; local image tests/scan pass, live context attempt fails conservatively | Resolve native finality, complete fresh provisioning and two-profile live scenario coverage with independent server evidence and applicable full gates; execute registry publication through an authorized release |

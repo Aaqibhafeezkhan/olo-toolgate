@@ -36,7 +36,7 @@ def source_root():
 def default_configuration():
     env_file=HERE/'.env'
     if not env_file.exists():
-        shutil.copyfile(HERE/'.env.example',env_file)
+        return ''
     defaults={}
     for line in env_file.read_text(encoding='utf-8-sig').splitlines():
         if line.strip() and not line.lstrip().startswith('#'):
@@ -44,7 +44,7 @@ def default_configuration():
             if key.strip()!='CONFIGURATION':
                 raise ValueError('The main .env may contain only CONFIGURATION; configure the workflow profile')
             defaults[key.strip()]=value.strip().strip('"').strip("'")
-    return defaults.get('CONFIGURATION','issue-triage')
+    return defaults.get('CONFIGURATION','')
 
 
 def environment(selection=None):
@@ -285,6 +285,21 @@ def profile(operator,settings,state):
     document['workflows']['dispatchBindings']=configuration.resolve(document['workflows']['dispatchBindings'],
         {'${SUBSCRIPTION_UID}':subscription,'${ASSIGNMENT_UID}':assignment})
     workflows=document['workflows']
+    # Mounted JSON bootstraps a fresh installation. Restarting a configured stack
+    # must not overwrite workflow data subsequently managed through Control.
+    after=''
+    for _ in range(21):
+        published=config.api('/api/control/v1/workflow-profiles/published?limit=50'+('&afterProfileId='+after if after else ''))
+        head=next((item for item in published if item['profileId']==document['profileId']),None)
+        if head:
+            operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(
+                profileId=head['profileId'],profileDigest=head['digest'],workflowIds=[settings['workflowId']])))
+            operator.shared.private_file(state/'workflow/worker/listener.json',json.dumps(dict(name=settings['subscription'],uid=subscription)))
+            if settings['fileAgent'] is not None:qualify_reader(operator,config,state)
+            return config
+        if len(published)<50:break
+        after=published[-1]['profileId']
+    else:raise ValueError('Workflow publication catalog exceeds the bootstrap lookup limit')
     # Each declared agent/group is independently administered. Only the original file agent has MCP grants.
     role='configured-workflow-service'
     config.upsert('roles',dict(id=role,name='Configured workflow service',revision=1,enabled=True,
@@ -325,7 +340,7 @@ def profile(operator,settings,state):
                 raise ValueError('Configured profile dependencies did not become ready; inspect provisioning status')
             time.sleep(2)
     config.api(base+'/'+document['profileId']+'/publish',{**digest,'expectedGeneration':staged['generation']})
-    operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(profileDigest=staged['profileDigest'],
+    operator.shared.private_file(state/'workflow/reader/delivery.json',json.dumps(dict(profileId=document['profileId'],profileDigest=staged['profileDigest'],
         workflowIds=[item['id'] for item in workflows['workflows']])))
     operator.shared.private_file(state/'workflow/worker/listener.json',json.dumps(dict(name=settings['subscription'],uid=subscription)))
     if settings['fileAgent'] is not None:qualify_reader(operator,config,state)
@@ -337,6 +352,11 @@ def deploy(settings,state,compose,build):
     if build:
         run([sys.executable,'tools/quickstart/check.py','--build','--build-only','--image',os.environ['TOOLGATE_QUICKSTART_IMAGE']],cwd=source_root())
         run(['docker','build','-t',os.environ['TOOLGATE_RUNTIME_IMAGE'],'apps/langgraph-runtime'],cwd=source_root())
+    run(['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL',
+         '-v',str((HERE/'configurations'/settings['id']).resolve())+':/configuration:ro',
+         '--entrypoint','/opt/toolgate-runtime/bin/python',os.environ['TOOLGATE_RUNTIME_IMAGE'],
+         '-m','toolgate_runtime.graph_packages','--profile','/configuration/workflow-profile.json',
+         '--workflow',settings['workflowId'],'--graph-directory','/configuration/graphs'])
     assets=image_assets.extract(os.environ['TOOLGATE_QUICKSTART_IMAGE'],state)
     operator=modules(state,compose,assets)
     model_custody(operator,state)
@@ -401,19 +421,57 @@ def ensure_start_images():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['start','deploy','stop','destroy','status','logs'])
+    parser.add_argument('command',choices=['start','admin','deploy','stop','destroy','status','logs'])
     parser.add_argument('--configuration')
+    parser.add_argument('--blank',action='store_true',help='Start the admin UI with a blank installation')
     parser.add_argument('--build',action='store_true',help='Build current source images before provisioning')
     args=parser.parse_args()
     try:
+        if args.command in ('start','admin'):
+            if args.build:raise ValueError('Build images with manage.py deploy --build --configuration <name> before starting the admin UI')
+            import admin_server
+            selection=None if args.blank else (args.configuration or default_configuration() or None)
+            if selection and not (HERE/'configurations'/selection/'workflow-profile.json').is_file():
+                if args.configuration:raise ValueError('Selected configuration does not exist')
+                selection=None
+            if args.command=='admin':
+                admin_server.serve(HERE,selection)
+                return
+            # Keep the privileged operator outside containers, with a hidden background process.
+            import urllib.request
+            try:
+                with urllib.request.urlopen(admin_server.ORIGIN+'/operator',timeout=2) as response:
+                    response.read(1)
+            except OSError:
+                home=HERE/'state/administrator'
+                home.mkdir(mode=0o700,parents=True,exist_ok=True)
+                arguments=[sys.executable,str(HERE/'manage.py'),'admin']
+                arguments+=['--configuration',selection] if selection else ['--blank']
+                with open(home/'server.log','ab') as log:
+                    subprocess.Popen(arguments,cwd=HERE,stdin=subprocess.DEVNULL,stdout=log,stderr=log,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0,
+                        start_new_session=os.name!='nt')
+                deadline=time.monotonic()+20
+                while time.monotonic()<deadline:
+                    try:
+                        with urllib.request.urlopen(admin_server.ORIGIN+'/operator',timeout=1) as response:response.read(1)
+                        break
+                    except OSError:time.sleep(.2)
+                else:raise ValueError('Administrator UI did not start; inspect state/administrator/server.log')
+            print('WorkflowStack administration: '+admin_server.ORIGIN)
+            print('Control admin credentials: '+str(HERE/'state'/(selection or 'blank')/'credentials/admin'))
+            print('Advanced operator credentials: '+str(HERE/'state/administrator/credentials/admin'))
+            print('Startup runs in the background; inspect its status in the administration UI.')
+            return
         if args.command=='destroy':
+            if not args.configuration:
+                import admin_server
+                admin_server.shutdown(HERE)
             lifecycle.destroy(HERE,args.configuration)
             return
-        if args.command=='start' and not args.configuration:
-            args.configuration=lifecycle.choose(HERE,default_configuration())
         settings,state,compose=environment(args.configuration)
-        if args.command in ('start','deploy'):
-            if args.command=='start' and not args.build:
+        if args.command=='deploy':
+            if not args.build:
                 if not Path(os.environ['TOOLGATE_WORKFLOW_MODEL_FILE']).is_file():
                     raise ValueError('Place the workflow profile modelFile in WorkflowStack/models before startup')
                 ensure_start_images()
