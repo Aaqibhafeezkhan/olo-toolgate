@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Parallel package build throttling repair — 2026-11-17
+
+Hosted run `44133089397` log-watch job `134217885473` hit Maven Central HTTP 429
+fetching RE2J before compilation/tests. The matrix runner now retries only that
+dependency-resolution failure twice with bounded 5/15-second backoff and saved
+attempt logs. Tests/compilation failures, other HTTP errors and exhausted retries
+remain failures; packages still run as independent parallel jobs. Eight tooling
+tests passed, including a real subprocess retry and bounded/refusal negatives.
+No live-provider acceptance, trigger protocol or module Done-when/weight changes:
+**27%** remains earned. See the
+[workflow checkpoint](workflow-v1-status.md#ui-test-typing-and-maven-throttling-repairs--2026-11-17)
+for known base and checks; a hosted package rerun is still required.
+
 ## Workflow admission across publication — 2026-11-17
 
 The next #295 slice extends its existing admission regression on SQLite and

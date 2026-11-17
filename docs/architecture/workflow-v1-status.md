@@ -1,6 +1,31 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## UI test typing and Maven throttling repairs — 2026-11-17
+
+Known base `a8085a05`. Run `44133089397` job `134216198993` failed TypeScript
+checking because the workflow-transfer upload test treated its `Blob` parameter
+as a `File` without narrowing. The fixture now explicitly requires the named
+archive the import action produces. The complete local UI gate passed TypeScript,
+309 UI tests (one optional bundle test skipped), coverage, production Vite build
+and reproducible packaging. Coverage was 87.98% statements, 84.18% branches,
+86.86% functions and 91.16% lines.
+
+The same run's log-watch matrix job `134217885473` failed before compilation
+when Maven Central returned HTTP 429 for RE2J 1.8. Package-test tooling now retries
+that dependency-resolution failure at most twice (5/15-second delays), preserves
+attempt logs and still fails tests/compilation, other HTTP errors and exhausted
+retries. Eight matrix-tooling tests passed, including a real subprocess retry
+and refusal/bounded-attempt cases. Package jobs remain parallel. No live package
+or hosted rerun success is inferred from these mock/tooling checks.
+
+The earlier provisioned full Java run finished with the existing Windows POSIX
+permissions failure in the kill-switch TLS fixture (449 enterprise cases, one
+failure; overall `javaCheck` failed). No full Java pass, #295 phase credit
+(**0/100**), trigger module credit or new security claim is earned. Capability-
+matched worker claiming is the next separate, still-uncommitted increment;
+fresh provisioning, stack wiring and live hot-swap acceptance remain outstanding.
+
 ## Installed native preparation and image fixture repair — 2026-11-17
 
 Known base `f962037e`. Hosted run `44130859168`, job `134208602466`, found

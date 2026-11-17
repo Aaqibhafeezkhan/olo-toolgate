@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +15,31 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TriggerPackageMatrixTests(unittest.TestCase):
+    def test_dependency_throttling_retries_a_real_failed_process_and_preserves_attempt_logs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            command=[sys.executable,'-c',
+                "from pathlib import Path;import sys;p=Path(sys.argv[1]);n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));print('Could not resolve all files for configuration; Received status code 429 from server' if n==0 else 'BUILD SUCCESSFUL');sys.exit(1 if n==0 else 0)",str(root/'attempt')]
+            delays=[]
+            package_tests.gradle(command,{},root/'logs',sleep=delays.append)
+            self.assertEqual('2',(root/'attempt').read_text())
+            self.assertEqual([5],delays)
+            self.assertIn('429',(root/'logs/gradle-1.log').read_text())
+            self.assertIn('BUILD SUCCESSFUL',(root/'logs/gradle-2.log').read_text())
+
+    def test_test_or_compilation_failures_are_not_retried_and_throttling_is_bounded(self):
+        throttle='Could not resolve all files for configuration; Received status code 429 from server'
+        for text,attempts in [(throttle,3),(throttle+'\n> Task :log-watch:test FAILED',1),
+                (throttle+'\nerror: compilation failed',1),('Received status code 503 from server',1)]:
+            with self.subTest(text=text),tempfile.TemporaryDirectory() as temporary:
+                count=[]
+                def execute(command,**options):
+                    count.append(1);options['stdout'].write(text.encode());return subprocess.CompletedProcess(command,1)
+                with patch.object(package_tests.subprocess,'run',side_effect=execute):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        package_tests.gradle(['gradle'],{},Path(temporary),sleep=lambda _:None)
+                self.assertEqual(attempts,len(count))
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

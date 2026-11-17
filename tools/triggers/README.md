@@ -14,6 +14,13 @@ Each job runs the package tests, descriptor examples, archive pack/validation
 and isolated trigger start/stop smoke, and retains its own reports/artifact.
 Existing SDK/example integration gates remain required as well.
 
+Maven dependency resolution can receive HTTP 429 from Maven Central. Each matrix
+entry retries that specific download failure at most twice, after 5 and 15
+seconds, keeping `gradle-1.log` through `gradle-3.log` in its uploaded evidence
+folder. Compilation errors, failing tests, other HTTP errors and exhausted
+retries fail the job. This does not retry trigger events, workflow effects or
+provider requests, and does not serialize the independent package jobs.
+
 Current registrations are the hotfolder and log packages plus the independent
 signal adoption fixture. They use deterministic in-memory file/broker mocks;
 this is not evidence that the remaining provider connectors already exist.
