@@ -30,8 +30,9 @@ class ReviewedCandidate:
 
 
 class GraphRuntime:
-    def __init__(self, candidates):
+    def __init__(self, candidates, *, graph_directory=None):
         self.candidates = candidates
+        self.packages = GraphPackages(graph_directory)
         self.request = contract('WorkflowGraphBuildRequest')
         self.result = contract('WorkflowGraphBuildResult')
 
@@ -46,17 +47,20 @@ class GraphRuntime:
                     != (value['tenantId'],value['profileId'],value['profileDigest'],value['workflowId'],value['expectedGeneration'])):
             raise GraphRefused('GRAPH_CANDIDATE_MISMATCH')
         selection = json_value(candidate.graph)
-        if selection.get('packageId') != 'olo.json-graph' or selection.get('entryPoint') != 'workflow':
-            raise GraphRefused('GRAPH_BUILD_FACTORY_UNSUPPORTED')
-        spec = validate(selection.get('config'))
-        if any(node.get('agentId') not in candidate.agent_ids for node in spec['nodes'] if node['kind'] in ('agent','model','tool')):
-            raise GraphRefused('GRAPH_AGENT_UNASSIGNED')
-        with GraphPackages().load(selection):
+        features = ['native-factory']
+        if selection.get('packageId') == 'olo.json-graph':
+            if selection.get('entryPoint') != 'workflow':
+                raise GraphRefused('GRAPH_BUILD_FACTORY_UNSUPPORTED')
+            spec = validate(selection.get('config'))
+            if any(node.get('agentId') not in candidate.agent_ids for node in spec['nodes'] if node['kind'] in ('agent','model','tool')):
+                raise GraphRefused('GRAPH_AGENT_UNASSIGNED')
+            features = list(FEATURES)
+        with self.packages.load(selection):
             pass  # Compilation only; no RunContext, model call, tool effect or publication.
         receipt = dict(tenantId=candidate.tenant_id,profileId=candidate.profile_id,
             profileDigest=candidate.profile_digest,workflowId=value['workflowId'],generation=candidate.generation,
             specificationDigest=specification_digest(selection['config']),compilerDigest=COMPILER_DIGEST,
-            features=list(FEATURES),state='READY')
+            features=features,state='READY')
         if not self.result.is_valid(receipt):
             raise GraphRefused('GRAPH_BUILD_RECEIPT')
         return receipt

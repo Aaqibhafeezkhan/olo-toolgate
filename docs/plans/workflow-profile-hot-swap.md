@@ -485,6 +485,17 @@ capabilities, approvals and network policy still determine actual availability.
 | 5 | UI activation, run isolation, delivery draining and database/cache cleanup | In-flight A completes on A; new work uses B; shared/in-use resources retained; all runtime replicas reconcile invalidations |
 | 6 | Stateless recovery, integrated acceptance and operator documentation | Cold-container recovery and all scenarios below executed; source-bound evidence recorded in #295 status |
 
+Implementation checkpoint (component evidence, no phase acceptance): step 1 is
+accepted. Step 2 remains pending. Step 3 has runtime subscription reconciliation;
+device placement/configuration feedback remains pending. Step 4 has JSON and
+installed native-factory rebuilding, admin preparation, durable receipts and
+compiler pinning; external LLM routing and replica readiness remain pending.
+Step 5 has admitted-run A/B configuration isolation; coordinated device handover,
+invalidation and cleanup remain pending. Step 6 has component/image tests, with
+full-stack recovery and the live demo still pending. The authoritative executed
+checks and limitations remain in
+[workflow-v1-status.md](../architecture/workflow-v1-status.md).
+
 The user accepted these solutions and authorized implementation. Work proceeds
 in focused changes. The user subsequently authorized committing, pushing and
 opening a draft PR for the initial implementation slice. Delivery must update the live

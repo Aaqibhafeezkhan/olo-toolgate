@@ -18,12 +18,23 @@ from toolgate_runtime.graph_runtime import GraphRuntime, ReviewedCandidate, Cont
 from toolgate_runtime.graph_server import server
 from toolgate_runtime.json_graph import cache_status, clear_cache
 from test_json_graph import spec, installed_selection
+from test_runner import lease
 
 
 REQUEST=dict(tenantId='tenant-a',profileId='profile',profileDigest='sha256:'+'a'*64,workflowId='flow',expectedGeneration=0)
 
 
 class RuntimeBuildTests(unittest.TestCase):
+    def test_explicit_installed_native_factory_compiles_without_a_json_fallback(self):
+        self.candidate=replace(self.candidate,graph=lease().graph)
+        result=self.runtime.rebuild(REQUEST)
+        self.assertEqual('READY',result['state'])
+        self.assertEqual(['native-factory'],result['features'])
+        invalid={**self.candidate.graph,'digest':'sha256:'+'0'*64}
+        self.candidate=replace(self.candidate,graph=invalid)
+        with self.assertRaisesRegex(GraphRefused,'GRAPH_PACKAGE_UNAVAILABLE'):
+            self.runtime.rebuild(REQUEST)
+
     def setUp(self):
         clear_cache()
         self.candidate=ReviewedCandidate('tenant-a','profile',REQUEST['profileDigest'],'flow',0,{**installed_selection(),'config':spec()})

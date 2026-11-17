@@ -1,6 +1,35 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Installed native preparation and image fixture repair — 2026-11-17
+
+Known base `f962037e`. Hosted run `44130859168`, job `134208602466`, found
+the image-release regression test still requiring exactly three fixture mounts.
+Its expected inventory now includes the summary-profile source used by the
+runtime test and verifies the test-only image stage. No production fixture or
+credential mount is added.
+
+Rebuild preparation now also accepts explicitly selected installed native
+factories through the same immutable-package verifier. Invalid JSON cannot fall
+back to native execution. An operator-owned `graphDirectory` may supply additional
+installed factories. Runtime/compiler identity covers the author API, loader,
+JSON compiler and governed runner with normalized line endings; both native and
+JSON runs require the admitted identity before execution. Tests verify native
+preparation, missing-package refusal, mismatched native compiler refusal and
+Windows/Linux identity equivalence while detecting changed runner semantics.
+
+The matching hardened image command passed **105 tests with no skips** in
+17.6 seconds. All three image-release tests and generated preflight passed.
+Full Linux CI regression discovery passed **484 tests, 18 skipped** for platform/
+tool prerequisites in a disposable Python/Git/Node test image. This is regression
+discovery, not all foundation build gates. The previous provisioned full Java run has encountered the known Windows POSIX
+permissions failure in the kill-switch TLS fixture and is still completing.
+No new live stack acceptance or full Java pass is claimed. This closes native
+factory preparation within step 4, not runtime replica readiness, provider
+routing, provisioning or any full #295 phase (**0/100** remains). Next work
+remains one-device provisioning and stable stack wiring, then the outstanding
+handover, persistence, cleanup and live acceptance cases.
+
 ## Graph preparation and admitted-run hot swap — 2026-11-17
 
 From known base `1c97ad26`, the next implementation adds an admin graph preparation

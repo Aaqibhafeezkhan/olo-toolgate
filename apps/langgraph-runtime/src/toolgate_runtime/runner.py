@@ -523,10 +523,9 @@ class Runner:
         self.graph_packages = GraphPackages(graph_directory)
 
     async def _graph(self, lease, execution):
-        if lease.graph['packageId'] == 'olo.json-graph':
-            from .json_graph import COMPILER_DIGEST
-            if lease.compiler_digest != COMPILER_DIGEST:
-                raise _Stop('GRAPH_COMPILER_MISMATCH')
+        from .compiler_identity import COMPILER_DIGEST
+        if lease.compiler_digest != COMPILER_DIGEST:
+            raise _Stop('GRAPH_COMPILER_MISMATCH')
         capabilities = _Capabilities(execution)
         context = RunContext(_Models(capabilities), _Tools(capabilities), _Agents(capabilities))
         final = None

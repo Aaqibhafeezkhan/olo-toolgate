@@ -90,6 +90,13 @@ class Gate:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_native_factory_also_requires_the_admitted_compiler_identity(self):
+        run=replace(lease(),compiler_digest='sha256:'+'0'*64)
+        gate=Gate(run)
+        result=Runner(gate).execute(run)
+        self.assertEqual(('FAILED','GRAPH_COMPILER_MISMATCH'),(result.state,result.code))
+        self.assertEqual([],gate.inferences)
+
     def test_fixed_stages_cannot_be_skipped_by_a_supervisor_finish(self):
         run = replace(lease(), agent_stages=(AgentStage('support-investigator', 'CONTEXT'), AgentStage('support-fixer', 'MODEL')))
         gate = Gate(run)

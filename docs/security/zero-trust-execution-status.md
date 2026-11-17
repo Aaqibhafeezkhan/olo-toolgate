@@ -1,6 +1,18 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Installed compiler identity follow-up — 2026-11-17
+
+The #295 runtime now prepares explicitly installed native factories through its
+existing immutable-package verifier and checks the admitted compiler identity for
+native and JSON runs. Identity includes the loader, author API, JSON compiler and
+runner, normalizing checkout line endings. This adds no untrusted Python sandbox
+or new execution authority. The hardened image gate passed 105 tests, including
+native mismatch refusal and compiler portability; no #230 stage, first-slice
+acceptance, phase table or security-guarantee weight changes. See the
+[workflow checkpoint](../architecture/workflow-v1-status.md#installed-native-preparation-and-image-fixture-repair--2026-11-17)
+for actual evidence, known base and remaining work.
+
 ## Admitted workflow revision and compiler pin — 2026-11-17
 
 The next #295 slice separates current-publication admission from execution of a

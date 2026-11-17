@@ -4,7 +4,6 @@ from collections import OrderedDict
 from copy import deepcopy
 import hashlib
 import json
-from pathlib import Path
 import re
 import threading
 from typing import Annotated, TypedDict
@@ -14,9 +13,9 @@ from langgraph.runtime import Runtime
 
 from .graph_api import RunContext, json_value
 from .graph_packages import GraphRefused, schema_validator
+from .compiler_identity import COMPILER_DIGEST
 
-COMPILER_DIGEST = 'sha256:' + hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
-FEATURES = ('value', 'agent', 'model', 'tool', 'branch', 'parallel', 'join', 'loops')
+FEATURES = ('value', 'agent', 'model', 'tool', 'branch', 'parallel', 'join', 'loops', 'native-factory')
 NODE = re.compile(r'[a-z][a-z0-9_-]{0,47}')
 _cache = OrderedDict()
 _lock = threading.RLock()

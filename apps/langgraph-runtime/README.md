@@ -92,8 +92,11 @@ fetches the exact reviewed document, asks its installation-selected runtime to
 compile every graph, then records all receipts in one tenant transaction after
 rechecking management authority and publication generation. Partial/failed builds
 leave previous receipts intact. Package readiness alone cannot publish a profile.
-The current rebuild endpoint supports the installed JSON factory; additional
-native-factory preparation remains to be implemented.
+The rebuild endpoint supports the installed JSON factory and explicitly selected,
+verified native factories. An invalid JSON graph never falls back to a native
+factory. Set the runtime API's installation-owned `graphDirectory` when additional
+operator-installed graph packages are mounted, and mount the same packages on
+workers. Native package code remains trusted operator code, not sandboxed uploads.
 
 Configure Control with these installation-owned settings, outside profiles:
 
@@ -122,8 +125,9 @@ them read-only. Import does not create certificates, grants, mounts or firewall
 rules. Runtime traffic remains on the private installation network; these settings
 do not require opening an inbound host port.
 
-Each admitted run now pins the build's compiler digest. JSON workers refuse a
-different compiler before executing graph effects. Control continues a queued or
+Each admitted run now pins the build's compiler digest, covering the installed
+loader, author API, JSON compiler and governed runner with normalized line endings.
+Workers refuse a different compiler before executing JSON or native graph effects. Control continues a queued or
 running admitted revision after a new publication, while rechecking live step,
 lease, kill and model/tool authority. New admissions use the new publication.
 Fresh schemas and the current lease shape are required; unsupported existing
