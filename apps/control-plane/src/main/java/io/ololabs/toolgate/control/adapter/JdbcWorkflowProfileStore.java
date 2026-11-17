@@ -84,10 +84,34 @@ final class JdbcWorkflowProfileStore implements WorkflowProfileStore {
             return rows.next() ? new Ownership(rows.getString(1), rows.getString(2)) : null;
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
+    public String graphBuild(String profileId, String digest, String workflowId) {
+        try (var statement = statement("SELECT document FROM control_workflow_graph_builds WHERE tenant_id=? AND profile_id=? AND digest=? AND workflow_id=?", profileId, digest, workflowId);
+             var rows = statement.executeQuery()) {
+            return rows.next() ? rows.getString(1) : null;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public void graphBuild(String profileId, String digest, String workflowId, String document) {
+        try (var statement = statement("INSERT INTO control_workflow_graph_builds(tenant_id,profile_id,digest,workflow_id,document) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,profile_id,digest,workflow_id) DO UPDATE SET document=excluded.document",
+                profileId, digest, workflowId, document)) {
+            statement.executeUpdate();
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
     public void own(String kind, String id, String profileId, String definitionDigest) {
         try (var statement = statement("INSERT INTO control_workflow_profile_owners(tenant_id,resource_kind,resource_id,profile_id,definition_digest) VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING", kind, id, profileId, definitionDigest)) {
             statement.executeUpdate();
             if (!new Ownership(profileId, definitionDigest).equals(owner(kind, id))) throw Failure.conflict();
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public DevicePlacement devicePlacement(String profileId) {
+        try (var statement = statement("SELECT device_id,generation FROM control_workflow_device_placements WHERE tenant_id=? AND profile_id=?", profileId);
+             var rows = statement.executeQuery()) {
+            return rows.next() ? new DevicePlacement(profileId, rows.getString(1), rows.getLong(2)) : null;
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    public DevicePlacement placeDevice(String profileId, String deviceId) {
+        try (var statement = statement("INSERT INTO control_workflow_device_placements(tenant_id,profile_id,device_id,generation) VALUES(?,?,?,1) ON CONFLICT DO NOTHING", profileId, deviceId)) {
+            statement.executeUpdate();
+            return devicePlacement(profileId);
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 }

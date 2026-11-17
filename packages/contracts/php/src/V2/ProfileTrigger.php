@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment. */
+/** A client trigger assignment colocated with the profile device packages on one persistently selected eligible device. Independently managed group membership remains a live constraint. */
 final readonly class ProfileTrigger implements \JsonSerializable {
     public function __construct(
         public string $assignment,

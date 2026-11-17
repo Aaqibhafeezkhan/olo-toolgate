@@ -6,6 +6,17 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Prepare reviewed JSON graphs from the admin console through a private mTLS
+  runtime connection and persist complete generation-bound compilation receipts.
+  Pin compiler identity and configuration for admitted runs across publication.
+  Workflow import stores embedded packages before staging, and export includes
+  tools referenced directly by JSON graph nodes. Full hot-swap deployment remains
+  in progress.
+
+- Add initial JSON workflow topology compilation, a private mTLS graph rebuild
+  API and dynamic authorized subscription reconciliation. Move debug helpers into
+  `debug/profiled`. Automatic profile hot-swap deployment remains in progress.
+
 - Build versioned workflow profiles from `profiles/configurations/` using
   `profiles/build.sh` or `profiles/build.bat`, with output and package inventories
   in `profiles/bin/` and verified publication as release assets. Workflow bundles

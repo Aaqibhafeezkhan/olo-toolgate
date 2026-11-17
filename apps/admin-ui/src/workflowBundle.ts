@@ -4,6 +4,7 @@ import type {DeploymentProfile,WorkflowConfiguration,WorkflowDefinition,TriggerA
 import type {ConfigurationFile} from './pendingContracts';
 import {referencedData,validateReferences} from './workflowReferences';
 import {inspectPackage,MAX_BUNDLE_BYTES,MAX_PACKAGE_BYTES,sha256,verifyPackageCoverage,type EmbeddedPackage} from './workflowPackages';
+import {graphToolIds} from './workflowTools';
 
 const MAX_PROFILE=262144,MAX_REFERENCES=2097152;
 const collections=['workflowGroups','modelGroups','modelDeployments','agentDefinitions','workflows','dispatchBindings'] as const;
@@ -37,6 +38,7 @@ export function workflowScope(profile:DeploymentProfile,id:string):DeploymentPro
   const workflowGroups=source.workflowGroups.filter(item=>item.id===workflow.workflowGroupId);
   if(workflowGroups.length!==1)fail('Workflow group is unavailable.');
   const packageIds=new Set([...(workflow.contextSources??[]),...agentDefinitions.flatMap(item=>item.contextSources)].map(item=>item.toolId.split('/')[0]));
+  for(const toolId of graphToolIds(workflow))packageIds.add(toolId.split('/')[0]);
   if(workflow.deployment)packageIds.add(workflow.deployment.source.packageId);
   const definition=copy(workflow);
   return copy({profileVersion:2,profileId:profile.profileId,packages:profile.packages.filter(item=>packageIds.has(item.packageId)),
@@ -62,6 +64,20 @@ export function removeWorkflow(profile:DeploymentProfile,id:string):DeploymentPr
   return next;
 }
 
+/** Profile placement is portable; the selected physical device belongs only to the destination installation. */
+export function portableAssignmentSpec(profile:DeploymentProfile,assignment:TriggerAssignment){
+  const spec=copy(assignment.spec);
+  const owner=profile.packages.find(item=>item.triggers?.some(trigger=>trigger.assignment===assignment.metadata.name));
+  if(owner?.deviceGroupIds?.length){
+    const local=profile.packages.filter(item=>item.deviceGroupIds?.length),required=local.filter(item=>item.required);
+    const sets=[...(required.length?required:local),owner].map(item=>[...item.deviceGroupIds!].sort());
+    spec.target={executor:'CLIENT',deviceGroups:[...owner.deviceGroupIds],requiredDeviceGroupSets:sets.filter((set,index)=>sets.findIndex(other=>same(other,set))===index)};
+  }
+  return spec;
+}
+export function workflowAssignmentMatches(profile:DeploymentProfile,assignment:TriggerAssignment,spec:Connection['assignmentSpec']){
+  return same(portableAssignmentSpec(profile,assignment),spec);
+}
 export function workflowConnections(selected:DeploymentProfile,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[]):Connection[]{
   return selected.workflows!.dispatchBindings.map(binding=>{
     const subscription=subscriptions.find(item=>item.metadata.uid===binding.subscriptionUid);
@@ -69,7 +85,7 @@ export function workflowConnections(selected:DeploymentProfile,assignments:reado
     if(!subscription||!assignment)fail('Resolve the workflow trigger mappings before export.');
     const {owner:_,...spec}=subscription.spec;
     const names=selected.workflows!.dispatchBindings.filter(item=>item.subscriptionUid===binding.subscriptionUid).map(item=>assignments.find(entry=>entry.metadata.uid===item.sourceAssignmentUid)?.metadata.name).filter((item):item is string=>Boolean(item));
-    return {id:binding.id,subscription:subscription.metadata.name,assignment:assignment.metadata.name,assignmentSpec:copy(assignment.spec),subscriptionSpec:{...copy(spec),sources:{assignments:[...new Set(names)]}}};
+    return {id:binding.id,subscription:subscription.metadata.name,assignment:assignment.metadata.name,assignmentSpec:portableAssignmentSpec(selected,assignment),subscriptionSpec:{...copy(spec),sources:{assignments:[...new Set(names)]}}};
   });
 }
 
@@ -78,12 +94,17 @@ export async function exportWorkflow(profile:DeploymentProfile,id:string,assignm
   const connections=workflowConnections(selected,assignments,subscriptions);
   const assignmentNames=new Set(connections.map(item=>item.assignment));
   for(const entry of selected.packages)if(entry.triggers)entry.triggers=entry.triggers.filter(item=>assignmentNames.has(item.assignment));
+  if(archives.reduce((total,item)=>total+item.length,0)>MAX_BUNDLE_BYTES)fail('Embedded packages exceed 128 MiB.');
+  const packages:EmbeddedPackage[]=[];for(const archive of archives)packages.push(await inspectPackage(archive));
+  for(const pin of selected.packages){
+    const matching=packages.filter(item=>item.metadata.packageId===pin.packageId&&item.metadata.version===pin.version&&(!pin.packageDigest||pin.packageDigest===item.metadata.packageDigest));
+    if(matching.length!==1)fail('Profile package is missing its exact embedded archive: '+pin.packageId);
+    pin.source='BUNDLE';pin.packageDigest=matching[0].metadata.packageDigest;
+  }
   const bytes=strToU8(JSON.stringify(selected));
   if(bytes.length>MAX_PROFILE)fail('Workflow configuration exceeds the Control size limit.');
   const referenced=referencedData(selected,snapshot),references=strToU8(JSON.stringify(referenced));
   if(references.length>MAX_REFERENCES)fail('Referenced configuration exceeds the size limit.');
-  if(archives.reduce((total,item)=>total+item.length,0)>MAX_BUNDLE_BYTES)fail('Embedded packages exceed 128 MiB.');
-  const packages:EmbeddedPackage[]=[];for(const archive of archives)packages.push(await inspectPackage(archive));
   verifyPackageCoverage(selected,referenced,connections,packages);
   const manifest:WorkflowBundleManifest={format:'olo-workflow',version:2,workflowId:id,sha256:await sha256(bytes),referencesSha256:await sha256(references),connections,packages:packages.map(item=>item.metadata)};
   const files={'manifest.json':strToU8(JSON.stringify(manifest)),'workflow.json':bytes,'referenced-data.json':references,...Object.fromEntries(packages.map(item=>[item.metadata.path,item.bytes]))};
@@ -117,6 +138,7 @@ export async function importWorkflow(name:string,bytes:Uint8Array):Promise<Workf
   }
   if(seen.size!==3+packages.length)fail('Unlisted package archive.');
   const references=validateReferences(decode(files['referenced-data.json']));verifyPackageCoverage(profile,references,connections,packages);
+  if(profile.packages.some(pin=>pin.source!=='BUNDLE'||!packages.some(item=>item.metadata.packageId===pin.packageId&&item.metadata.version===pin.version&&item.metadata.packageDigest===pin.packageDigest)))fail('Profile package must use its exact embedded archive.');
   return {profile,connections,references,packages};
 }
 

@@ -1,0 +1,40 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+services:
+  quickstart:
+    image: olo-toolgate-quickstart:debug
+    pull_policy: never
+    platform: linux/amd64
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 35s
+    environment:
+      # Fresh installations start with one password-protected administrator.
+      # Profile content and package provisioning arrive through authenticated APIs.
+      TOOLGATE_DISABLE_ADMIN_PASSWORD: 'false'
+      TOOLGATE_QUICKSTART_ADMIN_ONLY: 'true'
+      TOOLGATE_CONTROL_PROFILE_PATH: ''
+      TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH: ''
+      TOOLGATE_QUICKSTART_DATABASE_MODE: sqlite
+      TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS: 'true'
+      TOOLGATE_GATEWAY_NAME: ${TOOLGATE_GATEWAY_NAME:-Debug Gateway}
+      TOOLGATE_ALLOW_LOOPBACK_MCP_HTTP: 'true'
+      TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL: https://localhost:18450
+      TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL: https://localhost:18450
+      # Setup downloads name this console so Windows clients can trust the local CA.
+      TOOLGATE_CONTROL_ENDPOINT_CONSOLE_URL: http://127.0.0.1:18090
+      TOOLGATE_CONTROL_APPROVAL_ENABLED: 'true'
+      TOOLGATE_CONTROL_APPROVAL_PENDING_TTL_MS: 300000
+      TOOLGATE_CONTROL_APPROVAL_MAX_ACTIVE: 1000
+      TOOLGATE_CONTROL_APPROVAL_MAX_ACTIVE_PERMITS: 4096
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532
+    ports:
+      - "127.0.0.1:18090:8080"
+      - "127.0.0.1:18450:8443"
+    volumes:
+      - data:/data
+volumes:
+  data:

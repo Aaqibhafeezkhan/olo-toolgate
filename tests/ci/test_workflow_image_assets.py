@@ -55,7 +55,7 @@ class ImageAssetsTests(unittest.TestCase):
         self.manifest_path=self.assets/'packages/manifest.json'
         self.manifest_path.write_text(json.dumps(self.manifest))
         for relative in ('examples/langchain/manage.py','examples/langchain/packages.py',
-                'debug/standard/configure-debug-agent.py','debug/standard/agent-mimic.py',
+                'debug/profiled/configure-debug-agent.py','debug/profiled/agent-mimic.py',
                 'tools/access/presets.py','packages/contracts/management-permissions.json','VERSION'):
             path=self.assets/'operator'/relative
             path.parent.mkdir(parents=True,exist_ok=True)

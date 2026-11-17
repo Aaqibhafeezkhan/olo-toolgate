@@ -27,9 +27,9 @@ another file and set that variable to use a different profile with the same imag
 
 | Field | Meaning |
 |---|---|
-| `source` | `PREBUILT_CORE` resolves only to the sealed artifact in the image's core lock (`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH`); its digest comes from that lock and a declared `packageDigest` must equal it. `MARKETPLACE` downloads the exact signed release from the configured Marketplace and requires `packageDigest`; a release with another digest is refused before download. |
+| `source` | `PREBUILT_CORE` resolves only to the sealed artifact in the image's core lock (`TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH`); its digest comes from that lock and a declared `packageDigest` must equal it. `MARKETPLACE` downloads the exact signed release from the configured Marketplace and requires `packageDigest`. `BUNDLE` requires the exact verified embedded archive in this tenant's package store and its digest; it never fetches a substitute. |
 | `hostIds` | Tool Hosts that receive the package's eligible ServerTool exports. ClientTool exports are never deployed to a Tool Host. |
-| `deviceGroupIds` | Device groups whose active, approved devices receive the package's device-runnable exports (every ClientTool, and a ServerTool that needs no routes, secrets, globals or claims) as a signed client release. Devices that join a group later receive it too. An entry that activates exports needs `hostIds` or `deviceGroupIds`. |
+| `deviceGroupIds` | Eligible device groups for the package's device-runnable exports. Control persists one device per profile that belongs to at least one enabled group in every required package's group list. Watches and local file tools use this same device. An entry that activates exports needs `hostIds` or `deviceGroupIds`. |
 | `globals` | Package global values for the deployment. |
 | `tools` | Installed exports to enable, each in a reviewed Tool Group that must already exist. |
 | `bindingIds` | Existing execution bindings whose allowed package digests become exactly the profile packages that name them. |
@@ -45,6 +45,15 @@ there is no conversion, deletion, migration or compatibility mode. Use fresh
 stores and matching current Control, SDK and profile artifacts for this branch.
 Package-only deployment profiles still use the same current version-2 contract.
 
+Portable `.olo` builds/exports use `BUNDLE` for every declared package, with the
+exact embedded archive digest. Ordinary import verifies/stores the archives
+before staging. This lets the same package deploy on another installation
+without being compiled into that installation's core lock or hosted in its
+Marketplace. Missing verified content remains PENDING; mismatched coordinates
+are refused. Existing verification, signing, permissions, runtime capabilities
+and readiness still apply. Current bundle import rejects package declarations
+that depend on an image/Marketplace source rather than their embedded content.
+
 Workflow profiles use these authenticated Control APIs:
 
 | Request | Result |
@@ -59,6 +68,37 @@ Workflow profiles use these authenticated Control APIs:
 Workflow staging rejects invalid package declarations such as duplicate target
 groups and trigger assignments without a target group. The sealed package
 inventory and installation dependencies are checked when provisioning.
+
+Device-local provisioning selects only an enabled, approved, active device with
+a check-in within three minutes. The administrator must enroll/enable it and
+configure its group membership first; profile import does none of those things.
+The selected device is recorded before any rollout. Repeated provisioning and
+Control restarts reuse that selection. An offline or removed device leaves the
+operation PENDING with a reason; another group member never takes over silently.
+Fenced device reassignment is not implemented yet. Eligible platform/execution
+capabilities still require device installation/readiness evidence.
+
+A requested rollout is not READY. Control requires a recent authenticated device
+report for the exact desired package generation and version with READY state.
+Declared triggers must report the current configuration revision on the selected
+device, with Ready/Running state and a live lease when Running is requested.
+Publication and new admission recheck these observations inside their current
+tenant transaction; a previously saved READY status alone is insufficient.
+Paused/Stopped declarations require the corresponding applied state.
+
+Profile-created trigger targets name the selected device and
+`requiredDeviceGroupSets`: a list of alternative-group sets, one set per required package, plus the watch package's own set.
+The device must belong to at least one enabled group in every set. This only
+restricts targets; it never adds devices. Group removal removes the watch from
+desired state and revokes its old lease on the next normal check-in. No new
+Gateway/client transport or callback endpoint is introduced.
+
+This is component provisioning/readiness, not the complete activation protocol.
+Candidate trigger changes still need preparation/activation handover isolation;
+imported candidates also need durable automatic deployment reconciliation and
+complete runtime/provider readiness before publication. Until that is delivered, retry
+the provision action after device installation/check-in. The persistent stack,
+provider readiness and unchanged-container end-to-end demo remain unqualified.
 
 This initial management boundary requires a **current Super Admin** for every
 operation, including document/status reads. Cached actor flags and token roles
@@ -81,6 +121,14 @@ own model group. Vault values stay in the existing vault; readiness checks that
 the tenant's secret reference exists under the declared enabled groups. This is
 a dependency/reference check, not a provider credential validity test or live
 inference. No provider request is made during upload, review or publication.
+
+Start compatible runtime workers before publication. Workers advertise one
+process ID, compiler and verified graph-package inventory on claims and on a
+separate five-second heartbeat. Control requires matching tenant/owner-bound
+presence with a 30-second server expiry for each prepared graph. This continues
+during long runs without claiming more work. Expiry blocks new admissions;
+already admitted run leases/configuration remain independent. This is recent
+capability evidence, not instantaneous health or per-replica graph preparation.
 
 Publication requires current enabled agents/groups/tools, matching group
 membership, scoped vault references and the **same profile digest's** READY

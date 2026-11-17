@@ -2399,7 +2399,7 @@
     "expired": false,
     "gaps": []
   },
-  "ProfilePackageSource": "MARKETPLACE",
+  "ProfilePackageSource": "BUNDLE",
   "ProfileToolActivation": {
     "toolId": "examples.loans/evaluate",
     "toolGroupId": "MockToolGroup"
@@ -3815,6 +3815,15 @@
     ],
     "excludeDevices": [
       "device-7"
+    ],
+    "requiredDeviceGroupSets": [
+      [
+        "finance-desktops",
+        "on-call"
+      ],
+      [
+        "approved-file-devices"
+      ]
     ]
   },
   "TriggerRollingUpdate": {
@@ -5631,5 +5640,105 @@
       "includeState": false,
       "expiresAtUnixMs": 1793529000000
     }
+  },
+  "WorkflowJsonNodeKind": "value",
+  "WorkflowJsonBranchRoutes": {
+    "true": "END",
+    "false": "END"
+  },
+  "WorkflowJsonNode": {
+    "id": "result",
+    "kind": "value",
+    "input": {
+      "$path": "/message"
+    }
+  },
+  "WorkflowJsonEdge": {
+    "from": [
+      "START"
+    ],
+    "to": "result"
+  },
+  "WorkflowJsonGraph": {
+    "schemaVersion": 1,
+    "nodes": [
+      {
+        "id": "result",
+        "kind": "value",
+        "input": {
+          "$path": "/message"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "from": [
+          "START"
+        ],
+        "to": "result"
+      },
+      {
+        "from": [
+          "result"
+        ],
+        "to": "END"
+      }
+    ],
+    "output": {
+      "$path": "/values/result"
+    },
+    "outputSchema": {}
+  },
+  "WorkflowGraphBuildRequest": {
+    "tenantId": "tenant-a",
+    "profileId": "profile",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflowId": "workflow",
+    "expectedGeneration": 0
+  },
+  "WorkflowGraphBuildResult": {
+    "tenantId": "tenant-a",
+    "profileId": "profile",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflowId": "workflow",
+    "generation": 0,
+    "specificationDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "compilerDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "features": [
+      "value"
+    ],
+    "state": "READY"
+  },
+  "WorkflowGraphCandidate": {
+    "tenantId": "tenant-a",
+    "profileId": "profile",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflowId": "workflow",
+    "generation": 0,
+    "graph": {
+      "packageId": "toolgate.supervisor",
+      "version": "1.0.0",
+      "digest": "sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd",
+      "entryPoint": "supervisor",
+      "config": {}
+    },
+    "agentIds": [
+      "agent"
+    ]
+  },
+  "WorkflowGraphCapabilities": {
+    "entries": 0,
+    "capacity": 128,
+    "compilerDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "features": [
+      "value"
+    ]
+  },
+  "WorkflowWorkerCapabilities": {
+    "compilerDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "graphDigests": [
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "instanceId": "worker-1"
   }
 }

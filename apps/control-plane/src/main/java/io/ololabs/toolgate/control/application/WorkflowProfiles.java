@@ -153,6 +153,48 @@ public final class WorkflowProfiles {
             return new Store.Reply(200, codec.json(statuses), 0);
         });
     }
+    /** Read-only reviewed candidate for a verified tenant runtime service; no secrets or execution authority. */
+    public Store.Reply graphCandidate(DirectoryService.Actor worker, String id, String digest, String workflowId, long expectedGeneration) {
+        Ids.valid(workflowId);
+        if (expectedGeneration < 0 || expectedGeneration > 9007199254740991L) throw Failure.validation();
+        // Called only by the verified runtime-service adapter, never by public profile authors.
+        return store.transaction(worker.tenant(), false, tx -> {
+            var revision = revision(tx, worker.tenant(), id, digest);
+            if (!revision.state().equals("REVIEWED")) throw Failure.conflict();
+            var head = tx.workflowProfiles().publication(id);
+            long generation = head == null ? 0L : head.generation();
+            if (generation != expectedGeneration) throw Failure.conflict();
+            var value = profile(documents.open(tx, worker.tenant(), revision));
+            var workflow = value.workflows().workflows().stream().filter(item -> item.id().equals(workflowId)).findFirst()
+                .orElseThrow(() -> new Failure(ErrorCode.NOT_FOUND, 404, "Graph candidate unavailable"));
+            return new Store.Reply(200, codec.json(new WorkflowGraphCandidate(worker.tenant().value(), id, digest,
+                workflowId, generation, workflow.graph(), workflow.agents().stream().map(WorkflowAgentBinding::agentId).toList())), generation);
+        });
+    }
+
+    Store.Reply recordGraphBuilds(DirectoryService.Actor actor, String id, String digest, long expectedGeneration,
+            java.util.List<WorkflowGraphBuildResult> receipts, String requestId) {
+        return store.transaction(actor.tenant(), true, tx -> {
+            require(tx, actor);
+            var revision = revision(tx, actor.tenant(), id, digest);
+            if (!revision.state().equals("REVIEWED")) throw Failure.conflict();
+            var head = tx.workflowProfiles().publication(id);
+            if ((head == null ? 0L : head.generation()) != expectedGeneration) throw Failure.conflict();
+            var desired = profile(documents.open(tx, actor.tenant(), revision));
+            var ids = desired.workflows().workflows().stream().map(WorkflowDefinition::id).collect(java.util.stream.Collectors.toSet());
+            if (receipts.size() != ids.size() || !receipts.stream().map(WorkflowGraphBuildResult::workflowId)
+                    .collect(java.util.stream.Collectors.toSet()).equals(ids)) throw Failure.unavailable();
+            for (var receipt : receipts) {
+                if (!actor.tenant().value().equals(receipt.tenantId()) || !id.equals(receipt.profileId())
+                        || !digest.equals(receipt.profileDigest()) || receipt.generation() != expectedGeneration) throw Failure.unavailable();
+                tx.workflowProfiles().graphBuild(id, digest, receipt.workflowId(), codec.json(receipt));
+            }
+            tx.audit(actor.id(), "WORKFLOW_GRAPH_PREPARE", "profile:" + id, expectedGeneration,
+                requestId, digest.substring(7));
+            return new Store.Reply(200, codec.json(receipts), expectedGeneration);
+        });
+    }
+
     /** Reviewed document retrieval stays behind current management authorization; prompts are private configuration. */
     public Store.Reply document(DirectoryService.Actor actor, String id, String digest, boolean reviewed) {
         return store.transaction(actor.tenant(), false, tx -> {
@@ -239,13 +281,15 @@ public final class WorkflowProfiles {
         Ids.valid(id);
         return published(tx, tenant, id, tx.workflowProfiles().publication(id));
     }
-    /** A pinned run can only use the reviewed revision while its publication and readiness are current. */
-    public DeploymentProfile runnableRevision(Store.Session tx, Ids.TenantId tenant, String id, String digest) {
-        Ids.valid(id);
-        digest(digest);
-        var head = tx.workflowProfiles().publication(id);
-        if (head == null || !head.digest().equals(digest)) throw ManagementAccess.denied();
-        return published(tx, tenant, id, head);
+    /** An admitted run pins its reviewed configuration; publication controls new admissions only.
+     * Live service grants, agent eligibility, secrets and effect/lease authority are rechecked by callers. */
+    public DeploymentProfile admittedRevision(Store.Session tx, Ids.TenantId tenant, WorkflowRunStore.QueuedRun run) {
+        if (run == null || !run.equals(tx.workflowRuns().get(run.id()))
+                || !java.util.Set.of("QUEUED", "RUNNING").contains(tx.workflowRuns().state(run.id())))
+            throw ManagementAccess.denied();
+        var revision = revision(tx, tenant, run.profileId(), run.profileDigest());
+        if (!revision.state().equals("REVIEWED")) throw ManagementAccess.denied();
+        return profile(documents.open(tx, tenant, revision));
     }
     private DeploymentProfile published(Store.Session tx, Ids.TenantId tenant, String id, WorkflowProfileStore.Publication head) {
         if (head == null) throw ManagementAccess.denied();

@@ -54,7 +54,8 @@ it('stages, reviews, provisions and publishes only an exact ready revision and g
   let current={...status};
   const transport=vi.fn<typeof fetch>().mockImplementation(async(url,init)=>{
     if(String(url).endsWith('/review'))current={...current,state:'REVIEWED'};
-    if(String(url).endsWith('/provision')){current={...current,dependenciesReady:true};return response({state:'READY'});}
+    if(String(url).endsWith('/provision'))return response({state:'READY'});
+    if(String(url).endsWith('/graphs:prepare')){current={...current,dependenciesReady:true};return response([{state:'READY'}]);}
     if(String(url).endsWith('/publish'))current={...current,state:'PUBLISHED',generation:1};
     return response(current,init?.method==='POST'?201:200);
   });
@@ -67,6 +68,10 @@ it('stages, reviews, provisions and publishes only an exact ready revision and g
   fireEvent.click(screen.getByText('Review exact revision'));await screen.findByText('example: REVIEWED');
   expect((screen.getByText('Publish reviewed revision') as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByText('Provision reviewed packages'));await screen.findByText('Package provisioning: READY');
+  expect((screen.getByText('Publish reviewed revision') as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByText('Prepare reviewed graphs'));await screen.findByText('Prepared 1 workflow graphs. Refresh readiness before publication.');
+  const build=transport.mock.calls.find(([url])=>String(url).endsWith('/graphs:prepare'))!;
+  expect(JSON.parse(build[1]!.body as string)).toEqual({profileDigest:digest,expectedGeneration:0});
   fireEvent.click(screen.getByText('Publish reviewed revision'));await screen.findByText('example: PUBLISHED');
   const publish=transport.mock.calls.find(([url])=>String(url).endsWith('/publish'))!;
   expect(JSON.parse(publish[1]!.body as string)).toEqual({profileDigest:digest,expectedGeneration:0});

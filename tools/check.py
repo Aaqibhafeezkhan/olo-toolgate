@@ -109,7 +109,7 @@ def helm_checks():
 def scans(staged_scan=True):
     workflows = [p.relative_to(ROOT).as_posix() for p in sorted((ROOT/'.github/workflows').glob('*.yml'))]
     run(['docker','run','--rm','-v',f'{ROOT.as_posix()}:/work:ro','-w','/work','rhysd/actionlint:1.7.7',*workflows])
-    run(['npm','audit','--audit-level=high'])
+    python('tools/security/npm_audit.py')
     python('-m','pip_audit','-r','tools/requirements.txt')
     python('-m','pip_audit','-r','apps/quickstart/requirements.txt')
     from dependency_licenses import audit

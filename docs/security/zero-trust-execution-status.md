@@ -1,6 +1,116 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Expiring runtime worker observations — 2026-11-18
+
+The #295 integration now fences recent worker capabilities by tenant, stable
+authenticated owner and process instance, with a server-selected expiry and
+bounded storage. Publication/new admission require matching recent compiler/
+graph inventory; existing run leases and current step authorization stay
+independent. These are trusted service observations, not remote attestation or
+proof of instantaneous availability. SQLite/PostgreSQL negatives, RLS inventory
+and hardened-image tests passed within the
+[workflow checkpoint's scope](../architecture/workflow-v1-status.md#expiring-compatible-worker-presence--2026-11-18).
+No #230 stage, overall phase/first-slice acceptance table, weight or execution
+security guarantee is completed or expanded. Recovery and integrated acceptance
+remain outstanding.
+
+## Embedded workflow package source — 2026-11-18
+
+The #295 `BUNDLE` source consumes only an exact already verified tenant artifact;
+it grants no upload verification, publisher trust, runtime permission or signing
+bypass. Missing content remains pending without substituting image/Marketplace
+content. SQLite/PostgreSQL tests exercise missing content, coordinate mismatch
+and tenant separation; actual checks and outstanding execution prerequisites are
+in the [workflow checkpoint](../architecture/workflow-v1-status.md#embedded-package-source-portability--2026-11-18).
+No #230 stage, overall phase/first-slice acceptance table, weight or security
+guarantee is completed or expanded by this package-source integration.
+
+## Workflow placement and observed-device readiness — 2026-11-18
+
+The #295 integration adds immutable tenant-fenced device placement, checks live
+administrator authority before selection, and requires exact applied package and
+trigger observations during publication/new admission. Required group sets only
+restrict trigger targets; loss of target membership revokes the old lease on the
+next existing check-in. Selection does not enable, approve or enroll a device,
+grant execution, change OS access or provide a trusted-code sandbox. The
+[workflow checkpoint](../architecture/workflow-v1-status.md#durable-device-placement-and-applied-readiness--2026-11-18)
+records actual validation and remaining activation/recovery/acceptance limits.
+No S01–S33 stage or roadmap phase is completed by this slice; overall phase,
+first-slice acceptance tables, weights and security guarantees remain unchanged.
+
+## Capability-matched workflow claims — 2026-11-17
+
+The #295 worker now declares verified installed graph digests and compiler
+identity before Control selects an admitted run. Wrong/empty capabilities leave
+work queued; the client rechecks the returned identity. This grants no authority
+to install arbitrary code or bypass current leases/grants. Provisioned selected
+Java tests and the hardened image tests passed within the recorded scope; see
+the [workflow checkpoint](../architecture/workflow-v1-status.md#compatible-worker-claiming--2026-11-17).
+No #230 stage/phase/first-slice acceptance or security-guarantee weight changes;
+overall and acceptance tables remain unchanged. Durable worker readiness and
+full distributed hot-swap acceptance remain outstanding.
+
+## Temporary dependency-risk acceptance — 2026-11-17
+
+2026-11-18 follow-up (known base `f997222d`): the source Trivy gate now applies
+the same original-expiry exception to CVE alias `CVE-2026-112366`, restricted to
+the root npm lockfile, exact package/version, unchanged HIGH severity, affected
+status and absence of a fixed version. No image or license finding is waived.
+Eight npm tests, ten source-classification tests, replay of the actual CI
+artifact and a fresh live source Trivy scan passed; evidence is tracked in the
+[workflow checkpoint](../architecture/workflow-v1-status.md#trivy-identity-for-the-existing-temporary-exception--2026-11-18).
+No S01–S33 stage, overall phase/first-slice acceptance table or execution-security
+claim changes; the exception continues to accept unresolved dependency risk.
+
+At the user's request, CI temporarily accepts the exact Picomatch 4.0.7
+advisory `GHSA-fc5q-39xc-vjpf` until 2026-12-17. Raw findings remain retained;
+other high/critical advisories and invalid/expired exception results fail the
+npm gate. This is an unresolved dependency risk, not a security remediation or
+completed #230 stage. Overall phase and first-slice acceptance tables, weights
+and execution-security claims are unchanged. Known base, eight policy tests,
+live npm audit results and remaining work are recorded in the
+[workflow checkpoint](../architecture/workflow-v1-status.md#temporary-npm-audit-exception--2026-11-17).
+
+## Installed compiler identity follow-up — 2026-11-17
+
+The #295 runtime now prepares explicitly installed native factories through its
+existing immutable-package verifier and checks the admitted compiler identity for
+native and JSON runs. Identity includes the loader, author API, JSON compiler and
+runner, normalizing checkout line endings. This adds no untrusted Python sandbox
+or new execution authority. The hardened image gate passed 105 tests, including
+native mismatch refusal and compiler portability; no #230 stage, first-slice
+acceptance, phase table or security-guarantee weight changes. See the
+[workflow checkpoint](../architecture/workflow-v1-status.md#installed-native-preparation-and-image-fixture-repair--2026-11-17)
+for actual evidence, known base and remaining work.
+
+## Admitted workflow revision and compiler pin — 2026-11-17
+
+The next #295 slice separates current-publication admission from execution of a
+durable queued/running run, pins the compiler digest in that run, and requires
+tenant/generation-bound compiler receipts at production publication. Current
+leases, kills and live service/agent/model/tool authority remain mandatory.
+The focused SQLite/PostgreSQL admission test checks A/B selection, duplicate
+admission and current agent revocation; the real mTLS build transport test also
+passes. This is no completed #230 stage or full first-slice security acceptance.
+Weights, phase table and security limitations are unchanged. Actual checks and
+remaining activation/persistence/demo work are recorded in the
+[workflow checkpoint](../architecture/workflow-v1-status.md#graph-preparation-and-admitted-run-hot-swap--2026-11-17).
+
+## Local JSON graph/compiler boundary — 2026-11-17
+
+The #295 hot-swap implementation adds a pure JSON graph compiler using existing
+run-scoped model/tool/agent adapters. A private mTLS rebuild API reauthorizes
+against a reviewed, tenant-bound Control candidate and exact generation, without
+executing workflow effects or issuing authority. Compilation/cache tests and
+SQLite/PostgreSQL candidate-read negatives passed within their recorded scope.
+This introduces no Python sandbox, native-effect recovery guarantee or completed
+#230 stage/phase/first-slice acceptance. Existing phase weights and security
+limitations remain unchanged. The user authorized draft-PR delivery; complete activation,
+external persistence and new-stack runtime acceptance remain outstanding. See the
+[workflow checkpoint](../architecture/workflow-v1-status.md#accepted-hot-swap-plan-local-implementation-started--2026-11-17)
+for known base, actual checks and remaining work.
+
 
 ## Tool/profile extension split checkpoint — 2026-11-17
 

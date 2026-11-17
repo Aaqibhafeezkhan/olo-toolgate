@@ -77,7 +77,7 @@ class GraphPackages:
     def __init__(self, directory=None):
         self.directory = Path(directory) if directory is not None else None
 
-    def _verified(self, selection):
+    def _verified(self, selection, *, validate_config=True):
         validate_selection(selection)
         roots = [DEFAULT_DIRECTORY]
         if self.directory is not None:
@@ -153,9 +153,39 @@ class GraphPackages:
                 or not isinstance(factory["function"], str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", factory["function"])):
             raise GraphRefused("GRAPH_INVALID_FACTORY")
         validator = schema_validator(factory["configSchema"])
-        if not validator.is_valid(selection["config"]):
+        if validate_config and not validator.is_valid(selection["config"]):
             raise GraphRefused("GRAPH_CONFIG_SCHEMA")
         return sources, factory, schema_validator(factory["outputSchema"])
+
+    def installed_digests(self):
+        """Bounded verified installation inventory; never import a factory to advertise it."""
+        from itertools import islice
+        found=set()
+        roots=[DEFAULT_DIRECTORY]+([self.directory] if self.directory is not None else [])
+        for root in roots:
+            if not root.is_dir() or root.is_symlink():
+                continue
+            entries=list(islice(root.iterdir(),257))
+            if len(entries)>256:
+                raise GraphRefused('GRAPH_INVENTORY_LIMIT')
+            for path in entries:
+                if not re.fullmatch(r'[a-f0-9]{64}',path.name) or not path.is_dir() or path.is_symlink():
+                    continue
+                manifest_path=path/'manifest.json'
+                try:
+                    if manifest_path.is_symlink() or manifest_path.stat().st_size>65536:
+                        continue
+                    manifest=json.loads(manifest_path.read_bytes(),object_pairs_hook=_object)
+                    factory=next(iter(manifest['factories']))
+                    selection=dict(packageId=manifest['packageId'],version=manifest['version'],
+                        digest='sha256:'+path.name,entryPoint=factory,config={})
+                    self._verified(selection,validate_config=False)
+                    found.add(selection['digest'])
+                except (OSError,ValueError,KeyError,TypeError,StopIteration,GraphRefused):
+                    continue
+                if len(found)>128:
+                    raise GraphRefused('GRAPH_INVENTORY_LIMIT')
+        return tuple(sorted(found))
 
     @contextmanager
     def load(self, selection):

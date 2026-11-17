@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
+import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -77,15 +79,41 @@ def discover(root=ROOT):
     return entries
 
 
+def gradle(command, env, output, *, sleep=time.sleep):
+    """Retry Maven Central throttling during dependency resolution, never failed tests/compilation."""
+    output.mkdir(parents=True,exist_ok=True)
+    for attempt in range(3):
+        log=output/('gradle-'+str(attempt+1)+'.log')
+        with log.open('wb') as stream:
+            result=subprocess.run(command,cwd=ROOT,env=env,stdout=stream,stderr=subprocess.STDOUT)
+        with log.open('rb') as stream:
+            for chunk in iter(lambda:stream.read(65536),b''):
+                sys.stdout.write(chunk.decode('utf-8',errors='replace'))
+            stream.seek(max(0,stream.tell()-65536))
+            tail=stream.read().decode('utf-8',errors='replace')
+        if tail and not tail.endswith('\n'):print()
+        if result.returncode==0:return
+        throttled=('Could not resolve all files for configuration' in tail
+            and 'Received status code 429 from server' in tail
+            and not re.search(r'(?m)^> Task .*:[^\s]*[Tt]est[^\s]* FAILED',tail)
+            and 'There were failing tests' not in tail
+            and not re.search(r'(?m)(?:Compilation failed|\berror:)',tail))
+        if attempt==2 or not throttled:
+            raise subprocess.CalledProcessError(result.returncode,command)
+        delay=(5,15)[attempt]
+        print('Maven dependency request was throttled; retrying package build in '+str(delay)+' seconds.',flush=True)
+        sleep(delay)
+
+
 def run(entry, sdk_repo, cli, sdk_version):
     package = ROOT/entry['directory']
     prefix = ':'+entry['project']+':' if entry['project'] else ''
     env = dict(os.environ, TOOLGATE_CLI=str(cli), TOOLGATE_TEST_PROVIDER_MODE='mock')
     wrapper = ROOT/('gradlew.bat' if os.name == 'nt' else 'gradlew')
-    command = [str(wrapper), '--no-daemon', '-p', str(ROOT/entry['buildRoot']),
+    command = [str(wrapper), '--no-daemon', '--console=plain', '-p', str(ROOT/entry['buildRoot']),
                '-PtoolgateSdkRepo='+str(sdk_repo), '-PtoolgateSdkVersion='+sdk_version,
                prefix+'check', prefix+'toolgatePackage']
-    subprocess.run(command, cwd=ROOT, env=env, check=True)
+    gradle(command,env,ROOT/'build/trigger-package-tests'/entry['packageId'])
     artifacts = list((package/'build/toolgate').glob('*.olotool'))
     if len(artifacts) != 1:
         raise ValueError('Expected one current package artifact')

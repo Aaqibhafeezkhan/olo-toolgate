@@ -448,8 +448,17 @@ final class ContractV2RoundTripTest {
         "WorkflowDispatchRequest",
         "WorkflowExecutionLimits",
         "WorkflowFinishDecision",
+        "WorkflowGraphBuildRequest",
+        "WorkflowGraphBuildResult",
+        "WorkflowGraphCandidate",
+        "WorkflowGraphCapabilities",
         "WorkflowGraphSelection",
         "WorkflowGroupDefinition",
+        "WorkflowJsonBranchRoutes",
+        "WorkflowJsonEdge",
+        "WorkflowJsonGraph",
+        "WorkflowJsonNode",
+        "WorkflowJsonNodeKind",
         "WorkflowModelDeployment",
         "WorkflowModelGeneration",
         "WorkflowModelGroupDefinition",
@@ -466,7 +475,8 @@ final class ContractV2RoundTripTest {
         "WorkflowStackPlatform",
         "WorkflowStackRuntime",
         "WorkflowStackTriggerSource",
-        "WorkflowToolDecision");
+        "WorkflowToolDecision",
+        "WorkflowWorkerCapabilities");
     private final ObjectMapper mapper = JsonMapper.builder()
         .defaultPropertyInclusion(JsonInclude.Value.construct(JsonInclude.Include.NON_NULL, JsonInclude.Include.ALWAYS))
         .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES).build();

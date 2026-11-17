@@ -9,4 +9,5 @@ namespace OloLabs\ToolGate\Contracts\V2;
 enum ProfilePackageSource: string {
     case PREBUILT_CORE = 'PREBUILT_CORE';
     case MARKETPLACE = 'MARKETPLACE';
+    case BUNDLE = 'BUNDLE';
 }

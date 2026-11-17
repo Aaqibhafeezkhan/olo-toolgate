@@ -12,9 +12,15 @@ import json
 import subprocess
 import sys
 from contextlib import contextmanager
+from datetime import date
 import tarfile
 import tempfile
 from pathlib import Path
+
+if __package__:
+    from .security.npm_audit import exceptions, POLICY
+else:
+    from security.npm_audit import exceptions, POLICY
 
 ROOT=Path(__file__).resolve().parents[1]
 # Exact immutable evidence, not a directory exclusion. Changed/new manifests
@@ -95,6 +101,30 @@ def split_findings(report, historical):
     return blocking,archived
 
 
+def temporary_findings(report, policy, *, today=None):
+    """Apply the same reviewed npm exception to its exact Trivy CVE identity."""
+    split_findings(report,set())  # Validate even findings that might be accepted.
+    allowed=exceptions(policy).values()
+    today=today or date.today()
+    remaining=[];accepted=[]
+    for result in report['Results']:
+        findings=[];waived=[]
+        for finding in result.get('Vulnerabilities') or []:
+            permitted=(result['Target']=='package-lock.json' and result.get('Type')=='npm'
+                and finding.get('Status')=='affected' and not finding.get('FixedVersion')
+                and any(finding.get('VulnerabilityID')==entry['cve']
+                    and finding.get('PkgName')==entry['package']
+                    and finding.get('InstalledVersion') in entry['versions']
+                    and finding.get('Severity')==entry['severity'].upper()
+                    and date.fromisoformat(entry['created'])<=today<=date.fromisoformat(entry['expires'])
+                    for entry in allowed))
+            (waived if permitted else findings).append(finding)
+        remaining.append(dict(result,Vulnerabilities=findings))
+        if waived:
+            accepted.append(dict(Target=result['Target'],Type=result.get('Type'),Vulnerabilities=waived))
+    return dict(report,Results=remaining),accepted
+
+
 def scan():
     cache=ROOT/'.dev/trivy-cache';cache.mkdir(parents=True,exist_ok=True)
     with snapshot() as archive:
@@ -107,12 +137,15 @@ def scan():
         print(result.stderr,file=sys.stderr,end='',flush=True)
         result.check_returncode()
         report=json.loads(result.stdout)
-        blocking,archived=split_findings(report,historical_targets(archive))
+        filtered,accepted=temporary_findings(report,json.loads(POLICY.read_text(encoding='utf-8')))
+        blocking,archived=split_findings(filtered,historical_targets(archive))
     output=ROOT/'build/source-scan';output.mkdir(parents=True,exist_ok=True)
     for name,document in (('full',report),('blocking',dict(SchemaVersion=2,Results=blocking)),
-                          ('historical',dict(SchemaVersion=2,Results=archived))):
+                          ('historical',dict(SchemaVersion=2,Results=archived)),
+                          ('temporarily-accepted',dict(SchemaVersion=2,Results=accepted))):
         (output/(name+'.json')).write_text(json.dumps(document,indent=2)+'\n',encoding='utf-8')
-    for category,results in (('HISTORICAL (reported, nonblocking)',archived),('BLOCKING',blocking)):
+    for category,results in (('HISTORICAL (reported, nonblocking)',archived),
+                            ('TEMPORARY EXCEPTION (reported, expiring)',accepted),('BLOCKING',blocking)):
         for result in results:
             for key in ('Vulnerabilities','Licenses'):
                 for finding in result.get(key,[]):

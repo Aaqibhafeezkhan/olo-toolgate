@@ -26,6 +26,7 @@ class LangGraphImageReleaseTests(unittest.TestCase):
             '$PWD/apps/langgraph-runtime/tests:/workspace/apps/langgraph-runtime/tests:ro',
             '$PWD/tools/workflows:/workspace/tools/workflows:ro',
             '$PWD/examples/native-graphs:/workspace/examples/native-graphs:ro',
+            '$PWD/profiles/configurations/text-summary:/workspace/profiles/configurations/text-summary:ro',
         ])
         self.assertEqual('/workspace/apps/langgraph-runtime/tests', command[command.index('-s') + 1])
         for mount in mounts:
@@ -33,6 +34,8 @@ class LangGraphImageReleaseTests(unittest.TestCase):
             self.assertTrue(Path(source).is_dir(), source)
         self.assertIn('--read-only', command)
         self.assertEqual('none', command[command.index('--network') + 1])
+        self.assertIn('--target verification', script)
+        self.assertIn('olo-toolgate-langgraph-runtime:verification', command)
 
     def test_image_evidence_is_required_and_manual_build_saves_the_image(self):
         jobs = yaml.safe_load((ROOT/'.github/workflows/images.yml').read_text())['jobs']

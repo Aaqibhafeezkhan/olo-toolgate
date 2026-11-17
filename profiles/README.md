@@ -6,6 +6,14 @@ profile: workflow/agent/model JSON, referenced directory definitions, logical
 trigger connections and exact tool-package source recipes. Each folder has its
 own README and, for a file use case, an input example. Secrets are never sources.
 
+The supplied configurations now declare execution order in `workflow.graph.config`
+using the installed `olo.json-graph` factory. Edit its nodes, edges and output
+expressions to change the topology; agent definitions supply the governed model
+and tool capabilities. The compiler supports value, agent, model, tool, branching,
+static joins and bounded loops. Compilation does not provision devices or make a
+profile runnable. Automatic hot-swap deployment is still being implemented; see
+the [live workflow status](../docs/architecture/workflow-v1-status.md).
+
 From any directory on Windows:
 
 ```bat
@@ -29,6 +37,13 @@ builds reuse caches. Output is always in the ignored `profiles/bin/` directory
 unless `--output` is supplied. `--packages-dir` selects an existing collection
 of exact verified `.olotool` tool archives instead of compiling recipes.
 
+Package declarations use source `BUNDLE` and the exact digest of their embedded
+`.olotool` bytes. The target verifies/stores these archives before provisioning;
+they do not need to exist in its core image lock or Marketplace. Missing content
+stays pending with no substitution. Package verification, release signing,
+destination runtime support and independently administered permissions remain
+required. Configuration sources remain unchanged by export/build packaging.
+
 Each output `<configuration>-<workflow>-<version>.olo` is a ZIP containing:
 
 - `manifest.json`: current format version, workflow ID, configuration hashes,
@@ -48,12 +63,16 @@ Product/profile versions and tool package versions are independently recorded.
 Long or platform-sensitive labels are shortened in filenames; the inventory
 retains the complete original identifiers and version.
 
-Import a bundle on **Workflows → Import workflow .olo**. Import its embedded
-packages through Control, apply referenced configuration under the existing
+Import a bundle on **Workflows → Import workflow .olo**. Importing its embedded
+packages is part of that action: all exact archives must verify through Control
+before the new workflow is staged. Apply referenced configuration under the existing
 configuration policy, restore trigger mappings, review and publish. Upload does
 not deploy packages or grant execution. Approved devices, native Python graph
 factories, model services and vault secrets still need destination provisioning.
 Imports preserve human credentials and do not restart containers.
+Prepare reviewed graphs before publication; package installation alone is not
+graph readiness. Direct JSON graph tool nodes are included in the exported
+package/reference closure as well as configured agent context tools.
 
 Foundation CI builds and retains these outputs. Development, tagged, manual
 development and immutable product publication collect the tested bytes and

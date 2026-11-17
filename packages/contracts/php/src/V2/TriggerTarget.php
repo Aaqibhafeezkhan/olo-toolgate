@@ -11,19 +11,21 @@ final readonly class TriggerTarget implements \JsonSerializable {
         public TriggerExecutor $executor,
         public ?array $devices = null,
         public ?array $deviceGroups = null,
-        public ?array $excludeDevices = null
+        public ?array $excludeDevices = null,
+        public ?array $requiredDeviceGroupSets = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['executor', 'devices', 'deviceGroups', 'excludeDevices']) || array_diff(['executor'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['executor', 'devices', 'deviceGroups', 'excludeDevices', 'requiredDeviceGroupSets']) || array_diff(['executor'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             TriggerExecutor::from($data['executor']),
             array_key_exists('devices', $data) ? array_map(static fn ($item) => $item, $data['devices']) : null,
             array_key_exists('deviceGroups', $data) ? array_map(static fn ($item) => $item, $data['deviceGroups']) : null,
-            array_key_exists('excludeDevices', $data) ? array_map(static fn ($item) => $item, $data['excludeDevices']) : null
+            array_key_exists('excludeDevices', $data) ? array_map(static fn ($item) => $item, $data['excludeDevices']) : null,
+            array_key_exists('requiredDeviceGroupSets', $data) ? array_map(static fn ($item) => array_map(static fn ($item) => $item, $item), $data['requiredDeviceGroupSets']) : null
         );
     }
 

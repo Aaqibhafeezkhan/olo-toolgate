@@ -85,6 +85,134 @@ It excludes prompts, arguments, model/tool results and credentials. The summary
 is scoped to one run and bounded by its step limit. These are worker observations;
 independent server evidence is still required for full qualification.
 
+## JSON graphs and private rebuild API
+
+The admin profile lifecycle now includes **Prepare reviewed graphs**. Control
+fetches the exact reviewed document, asks its installation-selected runtime to
+compile every graph, then records all receipts in one tenant transaction after
+rechecking management authority and publication generation. Partial/failed builds
+leave previous receipts intact. Package readiness alone cannot publish a profile.
+The rebuild endpoint supports the installed JSON factory and explicitly selected,
+verified native factories. An invalid JSON graph never falls back to a native
+factory. Set the runtime API's installation-owned `graphDirectory` when additional
+operator-installed graph packages are mounted, and mount the same packages on
+workers. Native package code remains trusted operator code, not sandboxed uploads.
+
+Configure Control with these installation-owned settings, outside profiles:
+
+```text
+TOOLGATE_CONTROL_RUNTIME_BUILDER_ORIGIN=https://runtime-builder:8447
+TOOLGATE_CONTROL_RUNTIME_BUILDER_IDENTITY_PATH=/run/credentials/runtime/control-builder.p12
+TOOLGATE_CONTROL_RUNTIME_BUILDER_PASSWORD_PATH=/run/credentials/runtime/identity.password
+TOOLGATE_CONTROL_RUNTIME_BUILDER_CA_PATH=/run/credentials/runtime/runtime-ca.crt
+```
+
+Use an operator-issued Control service client certificate accepted by the runtime's
+`clientNames` and `clientCa`, and a server certificate valid for `runtime-builder`.
+Given those existing credentials, create the client identity without placing a
+password on the command line:
+
+```sh
+openssl pkcs12 -export -in credentials/runtime/control-builder.crt \
+  -inkey credentials/runtime/control-builder.key \
+  -out credentials/runtime/control-builder.p12 \
+  -passout file:credentials/runtime/identity.password
+chmod 600 credentials/runtime/control-builder.p12 credentials/runtime/identity.password
+```
+
+The identity/password must be private, protected files readable by Control; mount
+them read-only. Import does not create certificates, grants, mounts or firewall
+rules. Runtime traffic remains on the private installation network; these settings
+do not require opening an inbound host port.
+
+Each admitted run now pins the build's compiler digest, covering the installed
+loader, author API, JSON compiler and governed runner with normalized line endings.
+Workers refuse a different compiler before executing JSON or native graph effects. Control continues a queued or
+running admitted revision after a new publication, while rechecking live step,
+lease, kill and model/tool authority. New admissions use the new publication.
+Fresh schemas and the current lease shape are required; unsupported existing
+databases/snapshots are refused without conversion.
+
+The installed `olo.json-graph` factory now compiles topology from workflow JSON.
+Get its verified selection metadata with:
+
+```sh
+python tools/workflows/json_graph_package.py --check
+```
+
+Set that selection's `config` to a graph such as:
+
+```json
+{
+  "schemaVersion": 1,
+  "nodes": [
+    {"id": "summarize", "kind": "agent", "agentId": "your-configured-agent", "input": {"$path": "/message"}}
+  ],
+  "edges": [
+    {"from": ["START"], "to": "summarize"},
+    {"from": ["summarize"], "to": "END"}
+  ],
+  "output": {"$path": "/values/summarize"},
+  "outputSchema": {"type": "object"}
+}
+```
+
+`agentId` must be bound in the reviewed workflow. Nodes currently support
+`value`, `agent`, `model`, `tool` and `branch`; edges support static parallel
+execution, explicit all-predecessor joins and recursion-bounded loops. Expressions
+support `$path`, `$literal`, `$eq`, `$lt`, `$and`, `$or` and numeric `$add`.
+No Python expressions/import paths are evaluated from the profile. All actual
+model/tool/agent operations still use the run-scoped governed adapters.
+
+The shared compiler cache contains only pure topology and copied JSON, with no
+run credentials or adapters. Cache eviction does not terminate a running graph.
+Native installed factories retain their existing isolated loading semantics.
+Subgraphs, dynamic fan-out and durable interrupt/resume are **not implemented by
+this JSON compiler yet** and are refused, rather than silently ignored.
+
+The new [private runtime API](../../packages/contracts/openapi/runtime-v1.yaml)
+provides rebuild, actual capabilities and cache eviction. Start its service with
+an installation-owned configuration file:
+
+```sh
+python -m toolgate_runtime.graph_server --configuration /run/credentials/runtime-api.json
+```
+
+The file declares `host`, `port`, server `certificate`/`key`, `clientCa`, allowed
+Control certificate `clientNames`, `controlOrigin`, `controlCaFile` and a `readers`
+map from tenant IDs to workload-token file paths. Paths and private credentials
+are supplied by the operator, outside workflow bundles. There is no anonymous
+or plain-HTTP mode. Use a dedicated service CA/client identity; do not publish
+this internal API as an unauthenticated Internet endpoint.
+
+`POST /internal/runtime/v1/graphs:rebuild` accepts the canonical candidate
+reference (`tenantId`, `profileId`, `profileDigest`, `workflowId`,
+`expectedGeneration`). The service fetches the exact reviewed graph from
+Control's direct-TLS runtime-service endpoint and checks tenant, workflow,
+generation and bound agents before compiling. Every call reauthorizes, including
+cache hits. The receipt means **compiled**, not published, deployed or runnable;
+the full provisioning/activation barrier and console integration are pending.
+Model hosting remains external. This component does not create folders, change
+permissions, open firewall ports or provision model services.
+
+## Dynamic subscription listener
+
+The listener can follow the current caller's authorized active subscriptions:
+
+```sh
+python -m toolgate_runtime.trigger_listener --control-origin https://control.example \
+  --follow-subscriptions --token-file /run/credentials/listener.token \
+  --ca-file /run/credentials/control-ca.crt
+```
+
+The token must have current subscription/admission authority. The listener reads
+the complete bounded catalog, adds/removes sessions and drains a removed UID
+before replacing the same subscription name. It never chooses workflows from
+event data, generates acknowledgements without admission, or uses a local event
+deduplication flag. Control's durable admission is the workflow consumer's
+duplicate/in-progress boundary. `scheduled` statistics count listener loops,
+not proof that every underlying stream is connected or a device trigger healthy.
+
 ## Install and verify outside containers
 
 The Python CI group runs `python tools/workflows/check.py` in an isolated
@@ -265,3 +393,27 @@ simulated admission ledger. These prove client protocol/order/failure behavior,
 not real Control persistence, authentication/delegation enforcement, exactly-once
 business effects or real trigger-to-workflow completion. TLS tests require
 OpenSSL and explicitly skip where it is unavailable.
+The image CI gate uses the Dockerfile's `verification` stage with OpenSSL and
+runs the installed-runtime tests with read-only fixtures. The final `production`
+stage excludes that test-only executable.
+
+Workers advertise the current compiler digest and verified installed graph-package
+digests in every `POST /internal/v1/runtime/claim` body. Control leaves incompatible
+runs queued. The bounded inventory verifies package bytes without importing graph
+factories; `--graph-directory` adds operator-installed packages to the built-in
+inventory. Empty inventories claim no work. A worker checks the returned lease
+against its advertised identities before execution.
+
+Both claim and `POST /internal/v1/runtime/workers:heartbeat` use canonical
+`WorkflowWorkerCapabilities`: `instanceId`, `compilerDigest`, and `graphDigests`.
+Each process creates one instance ID and retains it across credential refresh.
+Control records tenant/owner-bound presence for 30 seconds, with at most 256
+unexpired instances per tenant. A background heartbeat renews every five seconds
+while a workflow is busy, without claiming another run. Failure stops subsequent
+claims; current run leases and step authorization remain independent. A crashed
+or stopped process disappears from readiness at expiry, even without a sweep.
+
+Publication and new admission require recent compatible worker presence for each
+prepared graph. This is bounded capability/liveness evidence, not remote code
+attestation, proof of instantaneous health, per-replica graph compilation or
+checkpoint/crash recovery. Other deployment and provider readiness still apply.

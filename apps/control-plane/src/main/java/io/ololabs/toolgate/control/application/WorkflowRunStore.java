@@ -8,11 +8,17 @@ public interface WorkflowRunStore {
 
     record QueuedRun(String id, String profileId, String profileDigest, String workflowId, String workflowVersionId,
                      String serviceAgentId, String serviceAgentGroupId, String remediationMode, long createdAt,
-                     long keyVersion, String document) {
+                     long keyVersion, String document, String compilerDigest, String graphDigest) {
         @Override public String toString() { return "QueuedRun[id=" + id + "]"; }
     }
     record Lease(String runId, String id, String ownerId, String tokenDigest, long expiresAt) {}
     record Step(String runId, String kind, String subjectId, String modelGroupId, String tokenDigest) {}
+    record Worker(String instanceId, String ownerId, String compilerDigest, java.util.List<String> graphDigests, long expiresAt) {
+        public Worker { graphDigests = java.util.List.copyOf(graphDigests); }
+    }
+    /** Server-expiring observations, not execution authority or remote attestation. */
+    void reportWorker(Worker worker, long now);
+    int compatibleWorkers(String compilerDigest, String graphDigest, long now);
 
     Admission admission(String subscriptionUid, String cursor);
     void insertAdmission(Admission admission);
@@ -21,7 +27,7 @@ public interface WorkflowRunStore {
     QueuedRun running(String id);
     QueuedRun get(String id);
     String state(String id);
-    QueuedRun nextQueued();
+    QueuedRun nextQueued(String compilerDigest, java.util.List<String> graphDigests);
     void claim(Lease lease);
     Lease activeLease(String runId);
     Step activeStep(String runId);

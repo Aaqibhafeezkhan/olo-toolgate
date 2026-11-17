@@ -3,6 +3,9 @@
 // GENERATED FILE — DO NOT EDIT; python tools/ui/generate.py
 import type { ControlAccessGrant, ControlAccessGrantPage, ControlAgent, ControlAgentDelegation, ControlAgentDelegationPage, ControlAgentGroup, ControlAgentGroupPage, ControlAgentPage, ControlDelegation, ControlDelegationPage, ControlDevice, ControlDeviceEvidence, ControlDeviceEvidencePage, ControlDeviceGroup, ControlDeviceGroupPage, ControlDevicePage, ControlExecutionBinding, ControlExecutionBindingPage, ControlIdentityBinding, ControlIdentityBindingPage, ControlPolicy, ControlPolicyPage, ControlResourceExtractor, ControlResourceExtractorPage, ControlRole, ControlRolePage, ControlTeam, ControlTeamPage, ControlTool, ControlToolGroup, ControlToolGroupPage, ControlToolPage, ControlUser, ControlUserPage, ControlWorkloadBinding, ControlWorkloadBindingPage } from '@olo-labs/toolgate-contracts';
 export const operations = {
+  reportWorkflowWorkerPresence: { method: 'POST', path: '/internal/v1/runtime/workers:heartbeat' },
+  claimCompatibleWorkflowRun: { method: 'POST', path: '/internal/v1/runtime/claim' },
+  getRuntimeGraphCandidate: { method: 'GET', path: '/internal/v1/runtime/graph-candidates/{profileId}/{digest}/{workflowId}' },
   getWorkflowRunResult: { method: 'GET', path: '/api/control/v1/workflow-runs/{runId}' },
   listPublishedWorkflows: { method: 'GET', path: '/api/control/v1/workflow-profiles/published' },
   getPublishedWorkflow: { method: 'GET', path: '/api/control/v1/workflow-profiles/published/{profileId}/{digest}' },
@@ -12,6 +15,7 @@ export const operations = {
   getWorkflowProfileDocument: { method: 'GET', path: '/api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/document' },
   reviewWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/review' },
   provisionWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/provision' },
+  prepareWorkflowGraphs: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/graphs:prepare' },
   publishWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/publish' },
   getAdminSession: { method: 'GET', path: '/api/control/v1/admin-session' },
   publicClientInstallers: { method: 'GET', path: '/api/public/v1/installers' },

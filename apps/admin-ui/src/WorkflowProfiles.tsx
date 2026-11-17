@@ -28,6 +28,7 @@ export function WorkflowProfiles({client}:{client:ControlClient}){
         <button disabled={busy} onClick={()=>void run(async()=>setStatus(await client.workflowProfileStatus(status.profileId,status.profileDigest)))}>Refresh lifecycle status</button>
         <button disabled={busy||status.state!=='DRAFT'} onClick={()=>void run(async()=>setStatus(await client.reviewWorkflowProfile(status.profileId,status.profileDigest)))}>Review exact revision</button>
         <button disabled={busy||status.state==='DRAFT'} onClick={()=>void run(async()=>{const result=await client.provisionWorkflowProfile(status.profileId,status.profileDigest);setStatus(await client.workflowProfileStatus(status.profileId,status.profileDigest));setNotice(`Package provisioning: ${result.state}`);})}>Provision reviewed packages</button>
+        <button disabled={busy||status.state==='DRAFT'} onClick={()=>void run(async()=>{const result=await client.prepareWorkflowGraphs(status.profileId,status.profileDigest,status.generation);setStatus(await client.workflowProfileStatus(status.profileId,status.profileDigest));setNotice(`Prepared ${result.length} workflow graphs. Refresh readiness before publication.`);})}>Prepare reviewed graphs</button>
         <button disabled={busy||status.state!=='REVIEWED'||!status.dependenciesReady} onClick={()=>void run(async()=>setStatus(await client.publishWorkflowProfile(status.profileId,status.profileDigest,status.generation)))}>Publish reviewed revision</button>
       </section>}
     </div></EditorDialog>}

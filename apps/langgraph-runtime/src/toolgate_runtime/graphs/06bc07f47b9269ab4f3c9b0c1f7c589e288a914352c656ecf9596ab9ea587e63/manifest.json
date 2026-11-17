@@ -1,0 +1,189 @@
+{
+  "format": 1,
+  "packageId": "olo.json-graph",
+  "version": "1.0.0",
+  "runtimeApi": 1,
+  "dependencies": {
+    "langgraph": "1.2.20"
+  },
+  "capabilities": [
+    "json-state",
+    "agents",
+    "models",
+    "tools",
+    "async",
+    "branches",
+    "parallel-compute"
+  ],
+  "factories": {
+    "workflow": {
+      "file": "graph.py",
+      "function": "build_graph",
+      "configSchema": {
+        "$ref": "#/$defs/WorkflowJsonGraph",
+        "$defs": {
+          "WorkflowJsonGraph": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Versioned, bounded JSON topology for the installed generic LangGraph compiler. Structure alone establishes no execution authority.",
+            "properties": {
+              "schemaVersion": {
+                "type": "integer",
+                "const": 1
+              },
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/WorkflowJsonNode"
+                },
+                "maxItems": 64,
+                "minItems": 1
+              },
+              "edges": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/WorkflowJsonEdge"
+                },
+                "maxItems": 128,
+                "minItems": 1
+              },
+              "output": {
+                "type": "object",
+                "maxProperties": 64
+              },
+              "outputSchema": {
+                "type": "object",
+                "maxProperties": 64
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "nodes",
+              "edges",
+              "output",
+              "outputSchema"
+            ]
+          },
+          "WorkflowJsonNode": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Pure node declaration; per-run capabilities are injected by the runtime, never captured in topology.",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 48,
+                "pattern": "^[a-z][a-z0-9_-]{0,47}$"
+              },
+              "kind": {
+                "$ref": "#/$defs/WorkflowJsonNodeKind"
+              },
+              "input": {
+                "type": "object",
+                "maxProperties": 64
+              },
+              "agentId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "toolRef": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[a-z0-9][a-z0-9._-]{0,127}/[a-z0-9][a-z0-9._-]{0,127}$"
+              },
+              "resultMode": {
+                "$ref": "#/$defs/WorkflowAgentResultMode"
+              },
+              "routes": {
+                "$ref": "#/$defs/WorkflowJsonBranchRoutes"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "input"
+            ]
+          },
+          "WorkflowJsonNodeKind": {
+            "type": "string",
+            "enum": [
+              "value",
+              "agent",
+              "model",
+              "tool",
+              "branch"
+            ],
+            "description": "Installed JSON node operations. Unsupported executable extensions are refused, never evaluated from profile text."
+          },
+          "WorkflowJsonBranchRoutes": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Boolean branch destinations in the configured graph.",
+            "properties": {
+              "true": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 48,
+                "pattern": "^(?:[a-z][a-z0-9_-]{0,47}|END)$"
+              },
+              "false": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 48,
+                "pattern": "^(?:[a-z][a-z0-9_-]{0,47}|END)$"
+              }
+            },
+            "required": [
+              "true",
+              "false"
+            ]
+          },
+          "WorkflowJsonEdge": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "One edge or explicit all-predecessor join. START and END are reserved boundary names.",
+            "properties": {
+              "from": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 48,
+                  "pattern": "^(?:[a-z][a-z0-9_-]{0,47}|START)$"
+                },
+                "maxItems": 64,
+                "minItems": 1
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 48,
+                "pattern": "^(?:[a-z][a-z0-9_-]{0,47}|END)$"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ]
+          },
+          "WorkflowAgentResultMode": {
+            "type": "string",
+            "enum": [
+              "CONTEXT",
+              "MODEL"
+            ],
+            "description": "Fixed stage completion source; context contains only confirmed configured reads."
+          }
+        }
+      },
+      "outputSchema": {}
+    }
+  },
+  "files": {
+    "README.md": "6dfa62f15bb714f4868321e702be019dbc01c75316d3b7482c8825f788292b33",
+    "graph.py": "772c83b489598f977c58123471449080de899454ec872f5534cfa081c5d4309d"
+  }
+}

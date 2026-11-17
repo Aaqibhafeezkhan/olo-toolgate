@@ -1,6 +1,439 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Trivy identity for the existing temporary exception — 2026-11-18
+
+Known base `f997222d`. CI run `44157956377`, scan job `134321768231`, failed
+because Trivy reports the already accepted Picomatch advisory as
+`CVE-2026-112366`. GitHub's advisory API confirms it is the same
+`GHSA-fc5q-39xc-vjpf`, with no patched version advertised. The shared exception
+policy now records both identities. Source classification accepts only npm
+Picomatch 4.0.7 in the root lockfile, with HIGH severity, affected status, no
+available fixed version and the original 2026-12-17 expiry. Raw findings remain
+in `full.json`; accepted findings are separated from blocking/historical
+findings. No new advisory, image or license exception is introduced.
+
+Eight npm policy tests and ten source-scan tests passed. Reclassification of
+the downloaded failing CI artifact produced zero blocking targets, one
+temporarily accepted target and one historical target, preserving raw findings.
+A fresh live source Trivy scan passed with zero blocking targets, one accepted
+target and one historical target, preserving all reports. Source quality and
+diff checks also passed. Java job `134322529497` failed resolving the Quarkus
+plugin before tests; its explicit rerun was cancelled when the newer push
+superseded it. Java CI remains unverified; no build gate was weakened. This unresolved dependency
+risk earns no #295 weight (**0/100**), #274 module weight (**27%** unchanged) or
+#230 execution-security claim. Full hot-swap acceptance remains outstanding.
+
+## Blank initialization and administrative API scripts — 2026-11-18
+
+Known base `a479b783`. Fresh `debug/profiled` Compose initialization now requests
+one password-protected administrator, disables automatic profile bootstrap and
+does not seed sealed-core packages. Existing initialized state is not reset or
+converted. The accepted plan now explicitly requires blank-first startup and
+permits administrator-authenticated backend scripts for explicit device
+enablement, verified-key approval and group membership; profile import must
+never imply these decisions.
+
+`tools/admin/control.py` supplies a standard-library HTTPS API client with private
+bearer/CA files, bounded JSON/exact `.olotool` inputs, explicit idempotency and
+revision headers, preserved HTTP 202 pending status, redirect refusal and no
+automatic effect retries. It calls existing Control APIs without Docker or
+database access. Operator instructions include private-folder ACLs and separate
+revision-guarded device requests. This generic transport is not a durable `.olo`
+import/prepare/activation orchestrator; console transfer still has the separate
+dependency preparation steps documented below.
+
+Validation passed: ten administrative transport/Compose tests (including real
+trusted/untrusted TLS, denied effects, redirect refusal and bounded responses),
+13 Quickstart initialization/restart tests, four Windows debug-management tests,
+Compose configuration validation and source quality. The first Windows debug
+run exceeded its old 30-second fixture limit; the generator harness now allows
+90 seconds and all four tests passed in 42 seconds. No application gate was
+disabled. The launcher still builds/recreates
+the old debug composition, and no new full stack or unchanged-container demo
+has run. Durable deployment reconciliation/activation handover, fresh generic
+stack wiring, external provider routing/readiness, recovery/cleanup and remaining
+graph features remain open. #295 remains **0/100**; #274 remains **27%**; this
+slice earns no #230 stage/security acceptance credit.
+
+## Expiring compatible worker presence — 2026-11-18
+
+Known base `78042804`. Canonical `WorkflowWorkerCapabilities` now carries one
+process instance ID plus compiler/verified installed graph digests. Claim and a
+separate authenticated direct-TLS heartbeat record tenant/owner-bound presence
+with a server-selected 30-second expiry. Renewal during a busy run does not
+claim another job. Publication/new admission require at least one recent
+compatible worker for each prepared graph; expired observations fail readiness
+without waiting for cleanup. Current admitted-run configuration/leases remain
+independent of this new-admission readiness check.
+
+Worker presence is bounded to 256 unexpired instances per tenant, uses fresh
+SQLite/PostgreSQL storage with RLS/identity guards/capacity accounting, and
+expires unused observations on subsequent reports. Another authenticated
+principal cannot replace an instance it does not own. A heartbeat failure stops
+subsequent claims; it neither retries effects nor falsely finishes an active
+run. The transport also refuses HTTP 200 JSON null as a queue/heartbeat success.
+Old bodyless/instance-less capability messages and obsolete generated contract
+names have no compatibility path.
+
+Provisioned verification passed **30 Control tests and two Java contract tests**,
+including SQLite/PostgreSQL owner/tenant/compiler/graph/expiry/limit cases,
+heartbeat-without-claim, publication refusal without workers, and RLS/privilege
+inventory. The hardened runtime image passed **111 tests without skips**.
+Seven canonical corpus tests, four ownership/capacity tests, PHP 459 v2 round
+trips, Rust two v2 round trips, UI/contract type checks, two TypeScript wire
+tests, generated preflight and source quality passed. The earlier full Java
+Windows fixture limitation remains; no full repository or live demo pass is
+inferred from these component gates.
+
+This is recent trusted-worker capability evidence, not remote attestation,
+instantaneous liveness, per-replica topology preparation or crash/checkpoint
+recovery. A stopped process can remain observed until its 30-second expiry.
+Durable deployment reconciliation, isolated prepare/activate trigger handover,
+external provider readiness/routing, fresh persistent stack wiring, remaining
+graph features, recovery/invalidation/cleanup and live unchanged-container
+acceptance remain outstanding. #295 stays **0/100**; #274 stays **27%**.
+
+## Embedded package source portability — 2026-11-18
+
+Known base `fe5dcef0`. Canonical package source `BUNDLE` requires an exact digest
+already verified in the tenant package store. Missing content stays pending;
+provisioning never substitutes a sealed-core or Marketplace artifact. Repository
+profile builds and console exports pin every declared package to their embedded
+archive coordinates/digest without changing source configuration. Bundle import
+rejects image/Marketplace-dependent declarations instead of retaining an old
+bundle interpretation. Ordinary package verification, release signing, current
+management permission and runtime authorization remain required.
+
+Provisioned Java verification passed **30 Control tests and two Java contract
+tests**; the new package-source acceptance executes on SQLite and PostgreSQL,
+including missing content, reapplication, coordinate mismatch and tenant
+isolation with no core lock or Marketplace configured. Seven profile build/
+release tests, seven canonical corpus tests, three deployment-profile tests,
+PHP 459 v2 round trips, TypeScript type checks/two wire tests, generated preflight
+and source quality passed. All **312 UI tests passed**, one optional test skipped,
+with coverage gates unchanged and passing. Both Rust v2 round-trip tests passed.
+
+This closes the destination image-inventory dependency for declared embedded
+packages; it does not prove a runnable imported workflow. Destination execution
+capabilities/signing, device eligibility, durable deployment reconciliation,
+activation handover, provider readiness, fresh stack wiring, recovery/cleanup
+and the unchanged-container demo remain outstanding. #295 stays **0/100**.
+
+## Durable device placement and applied readiness — 2026-11-18
+
+Known base `ab8a1de5`. Package provisioning now records one tenant/profile device
+selection before rollout and colocates its local packages and triggers there.
+The selected device must be enabled, approved, recently connected and a member
+of at least one enabled group in every required package's declared group list. Selection
+uses current Super Admin authority; cached actor flags do not suffice. Retries,
+reconnect and process reconstruction retain the selection. An offline/removed
+selection stays pending; no automatic second watcher or unfenced failover occurs.
+Fresh SQLite/PostgreSQL placement storage includes tenant fencing and capacity
+accounting; unsupported existing schemas remain rejected without migration.
+
+Generic trigger target `requiredDeviceGroupSets` restricts exact-device targets
+by independently managed group membership. A next-check-in target loss now marks
+the instance Removed and revokes the old active lease. Previously the desired
+set could shrink without explicitly revoking that lease. Provisioning requires
+exact applied package generation/version and READY reports; Running triggers
+require current configuration, Ready reports and unexpired leases on the same
+device. Publication/new admission recheck current observations instead of trusting
+a saved READY string. Profile-managed exports carry group requirements rather
+than the source's selected device; import refuses a group-wide watch before
+Control provisioning selects its destination.
+
+Validation already executed: canonical corpus seven tests, trigger bounds/size
+five tests, deployment-profile three tests, ownership/capacity four tests,
+PHP 459 v2 round trips, Rust two v2 round trips, generated preflight, source
+quality and UI type checking passed. All 311 UI tests passed (one optional test
+skipped), with coverage 87.98% statements, 84.18% branches, 86.86% functions and
+91.16% lines. Broader provisioned Java verification passed **79 Control tests**
+and **two Java contract tests** in 16m33s, including provisioning, fleet,
+trigger lifecycle/ingest/delivery, tenant RLS and capacity on their supported
+SQLite/PostgreSQL backends. After the final live-role and optional-package
+selection refinements, **13 affected Java tests** passed again against freshly
+provisioned storage. The complete UI gate/type checks also passed again after
+the final export change. The unrelated full `javaCheck` Windows fixture failure
+recorded below remains a limitation; no full repository gate or live demo pass
+is claimed.
+
+This is a component slice, not complete provisioning/activation or a live demo.
+Imported candidates still require durable automatic deployment reconciliation,
+candidate/active trigger handover isolation, provider/runtime readiness, fresh
+stack wiring, durable recovery/cleanup and unchanged-container acceptance.
+Device capability/folder permission qualification and explicit fenced
+reassignment remain incomplete. #295 stays **0/100**; #274 stays **27%** and
+no #230 stage/security-guarantee credit is earned.
+
+## Compatible worker claiming — 2026-11-17
+
+Known base `3d94520c`. Workers now advertise their compiler digest and bounded,
+verified installed graph-package digests on each authenticated claim. Control
+selects only queued runs with matching pinned identities; incompatible work
+stays queued rather than being consumed by the wrong worker. Fresh SQLite and
+PostgreSQL run storage includes the admitted graph digest and matching queue
+index/capacity accounting. Canonical JSON/OpenAPI and generated consumers change
+together; empty inventories claim nothing and obsolete bodyless requests are
+refused. Inventory verification does not execute installed factories, and the
+worker also refuses returned capabilities outside its advertised set.
+
+Focused provisioned Java verification passed 25 tests, including wrong compiler,
+wrong graph and empty-inventory queue preservation on SQLite/PostgreSQL.
+The hardened runtime image passed 108 tests without skips. Canonical corpus
+tests (seven), PHP v2 round trips (459 models), Rust v2 round trips (two),
+generated preflight (1585 files), schema ownership/capacity (four tests) and
+source quality passed. These are component checks, not live replica readiness
+or the unchanged-container demo. Full Java remains limited by the Windows
+POSIX-permission fixture failure recorded below. #295 remains **0/100**.
+Next work is device placement/applied readiness and fresh stack provisioning;
+publication still lacks a durable compatible-worker presence barrier.
+
+## Temporary npm audit exception — 2026-11-17
+
+Known tested base `3f18a6f9`. Run `44135588000`, job `134225730423`, failed
+on Picomatch advisory `GHSA-fc5q-39xc-vjpf`. At the user's request, the npm
+gate temporarily accepts that exact high-severity advisory for installed
+Picomatch **4.0.7**, including dependent findings whose reachable advisories
+are all covered. The exception expires **2026-12-17**. This accepts an unresolved
+dependency risk; it does not remediate the vulnerability. New advisories,
+different installed versions, changed advisory scope, an advertised Picomatch
+fix, expired exceptions and unverifiable audit results remain blocking.
+
+Eight focused policy tests passed, including peer-dependency cycles, unrelated
+findings, malformed responses, expiry and available-fix refusal. A live npm
+audit retained all six high findings and the gate passed under this exception.
+CI preserves the raw audit and decision in `source-scan-findings`; other
+dependency, license and secret gates are unchanged. No full scan-suite or
+hosted rerun pass is claimed. Remove the exception and update the lockfile when
+the upstream fix is available, or review it before expiry. #295 remains
+**0/100**; the hot-swap implementation and live acceptance work listed below
+remain outstanding.
+
+## UI test typing and Maven throttling repairs — 2026-11-17
+
+Known base `a8085a05`. Run `44133089397` job `134216198993` failed TypeScript
+checking because the workflow-transfer upload test treated its `Blob` parameter
+as a `File` without narrowing. The tracked `WorkflowTransfer.test.tsx` fixture now explicitly requires the named
+archive the import action produces. The complete local UI gate passed TypeScript,
+309 UI tests (one optional bundle test skipped), coverage, production Vite build
+and reproducible packaging. Coverage was 87.98% statements, 84.18% branches,
+86.86% functions and 91.16% lines.
+
+The same run's log-watch matrix job `134217885473` failed before compilation
+when Maven Central returned HTTP 429 for RE2J 1.8. Package-test tooling now retries
+that dependency-resolution failure at most twice (5/15-second delays), preserves
+attempt logs and still fails tests/compilation, other HTTP errors and exhausted
+retries. Eight matrix-tooling tests passed, including a real subprocess retry
+and refusal/bounded-attempt cases. Package jobs remain parallel. No live package
+or hosted rerun success is inferred from these mock/tooling checks.
+
+The earlier provisioned full Java run finished with the existing Windows POSIX
+permissions failure in the kill-switch TLS fixture (449 enterprise cases, one
+failure; overall `javaCheck` failed). No full Java pass, #295 phase credit
+(**0/100**), trigger module credit or new security claim is earned. Capability-
+matched worker claiming is the next separate, still-uncommitted increment;
+fresh provisioning, stack wiring and live hot-swap acceptance remain outstanding.
+
+## Installed native preparation and image fixture repair — 2026-11-17
+
+Known base `f962037e`. Hosted run `44130859168`, job `134208602466`, found
+the image-release regression test still requiring exactly three fixture mounts.
+Its expected inventory now includes the summary-profile source used by the
+runtime test and verifies the test-only image stage. No production fixture or
+credential mount is added.
+
+Rebuild preparation now also accepts explicitly selected installed native
+factories through the same immutable-package verifier. Invalid JSON cannot fall
+back to native execution. An operator-owned `graphDirectory` may supply additional
+installed factories. Runtime/compiler identity covers the author API, loader,
+JSON compiler and governed runner with normalized line endings; both native and
+JSON runs require the admitted identity before execution. Tests verify native
+preparation, missing-package refusal, mismatched native compiler refusal and
+Windows/Linux identity equivalence while detecting changed runner semantics.
+
+The matching hardened image command passed **105 tests with no skips** in
+17.6 seconds. All three image-release tests and generated preflight passed.
+Full Linux CI regression discovery passed **484 tests, 18 skipped** for platform/
+tool prerequisites in a disposable Python/Git/Node test image. This is regression
+discovery, not all foundation build gates. The previous provisioned full Java run has encountered the known Windows POSIX
+permissions failure in the kill-switch TLS fixture and is still completing.
+No new live stack acceptance or full Java pass is claimed. This closes native
+factory preparation within step 4, not runtime replica readiness, provider
+routing, provisioning or any full #295 phase (**0/100** remains). Next work
+remains one-device provisioning and stable stack wiring, then the outstanding
+handover, persistence, cleanup and live acceptance cases.
+
+## Graph preparation and admitted-run hot swap — 2026-11-17
+
+From known base `1c97ad26`, the next implementation adds an admin graph preparation
+action in both workflow editors, a fixed-installation mTLS Control-to-runtime
+client, and durable tenant/revision/workflow compiler receipts. All remote builds
+finish before one transaction rechecks authority/review/generation and records the
+complete set; failed, partial, cross-tenant and racing results retain the previous
+receipts. Production dependency checks now require these receipts for publication.
+The run ledger pins the admitted compiler digest, and JSON workers refuse a
+different compiler before graph effects. Fresh SQLite/PostgreSQL initialization
+includes the new receipt table and run column with tenant fencing and capacity
+accounting; unsupported existing stores are refused without migration.
+
+Publication now controls new admissions while queued/running work retains its
+reviewed immutable configuration. Live lease, service/agent grants, kill state
+and model/tool checks remain required. The real admission/store test demonstrates
+an A run finishing after B publication, duplicate admission returning A, new work
+using B's prompt/model, and current agent revocation still denying steps. This
+test uses deterministic dependencies, not a live model/device or full stack.
+
+Console import now verifies/stores embedded packages through Control before
+staging the candidate; a failed upload leaves the workflow unchanged. Direct
+JSON tool nodes participate in bundle package/reference closure and shared-data
+retention. The repository builder preserves their package declarations too.
+
+Hosted job `134193488132` in run `44115228272` failed on repository-only Python
+imports in installed-image tests. The tests now discover the installed graph
+factory, CI mounts the summary-profile fixture, and a test-only Docker stage
+supplies OpenSSL without adding it to production. The matching hardened image
+test command passed **102 tests with no skips** in 17.7 seconds. The earlier
+Windows runtime rerun hit the previously observed WSS fixture timeout; it is not
+reported as passing. Focused provisioned Java verification passed **25 tests**
+(23 profile cases, real mTLS transport, and the admission test exercising SQLite
+and PostgreSQL). Six profile tooling tests, four schema ownership/capacity tests,
+30 relevant UI tests including Python/console bundle interoperability, generated
+preflight/operation checks, source quality and TypeScript checking passed.
+
+The provisioned full `javaCheck` is running; no full Java/repository gate or live
+unchanged-container demo has passed for this increment. Native-factory preparation,
+runtime replica readiness, one-device
+provisioning/reconnect, persistent stack startup, external LLM routing/settings,
+device settings feedback, shared durable checkpoints, distributed cleanup and
+integrated acceptance remain outstanding. #295 stays **0/100**; no phase exit
+criteria, #274 module weight or #230 security guarantee is claimed. Next work
+is fresh placement/provisioning and stable stack wiring.
+
+## JSON profile preflight regression — 2026-11-17
+
+Hosted run `44113630148`, job `134145766601`, tested `fd19f0d0` and failed
+because the compose fixture still indexed `agentStages` after the supplied
+profiles moved execution order into `graph.config`. The fixture now checks the
+read-agent/context to summarizer/model nodes, their input handoff, START/END
+edges, final result/schema and agreement with the buildable profile source.
+No compatibility field or production behavior change is added. All 15 focused
+compose tests and generated metadata preflight passed locally. Linux container
+discovery also passes the corrected compose cases, but the full run is not green:
+the minimal image lacks the Git executable required by release/source tests.
+An initial bare-image attempt also lacked Python test dependencies; those were
+installed for the rerun. Hosted verification with the runner toolchain remains
+required; no full Linux CI pass is claimed.
+This repair earns no additional #295 phase weight (**0/100**); the hot-swap
+provisioning, activation and end-to-end limitations below remain unchanged.
+
+## Accepted hot-swap plan: local implementation started — 2026-11-17
+
+The user accepted the seven proposed decisions and authorized implementation.
+The user authorized committing and pushing this slice and opening a draft PR.
+Known tested base is `da948bb6`; the following source digest identifies the local
+implementation checked before delivery, without inventing a commit SHA. The local
+source manifest covers 156 changed/new/deleted paths, excluding these three live
+status documents. Its SHA-256 is
+`2657a2c8f70ba870917be6ab7f4f08d44ba7ccc34bf7b042c7a986524c93bf14`
+(`build/hotswap-source-manifest.json`, ignored local evidence).
+
+Implemented initial graph/runtime scope: canonical JSON topology/build contracts,
+an installed generic JSON compiler selected through the existing governed Runner,
+pure bounded compiled-topology caching, an mTLS-only rebuild/capabilities/eviction
+API, and a direct-TLS tenant-runtime candidate read endpoint in Control requiring
+an exact reviewed digest/workflow/publication generation. Rebuild fetches the
+candidate using a workload credential and does not publish or execute effects.
+Initial JSON operations support value, agent, model, tool, boolean branching,
+static parallel joins and recursion-bounded loops. Subgraphs, dynamic fan-out,
+durable interrupts/resume, complete graph feature validation and the final
+provisioning/activation barrier remain outstanding.
+
+The listener now has a dynamic authorized-catalog mode with pagination/resource
+bounds, multiple subscription sessions, cancellable reads and same-name UID
+replacement after draining. The deployment listener no longer selects its source
+from a startup `listener.json`. Control's durable duplicate admission and the
+existing trigger supervisor reconfigure lifecycle are being reused, not replaced
+by in-memory event suppression or a second Gateway transport.
+
+Executed local checks: 11 JSON compiler/Runner tests, 10 build/API tests (including
+real mutual TLS and verified HTTPS candidate transport), 5 subscription tests
+and 7 canonical v2 tests passed. The final complete runtime rerun passed all
+101 tests in 85.9 seconds, including the final HTTPS transport test.
+The supplied text-summary topology executed through the real Runner with
+deterministic mock tool/model adapters, verifying read-agent then summary-agent
+order. This is not a live device/provider demo. All five bundles rebuilt; both
+built-profile UI interoperability tests passed. TypeScript/Vite built successfully.
+Generation/fixtures verified 1,583 binding files; both Rust round-trip tests and
+458 PHP model checks passed. The private API compiles without publishing a
+workflow, and its standalone cache is not a readiness receipt for every worker.
+
+The provisioned full Java check failed on Windows in
+`KillSwitchTest.separateOperatorMtlsListenerCommitsOnlyAcceptedOfflineQuorum`
+(`UnsupportedOperationException` for POSIX permissions; enterprise suite:
+449 tests, one failure). `WorkflowProfilesTest` passed all 21 cases, including
+the new SQLite/PostgreSQL reviewed-candidate/tenant/generation cases. Repository
+discovery also stopped on the Windows symlink privilege error in the device
+startup test (483 tests, 11 skipped, one error). These broad gates are not green.
+Preflight, source quality, documentation links and generated checks passed within
+their executed scope. This evidence does not establish end-to-end hot-swap.
+
+The debug-directory move is still incomplete as a provisioning delivery. Fresh
+group-based package provisioning, admin-only startup of the consolidated stack,
+external model/monitoring installation settings, applied device configuration
+feedback, reader qualification, provider routing, external durable persistence,
+distributed cleanup and UI activation are not delivered by the compiler slice.
+No new stack/demo has run. #295 remains **0/100**, #274 remains **27%**; no #230
+stage, first-slice acceptance or security claim earns credit. Next work is the
+fresh provisioning and stable stack path, followed by the remaining acceptance
+cases. No legacy provisioning fallback or format/store conversion is authorized.
+
+## Profile hot-swap planning checkpoint — 2026-11-17
+
+Implementation is paused at the user's request. The proposed
+[hot-swap plan](../plans/workflow-profile-hot-swap.md) separates workflow data
+from installation environment and manually edited monitoring settings, defines
+readiness/activation and in-flight draining, and lists current repository blockers
+and required end-to-end evidence. Local debug-directory moves/reference edits
+have started but are incomplete, uncommitted and unpushed; no new stack or
+hot-swap acceptance has executed. The plan now explicitly requires one persistent
+device with dynamic trigger-status/event lists over check-in, live folder/tool
+reconfiguration, a protected graph rebuild API, external LLM connection types
+and agent/provider sequencing, external durable state and coordinated database/
+cache cleanup. Model hosting and all container/monitoring infrastructure belong
+to the user/cloud operations. It also requires ready-to-run operator README
+commands and lists the fixed protocol/security/runtime boundaries that remain.
+These are proposed requirements only; no implementation or new tests ran for
+this plan revision. The profile also carries every required tool/trigger archive,
+its settings and group-based placement policy. Import is planned to provision one
+eligible device and reconcile packages, subscriptions and workflow wiring; an
+offline/missing eligible device leaves the candidate pending until it can reconcile.
+Group membership does not bypass approval, capabilities or host prerequisites.
+New devices must be explicitly enabled and assigned device-group membership by
+the user/administrator; profile import must not perform either action or approve
+the device automatically. This remains a plan requirement, not delivered behavior.
+Tool/trigger packages are planned to declare folder defaults editable in the
+admin UI; saving sends a desired configuration generation through Gateway to the
+device, which reports applied/pending/refused status without restart. Users own
+folder creation, permissions and mounts; saving configuration does not change them.
+The user requires a new provisioning flow with no backward compatibility:
+current contracts/fresh schemas only, no old bootstrap/restart fallback, aliases,
+readers, migrations or conversions. Unsupported stores/inputs are rejected and
+preserved; current-schema retries, crash recovery and reconnect remain required.
+No additional use-case constant is identified at plan review beyond the recorded
+replacement work; actual end-to-end acceptance remains unexecuted.
+The plan now proposes concrete decisions for seven open points: consumer-owned
+durable duplicate/in-progress handling over at-least-once delivery; a versioned
+package prepare/apply lifecycle; a JSON graph compiler/capability matrix; durable
+provisioning readiness barriers; external PostgreSQL plus a device outbox volume;
+database-outbox cache invalidation; and an initial OpenAI-compatible LLM adapter
+with single/fallback/sequential routing. These are design proposals only. No
+implementation, verification or delivery credit is claimed for this revision.
+Tested base remains `da948bb6`; this planning
+checkpoint earns no #295 weight (**0/100**), #274 module credit or #230 security
+claim. Next work is plan review before resuming implementation. No commit or push
+is authorized for these local changes.
+
 
 ## Distinct archive extensions and foundation repair — 2026-11-17
 
@@ -1382,7 +1815,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | Phase | Share of total v1 effort | Cumulative allocation | Status | Earned completion |
 |---|---:|---:|---|---:|
 | V1.0 — Contract decisions | 10% | 10% | In progress; source gap inventory, ADR 063 and acceptance scenarios proposed; review/harness pending | 0% |
-| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
+| V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; one-device placement and current applied-device readiness added, complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
 | V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment, workflow replacement without restart, multi-workflow/shared-definition handling and admin-preserving blank reset locally exercised; complete fresh-install/cross-host qualification and release publication pending | 0% |
@@ -1692,8 +2125,8 @@ completion remains **0 / 100 = 0%**. Keep #297 draft.
 
 ### Mounted HotFolder debug lab (2026-11-11)
 
-Based on `7a83d6c6`, relocated the existing debug scripts to `debug/standard`
-and added the [mounted HotFolder bring-up](../../debug/hotfolder/README.md).
+Based on `7a83d6c6`, relocated the existing debug scripts to `debug/profiled`
+and added the [mounted HotFolder bring-up](../../debug/profiled/README.md).
 Standard Compose project, ports, and data volume are unchanged. The HotFolder
 lab reuses the existing signed inbox trigger/profile and LangGraph example in
 its own `toolgate-hotfolder` project. It builds the endpoint from source, mounts

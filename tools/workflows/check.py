@@ -21,6 +21,7 @@ def main():
     subprocess.run([str(python), "-m", "pip", "check"], cwd=ROOT, check=True)
     subprocess.run([sys.executable, "tools/workflows/graph_package.py", "apps/langgraph-runtime/graphs-src/supervisor",
                     "apps/langgraph-runtime/src/toolgate_runtime/graphs", "--check"], cwd=ROOT, check=True)
+    subprocess.run([sys.executable, "tools/workflows/json_graph_package.py", "--check"], cwd=ROOT, check=True)
     env = dict(os.environ, PYTHONPATH=str(RUNTIME / "src"))
     subprocess.run([str(python), "-m", "unittest", "discover", "-s", str(RUNTIME / "tests"), "-v"],
                    cwd=ROOT, env=env, check=True)

@@ -343,6 +343,18 @@ final class ClientReleasesTest {
             return null; });
     }
 
+    private static void observedPackage(Rig rig, long generation, PackageState state, long seen) {
+        rig.store.transaction(rig.tenant, true, tx -> {
+            var row = tx.endpoint("lab-1");
+            var value = (ObjectNode)rig.codec.value(row.document());
+            value.put("lastSeenUnixMs", seen);
+            value.set("report", (JsonNode)rig.codec.value(rig.codec.json(new ClientReport("lab-1", "0.10.0", generation,
+                List.of(new ReportedPackage("acme.greet", "1.0.0", state)), null))));
+            tx.saveEndpoint(new Store.EndpointRecord(row.id(), row.fingerprint(), rig.codec.json(value), row.csr(), row.reportDigest(), row.acknowledgment()));
+            return null;
+        });
+    }
+
     @Test void aProfileReleasesToTheActiveDevicesOfItsGroupsIncludingLaterOnes() throws Exception {
         var rig = rig(true, "robot:secret"); var provisioning = provisioning(rig);
         // No active device yet: released and activated, but PENDING.
@@ -362,7 +374,7 @@ final class ClientReleasesTest {
         // A device joins the group: the next application rolls the release out to it.
         join(rig, "lab-1");
         var second = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
-        assertEquals("READY", second.get("state").asText(), second.toString());
+        assertEquals("PENDING", second.get("state").asText(), second.toString());
         assertEquals("lab-1", second.get("packages").get(0).get("deviceIds").get(0).asText());
         var targets = rig.fleet.targets(rig.admin, "acme.greet", "1.0.0", List.of("lab"));
         assertEquals(List.of("lab-1"), targets.assigned());
@@ -371,6 +383,37 @@ final class ClientReleasesTest {
         var third = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
         assertEquals(second.get("generation"), third.get("generation"));
         assertEquals(1, JSON.readTree(rig.fleet.rollouts(rig.admin, null).body()).get("items").size());
+        long desired = rig.store.transaction(rig.tenant, false, tx -> tx.fleet().get(FleetStore.Kind.DESIRED, "lab-1").revision());
+        observedPackage(rig, desired, PackageState.READY, System.currentTimeMillis());
+        var ready = JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body());
+        assertEquals("READY", ready.path("state").asText());
+        var requested = rig.codec.model(DEVICE_PROFILE, io.ololabs.toolgate.contracts.v2.DeploymentProfile.class).packages().getFirst();
+        var checks = new WorkflowDeviceReadiness(rig.codec, java.time.Clock.systemUTC());
+        java.util.function.Supplier<String> blocker = () -> rig.store.transaction(rig.tenant, false,
+            tx -> checks.blocker(tx, "lab", requested, ready.path("packages").get(0)));
+        assertNull(blocker.get());
+        // READY is recomputed from the exact applied generation and current device state.
+        for (var state : List.of(PackageState.FAILED, PackageState.REVOKED, PackageState.ABSENT)) {
+            observedPackage(rig, desired, state, System.currentTimeMillis());
+            assertNotNull(blocker.get(), "publication must reject even while saved provisioning status is READY");
+            assertEquals("PENDING", JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body()).path("state").asText());
+        }
+        observedPackage(rig, desired + 1, PackageState.READY, System.currentTimeMillis());
+        assertEquals("PENDING", JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body()).path("state").asText());
+        observedPackage(rig, desired, PackageState.READY, System.currentTimeMillis() - 180001);
+        assertEquals("PENDING", JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body()).path("state").asText());
+        observedPackage(rig, desired, PackageState.READY, System.currentTimeMillis());
+        assertEquals("READY", JSON.readTree(provisioning.apply(rig.admin, DEVICE_PROFILE).body()).path("state").asText());
+        rig.store.transaction(rig.tenant, true, tx -> {
+            var row = tx.endpoint("lab-1"); var value = (ObjectNode)rig.codec.value(row.document());
+            value.put("connectionApproved", false);
+            tx.saveEndpoint(new Store.EndpointRecord(row.id(), row.fingerprint(), rig.codec.json(value), row.csr(), row.reportDigest(), row.acknowledgment()));
+            return null;
+        });
+        assertTrue(blocker.get().contains("approved"));
+        var other = io.ololabs.toolgate.control.fixtures.Tenants.id("other");
+        TestSupport.seed(rig.store, rig.codec, other, "root");
+        assertNotNull(rig.store.transaction(other, false, tx -> checks.blocker(tx, "lab", requested, ready.path("packages").get(0))), "tenant isolation");
     }
 
     /** Triggers module 5: a profile that declares a trigger assignment releases its trigger and assigns the device group. */
@@ -385,7 +428,7 @@ final class ClientReleasesTest {
         assertFalse(PackageProvisioning.declaresTriggers(JSON.readTree(DEVICE_PROFILE)));
         join(rig, "lab-1");
         var applied = JSON.readTree(provisioning.apply(rig.admin, profile).body());
-        assertEquals("READY", applied.get("state").asText(), applied.toString());
+        assertEquals("PENDING", applied.get("state").asText(), applied.toString());
         assertEquals("[\"lab-inbox\"]", applied.get("packages").get(0).get("triggerAssignments").toString());
         // The signed release declares the trigger: devices learn how to run it only from there.
         var document = rig.fleet.document(rig.admin, "acme.greet", "1.0.0");
@@ -396,7 +439,8 @@ final class ClientReleasesTest {
         assertEquals("acme.greet/jvm", registration.runtimeId());
         assertEquals(document.runtimes().getFirst().id(), registration.runtimeId());
         var assignment = JSON.readTree(triggers.get(rig.admin, "lab-inbox").body());
-        assertEquals("[\"lab\"]", assignment.path("spec").path("target").path("deviceGroups").toString());
+        assertEquals("[\"lab-1\"]", assignment.path("spec").path("target").path("devices").toString());
+        assertTrue(assignment.path("spec").path("target").path("deviceGroups").isMissingNode());
         assertEquals("inbox", assignment.path("spec").path("config").path("folder").asText());
         assertEquals(1, assignment.path("metadata").path("configRevision").asInt());
         // Reapplying the same profile changes nothing; a changed config updates the assignment with its ETag.

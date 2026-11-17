@@ -11,7 +11,7 @@ RUN python -m venv /opt/toolgate-runtime \
     && /opt/toolgate-runtime/bin/python -m pip install --no-cache-dir -r requirements.lock \
     && /opt/toolgate-runtime/bin/python -m pip check
 
-FROM base
+FROM base AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="OLO ToolGate LangGraph runtime" \
@@ -25,3 +25,11 @@ COPY src/ ./src/
 ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
 ENTRYPOINT ["/opt/toolgate-runtime/bin/python", "-m", "toolgate_runtime.worker"]
+
+# TLS test certificates require the CLI; it is excluded from the published image.
+FROM runtime AS verification
+USER 0:0
+RUN apk add --no-cache openssl
+USER 65532:65532
+
+FROM runtime AS production

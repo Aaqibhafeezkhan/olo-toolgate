@@ -3457,6 +3457,105 @@
         "SELECT",
         "UPDATE"
       ]
+    },
+    {
+      "name": "control_workflow_graph_builds",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "profile_id",
+        "digest",
+        "workflow_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        },
+        {
+          "table": "control_workflow_profile_revisions",
+          "columns": [
+            "tenant_id",
+            "profile_id",
+            "digest"
+          ],
+          "referencedColumns": [
+            "tenant_id",
+            "profile_id",
+            "digest"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
+    },
+    {
+      "name": "control_workflow_device_placements",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "profile_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "INSERT",
+        "SELECT"
+      ]
+    },
+    {
+      "name": "control_workflow_workers",
+      "classification": "tenant-data",
+      "tenantColumn": "tenant_id",
+      "postgresTenantType": "varchar(128)",
+      "sqliteTenantType": "VARCHAR(128)",
+      "primaryKey": [
+        "tenant_id",
+        "instance_id"
+      ],
+      "foreignKeys": [
+        {
+          "table": "control_tenants",
+          "columns": [
+            "tenant_id"
+          ],
+          "referencedColumns": [
+            "tenant_id"
+          ]
+        }
+      ],
+      "rowSecurity": "forced",
+      "runtimePrivileges": [
+        "DELETE",
+        "INSERT",
+        "SELECT",
+        "UPDATE"
+      ]
     }
   ]
 }

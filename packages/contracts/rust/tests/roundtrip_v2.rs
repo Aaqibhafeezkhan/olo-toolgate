@@ -450,8 +450,17 @@ fn v2_fixture_round_trips() {
         WorkflowDispatchRequest,
         WorkflowExecutionLimits,
         WorkflowFinishDecision,
+        WorkflowGraphBuildRequest,
+        WorkflowGraphBuildResult,
+        WorkflowGraphCandidate,
+        WorkflowGraphCapabilities,
         WorkflowGraphSelection,
         WorkflowGroupDefinition,
+        WorkflowJsonBranchRoutes,
+        WorkflowJsonEdge,
+        WorkflowJsonGraph,
+        WorkflowJsonNode,
+        WorkflowJsonNodeKind,
         WorkflowModelDeployment,
         WorkflowModelGeneration,
         WorkflowModelGroupDefinition,
@@ -469,6 +478,7 @@ fn v2_fixture_round_trips() {
         WorkflowStackRuntime,
         WorkflowStackTriggerSource,
         WorkflowToolDecision,
+        WorkflowWorkerCapabilities,
     );
 }
 

@@ -13,6 +13,13 @@ public interface WorkflowProfileStore {
     Publication publication(String profileId);
     java.util.List<Publication> publications(String afterProfileId, int limit);
     void publish(Publication publication, long expectedGeneration);
+    /** Compiler receipts are preparation evidence, never runtime authorization. */
+    String graphBuild(String profileId, String digest, String workflowId);
+    void graphBuild(String profileId, String digest, String workflowId, String document);
+    record DevicePlacement(String profileId, String deviceId, long generation) {}
+    DevicePlacement devicePlacement(String profileId);
+    /** Immutable selection, committed before rollout; concurrent retries return the same selection. */
+    DevicePlacement placeDevice(String profileId, String deviceId);
     /** A resource can be owned by one profile for its lifetime; omission never releases ownership. */
     record Ownership(String profileId, String definitionDigest) {}
     Ownership owner(String kind, String id);

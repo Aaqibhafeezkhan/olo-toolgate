@@ -1,0 +1,59 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+openapi: 3.1.0
+info:
+  title: OLO ToolGate Private Graph Runtime API
+  version: 1.0.0-dev.1
+  description: Control-only mTLS graph compilation and disposable cache management. Compilation neither publishes profiles nor authorizes execution.
+security:
+- controlServiceCertificate: []
+paths:
+  /internal/runtime/v1/graphs:rebuild:
+    post:
+      operationId: rebuildRuntimeGraph
+      description: Fetch the exact reviewed tenant candidate from Control and compile it without a RunContext or workflow effects. Reauthorize on every request, including cache hits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowGraphBuildRequest
+      responses:
+        '200':
+          description: Synchronous receipt for bounded compilation of the immutable candidate
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowGraphBuildResult
+        '400': {description: Invalid, unavailable, stale or unsupported candidate; active configuration is unchanged}
+        '403': {description: Client service identity refused; missing or untrusted certificates fail the TLS handshake}
+        '413': {description: Request exceeds the bounded build request size}
+        '415': {description: Expected JSON}
+        '503': {description: Compilation capacity is occupied; retry this same immutable candidate later}
+  /internal/runtime/v1/capabilities:
+    get:
+      operationId: getRuntimeGraphCapabilities
+      responses:
+        '200':
+          description: Actual compiler features, compiler digest and disposable cache capacity/entry count
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowGraphCapabilities
+        '403': {description: Client service identity refused}
+  /internal/runtime/v1/graphs/cache:
+    delete:
+      operationId: invalidateRuntimeGraphCache
+      description: Evict cached topology references. Already running invocations retain their graph object; execution authority remains in Control.
+      responses:
+        '200':
+          description: Current disposable cache statistics after eviction
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowGraphCapabilities
+        '403': {description: Client service identity refused}
+components:
+  securitySchemes:
+    controlServiceCertificate:
+      type: mutualTLS
+      description: Operator-supplied runtime service CA and explicitly allowed Control client certificate identity. Never expose as an anonymous public API.

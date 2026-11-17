@@ -4,7 +4,7 @@ import {unzipSync,zipSync,strToU8} from 'fflate';
 import type {DeploymentProfile,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
 import type {ConfigurationFile} from '../src/pendingContracts';
 import fixture from '../../../tests/fixtures/contracts/v2/valid.json';
-import {applyWorkflow,exportWorkflow as packWorkflow,importWorkflow,removeWorkflow,workflowScope} from '../src/workflowBundle';
+import {applyWorkflow,exportWorkflow as packWorkflow,importWorkflow,removeWorkflow,workflowScope,workflowConnections,workflowAssignmentMatches} from '../src/workflowBundle';
 import {mockWorkflowPackages} from './workflowPackageFixture';
 
 type Mutable<T>=T extends Uint8Array?Uint8Array:T extends readonly (infer E)[]?Mutable<E>[]:T extends object?{-readonly [K in keyof T]:Mutable<T[K]>}:T;
@@ -17,6 +17,35 @@ const subscriptions=[{...fixture.TriggerSubscription,metadata:{...fixture.Trigge
 
 const snapshot={formatVersion:2,tenantId:'tenant-a',revision:1,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
 const exportWorkflow=async(profile:DeploymentProfile,id:string,a:TriggerAssignment[],s:TriggerSubscription[])=>packWorkflow(profile,id,a,s,snapshot,await mockWorkflowPackages(profile,a));
+
+it('exports profile group placement without copying the source device and matches a different destination device',()=>{
+  const profile=mutable(original);
+  profile.packages.push({packageId:'examples.hotfolder-watch',version:'1.0.0',source:'PREBUILT_CORE',required:true,deviceGroupIds:['finance-desktops'],triggers:[{assignment:'source',triggerId:assignments[0].spec.trigger,config:{folder:'inbox'}}]});
+  const connection=workflowConnections(profile,assignments,subscriptions)[0];
+  expect(connection.assignmentSpec.target).toEqual({executor:'CLIENT',deviceGroups:['finance-desktops'],requiredDeviceGroupSets:[['finance-desktops']]});
+  expect(JSON.stringify(connection.assignmentSpec)).not.toContain('device-42');
+  const destination=mutable(assignments[0]);destination.spec.target={executor:'CLIENT',devices:['new-device'],requiredDeviceGroupSets:[['finance-desktops']]};
+  expect(workflowAssignmentMatches(profile,destination,connection.assignmentSpec)).toBe(true);
+  destination.spec.config={folder:'different'};
+  expect(workflowAssignmentMatches(profile,destination,connection.assignmentSpec)).toBe(false);
+});
+
+it('pins exported package declarations to verified embedded content instead of the source image inventory',async()=>{
+  const profile=mutable(original);
+  profile.packages.push({packageId:'acme.support',version:'1.0.0',source:'PREBUILT_CORE',required:true,hostIds:['host']});
+  const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);
+  const bundle=await importWorkflow('portable.olo',bytes);
+  const stored=bundle.packages.find(item=>item.metadata.packageId==='acme.support')!;
+  expect(bundle.profile.packages[0]).toMatchObject({source:'BUNDLE',packageDigest:stored.metadata.packageDigest});
+  expect(profile.packages[0].source).toBe('PREBUILT_CORE');
+  const files=unzipSync(bytes),old=JSON.parse(new TextDecoder().decode(files['workflow.json']));
+  old.packages[0].source='PREBUILT_CORE';files['workflow.json']=strToU8(JSON.stringify(old));
+  const manifest=JSON.parse(new TextDecoder().decode(files['manifest.json']));
+  const {sha256}=await import('../src/workflowPackages');manifest.sha256=await sha256(files['workflow.json']);files['manifest.json']=strToU8(JSON.stringify(manifest));
+  await expect(importWorkflow('image-dependent.olo',zipSync(files,{level:6}))).rejects.toThrow('exact embedded archive');
+  profile.packages[0].packageDigest='sha256:'+'f'.repeat(64);
+  await expect(exportWorkflow(profile,first.id,assignments,subscriptions)).rejects.toThrow('exact embedded archive');
+});
 
 it('exports one compressed workflow with its dependency closure and no README, host settings or credentials',async()=>{
   const profile=mutable(original);profile.workflows!.workflows.push({...mutable(first),id:'other'});
@@ -84,6 +113,24 @@ it('excludes unrelated models, agents and workflow groups',()=>{
   profile.workflows!.modelDeployments.push({...profile.workflows!.modelDeployments[0],id:'unused'});
   profile.workflows!.workflowGroups.push({id:'unused',displayName:'Unused'});
   expect(workflowScope(profile,first.id)).toEqual(original);
+});
+
+it('exports graph-only tool packages and retains their shared references when another workflow is removed',async()=>{
+  const profile=mutable(original);
+  const graph=profile.workflows!.workflows[0].graph;
+  graph.packageId='olo.json-graph';
+  graph.config={schemaVersion:1,nodes:[{id:'read',kind:'tool',agentId:first.agents[0].agentId,toolRef:'graph.files/read',input:{toolRef:'unrelated.package/fake'}}],
+    edges:[{from:['START'],to:'read'},{from:['read'],to:'END'}],output:{$path:'/values/read'},outputSchema:{}};
+  profile.packages.push({packageId:'graph.files',source:'MARKETPLACE',version:'1.0.0',required:true});
+  profile.workflows!.workflows.push({...mutable(profile.workflows!.workflows[0]),id:'shared-graph'});
+  expect(workflowScope(profile,first.id).packages.map(item=>item.packageId)).toContain('graph.files');
+  const bundle=await importWorkflow('graph.olo',await exportWorkflow(profile,first.id,assignments,subscriptions));
+  expect(bundle.packages.map(item=>item.metadata.packageId)).toContain('graph.files');
+  expect(bundle.packages.map(item=>item.metadata.packageId)).not.toContain('unrelated.package');
+  expect(removeWorkflow(profile,first.id).packages.map(item=>item.packageId)).toContain('graph.files');
+  const archives=await mockWorkflowPackages(profile,assignments);
+  const withoutGraph=[];for(const archive of archives){const content=unzipSync(archive);if(JSON.parse(new TextDecoder().decode(content['toolgate-package.json'])).id!=='graph.files')withoutGraph.push(archive);}
+  await expect(packWorkflow(profile,first.id,assignments,subscriptions,snapshot,withoutGraph)).rejects.toThrow('missing');
 });
 
 it('rejects former nested tool filenames and tool archives as workflow filenames',async()=>{

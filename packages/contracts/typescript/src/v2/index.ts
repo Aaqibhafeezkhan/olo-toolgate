@@ -1377,7 +1377,7 @@ export interface ProfileChange {
   readonly packageDigest?: string;
 }
 export type ProfileChangeKind = "ADDED" | "CHANGED" | "REMOVED";
-/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names the device groups whose active, approved devices receive its device-runnable exports as a signed client release (ADR 026), including devices that join later. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups. */
+/** One package the profile requires, pinned to an exact version. A MARKETPLACE entry must also pin its package digest; a PREBUILT_CORE entry resolves its digest from the sealed image lock, and a declared digest must equal it. hostIds names the Tool Hosts that receive its eligible ServerTool exports; ClientTool exports never deploy to a Tool Host. deviceGroupIds names eligible groups for one durably selected profile device receiving its device-runnable exports as a signed client release (ADR 026). One selected device must belong to at least one enabled group in each package group list, with no automatic failover. An entry that activates exports needs hostIds or deviceGroupIds. bindingIds have their allowed package digests set to exactly the profile packages that name them. triggers declares client trigger assignments of its exports for those device groups. */
 export interface ProfilePackage {
   readonly packageId: string;
   readonly source: ProfilePackageSource;
@@ -1391,7 +1391,7 @@ export interface ProfilePackage {
   readonly bindingIds?: ReadonlyArray<string>;
   readonly triggers?: ReadonlyArray<ProfileTrigger>;
 }
-export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE";
+export type ProfilePackageSource = "PREBUILT_CORE" | "MARKETPLACE" | "BUNDLE";
 /** A call the deployment makes through the Gateway, as the named agent, to declare the profile ready. Arguments are explicit; expected names fields the structured result must contain with these exact values. */
 export interface ProfileReadinessCase {
   readonly toolId: string;
@@ -1404,7 +1404,7 @@ export interface ProfileToolActivation {
   readonly toolId: string;
   readonly toolGroupId: string;
 }
-/** A client trigger assignment the profile declares for one of its package's trigger exports (ADR 058). It targets the entry's deviceGroupIds; a profile that declares any trigger enables triggers for the deployment. */
+/** A client trigger assignment colocated with the profile device packages on one persistently selected eligible device. Independently managed group membership remains a live constraint. */
 export interface ProfileTrigger {
   readonly assignment: string;
   readonly triggerId: string;
@@ -2603,6 +2603,7 @@ export interface TriggerTarget {
   readonly devices?: ReadonlyArray<string>;
   readonly deviceGroups?: ReadonlyArray<string>;
   readonly excludeDevices?: ReadonlyArray<string>;
+  readonly requiredDeviceGroupSets?: ReadonlyArray<ReadonlyArray<string>>;
 }
 export type TriggerTerminalRejectionPolicy = "HALT" | "SKIP_AND_RECORD";
 export type TriggerTimestamp = string;
@@ -2761,6 +2762,43 @@ export interface WorkflowFinishDecision {
   readonly kind: "finish";
   readonly result: unknown;
 }
+/** Control-authorized immutable candidate reference. Contains no arbitrary Python, paths, secrets or live clients. */
+export interface WorkflowGraphBuildRequest {
+  readonly tenantId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly expectedGeneration: number;
+}
+/** Compilation receipt; this neither publishes configuration nor grants runtime authority. */
+export interface WorkflowGraphBuildResult {
+  readonly tenantId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly generation: number;
+  readonly specificationDigest: string;
+  readonly compilerDigest: string;
+  readonly features: ReadonlyArray<string>;
+  readonly state: "READY";
+}
+/** Reviewed immutable graph candidate read by a verified tenant runtime service. Carries configuration only, never execution credentials. */
+export interface WorkflowGraphCandidate {
+  readonly tenantId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly generation: number;
+  readonly graph: WorkflowGraphSelection;
+  readonly agentIds: ReadonlyArray<string>;
+}
+/** Actual JSON compiler features and disposable cache statistics. This is not a readiness or execution grant. */
+export interface WorkflowGraphCapabilities {
+  readonly entries: number;
+  readonly capacity: 128;
+  readonly compilerDigest: string;
+  readonly features: ReadonlyArray<string>;
+}
 /** Pinned operator-installed native LangGraph factory. Configuration grants no runtime authority. */
 export interface WorkflowGraphSelection {
   readonly packageId: string;
@@ -2774,6 +2812,35 @@ export interface WorkflowGroupDefinition {
   readonly id: string;
   readonly displayName: string;
 }
+/** Boolean branch destinations in the configured graph. */
+export interface WorkflowJsonBranchRoutes {
+  readonly true: string;
+  readonly false: string;
+}
+/** One edge or explicit all-predecessor join. START and END are reserved boundary names. */
+export interface WorkflowJsonEdge {
+  readonly from: ReadonlyArray<string>;
+  readonly to: string;
+}
+/** Versioned, bounded JSON topology for the installed generic LangGraph compiler. Structure alone establishes no execution authority. */
+export interface WorkflowJsonGraph {
+  readonly schemaVersion: 1;
+  readonly nodes: ReadonlyArray<WorkflowJsonNode>;
+  readonly edges: ReadonlyArray<WorkflowJsonEdge>;
+  readonly output: Record<string, unknown>;
+  readonly outputSchema: Record<string, unknown>;
+}
+/** Pure node declaration; per-run capabilities are injected by the runtime, never captured in topology. */
+export interface WorkflowJsonNode {
+  readonly id: string;
+  readonly kind: WorkflowJsonNodeKind;
+  readonly input: Record<string, unknown>;
+  readonly agentId?: string;
+  readonly toolRef?: string;
+  readonly resultMode?: WorkflowAgentResultMode;
+  readonly routes?: WorkflowJsonBranchRoutes;
+}
+export type WorkflowJsonNodeKind = "value" | "agent" | "model" | "tool" | "branch";
 /** An explicitly assigned model deployment. Only server-owned TLS origin, model name and vault reference are configuration; no provider key reaches a runner. */
 export interface WorkflowModelDeployment {
   readonly id: string;
@@ -2891,4 +2958,10 @@ export interface WorkflowToolDecision {
   readonly kind: "tool";
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
+}
+/** Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority. */
+export interface WorkflowWorkerCapabilities {
+  readonly compilerDigest: string;
+  readonly graphDigests: ReadonlyArray<string>;
+  readonly instanceId: string;
 }

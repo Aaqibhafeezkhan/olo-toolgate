@@ -68,7 +68,7 @@ class Schemas:
     def validator(self, name):
         return Draft202012Validator({'$ref': self.v2[name][0] + '#/$defs/' + name}, registry=self.registry)
 
-    def longest(self, schema, key=None):
+    def longest(self, schema, key=None, unique=0):
         """The largest valid serialized value of a schema, with every optional member present."""
         name = self.name(schema)
         schema = self.resolve(schema)
@@ -83,7 +83,10 @@ class Schemas:
         if kind == 'object':
             return {k: self.longest(v, k) for k, v in schema['properties'].items()}
         if kind == 'array':
-            return [self.longest(schema['items']) for _ in range(schema['maxItems'])]
+            # Unique membership sets need distinct maximum-length identifiers,
+            # including across nested sets, rather than repeated identical values.
+            return [self.longest(schema['items'], unique=unique * schema['maxItems'] + i + 1 if schema.get('uniqueItems') else unique)
+                    for i in range(schema['maxItems'])]
         if kind == 'boolean':
             return False
         if kind == 'integer':
@@ -95,6 +98,9 @@ class Schemas:
             pattern = schema.get('pattern')
             for fill in ([WIDE] if not pattern else []) + ['a', 'A', 'f', '0', 'Z']:
                 value = fill * schema['maxLength']
+                if unique:
+                    suffix = str(unique)
+                    value = value[:-len(suffix)] + suffix
                 if not pattern or re.search(pattern, value):
                     return value
             raise AssertionError(f'No longest value for {name or key}: add it to LONGEST')

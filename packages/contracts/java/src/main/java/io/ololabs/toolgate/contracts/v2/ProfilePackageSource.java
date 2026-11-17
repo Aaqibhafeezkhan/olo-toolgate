@@ -8,5 +8,7 @@ public enum ProfilePackageSource {
     /** Canonical PREBUILT_CORE value. */
     PREBUILT_CORE,
     /** Canonical MARKETPLACE value. */
-    MARKETPLACE
+    MARKETPLACE,
+    /** Canonical BUNDLE value. */
+    BUNDLE
 }

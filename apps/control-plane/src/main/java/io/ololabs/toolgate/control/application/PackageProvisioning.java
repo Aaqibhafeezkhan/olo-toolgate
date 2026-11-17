@@ -19,8 +19,8 @@ import java.util.function.Supplier;
  *
  *  The whole profile is validated before anything changes. Each pinned package is then imported through the ordinary
  *  verifier — the sealed core artifact from the image lock, or the exact signed Marketplace release — deployed to the
- *  Tool Hosts it names (which receive only its ServerTool exports), released to the active devices of the device groups
- *  it names (a signed client release, ADR 026, rolled out to members that do not hold it yet), and its declared exports
+ *  Tool Hosts it names (which receive only its ServerTool exports), released to one durably selected device satisfying
+ *  every package's group set (a signed client release, ADR 026), and its declared exports
  *  are enabled in their reviewed Tool Groups. Bindings named by the profile allow exactly the profile's packages that name them. A Tool Host
  *  that has not registered, or a device group with no active device, leaves the package PENDING; a pin, verifier, compatibility or reference failure leaves it
  *  FAILED, and nothing is substituted. Repeating an identical profile changes nothing; removing an entry never
@@ -47,7 +47,7 @@ public final class PackageProvisioning {
         return false;
     }
 
-    /** Whether a profile names device groups: their membership changes after READY, so the profile keeps being reapplied. */
+    /** Device placement, membership and applied readiness need reconciliation even after a READY observation. */
     public boolean followsDevices(String document) {
         return codec.model(document, DeploymentProfile.class).packages().stream().anyMatch(p -> p.deviceGroupIds() != null && !p.deviceGroupIds().isEmpty());
     }
@@ -62,7 +62,7 @@ public final class PackageProvisioning {
         var ids = new HashSet<String>(); var assignments = new HashSet<String>();
         for (var p : profile.packages()) {
             if (!ids.add(p.packageId())) throw refused("The profile names " + p.packageId() + " twice");
-            if (p.source() == ProfilePackageSource.MARKETPLACE && p.packageDigest() == null) throw refused(p.packageId() + " needs an exact Marketplace package digest");
+            if (p.source() != ProfilePackageSource.PREBUILT_CORE && p.packageDigest() == null) throw refused(p.packageId() + " needs an exact package digest for " + p.source());
             var hosts = p.hostIds() == null ? List.<String>of() : p.hostIds();
             if (new HashSet<>(hosts).size() != hosts.size()) throw refused(p.packageId() + " names a Tool Host twice");
             var groups = p.deviceGroupIds() == null ? List.<String>of() : p.deviceGroupIds();
@@ -96,6 +96,7 @@ public final class PackageProvisioning {
     public Store.Reply apply(DirectoryService.Actor actor, String document) {
         var profile = codec.model(document, DeploymentProfile.class);
         validate(profile);
+        var placement = new WorkflowDevicePlacement(store, codec, clock).resolve(actor, profile);
         String profileDigest = Canonical.digest(node(document));
         var previous = store.transaction(actor.tenant(), false, tx -> tx.packages().provisioning(profile.profileId()));
         var before = new HashMap<String, JsonNode>();
@@ -105,7 +106,7 @@ public final class PackageProvisioning {
         for (var p : profile.packages()) {
             var status = JSON.objectNode().put("packageId", p.packageId()).put("version", p.version()).put("required", p.required());
             statuses.add(status);
-            try { provision(actor, p, status, before.get(p.packageId()), digests); }
+            try { provision(actor, profile.profileId(), p, status, before.get(p.packageId()), digests, placement); }
             catch (Failure failure) { status.put("state", "FAILED").put("reason", bounded(failure.getMessage())); }
             catch (RuntimeException failure) { status.put("state", "FAILED").put("reason", "Provisioning failed: " + failure.getClass().getSimpleName()); }
         }
@@ -161,7 +162,7 @@ public final class PackageProvisioning {
         return changes;
     }
 
-    private void provision(DirectoryService.Actor actor, ProfilePackage p, ObjectNode status, JsonNode before, Map<String, Set<String>> digests) {
+    private void provision(DirectoryService.Actor actor, String profileId, ProfilePackage p, ObjectNode status, JsonNode before, Map<String, Set<String>> digests, WorkflowDevicePlacement.Selection placement) {
         // 1. Import through the ordinary verifier.
         status.put("step", "IMPORT");
         String digest;
@@ -171,6 +172,10 @@ public final class PackageProvisioning {
         } else {
             digest = p.packageDigest(); status.put("packageDigest", digest);
             if (version(actor, digest) == null) {
+                if (p.source() == ProfilePackageSource.BUNDLE) {
+                    status.put("state", "PENDING").put("reason", bounded("Waiting for the verified embedded archive for " + p.packageId() + " " + p.version()));
+                    return;
+                }
                 if (marketplace == null || !marketplace.settings().enabled()) throw refused("No Marketplace is configured for " + p.packageId());
                 marketplace.install(actor, p.packageId(), p.version(), digest, "profile-market-" + hex(digest).substring(0, 32));
             }
@@ -201,7 +206,7 @@ public final class PackageProvisioning {
             deployment.path("toolIds").forEach(id -> { toolIds.add(id.asText()); expected.put(id.asText(), hex(digest)); });
         }
 
-        // 3. Release device-runnable exports to the active devices of the named groups.
+        // 3. Release device-runnable exports to the profile's one persistent placement.
         var groups = new TreeSet<>(p.deviceGroupIds() == null ? List.<String>of() : p.deviceGroupIds());
         boolean waitingForDevice = false;
         if (!groups.isEmpty()) {
@@ -221,15 +226,16 @@ public final class PackageProvisioning {
             }
             status.put("step", "ROLLOUT");
             var targets = fleet.apply(actor.tenant()).targets(actor, p.packageId(), p.version(), groups);
-            var missing = targets.members().stream().filter(d -> !targets.assigned().contains(d)).toList();
+            var selected = placement.deviceId() == null ? List.<String>of() : List.of(placement.deviceId());
+            var missing = placement.blocker() == null ? selected.stream().filter(d -> targets.members().contains(d) && !targets.assigned().contains(d)).toList() : List.<String>of();
             if (!missing.isEmpty()) {
                 String id = "profile-" + DirectoryService.digest(p.packageId() + "\n" + p.version() + "\n" + String.join(",", missing)).substring(0, 40);
                 var request = JSON.objectNode().put("id", id).put("packageId", p.packageId()).put("version", p.version()).put("desiredPresence", true).put("percentage", 100);
                 var devices = request.putArray("deviceIds"); missing.forEach(devices::add);
                 fleet.apply(actor.tenant()).rollout(actor, codec.json(request), id, id);
             }
-            var deviceIds = status.putArray("deviceIds"); targets.members().forEach(deviceIds::add);
-            waitingForDevice = targets.members().isEmpty();
+            var deviceIds = status.putArray("deviceIds"); selected.forEach(deviceIds::add);
+            waitingForDevice = selected.isEmpty() || placement.blocker() != null || !targets.members().contains(placement.deviceId());
         }
 
         // 4. Enable the declared exports in their reviewed groups. Unknown exports block; nothing is created for them.
@@ -255,24 +261,35 @@ public final class PackageProvisioning {
             if (changed) save(tx, actor, directory, entries, "PROFILE_ACTIVATE", "package:" + p.packageId());
             return null;
         });
-        // 5. Trigger assignments of the package's client triggers for its device groups (ADR 058).
+        if (waitingForDevice) { status.put("state", "PENDING").put("reason", bounded(placement.blocker() == null ? "Waiting for the selected device in " + String.join(", ", groups) : placement.blocker())); return; }
+        // 5. Exact-device assignments colocate watches and file tools without broadcasting to the group.
         var declared = p.triggers() == null ? List.<io.ololabs.toolgate.contracts.v2.ProfileTrigger>of() : p.triggers();
         if (!declared.isEmpty()) {
             status.put("step", "ASSIGN");
             if (triggers == null) throw refused("Trigger assignments need the trigger service");
             var service = triggers.apply(actor.tenant());
             var names = status.putArray("triggerAssignments");
-            for (var t : declared) { assign(actor, service, p, groups, t); names.add(t.assignment()); }
+            for (var t : declared) { assign(actor, service, p, placement, t); names.add(t.assignment()); }
         }
-        if (waitingForDevice) { status.put("state", "PENDING").put("reason", bounded("Waiting for an active device in " + String.join(", ", groups))); return; }
+        String blocker = store.transaction(actor.tenant(), false, tx -> {
+            String pending = new WorkflowDeviceReadiness(codec, clock).blocker(tx, profileId, p, status);
+            if (pending != null) return pending;
+            var devices = java.util.stream.StreamSupport.stream(status.path("deviceIds").spliterator(), false).map(JsonNode::asText).toList();
+            for (var t : declared) if (!triggers.apply(actor.tenant()).prepared(tx, t.assignment(), t.triggerId(), p.version(), node(codec.json(t.config())), devices))
+                return "Waiting for trigger " + t.assignment() + " to apply its configuration";
+            return null;
+        });
+        if (blocker != null) { status.put("state", "PENDING").put("reason", bounded(blocker)); return; }
         status.put("step", "DONE").put("state", "READY");
     }
 
     /** Creates the declared assignment, or brings an existing one to the declared spec with its ETag. */
-    private void assign(DirectoryService.Actor actor, TriggerService service, ProfilePackage p, java.util.Collection<String> groups, io.ololabs.toolgate.contracts.v2.ProfileTrigger t) {
+    private void assign(DirectoryService.Actor actor, TriggerService service, ProfilePackage p, WorkflowDevicePlacement.Selection placement, io.ololabs.toolgate.contracts.v2.ProfileTrigger t) {
         var spec = JSON.objectNode().put("trigger", t.triggerId()).put("packageVersion", p.version());
         var target = spec.putObject("target").put("executor", "CLIENT");
-        var groupIds = target.putArray("deviceGroups"); groups.forEach(groupIds::add);
+        target.putArray("devices").add(placement.deviceId());
+        var constraints = java.util.stream.Stream.concat(placement.groupSets().stream(), java.util.stream.Stream.of(p.deviceGroupIds().stream().sorted().toList())).distinct().toList();
+        target.set("requiredDeviceGroupSets", node(codec.json(constraints)));
         spec.set("config", node(codec.json(t.config())));
         spec.put("desiredState", t.desiredState() == null ? "Running" : t.desiredState().name());
         Store.Reply current;

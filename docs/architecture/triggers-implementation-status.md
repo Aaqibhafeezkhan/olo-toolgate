@@ -1,6 +1,79 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Runtime worker presence integration — 2026-11-18
+
+#295 publication/admission now checks recent compatible LangGraph worker
+capabilities. The new heartbeat is between the runtime and Control, not a new
+Device/Gateway trigger channel or package-specific subscription. The existing
+trigger admission regression still passes on SQLite/PostgreSQL; actual scope,
+checks and remaining activation/acceptance limits are in the
+[workflow checkpoint](workflow-v1-status.md#expiring-compatible-worker-presence--2026-11-18).
+No #274 module/Done-when change or new earned weight: **27% remains earned**.
+
+## Embedded trigger/tool package source — 2026-11-18
+
+The #295 portable bundle path now consumes exact tenant-verified embedded
+archives through source `BUNDLE`, independently of a destination's core image
+inventory or Marketplace. This changes no trigger definition verification,
+release signing, Gateway/client protocol or module completion criteria.
+Evidence and remaining deployment/handover limitations are in the
+[workflow checkpoint](workflow-v1-status.md#embedded-package-source-portability--2026-11-18).
+No module earns new weight: **27% remains earned**.
+
+## Workflow device placement and live group fencing — 2026-11-18
+
+The #295 integration adds canonical `requiredDeviceGroupSets` to restrict resolved
+targets without adding devices. Profile provisioning selects one persisted
+device, preserving live group constraints rather than broadcasting a watch to
+all members. On target loss, the next existing check-in marks the old instance
+Removed and explicitly revokes its lease. Exact current configuration readiness
+and live lease evidence are required before workflow publication/admission.
+The Gateway/client check-in protocol is unchanged; generated target consumers
+are regenerated together. Actual checks, known base and remaining distributed
+handover/demo limits are in the
+[workflow checkpoint](workflow-v1-status.md#durable-device-placement-and-applied-readiness--2026-11-18).
+This integration does not complete another #274 module or change its weights,
+Done-when criteria or baseline: **27% remains earned**.
+
+## Parallel package build throttling repair — 2026-11-17
+
+Hosted run `44133089397` log-watch job `134217885473` hit Maven Central HTTP 429
+fetching RE2J before compilation/tests. The matrix runner now retries only that
+dependency-resolution failure twice with bounded 5/15-second backoff and saved
+attempt logs. Tests/compilation failures, other HTTP errors and exhausted retries
+remain failures; packages still run as independent parallel jobs. Eight tooling
+tests passed, including a real subprocess retry and bounded/refusal negatives.
+No live-provider acceptance, trigger protocol or module Done-when/weight changes:
+**27%** remains earned. See the
+[workflow checkpoint](workflow-v1-status.md#ui-test-typing-and-maven-throttling-repairs--2026-11-17)
+for known base and checks; a hosted package rerun is still required.
+
+## Workflow admission across publication — 2026-11-17
+
+The next #295 slice extends its existing admission regression on SQLite and
+PostgreSQL: an admitted A run keeps A after publication of B, duplicate delivery
+still returns the original run, new admission uses B, and current agent revocation
+still refuses execution. No trigger protocol, Gateway/client interface or device
+reconfiguration lifecycle changes in this increment. No #274 module completion
+or earned-weight change: **27%** remains. See the
+[workflow checkpoint](workflow-v1-status.md#graph-preparation-and-admitted-run-hot-swap--2026-11-17)
+for known tested base, checks, limitations and outstanding work.
+
+## Local hot-swap consumer work — 2026-11-17
+
+The user authorized delivery of this initial #295 hot-swap slice in a draft PR.
+Its runtime listener now reconciles the caller's complete authorized
+subscription catalog, with bounded pagination/session counts, cancellable reads,
+multiple sessions and same-name UID draining/replacement. Existing Gateway/client
+check-in, trigger event and durable admission interfaces are unchanged. Five
+focused catalog/reconciliation tests passed; the final broader runtime rerun
+passed 101 tests. This is consumer-side
+component evidence, not native PUSH/device reconfiguration or a complete demo.
+No #274 module Done-when or weight changes: **27% remains earned**. See the
+[workflow checkpoint](workflow-v1-status.md#accepted-hot-swap-plan-local-implementation-started--2026-11-17)
+for implemented scope, known base, limits and outstanding work.
+
 
 ## Tool/profile extension split and foundation repair — 2026-11-17
 
@@ -182,7 +255,7 @@ documentation and source checks. The Compose acceptance run was not repeated
 on the merge result.
 
 Local mounted-folder validation on the #297 integration branch: the
-[HotFolder debug lab](../../debug/hotfolder/README.md) ran in its own WSL Docker
+[HotFolder debug lab](../../debug/profiled/README.md) ran in its own WSL Docker
 project. The running Linux device watched `inbox/` under a host bind mount,
 not just an internal named volume. A separate producer wrote a synthetic root-owned
 mode 0600 file through the mount; the signed trigger reached `Running` and the

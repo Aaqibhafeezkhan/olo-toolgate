@@ -7,9 +7,34 @@ import os
 from pathlib import Path
 import re
 import time
+import threading
 
 from .run_transport import ControlRuns, GatewayRuntime, RunTransportError, WorkflowGateway
 from .runner import CompletionUnconfirmed, Denied, OwnershipLost, Runner
+
+
+class WorkerPresence:
+    """Renew capability presence during long runs without claiming another run."""
+    def __init__(self,control,interval=5):
+        self.control=control;self.interval=interval
+        self.stopped=threading.Event();self.failed=threading.Event();self.thread=None
+
+    def start(self):
+        self.control.heartbeat()
+        def renew():
+            while not self.stopped.wait(self.interval):
+                try:self.control.heartbeat()
+                except Exception:
+                    self.failed.set();return
+        self.thread=threading.Thread(target=renew,name='workflow-worker-presence',daemon=True)
+        self.thread.start()
+
+    def require_current(self):
+        if self.failed.is_set():raise RunTransportError('Worker presence is unavailable')
+
+    def close(self):
+        self.stopped.set()
+        if self.thread is not None:self.thread.join(timeout=11)
 
 
 def log_result(directory, lease, outcome):
@@ -79,10 +104,13 @@ def main(argv=None):
         with args.token_file.open(encoding="ascii") as stream:
             return stream.read(8193).strip()
 
+    presence=None
     try:
-        control = ControlRuns(args.control_origin, credential, ca_file=args.control_ca_file)
+        control = ControlRuns(args.control_origin, credential, ca_file=args.control_ca_file,graph_directory=args.graph_directory)
         gateway = GatewayRuntime(args.gateway_origin, ca_file=args.gateway_ca_file)
+        presence=WorkerPresence(control);presence.start()
         while True:
+            presence.require_current()
             lease = control.claim()
             if lease is not None:
                 evidence = ExecutionEvidence(WorkflowGateway(control, gateway))
@@ -103,6 +131,8 @@ def main(argv=None):
     except (RunTransportError, CompletionUnconfirmed, OwnershipLost, OSError, ValueError):
         print(json.dumps({"error": "WORKFLOW_WORKER_STOPPED"}), flush=True)
         return 2
+    finally:
+        if presence is not None:presence.close()
 
 
 if __name__ == "__main__":

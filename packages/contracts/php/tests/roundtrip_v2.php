@@ -444,8 +444,17 @@ $models = [
     'WorkflowDispatchRequest',
     'WorkflowExecutionLimits',
     'WorkflowFinishDecision',
+    'WorkflowGraphBuildRequest',
+    'WorkflowGraphBuildResult',
+    'WorkflowGraphCandidate',
+    'WorkflowGraphCapabilities',
     'WorkflowGraphSelection',
     'WorkflowGroupDefinition',
+    'WorkflowJsonBranchRoutes',
+    'WorkflowJsonEdge',
+    'WorkflowJsonGraph',
+    'WorkflowJsonNode',
+    'WorkflowJsonNodeKind',
     'WorkflowModelDeployment',
     'WorkflowModelGeneration',
     'WorkflowModelGroupDefinition',
@@ -462,7 +471,8 @@ $models = [
     'WorkflowStackPlatform',
     'WorkflowStackRuntime',
     'WorkflowStackTriggerSource',
-    'WorkflowToolDecision'
+    'WorkflowToolDecision',
+    'WorkflowWorkerCapabilities'
 ];
 $count = 0;
 foreach ($fixtures as $name => $fixture) {

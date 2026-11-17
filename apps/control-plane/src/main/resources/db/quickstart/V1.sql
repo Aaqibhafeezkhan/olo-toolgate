@@ -1578,10 +1578,41 @@ WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.profile_id<>OLD.profile_id OR NEW.diges
 BEGIN SELECT RAISE(ABORT,'immutable workflow profile revision'); END;
 
 -- statement
+CREATE TABLE control_workflow_workers(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id), instance_id varchar(128) NOT NULL,
+ owner_id varchar(64) NOT NULL, compiler_digest varchar(71) NOT NULL CHECK(length(compiler_digest)=71 AND substr(compiler_digest,1,7)='sha256:'),
+ graph_inventory text NOT NULL CHECK(length(CAST(graph_inventory AS BLOB))<=9217),
+ expires_at bigint NOT NULL CHECK(expires_at BETWEEN 1 AND 9007199254740991), PRIMARY KEY(tenant_id,instance_id));
+-- statement
+CREATE INDEX control_workflow_workers_ready ON control_workflow_workers(tenant_id,compiler_digest,expires_at);
+-- statement
+CREATE TRIGGER control_workflow_workers_identity BEFORE UPDATE ON control_workflow_workers
+WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.instance_id<>OLD.instance_id OR NEW.owner_id<>OLD.owner_id
+BEGIN SELECT RAISE(ABORT,'immutable worker identity'); END;
+-- statement
+CREATE TABLE control_workflow_device_placements(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ profile_id varchar(128) NOT NULL, device_id varchar(128) NOT NULL,
+ generation bigint NOT NULL CHECK(generation=1), PRIMARY KEY(tenant_id,profile_id));
+-- statement
+CREATE TRIGGER control_workflow_device_placements_immutable BEFORE UPDATE ON control_workflow_device_placements BEGIN SELECT RAISE(ABORT,'immutable device placement'); END;
+-- statement
+CREATE TABLE control_workflow_graph_builds(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ profile_id varchar(128) NOT NULL, digest varchar(71) NOT NULL, workflow_id varchar(128) NOT NULL,
+ document text NOT NULL CHECK(length(document)<=8192),
+ FOREIGN KEY(tenant_id,profile_id,digest) REFERENCES control_workflow_profile_revisions(tenant_id,profile_id,digest),
+ PRIMARY KEY(tenant_id,profile_id,digest,workflow_id));
+-- statement
+CREATE TRIGGER control_workflow_graph_builds_tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_graph_builds WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+
 CREATE TABLE control_workflow_runs(
  tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
  run_id varchar(128) NOT NULL, profile_id varchar(128) NOT NULL, profile_digest varchar(71) NOT NULL,
  workflow_id varchar(128) NOT NULL, workflow_version_id varchar(128) NOT NULL,
+ compiler_digest varchar(71) NOT NULL CHECK(length(compiler_digest)=71 AND substr(compiler_digest,1,7)='sha256:'),
+ graph_digest varchar(71) NOT NULL CHECK(length(graph_digest)=71 AND substr(graph_digest,1,7)='sha256:'),
  service_agent_id varchar(128) NOT NULL, service_agent_group_id varchar(128) NOT NULL,
  remediation_mode varchar(16) NOT NULL CHECK(remediation_mode IN('PREPARE','APPLY')),
  state varchar(24) NOT NULL CHECK(state IN('QUEUED','RUNNING','SUCCEEDED','FAILED','AWAITING_APPROVAL','CANCELLED','EXPIRED')),
@@ -1597,7 +1628,7 @@ CREATE TABLE control_workflow_runs(
  FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version),
  PRIMARY KEY(tenant_id,run_id));
 -- statement
-CREATE INDEX control_workflow_runs_queue ON control_workflow_runs(tenant_id,state,created_at,run_id);
+CREATE INDEX control_workflow_runs_queue ON control_workflow_runs(tenant_id,state,compiler_digest,graph_digest,created_at,run_id);
 -- statement
 CREATE INDEX control_workflow_runs_expiry ON control_workflow_runs(tenant_id,state,lease_expires_at);
 -- statement
@@ -1619,18 +1650,63 @@ CREATE TRIGGER control_workflow_admissions_tenant_immutable BEFORE UPDATE OF ten
 -- BEGIN TENANT CAPACITY
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants BEGIN INSERT INTO control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id); END;
 -- statement
+CREATE TRIGGER control_workflow_workers_capacity_insert AFTER INSERT ON control_workflow_workers BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.instance_id AS BLOB)),0)+COALESCE(length(CAST(NEW.owner_id AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_inventory AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_workers_capacity_delete AFTER DELETE ON control_workflow_workers BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.instance_id AS BLOB)),0)+COALESCE(length(CAST(OLD.owner_id AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_inventory AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_workers_capacity_update AFTER UPDATE ON control_workflow_workers BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.instance_id AS BLOB)),0)+COALESCE(length(CAST(NEW.owner_id AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_inventory AS BLOB)),0))-(COALESCE(length(CAST(OLD.instance_id AS BLOB)),0)+COALESCE(length(CAST(OLD.owner_id AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_inventory AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_device_placements_capacity_insert AFTER INSERT ON control_workflow_device_placements BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.profile_id AS BLOB)),0)+COALESCE(length(CAST(NEW.device_id AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_device_placements_capacity_delete AFTER DELETE ON control_workflow_device_placements BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.profile_id AS BLOB)),0)+COALESCE(length(CAST(OLD.device_id AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_device_placements_capacity_update AFTER UPDATE ON control_workflow_device_placements BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.profile_id AS BLOB)),0)+COALESCE(length(CAST(NEW.device_id AS BLOB)),0))-(COALESCE(length(CAST(OLD.profile_id AS BLOB)),0)+COALESCE(length(CAST(OLD.device_id AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_graph_builds_capacity_insert AFTER INSERT ON control_workflow_graph_builds BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_graph_builds_capacity_delete AFTER DELETE ON control_workflow_graph_builds BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_workflow_graph_builds_capacity_update AFTER UPDATE ON control_workflow_graph_builds BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
 CREATE TRIGGER control_workflow_runs_capacity_insert AFTER INSERT ON control_workflow_runs BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_digest AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
 CREATE TRIGGER control_workflow_runs_capacity_delete AFTER DELETE ON control_workflow_runs BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=OLD.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_digest AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=OLD.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
 CREATE TRIGGER control_workflow_runs_capacity_update AFTER UPDATE ON control_workflow_runs BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_digest AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_digest AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement

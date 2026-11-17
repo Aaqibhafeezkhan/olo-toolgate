@@ -91,7 +91,7 @@ def main(drop=None):
     print('Instance Running on the device', flush=True)
     directory = manage.STATE / 'agents'
     descriptor = json.loads((directory / 'linux.json').read_text(encoding='utf-8'))
-    mimic = ta._load('agent_mimic', manage.ROOT / 'debug/standard/agent-mimic.py')
+    mimic = ta._load('agent_mimic', manage.ROOT / 'debug/profiled/agent-mimic.py')
     gateway = mimic.Agent(descriptor['gateway'], directory / 'linux.token', directory / 'gateway-ca.crt')
     from websockets.sync.client import connect
     ta.ensure_subscription(config.api, int(time.time() * 1000))

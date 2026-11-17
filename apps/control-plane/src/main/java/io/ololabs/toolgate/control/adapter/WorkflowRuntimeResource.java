@@ -42,10 +42,29 @@ public class WorkflowRuntimeResource {
             triggers.subscriptions(actor.tenant()), triggers.forTenant(actor.tenant()), actor.tenant()), vault);
     }
 
-    @POST @Path("claim") @RolesAllowed(ROLE)
-    public Response claim() {
+    @POST @Path("claim") @Consumes("application/json") @RolesAllowed(ROLE)
+    public Response claim(String document) {
         var worker = worker();
-        return reply(leases(worker).claim(worker, correlation.id()));
+        if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 16384) throw Failure.validation();
+        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities.class);
+        return reply(leases(worker).claim(worker, request.instanceId(), request.compilerDigest(), request.graphDigests(), correlation.id()));
+    }
+
+    @POST @Path("workers:heartbeat") @Consumes("application/json") @RolesAllowed(ROLE)
+    public Response heartbeat(String document) {
+        var worker = worker();
+        if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 16384) throw Failure.validation();
+        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities.class);
+        return reply(leases(worker).heartbeat(worker, request.instanceId(), request.compilerDigest(), request.graphDigests(), correlation.id()));
+    }
+
+    @GET @Path("graph-candidates/{profileId}/{digest}/{workflowId}") @RolesAllowed(ROLE)
+    public Response graphCandidate(@PathParam("profileId") String profileId, @PathParam("digest") String digest,
+            @PathParam("workflowId") String workflowId, @QueryParam("expectedGeneration") Long expectedGeneration) {
+        var worker = worker();
+        if (expectedGeneration == null) throw Failure.validation();
+        return reply(profiles(worker, Clock.systemUTC(), keys.required()).graphCandidate(worker,
+            profileId, digest, workflowId, expectedGeneration));
     }
 
     @POST @Path("runs/{runId}/finish") @Consumes("application/json") @RolesAllowed(ROLE)

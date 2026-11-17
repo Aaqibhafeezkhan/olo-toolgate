@@ -6,6 +6,7 @@ import json
 from pathlib import PurePosixPath
 import re
 import zipfile
+from copy import deepcopy
 
 MAX_PACKAGE=64*1024*1024
 MAX_BUNDLE=128*1024*1024
@@ -46,14 +47,21 @@ def package(data):
 
 
 def pack(profile,references,connections,archives,build):
-    payload={'workflow.json':encoded(profile),'referenced-data.json':encoded(references)}
-    if len(payload['workflow.json'])>262144 or len(payload['referenced-data.json'])>2097152:raise ValueError('Configuration exceeds Control limits')
+    profile=deepcopy(profile)
+    payload={'referenced-data.json':encoded(references)}
     entries=[]
     for data in archives:
         item,_=package(data)
         if item['path'] in payload:raise ValueError('Duplicate package')
         payload[item['path']]=data;entries.append(item)
     if len(entries)>32:raise ValueError('Too many package archives')
+    for pin in profile['packages']:
+        matches=[item for item in entries if item['packageId']==pin['packageId'] and item['version']==pin['version']
+                 and (not pin.get('packageDigest') or pin['packageDigest']==item['packageDigest'])]
+        if len(matches)!=1:raise ValueError('Profile package needs its exact embedded archive: '+pin['packageId'])
+        pin.update(source='BUNDLE',packageDigest=matches[0]['packageDigest'])
+    payload['workflow.json']=encoded(profile)
+    if len(payload['workflow.json'])>262144 or len(payload['referenced-data.json'])>2097152:raise ValueError('Configuration exceeds Control limits')
     manifest=dict(format='olo-workflow',version=2,workflowId=profile['workflows']['workflows'][0]['id'],
                   sha256=digest(payload['workflow.json']),referencesSha256=digest(payload['referenced-data.json']),
                   connections=connections,packages=sorted(entries,key=lambda row:row['packageDigest']),build=build)
@@ -81,5 +89,8 @@ def verify(data):
         allowed.add(item['path'])
     if set(files)!=allowed:raise ValueError('Unexpected bundle content')
     profile=json.loads(files['workflow.json'])
+    for pin in profile['packages']:
+        if pin.get('source')!='BUNDLE' or not any(item['packageId']==pin['packageId'] and item['version']==pin['version']
+                and item['packageDigest']==pin.get('packageDigest') for item in manifest['packages']):raise ValueError('Profile package must use its exact embedded archive')
     if len(profile['workflows']['workflows'])!=1 or profile['workflows']['workflows'][0]['id']!=manifest['workflowId']:raise ValueError('Bundle must contain one workflow')
     return manifest

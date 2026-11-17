@@ -49,24 +49,42 @@ public final class WorkflowLeases {
                             WorkflowExecutionLimits limits, List<AgentSnapshot> agents, List<WorkflowContextSource> contextSources,
                             String remediationMode, long expiresAtUnixMs,
                             List<io.ololabs.toolgate.contracts.v2.WorkflowAgentStage> agentStages,
-                            io.ololabs.toolgate.contracts.v2.WorkflowGraphSelection graph) {
+                            io.ololabs.toolgate.contracts.v2.WorkflowGraphSelection graph, String compilerDigest) {
         @Override public String toString() { return "Snapshot[runId=" + runId + "]"; }
     }
 
-    public Store.Reply claim(DirectoryService.Actor worker, String requestId) {
+    private io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities capabilities(String instanceId, String compilerDigest, List<String> graphDigests) {
+        if (instanceId == null || compilerDigest == null || graphDigests == null) throw Failure.validation();
+        return codec.model(codec.json(Map.of("instanceId", instanceId, "compilerDigest", compilerDigest, "graphDigests", graphDigests)),
+            io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities.class);
+    }
+    private long presence(Store.Session tx, DirectoryService.Actor worker, io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities capabilities) {
+        long now = clock.millis();
+        if (now < 1 || now > 9007199254740991L - 30000) throw Failure.unavailable();
+        tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker(capabilities.instanceId(), worker.id(), capabilities.compilerDigest(), capabilities.graphDigests(), now + 30000), now);
+        return now;
+    }
+    public Store.Reply heartbeat(DirectoryService.Actor worker, String instanceId, String compilerDigest, List<String> graphDigests, String requestId) {
         Ids.valid(requestId);
+        var capabilities = capabilities(instanceId, compilerDigest, graphDigests);
+        return store.transaction(worker.tenant(), true, tx -> { presence(tx, worker, capabilities); return new Store.Reply(204, null, 0); });
+    }
+    public Store.Reply claim(DirectoryService.Actor worker, String instanceId, String compilerDigest, List<String> graphDigests, String requestId) {
+        Ids.valid(requestId);
+        var capabilities = capabilities(instanceId, compilerDigest, graphDigests);
         return store.transaction(worker.tenant(), true, tx -> {
             var runs = tx.workflowRuns();
-            long now = clock.millis();
+            long now = presence(tx, worker, capabilities);
             runs.expire(now);
-            var run = runs.nextQueued();
+            var run = runs.nextQueued(capabilities.compilerDigest(), capabilities.graphDigests());
             if (run == null) return new Store.Reply(204, null, 0);
             WorkflowConfiguration config;
             WorkflowDefinition workflow;
             try {
-                config = profiles.runnableRevision(tx, worker.tenant(), run.profileId(), run.profileDigest()).workflows();
+                config = profiles.admittedRevision(tx, worker.tenant(), run).workflows();
                 workflow = config.workflows().stream().filter(candidate -> candidate.id().equals(run.workflowId())
                     && candidate.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
+                if (!workflow.graph().digest().equals(run.graphDigest())) throw Failure.unavailable();
                 access.require(tx.load(), run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
             } catch (Failure denied) {
                 if (denied.status() != 403) throw denied;
@@ -82,7 +100,7 @@ public final class WorkflowLeases {
             var lease = new WorkflowRunStore.Lease(run.id(), "lease-" + UUID.randomUUID(), worker.id(), DirectoryService.digest(token), expires);
             var snapshot = new Snapshot(run.id(), lease.id(), run.workflowId(), run.workflowVersionId(), run.profileDigest(),
                 token, message, workflow.systemPrompt(), workflow.modelGroupId(), workflow.limits(), agents, workflow.contextSources(),
-                run.remediationMode(), expires, workflow.agentStages() == null ? List.of() : workflow.agentStages(), workflow.graph());
+                run.remediationMode(), expires, workflow.agentStages() == null ? List.of() : workflow.agentStages(), workflow.graph(), run.compilerDigest());
             runs.claim(lease);
             tx.audit(worker.id(), "WORKFLOW_RUN_CLAIM", "workflow-run:" + run.id(), 1, requestId, run.profileDigest().substring(7));
             return new Store.Reply(200, codec.json(snapshot), 0);
@@ -105,7 +123,7 @@ public final class WorkflowLeases {
             var run = runs.running(runId);
             if (run == null) throw ManagementAccess.denied();
             if ("SUCCEEDED".equals(state)) {
-                var config = profiles.runnableRevision(tx, worker.tenant(), run.profileId(), run.profileDigest()).workflows();
+                var config = profiles.admittedRevision(tx, worker.tenant(), run).workflows();
                 var workflow = config.workflows().stream().filter(item -> item.id().equals(run.workflowId())
                     && item.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
                 access.require(tx.load(), run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
@@ -146,7 +164,7 @@ public final class WorkflowLeases {
             var lease = requireLease(runs, worker, runId, leaseId, leaseToken, now);
             var run = runs.running(runId);
             if (run == null) throw ManagementAccess.denied();
-            var config = profiles.runnableRevision(tx, worker.tenant(), run.profileId(), run.profileDigest()).workflows();
+            var config = profiles.admittedRevision(tx, worker.tenant(), run).workflows();
             var workflow = config.workflows().stream().filter(candidate -> candidate.id().equals(run.workflowId())
                 && candidate.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
             if (tx.kills().effective().stream().anyMatch(kill -> "TENANT".equals(kill.scope()))) throw ManagementAccess.denied();
