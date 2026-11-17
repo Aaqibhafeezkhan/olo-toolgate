@@ -1,6 +1,23 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## JSON profile preflight regression — 2026-11-17
+
+Hosted run `44113630148`, job `134145766601`, tested `fd19f0d0` and failed
+because the compose fixture still indexed `agentStages` after the supplied
+profiles moved execution order into `graph.config`. The fixture now checks the
+read-agent/context to summarizer/model nodes, their input handoff, START/END
+edges, final result/schema and agreement with the buildable profile source.
+No compatibility field or production behavior change is added. All 15 focused
+compose tests and generated metadata preflight passed locally. Linux container
+discovery also passes the corrected compose cases, but the full run is not green:
+the minimal image lacks the Git executable required by release/source tests.
+An initial bare-image attempt also lacked Python test dependencies; those were
+installed for the rerun. Hosted verification with the runner toolchain remains
+required; no full Linux CI pass is claimed.
+This repair earns no additional #295 phase weight (**0/100**); the hot-swap
+provisioning, activation and end-to-end limitations below remain unchanged.
+
 ## Accepted hot-swap plan: local implementation started — 2026-11-17
 
 The user accepted the seven proposed decisions and authorized implementation.

@@ -196,8 +196,23 @@ class ProfileComposeTests(unittest.TestCase):
         profile=json.loads((ROOT/'deploy/compose/WorkflowStack/configurations/text-summary/workflow-profile.json').read_text())
         self.assertEqual({'langchain-linux-agent','text-summarizer'},{agent['agentId'] for agent in profile['workflows']['agentDefinitions']})
         self.assertEqual([],profile['workflows']['agentDefinitions'][1]['contextSources'])
-        self.assertEqual([{'agentId':'langchain-linux-agent','resultMode':'CONTEXT'},
-                          {'agentId':'text-summarizer','resultMode':'MODEL'}],profile['workflows']['workflows'][0]['agentStages'])
+        workflow=profile['workflows']['workflows'][0]
+        self.assertNotIn('agentStages',workflow)
+        self.assertEqual('olo.json-graph',workflow['graph']['packageId'])
+        graph=workflow['graph']['config']
+        self.assertEqual([
+            {'id':'stage-1','kind':'agent','agentId':'langchain-linux-agent',
+             'resultMode':'CONTEXT','input':{'$path':'/message'}},
+            {'id':'stage-2','kind':'agent','agentId':'text-summarizer',
+             'resultMode':'MODEL','input':{'$path':'/values/stage-1'}}],graph['nodes'])
+        self.assertEqual([
+            {'from':['START'],'to':'stage-1'},
+            {'from':['stage-1'],'to':'stage-2'},
+            {'from':['stage-2'],'to':'END'}],graph['edges'])
+        self.assertEqual({'$path':'/values/stage-2'},graph['output'])
+        self.assertEqual(workflow['resultSchema'],graph['outputSchema'])
+        source=json.loads((ROOT/'profiles/configurations/text-summary/workflow-profile.json').read_text())
+        self.assertEqual(workflow['graph'],source['workflows']['workflows'][0]['graph'])
         self.assertEqual('uid',configuration.resolve('${SUBSCRIPTION_UID}',{'${SUBSCRIPTION_UID}':'uid'}))
         with self.assertRaises(ValueError):
             configuration.resolve('${TOKEN}',{})
