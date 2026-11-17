@@ -16,5 +16,5 @@ Text files in a protected folder on an enrolled device. Every tool is a `@Client
 
 ```sh
 toolgate dev      # an MCP server over stdio
-toolgate pack     # build/toolgate/hotfolder-0.1.0.tgpkg
+toolgate pack     # build/toolgate/hotfolder-0.1.0.olotool
 ```

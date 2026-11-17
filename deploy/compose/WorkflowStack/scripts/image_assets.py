@@ -22,7 +22,7 @@ def validate(root):
         raise ValueError('Unsupported packaged workflow asset manifest')
     for package in manifest['packages']:
         name=package['artifact']
-        if not isinstance(name,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.tgpkg',name):
+        if not isinstance(name,str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}\.olotool',name):
             raise ValueError('Unsupported packaged artifact path')
         path=root/'packages'/name
         if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest()!=package['artifactSha256']:

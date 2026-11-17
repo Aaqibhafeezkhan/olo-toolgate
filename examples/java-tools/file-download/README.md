@@ -29,7 +29,7 @@ Your server lays files out deeper than one folder? Add a route for that shape, s
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # then edit it; never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/file-download-0.1.0.tgpkg
+toolgate pack                                     # build/toolgate/file-download-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

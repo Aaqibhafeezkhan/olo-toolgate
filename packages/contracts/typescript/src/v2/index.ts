@@ -2643,6 +2643,40 @@ export interface WorkflowAgentStage {
   readonly agentId: string;
   readonly resultMode: WorkflowAgentResultMode;
 }
+/** WorkflowBundleBuild portable metadata. */
+export interface WorkflowBundleBuild {
+  readonly version: string;
+  readonly sourceCommit: string;
+  readonly build: string;
+}
+/** Logical trigger mappings restored to destination identities. */
+export interface WorkflowBundleConnection {
+  readonly id: string;
+  readonly assignment: string;
+  readonly subscription: string;
+  readonly assignmentSpec: TriggerAssignmentSpec;
+  readonly subscriptionSpec: TriggerSubscriptionSpec;
+}
+/** WorkflowBundleManifest portable metadata. */
+export interface WorkflowBundleManifest {
+  readonly format: "olo-workflow";
+  readonly version: 2;
+  readonly workflowId: string;
+  readonly sha256: string;
+  readonly referencesSha256: string;
+  readonly build?: WorkflowBundleBuild;
+  readonly connections: ReadonlyArray<WorkflowBundleConnection>;
+  readonly packages: ReadonlyArray<WorkflowBundlePackage>;
+}
+/** WorkflowBundlePackage portable metadata. */
+export interface WorkflowBundlePackage {
+  readonly packageId: string;
+  readonly version: string;
+  readonly packageDigest: string;
+  readonly sha256: string;
+  readonly bytes: number;
+  readonly path: string;
+}
 /** Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority. */
 export interface WorkflowConfiguration {
   readonly workflowGroups: ReadonlyArray<WorkflowGroupDefinition>;

@@ -30,7 +30,7 @@ def select(source,configuration,assets):
     if directory.is_symlink():raise ValueError('Linked configuration package directory')
     local=[]
     if directory.exists():
-        for path in sorted(directory.glob('*.tgpkg')):
+        for path in sorted(directory.glob('*.olotool')):
             metadata=describe(path)
             if (metadata['id'],metadata['version'])==(source['packageId'],source['version']):local.append((metadata,path))
     if local:
@@ -39,7 +39,7 @@ def select(source,configuration,assets):
         return local[0]
     manifest=json.loads((assets/'packages/manifest.json').read_text(encoding='utf-8'))
     matches=[item for item in manifest['packages'] if (item['id'],item['version'])==(source['packageId'],source['version'])]
-    if len(matches)!=1:raise ValueError('Selected trigger package is missing; place its pinned .tgpkg in the configuration packages folder')
+    if len(matches)!=1:raise ValueError('Selected trigger package is missing; place its pinned .olotool in the configuration packages folder')
     metadata=matches[0]
     if source.get('packageDigest',metadata['packageDigest'])!=metadata['packageDigest']:
         raise ValueError('Selected trigger package digest does not match the profile')

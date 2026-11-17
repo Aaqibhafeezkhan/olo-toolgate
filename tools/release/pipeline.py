@@ -158,6 +158,10 @@ def collect(source):
 def verify_packages(info, assets):
     """Inspect actual package contents, not just their filenames or build claims."""
     version = info['version']
+    from tools.release.profiles import collect as collect_profiles
+    # Verify the collected profile archive bytes, not a rebuild from publication sources.
+    with tempfile.TemporaryDirectory() as temporary:
+        collect_profiles(assets,Path(temporary),version=version,commit=info['commit'])
     pom = ET.parse(assets/f'toolgate-contracts-{version}.pom').getroot()
     ns = {'m':'http://maven.apache.org/POM/4.0.0'}
     if [pom.findtext('m:'+key, namespaces=ns) for key in ('groupId', 'artifactId', 'version')] != ['io.github.olo-labs', 'toolgate-contracts', version]:

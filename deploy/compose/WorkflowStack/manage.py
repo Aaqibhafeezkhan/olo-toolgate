@@ -175,7 +175,7 @@ def qualify_reader(operator,config,state):
         if not saved.startswith(expected) or not re.fullmatch(r'sha256:[a-f0-9]{64}',saved[len(expected):]):
             raise ValueError('Existing file-reader qualification does not match the current device/group')
         return
-    release=operator.packages.publish(config,state/'package/hotfolder.tgpkg')
+    release=operator.packages.publish(config,state/'package/hotfolder.olotool')
     pin=prefix+release['image'].rsplit('@',1)[1]
     operator.shared.private_file(destination,'TOOLGATE_CONTROL_QUALIFIED_DEVICE_FILE_READERS='+pin+'\n')
 
@@ -225,7 +225,7 @@ def prepare_packages(operator,settings,state,compose,assets):
         run(compose+['up','-d','registry'])
         return
     directory.mkdir(mode=0o700,parents=True,exist_ok=True)
-    target=dict(metadata,artifact='trigger.tgpkg')
+    target=dict(metadata,artifact='trigger.olotool')
     shutil.copyfile(artifact,directory/target['artifact'])
     lock=dict(schemaVersion=1,sdkVersion=metadata['sdkVersion'],packages=[dict(
         project='profile-selected-package',sdk='java-gradle',**{key:target[key] for key in
@@ -234,7 +234,7 @@ def prepare_packages(operator,settings,state,compose,assets):
     if settings['fileAgent'] is not None:
         # This optional file-delivery adapter has its own tool package. It does
         # not determine the watch package, trigger configuration or event filter.
-        shutil.copyfile(assets/'packages/hotfolder.tgpkg',state/'package/hotfolder.tgpkg')
+        shutil.copyfile(assets/'packages/hotfolder.olotool',state/'package/hotfolder.olotool')
     operator.packages.registry(compose,state,os.environ)
 
 

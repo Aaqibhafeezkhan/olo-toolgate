@@ -8749,7 +8749,7 @@ paths:
   /api/control/v1/packages/uploads:
     post:
       operationId: uploadServerPackage
-      description: Super Admin only. Uploads a .tgpkg built by `toolgate pack`. Control
+      description: Super Admin only. Uploads a .olotool built by `toolgate pack`. Control
         applies the packager's archive rules, CHECKSUMS, artifact and descriptor digests,
         stores the exact bytes and answers the verified version. Uploading the same
         bytes again answers 200 with the stored version.
@@ -8785,6 +8785,33 @@ paths:
           description: Not a package
         '503':
           description: Dependency unavailable
+  /api/control/v1/packages/artifacts/{digest}:
+    get:
+      operationId: exportServerPackage
+      description: Exact verified package archive in the authenticated tenant, requiring current package.read authority. No deployment or execution permission is conferred.
+      parameters:
+      - name: digest
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+      responses:
+        '200':
+          description: Verified package bytes; no-store
+          content:
+            application/vnd.ololabs.toolgate.package+zip:
+              schema:
+                type: string
+                contentMediaType: application/vnd.ololabs.toolgate.package+zip
+        '400':
+          description: Invalid digest
+        '401':
+          description: Authentication required
+        '403':
+          description: Current package.read authority required
+        '404':
+          description: Package not in this tenant
   /api/control/v1/packages:
     get:
       operationId: listServerPackageVersions

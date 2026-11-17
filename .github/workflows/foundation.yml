@@ -336,7 +336,7 @@ jobs:
           build/trigger-package-tests/
           ${{ matrix.package }}/build/test-results/
           ${{ matrix.package }}/build/reports/
-          ${{ matrix.package }}/build/toolgate/*.tgpkg
+          ${{ matrix.package }}/build/toolgate/*.olotool
         if-no-files-found: warn
         retention-days: 7
   scans:
@@ -567,6 +567,18 @@ jobs:
         python core-mcp/test_build.py
         python core-mcp/build.py --cli target/debug/toolgate
         TOOLGATE_CLI="$PWD/target/debug/toolgate" ./gradlew --no-daemon :control-plane:sdkWorkerTest -PprebuiltAdminUi=true
+    - name: Build versioned profiles including their tool and trigger archives
+      run: |
+        TOOLGATE_CLI="$PWD/target/debug/toolgate" python profiles/build.py
+        python -m unittest discover -s tests/ci -p test_profiles.py -v
+        npm ci --ignore-scripts
+        PROFILE_BUNDLE_DIRECTORY=profiles/bin PROFILE_BUNDLE_VERSION="$(cat VERSION)" npm --workspace @olo-labs/toolgate-admin-ui exec -- vitest run tests/profilesBuiltAcceptance.test.ts
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: foundation-stage-profiles
+        path: profiles/bin/
+        retention-days: 1
+        if-no-files-found: error
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: foundation-stage-core-mcp
@@ -632,8 +644,13 @@ jobs:
       with:
         name: foundation-stage-core-mcp
         path: build/core-mcp
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: foundation-stage-profiles
+        path: profiles/bin
     - name: Create raw contract release smoke assets
       run: |
+        python tools/release/profiles.py --source profiles/bin --output build/release --version "$(cat VERSION)" --commit "$(git rev-parse HEAD)"
         python tools/release/bundle.py
         contracts_version="$(cat packages/contracts/VERSION)"
         for classifier in "" "-sources" "-javadoc"; do

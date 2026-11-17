@@ -28,7 +28,7 @@ def initialize(assets,profile,output):
         raise ValueError('Unsupported selected trigger package lock')
     package=lock['packages'][0]
     if (not isinstance(package['artifact'],str) or '/' in package['artifact'] or '\\' in package['artifact']
-            or not package['artifact'].endswith('.tgpkg') or len(declaration['packages'])!=1
+            or not package['artifact'].endswith('.olotool') or len(declaration['packages'])!=1
             or declaration['packages'][0]['packageId']!=package['id']
             or declaration['packages'][0]['version']!=package['version']):
         raise ValueError('Selected trigger package does not match its bootstrap profile')

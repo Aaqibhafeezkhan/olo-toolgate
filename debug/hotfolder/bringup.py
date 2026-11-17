@@ -135,7 +135,7 @@ def main():
         if not args.prepared:
             manage.packages.prepare(compose, STATE, os.environ)
         else:
-            for required in ('client-images.env', 'package/core-packages.lock.json', 'package/hotfolder.tgpkg'):
+            for required in ('client-images.env', 'package/core-packages.lock.json', 'package/hotfolder.olotool'):
                 if not (STATE / required).is_file():
                     raise ValueError('Prepared input missing; run start without --prepared')
         run(['docker', 'build', '-f', 'debug/standard/linux-device.Dockerfile', '-t', 'olo-toolgate-debug-device:hotfolder', '.'])

@@ -203,8 +203,8 @@ fn variables(starter: &Starter, options: &Options) -> Result<Vec<(&'static str, 
             values.push((
                 "buildCommands",
                 match starter.build {
-                    "maven" => "The same with Maven directly: `mvn toolgate:dev`, `mvn test`, and `mvn package`, which writes `target/toolgate/<name>-<version>.tgpkg`.".into(),
-                    _ => "The same with Gradle directly: `./gradlew toolgateDev`, `./gradlew check`, and `./gradlew toolgatePackage`, which writes `build/toolgate/<name>-<version>.tgpkg`.".into(),
+                    "maven" => "The same with Maven directly: `mvn toolgate:dev`, `mvn test`, and `mvn package`, which writes `target/toolgate/<name>-<version>.olotool`.".into(),
+                    _ => "The same with Gradle directly: `./gradlew toolgateDev`, `./gradlew check`, and `./gradlew toolgatePackage`, which writes `build/toolgate/<name>-<version>.olotool`.".into(),
                 },
             ));
         }

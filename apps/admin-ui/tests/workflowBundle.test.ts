@@ -5,9 +5,10 @@ import type {DeploymentProfile,TriggerAssignment,TriggerSubscription} from '@olo
 import type {ConfigurationFile} from '../src/pendingContracts';
 import fixture from '../../../tests/fixtures/contracts/v2/valid.json';
 import {applyWorkflow,exportWorkflow as packWorkflow,importWorkflow,removeWorkflow,workflowScope} from '../src/workflowBundle';
+import {mockWorkflowPackages} from './workflowPackageFixture';
 
-type Mutable<T>=T extends readonly (infer E)[]?Mutable<E>[]:T extends object?{-readonly [K in keyof T]:Mutable<T[K]>}:T;
-const mutable=<T,>(value:T):Mutable<T>=>JSON.parse(JSON.stringify(value)) as Mutable<T>;
+type Mutable<T>=T extends Uint8Array?Uint8Array:T extends readonly (infer E)[]?Mutable<E>[]:T extends object?{-readonly [K in keyof T]:Mutable<T[K]>}:T;
+const mutable=<T,>(value:T):Mutable<T>=>structuredClone(value) as Mutable<T>;
 const original={profileVersion:2,profileId:'test-profile',packages:[],workflows:mutable(fixture.WorkflowConfiguration)} as DeploymentProfile;
 const first=original.workflows!.workflows[0];
 const binding=original.workflows!.dispatchBindings[0];
@@ -15,13 +16,16 @@ const assignments=[{...fixture.TriggerAssignment,metadata:{...fixture.TriggerAss
 const subscriptions=[{...fixture.TriggerSubscription,metadata:{...fixture.TriggerSubscription.metadata,uid:binding.subscriptionUid,name:'events'}}] as TriggerSubscription[];
 
 const snapshot={formatVersion:2,tenantId:'tenant-a',revision:1,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
-const exportWorkflow=(profile:DeploymentProfile,id:string,a:TriggerAssignment[],s:TriggerSubscription[])=>packWorkflow(profile,id,a,s,snapshot);
+const exportWorkflow=async(profile:DeploymentProfile,id:string,a:TriggerAssignment[],s:TriggerSubscription[])=>packWorkflow(profile,id,a,s,snapshot,await mockWorkflowPackages(profile,a));
 
 it('exports one compressed workflow with its dependency closure and no README, host settings or credentials',async()=>{
   const profile=mutable(original);profile.workflows!.workflows.push({...mutable(first),id:'other'});
   const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);
   const files=unzipSync(bytes);
-  expect(Object.keys(files).sort()).toEqual(['manifest.json','referenced-data.json','workflow.json']);
+  expect(Object.keys(files).filter(name=>!name.startsWith('packages/')).sort()).toEqual(['manifest.json','referenced-data.json','workflow.json']);
+  const tools=Object.keys(files).filter(name=>name.startsWith('packages/'));
+  expect(tools).toHaveLength(2);
+  expect(tools.every(name=>name.endsWith('.olotool'))).toBe(true);
   const bundle=await importWorkflow('working.olo',bytes);
   expect(bundle.profile.workflows!.workflows.map(item=>item.id)).toEqual([first.id]);
   expect(bundle.profile.workflows!.agentDefinitions).toEqual(original.workflows!.agentDefinitions);
@@ -65,10 +69,33 @@ it('rejects tampering, unsupported stack archives, traversal, wrong extensions a
   await expect(importWorkflow('working.zip',bytes)).rejects.toThrow();
   await expect(importWorkflow('working.olo',new Uint8Array(3145729))).rejects.toThrow();
 });
+it('requires exact embedded packages and refuses incomplete inventories and the prior profile format',async()=>{
+  await expect(packWorkflow(original,first.id,assignments,subscriptions,snapshot)).rejects.toThrow('missing');
+  const files=unzipSync(await exportWorkflow(original,first.id,assignments,subscriptions));
+  const manifest=JSON.parse(new TextDecoder().decode(files['manifest.json'])) as {version:number;packages:{path:string}[]};
+  delete files[manifest.packages[0].path];
+  await expect(importWorkflow('missing.olo',zipSync(files))).rejects.toThrow('Missing package');
+  manifest.version=1;files['manifest.json']=strToU8(JSON.stringify(manifest));
+  await expect(importWorkflow('prior.olo',zipSync(files))).rejects.toThrow('verification');
+});
 it('excludes unrelated models, agents and workflow groups',()=>{
   const profile=mutable(original);
   profile.workflows!.agentDefinitions.push({...profile.workflows!.agentDefinitions[0],agentId:'unused'});
   profile.workflows!.modelDeployments.push({...profile.workflows!.modelDeployments[0],id:'unused'});
   profile.workflows!.workflowGroups.push({id:'unused',displayName:'Unused'});
   expect(workflowScope(profile,first.id)).toEqual(original);
+});
+
+it('rejects former nested tool filenames and tool archives as workflow filenames',async()=>{
+  const bytes=await exportWorkflow(original,first.id,assignments,subscriptions);
+  await expect(importWorkflow('tool.olotool',bytes)).rejects.toThrow();
+  for(const extension of ['.olo','.tgpkg']){
+    const files=unzipSync(bytes);
+    const manifest=JSON.parse(new TextDecoder().decode(files['manifest.json']));
+    const previous=manifest.packages[0].path;
+    const obsolete=previous.replace(/\.olotool$/,extension);
+    files[obsolete]=files[previous];delete files[previous];
+    manifest.packages[0].path=obsolete;files['manifest.json']=strToU8(JSON.stringify(manifest));
+    await expect(importWorkflow('workflow.olo',zipSync(files))).rejects.toThrow();
+  }
 });

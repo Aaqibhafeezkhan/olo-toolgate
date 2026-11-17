@@ -1,0 +1,35 @@
+[
+  {
+    "id": "log-triage-dispatch",
+    "assignment": "log-triage-watch",
+    "subscription": "log-triage-events",
+    "assignmentSpec": {
+      "trigger": "examples.log-watch/error-spike",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "log-devices"
+        ]
+      },
+      "config": {
+        "file": "logs/app.log",
+        "pattern": "ERROR|FATAL",
+        "threshold": 2,
+        "windowSeconds": 60,
+        "cooldownSeconds": 60
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "log-triage-watch"
+        ]
+      },
+      "filter": "event.type == 'examples.logs.match.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

@@ -5,7 +5,7 @@ Open **Tools → Triggers** in the Admin UI. The page lists live assignments
 and the desired state, reported phase, and configuration revision of each
 device. The workflow profile editor on the same page manages profile drafts.
 
-1. With `package.import`, upload the trigger's signed `.tgpkg` using
+1. With `package.import`, upload the trigger's signed `.olotool` using
    **Upload trigger package**. Control verifies the package before storing it.
 2. With `trigger.manage` on the target, open **Create trigger assignment**.
    Enter a JSON object with the package's exported trigger ID and version,
@@ -65,7 +65,7 @@ its local checkpoint before pause and after resume. The post-resume
 checkpoint must retain the first marker and advance the same lease epoch
 by exactly one outbox record for the new marker. The fixture remains
 available for inspection until you remove the disposable stack. For the failing-package rollout scenario, provide a distinct Inbox Watch
-`.tgpkg` whose poll process exits on the fixture configuration. Use three
+`.olotool` whose poll process exits on the fixture configuration. Use three
 devices already running the known-good package and pass the failing archive
 to `examples/langchain/trigger_rollout_e2e.py`. The runner assigns the bad
 fleet release only to the device selected by the trigger rollout and

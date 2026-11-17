@@ -132,7 +132,7 @@ Everything is found by the digest the permit pins, never by name or version.
 
 | File | Digest |
 |---|---|
-| `packages/<hex>.tgpkg` | `packageDigest`: `sha256` of the package's `CHECKSUMS.sha256`. The package passes the CLI's archive rules and packager checks before first use. |
+| `packages/<hex>.olotool` | `packageDigest`: `sha256` of the package's `CHECKSUMS.sha256`. The package passes the CLI's archive rules and packager checks before first use. |
 | `profiles/<hex>.json` | `serviceProfileDigest`: the canonical digest (NFC, then RFC 8785) of the `ServiceProfile`. Its `revision` must equal `serviceProfileRevision` and its `packageId` the package's id. |
 | `globals/<hex>.json` | `globalsDigest`: the canonical digest of the tool's resolved globals, one JSON object of name to value. |
 

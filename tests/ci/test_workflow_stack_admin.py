@@ -2,6 +2,7 @@
 """Local operator authorization, scoped lifecycle and portable bundle regressions."""
 from copy import deepcopy
 import http.cookiejar
+import http.client
 import importlib.util
 import json
 from pathlib import Path
@@ -158,6 +159,9 @@ class StackAdminTests(unittest.TestCase):
                 observed.append(dict(self.headers))
                 self.send_response(200 if self.headers.get('Authorization')=='Bearer control-token' else 401)
                 self.send_header('Content-Length','2');self.end_headers();self.wfile.write(b'{}')
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get('Content-Length','0')))
+                self.do_GET()
         upstream=ThreadingHTTPServer(('127.0.0.1',0),Upstream)
         threading.Thread(target=upstream.serve_forever,daemon=True).start()
         self.addCleanup(upstream.server_close);self.addCleanup(upstream.shutdown)
@@ -176,6 +180,16 @@ class StackAdminTests(unittest.TestCase):
             with opener.open(request) as response:self.assertEqual(200,response.status)
             self.assertNotIn('operator-secret',str(observed[-1]));self.assertNotIn('operator-csrf',str(observed[-1]))
             self.assertIn('control-cookie',str(observed[-1]))
+            large=b'x'*(3*1024*1024)
+            headers={'Authorization':'Bearer control-token','Origin':origin}
+            with opener.open(urllib.request.Request(origin+'/api/control/v1/packages/uploads',large,headers)) as response:self.assertEqual(200,response.status)
+            connection=http.client.HTTPConnection('127.0.0.1',port,timeout=5)
+            try:
+                connection.putrequest('POST','/api/control/v1/workflow-profiles')
+                connection.putheader('Origin',origin);connection.putheader('Content-Length',str(len(large)))
+                connection.endheaders()
+                self.assertEqual(413,connection.getresponse().status)
+            finally:connection.close()
             with self.assertRaises(urllib.error.HTTPError) as error:
                 opener.open(urllib.request.Request(origin+'/api/control/v1/workflow-profiles',b'{}',{'Origin':'https://evil.example'}))
             self.assertEqual(403,error.exception.code)

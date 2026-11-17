@@ -1,7 +1,7 @@
 # JSON SDK Hello World
 
 Open `toolgate.json` in Tool Builder's JSON SDK editor, save it in an authorized
-Tool Group and build the saved revision. Download the standard `.tgpkg` and the
+Tool Group and build the saved revision. Download the standard `.olotool` and the
 single canonical source-project ZIP.
 
 The same source builds outside Builder:

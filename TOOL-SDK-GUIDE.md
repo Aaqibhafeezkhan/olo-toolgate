@@ -37,7 +37,7 @@ This file is also bundled in the published SDK: inside the `toolgate-sdk-api` ja
 ## 1. How it fits together
 
 ```text
- your code ──► annotations ──► descriptors ──► .tgpkg package
+ your code ──► annotations ──► descriptors ──► .olotool package
                 (what the tool     (canonical JSON,    (code + descriptors,
                  needs)             digested)           digested, reproducible)
 
@@ -50,7 +50,7 @@ This file is also bundled in the published SDK: inside the `toolgate-sdk-api` ja
 ```
 
 - **Descriptors** are generated at compile time from your annotations. They describe each tool: its inputs and output, its effect on the world, the hosts and routes it may call, the secrets and settings it reads. A descriptor's SHA-256 is the tool's identity (`toolDescriptorDigest`). Change what a tool may do and its digest changes, so an administrator must approve the new version.
-- **A package** (`.tgpkg`) is a deterministic zip of your built code and its descriptors. The same sources give the same bytes on any machine.
+- **A package** (`.olotool`) is a deterministic zip of your built code and its descriptors. The same sources give the same bytes on any machine.
 - **Standalone mode** is a normal MCP server (protocol 2026-07-28 over stdio or Streamable HTTP). Your declarations are enforced as developer feedback.
 - **Governed mode** runs each call in a Tool Host from the exact package an administrator deployed. The host's broker makes every outbound request from the approved routes and adds the credentials itself; your code never sees an organisation's API keys.
 
@@ -102,7 +102,7 @@ Then:
 ```sh
 toolgate dev      # serve the tools as an MCP server over stdio
 toolgate check    # compile, unit tests, and every @Example
-toolgate pack     # build/toolgate/orders-0.1.0.tgpkg
+toolgate pack     # build/toolgate/orders-0.1.0.olotool
 ```
 
 `descriptorGeneration` is pinned in the build so an SDK upgrade never changes your descriptors (and so their digests) until you choose to move it. It has no default; the build fails without it.
@@ -340,7 +340,7 @@ To use it from an MCP client that launches servers over stdio, give the client t
 **In production, standalone:** the package's `artifacts/tool.jar` is one self-contained executable: your code, the SDK runtime and every dependency in a single fat jar. A machine needs only a Java 17+ runtime to run it.
 
 ```sh
-unzip -q build/toolgate/orders-0.1.0.tgpkg artifacts/tool.jar -d orders-pkg
+unzip -q build/toolgate/orders-0.1.0.olotool artifacts/tool.jar -d orders-pkg
 TOOLGATE_GLOBAL_GREETING=Hello \
 TOOLGATE_DESTINATION_ITEMSAPIHOST=items.example.com \
 TOOLGATE_SECRET_ITEMSAPIKEY=... \
@@ -359,9 +359,9 @@ Standalone mode is a plain MCP server: there is no enterprise audit, and the sta
 ## 12. Package
 
 ```sh
-toolgate pack                         # build/toolgate/<name>-<version>.tgpkg (Maven: target/toolgate/)
-toolgate validate build/toolgate/orders-0.1.0.tgpkg
-toolgate verify   build/toolgate/orders-0.1.0.tgpkg   # prints packageDigest
+toolgate pack                         # build/toolgate/<name>-<version>.olotool (Maven: target/toolgate/)
+toolgate validate build/toolgate/orders-0.1.0.olotool
+toolgate verify   build/toolgate/orders-0.1.0.olotool   # prints packageDigest
 ```
 
 `pack` runs your build, then writes a deterministic archive: the manifest, a canonical descriptor per tool, your executable and `CHECKSUMS.sha256`.
@@ -386,7 +386,7 @@ public Greeting greet(@Param(description = "Who to greet") @TrainingValues(examp
         negatives = "How do I write hello world in Rust?")
 ```
 
-There is no hand-written annotations file: `pack` refuses one. See [tool-sdk/spec/authoring/training.md](tool-sdk/spec/authoring/training.md). The schema is not part of the package and does not change any digest. `toolgate schema <file.tgpkg>` writes it for any package you already have.
+There is no hand-written annotations file: `pack` refuses one. See [tool-sdk/spec/authoring/training.md](tool-sdk/spec/authoring/training.md). The schema is not part of the package and does not change any digest. `toolgate schema <file.olotool>` writes it for any package you already have.
 
 Bump `version` in your build for every release you hand to an administrator. The same version with different contents is a different digest and will be treated as a new package.
 
@@ -394,7 +394,7 @@ Bump `version` in your build for every release you hand to an administrator. The
 
 Under ToolGate your tool runs in a **Tool Host**, a device enrolled with Control that holds deployed packages and runs one process per call. Here is the path from package to a governed MCP call, as an administrator walks it in the console.
 
-1. **Upload.** *Server packages → Upload a package.* Control checks the archive rules, every checksum and every descriptor digest, then stores the exact bytes. Only the installation's Super Admin can upload. (API: `POST /api/control/v1/packages/uploads` with the `.tgpkg` as `application/vnd.ololabs.toolgate.package+zip`.)
+1. **Upload.** *Server packages → Upload a package.* Control checks the archive rules, every checksum and every descriptor digest, then stores the exact bytes. Only the installation's Super Admin can upload. (API: `POST /api/control/v1/packages/uploads` with the `.olotool` as `application/vnd.ololabs.toolgate.package+zip`.)
 2. **Deploy.** *Server packages → Deploy a version.* Pick the version and give a value for each global and each destination host setting (the console prefills them from the descriptors). Each new tool is added to the directory **disabled**, in the default Tool Group. Tool Hosts fetch the package and report the tools they can run. (API: `POST /api/control/v1/packages/deployments`.)
 3. **Enable.** *Tools → `acme.orders/greet` → Enable.* A reviewed change, approved by a second administrator.
 4. **Allow the package.** In the binding the tool runs under, add the `packageDigest` to the allowed packages and allow the `invoke` action. This is what lets *this exact build* run; a new build needs a new approval.

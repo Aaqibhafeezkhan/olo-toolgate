@@ -1,6 +1,29 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+
+## Tool/profile extension split and foundation repair — 2026-11-17
+
+Trigger/tool packages now use `.olotool`, embedded in workflow `.olo` bundles.
+The existing parallel package matrix, SDKs, fixtures and profile loader use the
+new tool suffix. No trigger API version, Gateway/client interface, module scope
+or earned weight changes: **27% remains earned**. The foundation failure from
+job 133983308294 was the stale schema-count test, now corrected and tested.
+See the [workflow checkpoint](workflow-v1-status.md#distinct-archive-extensions-and-foundation-repair--2026-11-17)
+for checks, tested base/digest, limitations and next work. Existing module
+Done-when criteria, native PUSH/provider acceptance and M7/M8 remain outstanding.
+
+## Profile-contained trigger artifacts — 2026-11-17
+
+Trigger toolchains, fixtures and the existing parallel package-test matrix now
+use `.olotool` only. Profiles embed the exact trigger/tool archives and logical
+assignment/subscription declarations. Package import/deployment still uses the
+existing #274 interfaces; no Gateway/client trigger protocol or module scope
+changes. No module earns weight: **27% remains earned** and all original Done-when
+criteria remain. See the [workflow status](workflow-v1-status.md#buildable-profiles-and-embedded-tool-archives--2026-11-17)
+for source/build/live transfer evidence and verification limitations. Native PUSH,
+M7/M8 and full provider acceptance remain separate outstanding work.
+
 This is the live progress document for issue #274 (server and client triggers). The design is
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.

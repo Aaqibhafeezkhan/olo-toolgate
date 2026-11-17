@@ -314,7 +314,10 @@ impl Device {
     async fn fetch(&self, deployment: &PackageDeployment) -> Result<(), Failure> {
         let digest = &deployment.package_digest;
         let hex = store::hex(digest).ok_or_else(|| Failure::Local("bad package digest".into()))?;
-        let path = self.store_dir.join("packages").join(format!("{hex}.tgpkg"));
+        let path = self
+            .store_dir
+            .join("packages")
+            .join(format!("{hex}.olotool"));
         if !path.is_file() {
             let data = self
                 .control

@@ -1,6 +1,32 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+
+## Tool/profile extension split checkpoint — 2026-11-17
+
+Tool SDK/CLI and cache filenames use `.olotool`; workflow bundles use `.olo`
+with exact nested `.olotool` bytes. Unsupported old names are refused without
+migration or alias. This changes no package-byte trust or effect authorization,
+no S01–S33 weight, overall phase table, first-slice acceptance or security claim.
+Rust CLI/Tool Host and isolated SQLite/PostgreSQL package tests passed within
+their recorded scope. The foundation schema-count regression is fixed.
+See the [workflow checkpoint](../architecture/workflow-v1-status.md#distinct-archive-extensions-and-foundation-repair--2026-11-17)
+for tested revision/digest, executed checks and broad-gate limitations. Complete
+native-effect/runtime guarantees remain outstanding.
+
+## Profile/archive naming integration — 2026-11-17
+
+The workflow profile delivery now embeds exact `.olotool` tool packages and uses
+`.olotool` exclusively for SDK/CLI output and client cache filenames. A tenant-scoped
+administrative byte-export API rechecks current `package.read`; it issues no
+execution authority. Import remains the existing verified package-upload path,
+followed by separate deployment/enable/review requirements. No native effect
+boundary, store migration, compatibility reader, S01–S33 stage credit or overall
+phase-table weight changes here. The first vertical-slice acceptance criteria and
+native-write limitations remain unchanged. See the
+[workflow status](../architecture/workflow-v1-status.md#buildable-profiles-and-embedded-tool-archives--2026-11-17)
+for actual checks, tested revision, limitations and pending verification.
+
 The [revision-10 plan](../plans/zero-trust-tool-execution.md) is the preserved
 proposal linked by issue #230. A merged design or an authored conformance case
 does not establish a passing security claim.

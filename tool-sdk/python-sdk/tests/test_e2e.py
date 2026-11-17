@@ -121,7 +121,7 @@ def hello() -> Out:
             self.assertEqual(1, sum(frame["kind"] == "RESULT" for frame in frames))
             if cli:
                 command("pack")
-                package = next((root/"build/toolgate").glob("*.tgpkg"))
+                package = next((root/"build/toolgate").glob("*.olotool"))
                 subprocess.run([cli, "validate", str(package)], check=True, capture_output=True)
                 with zipfile.ZipFile(package) as archive:
                     manifest = json.loads(archive.read("toolgate-package.json"))

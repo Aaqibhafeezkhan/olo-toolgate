@@ -10,7 +10,7 @@ use toolgate_cli::{archive, package, Error};
 const FIXTURES: &str = "tool-sdk/conformance/fixtures/packages";
 
 fn fixture(name: &str) -> Vec<u8> {
-    std::fs::read(root().join(FIXTURES).join(format!("{name}.tgpkg"))).unwrap()
+    std::fs::read(root().join(FIXTURES).join(format!("{name}.olotool"))).unwrap()
 }
 
 /// packages/valid-accepted and every packages/<rule> rejection.

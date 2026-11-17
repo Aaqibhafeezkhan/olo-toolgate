@@ -6,6 +6,14 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Build versioned workflow profiles from `profiles/configurations/` using
+  `profiles/build.sh` or `profiles/build.bat`, with output and package inventories
+  in `profiles/bin/` and verified publication as release assets. Workflow bundles
+  include the exact required tool and trigger archives. Tool packaging now uses
+  `.olotool` exclusively; workflow/profile bundles use `.olo`. Prior tool filenames and configuration-only profile bundles
+  have no compatibility reader. Console transfer preserves credentials and uses
+  existing package import/deployment policy.
+
 - Add the `examples.log-watch/error-spike` client POLL package and a profile-scoped
   managed-log triage use case, with bounded RE2 filtering, observation windows,
   cooldowns, restart checkpoints and explicit rewrite/rotation limits. Host log
@@ -98,14 +106,14 @@ The project follows semantic versioning once stable versioning begins.
   `@TrainingValues`, `@TrainingPrompt` and `@ValuePhrasing` in Java, `training(...)`, `TrainingValues` and
   `TrainingPrompt` in Python, and `"training"` blocks on tools and inputs in `toolgate.json`. The build checks every
   hint against the tool's inputs and types. `toolgate pack` folds them into the tool schema and writes the file beside
-  the `.tgpkg`; it refuses a hand-written annotations file. Hints never reach a descriptor, and Java and JSON packages
+  the `.olotool`; it refuses a hand-written annotations file. Hints never reach a descriptor, and Java and JSON packages
   keep their digests when a hint changes. `core-mcp/hello-world` declares its hints in `HelloWorld.java`.
   See `tool-sdk/spec/authoring/training.md`.
 
-- Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.tgpkg`
+- Tool schema for training: `toolgate pack` also writes `<name>-<version>.tool-schema.json` beside the `.olotool`
   (each tool's name, description, `useWhen`, effect, parameters with types, defaults, enums and bounds, and the
   input and output schemas), merging optional phrasing hints from the project's `training/annotations.json`.
-  `toolgate schema <file.tgpkg>` writes it for any package. The file is not packaged, so no digest changes.
+  `toolgate schema <file.olotool>` writes it for any package. The file is not packaged, so no digest changes.
   `core-mcp/hello-world` ships annotations.
 - Operator Insights (ADR 031): installation operators see how tools are used and behave across every tenant: call
   volume, outcomes, latency, retries, admission denials, sessions and the history of any one invocation. It is off
@@ -177,7 +185,7 @@ The project follows semantic versioning once stable versioning begins.
   packaging and running under ToolGate. The same file ships in the `toolgate-sdk-api` jar as
   `META-INF/toolgate/TOOL-SDK-GUIDE.md` and prints with `toolgate guide`.
 
-- Java server tools run end to end through `/mcp` (M0 part 14). Control takes a `.tgpkg` at
+- Java server tools run end to end through `/mcp` (M0 part 14). Control takes a `.olotool` at
   `POST /api/control/v1/packages/uploads` (Super Admin), applies the packager's archive rules,
   CHECKSUMS and descriptor digests, and stores the exact bytes; `POST .../packages/deployments`
   makes a version the one Tool Hosts run, with values for its globals and destination host
@@ -214,7 +222,7 @@ The project follows semantic versioning once stable versioning begins.
   examples, a `ToolHarness` test and a git-ignored `toolgate.dev.json`. In a project,
   `toolgate dev` serves the tools over stdio (or `--http` on loopback), `toolgate dev
   --digests` prints the descriptor digests, `toolgate check` (and `toolgate validate <dir>`)
-  runs the tests and examples, and `toolgate pack` builds and validates the `.tgpkg`. The CLI
+  runs the tests and examples, and `toolgate pack` builds and validates the `.olotool`. The CLI
   drives each build through one adapter per language and build tool, and starters are layered
   templates embedded in the binary, so a new language adds a starter and an adapter.
   `./gradlew publishJavaSdkToMavenLocal` publishes the SDK where starters find it. The Java
@@ -323,7 +331,7 @@ The project follows semantic versioning once stable versioning begins.
 - The Tool SDK has its packager: the `toolgate` CLI (`tool-sdk/cli`, M0 part 1). It
   computes canonical descriptor bytes and the `toolDescriptorDigest`,
   `descriptorSetDigest` and `packageDigest`, compares descriptors under the equivalence
-  rewrites, and packs, validates and verifies `.tgpkg` archives offline under the
+  rewrites, and packs, validates and verifies `.olotool` archives offline under the
   archive rules of platform-requirements.md §7.6. It passes the descriptor vectors, all 20 package
   archive fixtures and the v2 schema fixtures. The archive fixtures' stub manifest now
   names the artifact digest `artifactDigest`, as `PackagedArtifact` v2 does.

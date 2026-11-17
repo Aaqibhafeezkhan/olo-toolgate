@@ -28,7 +28,7 @@ Deploy it to every Tool Host (leave *Tool Hosts* blank) and the same question wo
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # then edit it; never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/system-health-0.1.0.tgpkg
+toolgate pack                                     # build/toolgate/system-health-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

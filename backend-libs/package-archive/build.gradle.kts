@@ -6,7 +6,7 @@ plugins {
     `java-test-fixtures`
 }
 
-description = "The .tgpkg package validator shared by Control and the Marketplace helper. JDK only, no dependencies."
+description = "The .olotool package validator shared by Control and the Marketplace helper. JDK only, no dependencies."
 base { archivesName.set("toolgate-package-archive") }
 
 dependencies {

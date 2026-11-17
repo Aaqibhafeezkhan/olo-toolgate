@@ -9,7 +9,7 @@ FROM ${QUICKSTART_IMAGE}
 USER root
 RUN install -d -o 0 -g 0 -m 0755 /opt/toolgate/example /opt/toolgate/example-core
 COPY --chown=0:0 --chmod=0644 hotfolder-trigger.profile.json /opt/toolgate/example/hotfolder-trigger.profile.json
-COPY --from=package --chown=0:0 --chmod=0644 core-packages.lock.json hotfolder-watch.tgpkg /opt/toolgate/example-core/
+COPY --from=package --chown=0:0 --chmod=0644 core-packages.lock.json hotfolder-watch.olotool /opt/toolgate/example-core/
 USER 65532:65532
 ENV TOOLGATE_CONTROL_PROFILE_PATH=/opt/toolgate/example/hotfolder-trigger.profile.json \
     TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH=/opt/toolgate/example-core/core-packages.lock.json

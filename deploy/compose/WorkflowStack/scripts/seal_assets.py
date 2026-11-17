@@ -9,9 +9,9 @@ from package_assets import describe
 
 def seal(source,output):
     found=[]
-    for artifact in sorted(source.glob('*/build/toolgate/*.tgpkg')):
+    for artifact in sorted(source.glob('*/build/toolgate/*.olotool')):
         metadata=describe(artifact)
-        metadata['artifact']=artifact.parents[2].name+'.tgpkg'
+        metadata['artifact']=artifact.parents[2].name+'.olotool'
         found.append((metadata,artifact))
     if len(found)>64 or len({(p['id'],p['version']) for p,_ in found})!=len(found):
         raise ValueError('Package catalog must contain unique, bounded package identities')

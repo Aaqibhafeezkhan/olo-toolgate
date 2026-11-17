@@ -227,6 +227,7 @@ export const operations = {
   enterpriseOperationalStatus: { method: 'GET', path: '/api/control/v1/access/operations' },
   exportOperationEvidence: { method: 'GET', path: '/api/control/v1/access/operations/evidence' },
   uploadServerPackage: { method: 'POST', path: '/api/control/v1/packages/uploads' },
+  exportServerPackage: { method: 'GET', path: '/api/control/v1/packages/artifacts/{digest}' },
   listServerPackageVersions: { method: 'GET', path: '/api/control/v1/packages' },
   listServerPackageDeployments: { method: 'GET', path: '/api/control/v1/packages/deployments' },
   deployServerPackage: { method: 'POST', path: '/api/control/v1/packages/deployments' },

@@ -26,7 +26,7 @@ def run(args, **kwargs):
 
 def hello_world_artifact(output, work, package, extension):
     """Extract the artifact from the same sealed package the Control image ships."""
-    packages = sorted(output.glob(package + '-[0-9]*.tgpkg'))
+    packages = sorted(output.glob(package + '-[0-9]*.olotool'))
     if len(packages) != 1:
         raise ValueError('Expected exactly one Hello World package')
     with zipfile.ZipFile(packages[0]) as archive:

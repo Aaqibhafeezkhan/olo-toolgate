@@ -32,7 +32,7 @@ There are no fixed watch IDs, versions, config keys or event filters in the
 deployment operator or canonical source model.
 
 To adopt an external package using supported executor capabilities, place its
-`.tgpkg` in `configurations/<selection>/packages/` and pin its `packageDigest`
+`.olotool` in `configurations/<selection>/packages/` and pin its `packageDigest`
 (`sha256:` plus the SHA-256 of its `CHECKSUMS.sha256` bytes) in `deployment.source`.
 Use the digest emitted by `toolgate pack`. The selected package/version must
 match exactly. Only the selected artifact enters bootstrap custody. Review the
@@ -79,9 +79,11 @@ empty installation), then use **Workflow import / export (.olo)**.
 
 - Each ZIP-compressed `.olo` contains **one workflow**, its referenced agents,
   model/group definitions, prompts, schemas, context, inert deployment hints,
-  signed-package references, directory configuration and named trigger declarations.
-  It contains no README, container images, model weights, databases, human
-  accounts, private keys or credential stores. The limit is 3 MiB compressed.
+  directory configuration, named trigger declarations and exact required tool/trigger
+  `.olotool` archives. No profile README, container images, model weights, databases,
+  human accounts, private keys or credential stores are added. Embedded package
+  contents are preserved byte for byte. The limit is 128 MiB compressed, with
+  Control's existing 64 MiB ceiling per tool archive.
 - A working profile may hold multiple workflows. Import adds a workflow or
   replaces the selected/matching workflow. The editor rereads the staged content
   and refreshes automatically. Review and publish to activate; publication
@@ -93,8 +95,9 @@ empty installation), then use **Workflow import / export (.olo)**.
   needed. Existing shared definitions are not overwritten. Owner IDs can be
   mapped to existing users without changing those users or their memberships.
   Restore trigger connections and stage the resolved mappings before publication.
-- The destination must supply its provider secrets, approved devices, exact signed
-  packages and trusted native graph factories/model services. Missing dependencies
+- Import embedded packages through the displayed action before their normal
+  deployment/activation. The destination supplies provider secrets, approved
+  devices and trusted native graph factories/model services. Missing dependencies
   remain readiness/setup blockers; structural import does not prove execution.
   No Python code from an uploaded file is installed or executed.
 - Removing a workflow prunes its unshared profile definitions and mappings while
@@ -103,7 +106,10 @@ empty installation), then use **Workflow import / export (.olo)**.
   workflow-owned garbage.
 
 There is one application-level transfer implementation at both console URLs.
-The earlier whole-deployment `.olo` format is unsupported; it is neither converted
+Repository authoring/build sources are in [profiles](../../../profiles/README.md),
+with versioned outputs under `profiles/bin/`. Tool archives use `.olotool`; workflow/profile archives use
+`.olo`. Only profile bundle format 2 is accepted.
+The earlier configuration-only and whole-deployment formats are unsupported; neither is converted
 nor loaded into Docker. Existing old archive files remain untouched.
 
 **Factory reset** is an explicit destructive action in `/operator`: enter

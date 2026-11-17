@@ -121,4 +121,4 @@ The SDK build writes the staging directory's `training/annotations.json`, marked
                      "examples": [{"prompt": "...", "arguments": {"file": "orders.csv"}}]}}}
 ```
 
-`toolgate pack` folds it into `<package>.tool-schema.json` under each tool's `annotations`, and writes it to `training/annotations.json` beside the `.tgpkg` (marked `"generatedBy": "toolgate pack"`), where the dataset builder looks for it. A later build replaces that file, or removes it when no tool declares hints any more. `pack` refuses an annotations file without the `generatedBy` mark, and a `training/annotations.json` in a tool project.
+`toolgate pack` folds it into `<package>.tool-schema.json` under each tool's `annotations`, and writes it to `training/annotations.json` beside the `.olotool` (marked `"generatedBy": "toolgate pack"`), where the dataset builder looks for it. A later build replaces that file, or removes it when no tool declares hints any more. `pack` refuses an annotations file without the `generatedBy` mark, and a `training/annotations.json` in a tool project.

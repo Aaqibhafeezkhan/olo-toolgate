@@ -231,7 +231,7 @@ def main(argv):
     if '--check' in argv:
         bad = []
         for name, data in out.items():
-            path = OUT / f'{name}.tgpkg'
+            path = OUT / f'{name}.olotool'
             if not path.is_file():
                 bad.append(f'missing {path.name}')
             elif name == 'valid-deflated':
@@ -240,14 +240,14 @@ def main(argv):
                         bad.append(f'{path.name} differs from a fresh build')
             elif path.read_bytes() != data:
                 bad.append(f'{path.name} differs from a fresh build')
-        bad.extend(f'unexpected {p.name}' for p in sorted(OUT.glob('*.tgpkg')) if p.stem not in out)
+        bad.extend(f'unexpected {p.name}' for p in sorted(OUT.glob('*.olotool')) if p.stem not in out)
         if bad:
             raise SystemExit('\n'.join(bad))
         print(f'{len(out)} package fixtures match the generator')
         return
     OUT.mkdir(exist_ok=True)
     for name, data in out.items():
-        (OUT / f'{name}.tgpkg').write_bytes(data)
+        (OUT / f'{name}.olotool').write_bytes(data)
     print(f'wrote {len(out)} package fixtures to {OUT.relative_to(HERE)}/')
 
 

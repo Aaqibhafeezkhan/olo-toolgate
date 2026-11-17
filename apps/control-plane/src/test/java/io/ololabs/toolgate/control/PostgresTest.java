@@ -73,6 +73,15 @@ final class PostgresTest {
         assertEquals(201, service.mutate(rollback, Kind.USER, "user", "CREATE", DomainTest.user("user", 1), 0, "rollback-key", "request").status());
         service.mutate(rollback, Kind.USER, "user", "DELETE", null, 1, "delete-retired", "request");
         assertThrows(Failure.class, () -> service.mutate(rollback, Kind.USER, "user", "CREATE", DomainTest.user("user", 1), 0, "reuse-retired", "request"));
+        // Archive export must use the same tenant fence and current reader policy on PostgreSQL.
+        var packages = new io.ololabs.toolgate.control.application.ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        byte[] archive = ServerPackagesTest.zip(ServerPackagesTest.files());
+        String packageDigest = codec.configuration(packages.upload(actor, archive, "pg-export-upload").body(), false).path("packageDigest").asText();
+        assertArrayEquals(archive, packages.exportContent(actor, packageDigest));
+        var otherReader = TestSupport.seed(store, codec, io.ololabs.toolgate.control.fixtures.Tenants.id("other"), "root");
+        assertEquals(404, assertThrows(Failure.class, () -> packages.exportContent(otherReader, packageDigest)).status());
+        TestSupport.seed(store, codec, actor.tenant(), "backup");
+        assertEquals(403, assertThrows(Failure.class, () -> packages.exportContent(actor, packageDigest)).status());
     }
     private long auditCount(PGSimpleDataSource source, String tenant) throws Exception {
         try (var connection = source.getConnection(); var statement = connection.prepareStatement("SELECT count(*) FROM control_audit WHERE tenant_id=?")) {

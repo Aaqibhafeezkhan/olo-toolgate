@@ -3,8 +3,9 @@ import {useEffect,useState} from 'react';
 import type {DeploymentProfile,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
 import {ApiError,ConfigurationPending,ControlClient} from './api';
 import type {ConfigurationFile,ImportIdentityOptions} from './pendingContracts';
-import {mergeReferences} from './workflowReferences';
-import {applyWorkflow,exportWorkflow,importWorkflow,type WorkflowBundle} from './workflowBundle';
+import {mergeReferences,referencedData} from './workflowReferences';
+import {applyWorkflow,exportWorkflow,importWorkflow,workflowConnections,workflowScope,type WorkflowBundle} from './workflowBundle';
+import {inspectPackage,MAX_BUNDLE_BYTES,requiredPackages} from './workflowPackages';
 
 async function triggers(client:ControlClient){
   const assignments:TriggerAssignment[]=[];let token:string|undefined;
@@ -21,15 +22,15 @@ export function WorkflowTransfer({client,profile,allowNew=false,busy,run,replace
   useEffect(()=>{if(imported&&profile&&!profile.workflows?.workflows.some(item=>item.id===imported.targetId)){setImported(undefined);setReferencePreview(undefined);setReferenceChange('');}},[profile,imported]);
   const exportId=workflows.some(item=>item.id===selected)?selected:workflows[0]?.id??'';
   return <section className="guidance" aria-label="Workflow bundles"><h2>Workflow import / export (.olo)</h2>
-    <p>Transfer one workflow and its agents, model definitions, prompts, context and trigger mappings. Runtime packages, model services and vault secrets must be available on the destination. Import updates this profile; containers and login credentials stay unchanged.</p>
+    <p>Transfer one workflow, its referenced configuration and exact tool/trigger .olotool packages. Import packages through Control before deploying and enabling them. Native graph factories, model services and vault secrets require destination setup. Containers and login credentials stay unchanged.</p>
     {['127.0.0.1','localhost','[::1]'].includes(location.hostname)&&<p><a href="http://127.0.0.1:48190/operator" target="_blank" rel="noopener">Factory reset / deployment operator</a></p>}
     <fieldset disabled={busy}><legend>Export a workflow</legend><label>Workflow to export<select value={exportId} onChange={event=>setSelected(event.target.value)}>{workflows.map(item=><option key={item.id} value={item.id}>{item.id}</option>)}</select></label>
-      <button disabled={!exportId} onClick={()=>void run(async()=>{const [sources,snapshot]=await Promise.all([triggers(client),client.exportConfiguration()]);const bytes=await exportWorkflow(profile!,exportId,sources.assignments,sources.subscriptions,snapshot);const url=URL.createObjectURL(new Blob([new Uint8Array(bytes).buffer],{type:'application/zip'}));const link=document.createElement('a');link.href=url;link.download=exportId+'.olo';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);})}>Export workflow .olo</button>
+      <button disabled={!exportId} onClick={()=>void run(async()=>{const [sources,snapshot,catalog]=await Promise.all([triggers(client),client.exportConfiguration(),client.serverPackages()]);const selected=workflowScope(profile!,exportId);const needed=requiredPackages(selected,referencedData(selected,snapshot),workflowConnections(selected,sources.assignments,sources.subscriptions),catalog.items);const archives=[];let total=0;for(const item of needed){const archive=await client.exportServerPackage(item.packageDigest);if((total+=archive.length)>MAX_BUNDLE_BYTES)throw new ApiError(413,'WORKFLOW_BUNDLE_LIMIT');if((await inspectPackage(archive)).metadata.packageDigest!==item.packageDigest)throw new ApiError(400,'PACKAGE_DIGEST');archives.push(archive);}const bytes=await exportWorkflow(profile!,exportId,sources.assignments,sources.subscriptions,snapshot,archives);const url=URL.createObjectURL(new Blob([new Uint8Array(bytes).buffer],{type:'application/zip'}));const link=document.createElement('a');link.href=url;link.download=exportId+'.olo';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);})}>Export workflow .olo</button>
     </fieldset>
     <fieldset disabled={busy}><legend>Import or replace a workflow</legend><label>Workflow .olo file<input type="file" accept=".olo" onChange={event=>{setFile(event.currentTarget.files?.[0]);event.currentTarget.value='';}}/></label>{file&&<p>Selected: {file.name}</p>}
       <label>Import destination<select value={target} onChange={event=>setTarget(event.target.value)}><option value="">Add, or replace the matching workflow ID</option>{workflows.map(item=><option key={item.id} value={item.id}>Replace {item.id}</option>)}</select></label>
       <button disabled={!file||!profile&&!allowNew} onClick={()=>void run(async()=>{
-        if(!file||file.size>3145728)throw new ApiError(413,'WORKFLOW_BUNDLE_LIMIT');
+        if(!file||file.size>MAX_BUNDLE_BYTES)throw new ApiError(413,'WORKFLOW_BUNDLE_LIMIT');
         let bundle:WorkflowBundle;try{bundle=await importWorkflow(file.name,new Uint8Array(await file.arrayBuffer()));}catch{throw new ApiError(400,'INVALID_WORKFLOW_BUNDLE');}const sources=await triggers(client);
         const base=profile??{profileVersion:2,profileId:bundle.profile.profileId,packages:[],workflows:{workflowGroups:[],modelGroups:[],modelDeployments:[],agentDefinitions:[],workflows:[],dispatchBindings:[]}};
         await replace(applyWorkflow(base,bundle,target||undefined,sources.assignments,sources.subscriptions,true));
@@ -38,6 +39,8 @@ export function WorkflowTransfer({client,profile,allowNew=false,busy,run,replace
       <p>Replacement refreshes the editor after Control stages the new revision. Review and publish it to activate it. Removing a workflow prunes its unshared profile definitions; other workflows and shared definitions remain.</p>
     </fieldset>
     {imported&&<section aria-label="Imported workflow dependencies"><h3>Referenced configuration</h3>
+      <p>{imported.bundle.packages.length} embedded tool/trigger packages. Import validates and stores them; it does not deploy or authorize execution.</p>
+      {imported.bundle.packages.length>0&&<button disabled={busy} onClick={()=>void run(async()=>{for(const item of imported.bundle.packages){const stored=await client.uploadServerPackage(new File([new Uint8Array(item.bytes).buffer],item.metadata.packageId+'.olotool'));if(stored.packageDigest!==item.metadata.packageDigest)throw new ApiError(400,'PACKAGE_DIGEST');}})}>Import embedded tool packages</button>}
       <p>The workflow is staged. Existing references stay in place. Review missing directory configuration and restore its trigger connections before publication. Provider secrets, approved devices and exact runtime graph packages must be configured on this system.</p>
       {(imported.bundle.references.requiredIdentities??[]).map(owner=><label key={owner.id}>Existing user for owner {owner.id}<input value={ownerMappings[owner.id]??owner.id} onChange={event=>{setOwnerMappings({...ownerMappings,[owner.id]:event.target.value});setReferencePreview(undefined);}}/></label>)}
       <button disabled={busy} onClick={()=>void run(async()=>{const current=await client.exportConfiguration();const snapshot=mergeReferences(imported.bundle.references,current);const options:ImportIdentityOptions={removeUnlistedMemberships:false,identityResolution:Object.fromEntries((snapshot.requiredIdentities??[]).map(item=>{const mapped=ownerMappings[item.id]??item.id;return [item.id,{action:mapped===item.id?'EXISTING':'MAP',...(mapped===item.id?{}:{targetUserId:mapped}),teamIds:[]}];}))};const result=await client.previewConfiguration(snapshot,'MERGE',options);setReferencePreview({snapshot,options,changes:result.changes.length});})}>Preview referenced data</button>

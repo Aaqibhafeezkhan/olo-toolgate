@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Example tool packages that return fixed, fictional data, for demos, agent design and tests without real systems.
-// Each directory is one package: one @ToolPackage, one fat jar, one .tgpkg. They share this build only so
+// Each directory is one package: one @ToolPackage, one fat jar, one .olotool. They share this build only so
 // `./gradlew check` tests them all at once.
 //
 // The SDK comes from the local Maven repository (`./gradlew publishJavaSdkToMavenLocal` at the repository root) until

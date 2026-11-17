@@ -128,3 +128,5 @@ Use `000-template.md`.
 - [ADR 069: Local WorkflowStack administration and portable profiles](069-workflow-stack-administration.md)
 
 - [ADR 070: Workflow-level .olo configuration transfer](070-workflow-olo-transfer.md)
+
+- [ADR 071: Buildable profiles and embedded tool packages](071-profile-builds-and-embedded-packages.md)

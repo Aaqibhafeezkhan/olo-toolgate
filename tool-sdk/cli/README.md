@@ -3,7 +3,7 @@
 
 ## Purpose
 
-`toolgate` is the single packager behind every Tool SDK (platform-requirements.md §4), and the one command line a tool author needs in any language. Language SDKs turn annotations and types into semantic descriptors; this crate turns descriptors into canonical bytes and digests, builds and checks `.tgpkg` packages, creates tool projects from starters and drives their builds. It works offline: the canonical schemas come from the contracts crate and the starters are embedded.
+`toolgate` is the single packager behind every Tool SDK (platform-requirements.md §4), and the one command line a tool author needs in any language. Language SDKs turn annotations and types into semantic descriptors; this crate turns descriptors into canonical bytes and digests, builds and checks `.olotool` packages, creates tool projects from starters and drives their builds. It works offline: the canonical schemas come from the contracts crate and the starters are embedded.
 
 `sign`, `upload`, `publish`, `import-openapi` and `add-mcp` arrive in later parts.
 
@@ -15,7 +15,7 @@
 | `toolgate dev [dir]` | Builds the tools and serves them as an MCP server over stdio in development mode, with `toolgate.dev.json`. `--http host:port` serves Streamable HTTP on a loopback address instead |
 | `toolgate dev --digests` | Starts the server, asks `server/discover`, and prints each `toolDescriptorDigest` and the `descriptorSetDigest` (runtime-modes.md §3) |
 | `toolgate check [dir]` | Compiles, runs the unit tests and every `@Example` in test mode, and fails if `toolgate.dev.json` is tracked by git |
-| `toolgate pack [dir] [-o file.tgpkg]` | Builds the package with the project's build, then validates it and prints its digests |
+| `toolgate pack [dir] [-o file.olotool]` | Builds the package with the project's build, then validates it and prints its digests |
 | `toolgate guide` | Prints the [community guide](../../TOOL-SDK-GUIDE.md) to building tools with the SDK |
 
 `dir` defaults to the current directory. The CLI never compiles code: an adapter per language and build tool ([src/project.rs](src/project.rs)) finds the project by its marker file (`settings.gradle(.kts)`/`build.gradle(.kts)`, `pom.xml`) and runs that build's own tasks (`toolgateDev`, `check`, `toolgatePackage`; `toolgate:dev`, `test`, `package`), using `./gradlew` or `./mvnw` when the project has one. `--build gradle|maven` chooses when a directory has both, and anything after `--` goes to the build tool. The build calls back into this binary to pack (`TOOLGATE_CLI`).
@@ -24,10 +24,10 @@
 
 | Command | Does |
 |---|---|
-| `toolgate pack <staging-dir> [-o file.tgpkg]` | Builds a package from a directory holding `toolgate-package.json`, and prints its digests (below) |
-| `toolgate validate <file.tgpkg>` | The archive rules, then the manifest against `PackageManifest` v2, every `toolDescriptorDigest` and `triggerDescriptorDigest`, `descriptorSetDigest`, the `tools/` and `triggers/` files, artifact and runtime references, the ceilings, and the trigger rules of [ADR 058](../../docs/adr/058-triggers.md): one export namespace for tools and triggers, client triggers on `CLIENT` executors only and with read-only device files, server triggers that use routes, TCP destinations or secrets on `SERVER` only, a POLL interval or a PUSH resync interval, `DROP_*` overflow only for loss-tolerant types with `SKIP_AND_RECORD`, and checkpoints above 16 KiB only with a snapshot capacity |
-| `toolgate verify <file.tgpkg>` | The archive rules only, as every hop runs them (platform-requirements.md §7.6); prints `packageDigest` |
-| `toolgate schema <file.tgpkg \| staging-dir> [--annotations file] [-o file]` | Writes the [tool schema](#tool-schema) (default `<file>.tool-schema.json`, or `tool-schema.json` in the staging directory) |
+| `toolgate pack <staging-dir> [-o file.olotool]` | Builds a package from a directory holding `toolgate-package.json`, and prints its digests (below) |
+| `toolgate validate <file.olotool>` | The archive rules, then the manifest against `PackageManifest` v2, every `toolDescriptorDigest` and `triggerDescriptorDigest`, `descriptorSetDigest`, the `tools/` and `triggers/` files, artifact and runtime references, the ceilings, and the trigger rules of [ADR 058](../../docs/adr/058-triggers.md): one export namespace for tools and triggers, client triggers on `CLIENT` executors only and with read-only device files, server triggers that use routes, TCP destinations or secrets on `SERVER` only, a POLL interval or a PUSH resync interval, `DROP_*` overflow only for loss-tolerant types with `SKIP_AND_RECORD`, and checkpoints above 16 KiB only with a snapshot capacity |
+| `toolgate verify <file.olotool>` | The archive rules only, as every hop runs them (platform-requirements.md §7.6); prints `packageDigest` |
+| `toolgate schema <file.olotool \| staging-dir> [--annotations file] [-o file]` | Writes the [tool schema](#tool-schema) (default `<file>.tool-schema.json`, or `tool-schema.json` in the staging directory) |
 | `toolgate digest <descriptor.json>...` | `toolDescriptorDigest` of each descriptor, and their `descriptorSetDigest` |
 | `toolgate canonical <descriptor.json>` | The canonical bytes (NFC, then RFC 8785) |
 | `toolgate equivalent <a.json> <b.json>` | Compares two descriptors under rewrite list 1; exits 1 when they differ |
@@ -50,7 +50,7 @@ The same inputs give the same bytes in any directory or machine.
 
 ## Tool schema
 
-After packing, `pack` writes `<package>.tool-schema.json` beside the `.tgpkg` ([src/tool_schema.rs](src/tool_schema.rs)). It holds what a training pipeline needs to teach a model to call the tools: per tool, `toolId`, `name`, `mcpName`, `kind`, `title`, `description`, `useWhen`, `effect`, a flat `parameters` list (`name`, `type`, `description`, `required`, `default`, `enum`, `sensitive`, `constraints`), the full `inputSchema` and `outputSchema`, and `annotations`. Annotations are declared on the tools (`@Training`, `training(...)`, a `"training"` block; see [../spec/authoring/training.md](../spec/authoring/training.md)); the SDK build generates `training/annotations.json` in the staging directory, keyed by tool local name, and `pack` also writes it beside the `.tgpkg`. A key that names no tool is refused, and so is a file without the `generatedBy` mark or a `training/annotations.json` in a tool project: hints are never written by hand. The file is not packaged, so no digest changes.
+After packing, `pack` writes `<package>.tool-schema.json` beside the `.olotool` ([src/tool_schema.rs](src/tool_schema.rs)). It holds what a training pipeline needs to teach a model to call the tools: per tool, `toolId`, `name`, `mcpName`, `kind`, `title`, `description`, `useWhen`, `effect`, a flat `parameters` list (`name`, `type`, `description`, `required`, `default`, `enum`, `sensitive`, `constraints`), the full `inputSchema` and `outputSchema`, and `annotations`. Annotations are declared on the tools (`@Training`, `training(...)`, a `"training"` block; see [../spec/authoring/training.md](../spec/authoring/training.md)); the SDK build generates `training/annotations.json` in the staging directory, keyed by tool local name, and `pack` also writes it beside the `.olotool`. A key that names no tool is refused, and so is a file without the `generatedBy` mark or a `training/annotations.json` in a tool project: hints are never written by hand. The file is not packaged, so no digest changes.
 
 ## Archive rules
 

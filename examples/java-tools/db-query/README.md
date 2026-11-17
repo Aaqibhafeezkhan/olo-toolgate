@@ -34,7 +34,7 @@ Create the demo database (fictional customers and orders, plus the `reader` acco
 
 ```sh
 toolgate pack
-unzip -q build/toolgate/db-query-0.1.0.tgpkg artifacts/tool.jar -d pkg
+unzip -q build/toolgate/db-query-0.1.0.olotool artifacts/tool.jar -d pkg
 java -cp pkg/artifacts/tool.jar org.h2.tools.RunScript -url jdbc:h2:file:./data/demo -user sa -password admin-secret -script demo/seed.sql
 cp toolgate.dev.example.json toolgate.dev.json
 toolgate dev

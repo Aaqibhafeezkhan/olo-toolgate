@@ -19,7 +19,7 @@ The rules are deliberately simple and live in one method, so they are easy to re
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/bank-loan-0.1.0.tgpkg
+toolgate pack                                     # build/toolgate/bank-loan-0.1.0.olotool
 ```
 
 Things to ask a model connected to it:

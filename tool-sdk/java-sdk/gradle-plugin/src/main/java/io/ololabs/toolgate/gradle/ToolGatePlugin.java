@@ -86,7 +86,7 @@ public final class ToolGatePlugin implements Plugin<Project> {
             var version = objects.property(String.class).value(project.provider(() -> String.valueOf(project.getVersion())));
             var staging = objects.directoryProperty().value(layout.getBuildDirectory().dir("toolgate/staging"));
             String name = project.getName();
-            var output = objects.fileProperty().value(layout.getBuildDirectory().file(version.map(v -> "toolgate/" + name + "-" + v + ".tgpkg")));
+            var output = objects.fileProperty().value(layout.getBuildDirectory().file(version.map(v -> "toolgate/" + name + "-" + v + ".olotool")));
             t.getArgumentProviders().add(new PackageArguments(jarFile,
                     project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME), version, staging, output));
         });

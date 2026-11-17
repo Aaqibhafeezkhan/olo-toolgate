@@ -210,9 +210,17 @@ configuration. Replacement refreshes the editor; review and publish activate it.
 Imports never restart containers or alter login credentials. Multiple workflows
 can share definitions; removal prunes only unshared profile definitions.
 
+Bundles include exact required tool and trigger `.olotool` archives. Console export
+requires current package.read authority and available verified package content;
+missing or ambiguous packages fail the export. Import embedded packages through
+the displayed action before their normal deployment/activation. Current bundle
+format 2 refuses the prior configuration-only format. No old tool extension is
+accepted. The compressed bundle limit is 128 MiB; an individual tool archive is
+bounded by Control's existing 64 MiB ceiling.
+
 Referenced directory additions use the existing reviewed MERGE flow. Map owners
-to existing users, provision provider secrets and approved devices, and install
-the exact signed packages and trusted graph factories separately. Model weights
+to existing users, import the embedded packages, provision provider secrets and
+approved devices, and install trusted graph factories separately. Model weights
 and Docker images are not embedded. No README is added to the bundle. See the
 [WorkflowStack operator guide](../../deploy/compose/WorkflowStack/README.md) for
 local startup, credentials and factory reset.

@@ -51,7 +51,7 @@ class QuickstartStarterTests(unittest.TestCase):
                 if arguments[1]=='init':
                     projects.append(Path(arguments[arguments.index('--dir')+1]))
                 elif arguments[1]=='pack':
-                    package=Path(kwargs['cwd'])/'build/toolgate/orders-0.1.0.tgpkg'
+                    package=Path(kwargs['cwd'])/'build/toolgate/orders-0.1.0.olotool'
                     package.parent.mkdir(parents=True);package.write_bytes(b'package')
             with patch.object(check, 'ROOT', root), patch.object(check, 'toolgate_cli', return_value=root/'toolgate.exe'), \
                     patch.object(check, 'run', side_effect=build):

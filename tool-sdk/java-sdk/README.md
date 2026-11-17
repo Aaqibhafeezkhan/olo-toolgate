@@ -30,7 +30,7 @@ toolgate init orders                    # or --build maven
 cd orders
 toolgate dev                            # an MCP server over stdio; --http 127.0.0.1:8080 for Streamable HTTP
 toolgate check                          # unit tests and every @Example
-toolgate pack                           # build/toolgate/orders-0.1.0.tgpkg, validated
+toolgate pack                           # build/toolgate/orders-0.1.0.olotool, validated
 ```
 
 The starter ([cli/starters/java](../cli/starters/java/)) has a tool that reads a global through its typed accessor, a tool that calls a declared route with a recorded exchange, an `@Example` on each, a `ToolHarness` unit test, a git-ignored `toolgate.dev.json`, and the Gradle bootstrap scripts. `toolgate dev --digests` prints the descriptor digests the governed package will carry.
@@ -59,7 +59,7 @@ Both add `toolgate-sdk-api`, the processor, `toolgate-sdk-runtime-mcp` (runtime)
 |---|---|---|
 | `toolgateDev` | `toolgate:dev` | Serves the tools over stdio in development mode, with `toolgate.dev.json` |
 | `toolgateCheck` (part of `check`) | `toolgate:check` (phase `test`) | Runs every `@Example` in test mode, with the dev file's values as fixtures, and fails if `toolgate.dev.json` is tracked by git |
-| `toolgatePackage` | `toolgate:package` (phase `package`) | Stages the package and packs it with the `toolgate` CLI (`TOOLGATE_CLI`, or `toolgate` on the `PATH`) into `build/toolgate/` or `target/toolgate/` as `<name>-<version>.tgpkg` |
+| `toolgatePackage` | `toolgate:package` (phase `package`) | Stages the package and packs it with the `toolgate` CLI (`TOOLGATE_CLI`, or `toolgate` on the `PATH`) into `build/toolgate/` or `target/toolgate/` as `<name>-<version>.olotool` |
 
 Tool code always runs in a forked JVM, never in the build tool. The staging directory holds `toolgate-package.json` and one artifact, `artifacts/tool.jar`: a fat jar of the project jar and its whole runtime class path, with sorted entries, fixed dates and `Main-Class: io.ololabs.toolgate.runtime.Main`, so a device needs only a JRE and `java -jar tool.jar` serves the tools over stdio. Resources go to the first jar on the class path that has them, `META-INF/services` files are merged, signatures and `module-info` are dropped, and two different copies of one class fail the build. Every tool's entry point is `io.ololabs.toolgate.runtime.Main`. The CLI computes the digests, so the same sources give the same `descriptorSetDigest` from either build.
 

@@ -131,7 +131,7 @@ class ProfileComposeTests(unittest.TestCase):
         spec.loader.exec_module(manager)
         operator=Mock()
         assets=self.root/'assets/packages';assets.mkdir(parents=True)
-        artifact=assets/'custom.tgpkg';artifact.write_bytes(b'reviewed package')
+        artifact=assets/'custom.olotool';artifact.write_bytes(b'reviewed package')
         metadata=dict(id='acme.sensor-watch',version='2.3.0',artifact=artifact.name,sdkVersion='1',
             packageDigest='sha256:'+'a'*64,artifactSha256=hashlib.sha256(artifact.read_bytes()).hexdigest())
         (assets/'manifest.json').write_text(json.dumps(dict(formatVersion=2,packages=[metadata])))
@@ -141,7 +141,7 @@ class ProfileComposeTests(unittest.TestCase):
         manager.run=Mock()
         manager.prepare_packages(operator,settings,self.root,['compose'],assets.parent)
         operator.packages.prepare.assert_not_called()
-        staged=self.root/'package/bootstrap/trigger.tgpkg';staged.write_bytes(b'changed package')
+        staged=self.root/'package/bootstrap/trigger.olotool';staged.write_bytes(b'changed package')
         with self.assertRaisesRegex(ValueError,'sealed lock'):
             manager.prepare_packages(operator,settings,self.root,['compose'],assets.parent)
         self.assertEqual(b'changed package',staged.read_bytes())

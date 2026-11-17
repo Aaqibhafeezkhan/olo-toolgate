@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
 /**
  * Training hints for a tool: how people ask for it, and how they do not. The processor writes them to
  * {@code META-INF/toolgate/training/annotations.json}; the package build moves that file out of the jar to
- * {@code training/annotations.json} beside the {@code .tgpkg} and into its {@code .tool-schema.json}. With source
+ * {@code training/annotations.json} beside the {@code .olotool} and into its {@code .tool-schema.json}. With source
  * retention the hints are not in the class files either, so editing one changes no digest. They sit next to the tool's
  * name, description and inputs and are checked against them on every build: a placeholder such as {@code {city}} must
  * name an input, and an example value must suit its input's type (tool-sdk/spec/authoring/training.md).

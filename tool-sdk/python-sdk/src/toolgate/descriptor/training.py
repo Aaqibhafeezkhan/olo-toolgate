@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from ..declarations import TrainingValues, model_validation, training
 from .problems import Problem, Site
 
-#: Where the staging directory, and the folder holding the ``.tgpkg``, carry the hints.
+#: Where the staging directory, and the folder holding the ``.olotool``, carry the hints.
 FILE = "training/annotations.json"
 PLACEHOLDER = re.compile(r"\{([^{}]*)\}")
 MAX_ITEMS = 200

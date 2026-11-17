@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Selected trigger artifact
 
-Place the reviewed `log-watch-0.1.0.tgpkg` here. It is built from
+Place the reviewed `log-watch-0.1.0.olotool` here. It is built from
 [`examples/java-tools/log-watch`](../../../../../../examples/java-tools/log-watch/README.md).
 Generated binaries are ignored by Git. The workflow profile pins its package ID,
 version, trigger ID and digest; `toolgate verify` prints the package digest.

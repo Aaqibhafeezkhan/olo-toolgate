@@ -9,7 +9,7 @@ suppresses repeated alerts. This demo has **no remediation effects**.
 
 ## Install and start
 
-Place reviewed `log-watch-0.1.0.tgpkg` in this configuration's `packages/`
+Place reviewed `log-watch-0.1.0.olotool` in this configuration's `packages/`
 subfolder. Build it using the [package instructions](../../../../../examples/java-tools/log-watch/README.md).
 The profile pins package digest
 `sha256:1a924aebfc10080d0a970233ec0eeb401c2c6e509119add9a40a3f0f9210dca9`;
