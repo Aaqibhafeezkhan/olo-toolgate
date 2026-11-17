@@ -3,7 +3,7 @@
   "$id": "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
   "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
   "title": "Tool package manifest v2",
-  "description": "toolgate-package.json in a .tgpkg (platform-requirements.md \u00a77). Credential values are forbidden.",
+  "description": "toolgate-package.json in a .olo (platform-requirements.md \u00a77). Credential values are forbidden.",
   "$ref": "#/$defs/PackageManifest",
   "$defs": {
     "PackageKind": {

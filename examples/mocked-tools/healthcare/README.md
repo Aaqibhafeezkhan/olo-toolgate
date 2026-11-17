@@ -14,7 +14,7 @@ It also shows how to handle health data. Patient ids and visit reasons are `sens
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/healthcare-0.1.0.tgpkg
+toolgate pack                                     # build/toolgate/healthcare-0.1.0.olo
 ```
 
 Things to ask a model connected to it:

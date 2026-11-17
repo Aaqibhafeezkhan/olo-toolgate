@@ -101,7 +101,7 @@ def main():
         else:
             run([cli, "check", project], python_env)
             run([cli, "pack", project], python_env)
-        artifacts = sorted((project / "build/toolgate").glob("*.tgpkg"))
+        artifacts = sorted((project / "build/toolgate").glob("*.olo"))
         if len(artifacts) != 1:
             raise ValueError("Build must produce exactly one package: " + str(project))
         artifact = artifacts[0]
@@ -113,7 +113,7 @@ def main():
             if manifest.get("sdk", {}).get("version") != lock["sdkVersion"]:
                 raise ValueError("Package SDK version does not match the pinned build")
             checksums = archive.read("CHECKSUMS.sha256")
-        filename = f"{package['id']}-{package['version']}.tgpkg"
+        filename = f"{package['id']}-{package['version']}.olo"
         destination = output / filename
         if destination.parent != output:
             raise ValueError("Unsafe package identity")

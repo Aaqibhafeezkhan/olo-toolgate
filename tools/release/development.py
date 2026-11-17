@@ -166,6 +166,8 @@ def prepare(run_id=None):
     if len(contracts)!=1:raise ValueError('Exactly one validated raw contract bundle is required')
     for path in contracts:
         shutil.copyfile(path,assets/path.name)
+    from tools.release.profiles import collect as collect_profiles
+    collect_profiles(OUTPUT/'foundation/build/release',assets,commit=sha)
     if tagged:
         from tools.release.tagged import prepare_assets
         prepare_assets(selected)

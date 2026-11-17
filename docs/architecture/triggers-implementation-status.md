@@ -1,6 +1,17 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Profile-contained trigger artifacts — 2026-11-17
+
+Trigger toolchains, fixtures and the existing parallel package-test matrix now
+use `.olo` only. Profiles embed the exact trigger/tool archives and logical
+assignment/subscription declarations. Package import/deployment still uses the
+existing #274 interfaces; no Gateway/client trigger protocol or module scope
+changes. No module earns weight: **27% remains earned** and all original Done-when
+criteria remain. See the [workflow status](workflow-v1-status.md#buildable-profiles-and-embedded-tool-archives--2026-11-17)
+for source/build/live transfer evidence and verification limitations. Native PUSH,
+M7/M8 and full provider acceptance remain separate outstanding work.
+
 This is the live progress document for issue #274 (server and client triggers). The design is
 [`device-triggers-plan.md`](device-triggers-plan.md) (revision 12). Module scope, weights, dependencies and
 *Done when* criteria come from its section 24.2; nothing here changes them silently.

@@ -1,6 +1,101 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Buildable profiles and embedded tool archives — 2026-11-17
+
+Unweighted extension on `feature/workflow-enhancement`, with delivery directly to
+that branch at the user's request. Tested base is `38a7dbde` (the merged #314
+tree, identical to `d59d39e1`). [ADR 071](../adr/071-profile-builds-and-embedded-packages.md)
+supersedes the earlier configuration-only bundle format. The #295 baseline
+remains **0/100**; #274 stays **27%**. No #230 stage or full-phase exit criterion
+is credited by this packaging work.
+
+Delivered: `profiles/configurations/` owns five supplied editable profile build
+inputs and per-configuration READMEs. `profiles/build.bat` and `build.sh` produce
+versioned workflow `.olo` files, a product/source/package version inventory and
+checksums in ignored `profiles/bin/`. Local native tooling or an isolated Docker
+toolchain builds the declared tool recipes; prebuilt `.olo` inputs are supported.
+The container build uses an export of non-ignored source inputs, not private
+stack state, host credentials or a Docker socket. File-only recipes do not need
+the Java/Rust build toolchain.
+
+Both tool and workflow archives use `.olo`, distinguished by their manifests.
+The SDKs, CLI, builder downloads, client cache filenames, fixture filenames and
+publication paths use that extension exclusively. There is no extension alias,
+store migration or old profile-bundle reader. The prior raw tool ZIP contract
+is still canonical PackageManifest v2; profile bundle format 2 adds exact nested
+tool/trigger archives, inventory hashes, identities and versions. No README is
+added by profile export; immutable package-owned contents stay byte-identical.
+
+Console export resolves current referenced descriptor identities, trigger
+declarations and profile pins to verified tenant package versions. Missing or
+ambiguous packages fail export. The new management artifact download checks
+current `package.read` authority inside the tenant transaction. Import verifies
+the archive inventory before staging, then explicitly uploads embedded packages
+through the existing bounded package API. Upload does not deploy, enable or grant
+execution. Current configuration review, tenant fencing and device authorization
+remain authoritative. Transfer preserves human credentials and container start
+times; the local console proxy permits the existing 64 MiB package-upload ceiling
+while keeping ordinary configuration requests bounded at 2 MiB.
+
+Foundation builds/retains profile outputs; development, tagged, manual development
+and immutable product release paths collect the tested bytes with their version
+inventory. Promotion validates source/version, hashes and embedded inventories;
+it does not rebuild profile packages. The release page explains the assets.
+
+Executed evidence so far:
+
+- Both build entry points built all five profiles. Windows and Linux builds
+  retained identical configuration payloads and embedded package bytes. ZIP
+  wrapper bytes may differ across Python/zlib versions; publication preserves
+  the exact tested archive instead of claiming cross-toolchain byte identity.
+- The console importer accepted every built profile. Python-built bundles import
+  in TypeScript and console-produced bundles validate in Python.
+- A fresh, isolated Control instance staged the built native-hotfolder profile,
+  verified/stored its two embedded tool packages, and exported those same package
+  bytes. Export was 30,897,509 bytes, format 2. The sole human admin and container
+  start time were unchanged. The original running stack/storage was not reset.
+- Package export tests passed on SQLite and real PostgreSQL, including exact
+  bytes, foreign-tenant 404 and revoked-reader 403. The focused run executed the
+  13 ServerPackages tests plus the PostgreSQL integration scenario successfully.
+- UI: **305 tests passed**, one built-artifact acceptance test skipped in the
+  ordinary UI run and executed separately against all five built artifacts.
+  Coverage gate passed. Profile tooling: **5 tests passed**; release regressions:
+  **103 passed** with UTF-8 Python; PHP: **449 v2 model round trips passed**.
+  Metadata/generated bindings (**1,565 files**), source quality and Markdown links
+  passed at their recorded checks.
+
+Verification limitations: the Windows broad repository invocation reached 482
+CI tests with 11 skips and two errors: the existing missing symlink privilege
+and an oversized-body transport race in the new proxy test. That test now sends
+only an oversized Content-Length, and its focused 11-test operator suite passes;
+the final rerun reached 482 tests with only the existing symlink-privilege error
+remaining (11 skips). Initial Java runs
+without the database fixture and concurrent Gradle clients were invalid broad
+evidence; a serial clean focused PostgreSQL run passed. Provisioned broad
+`javaCheck` reached 449 enterprise cases with one existing Windows POSIX-permission
+failure in KillSwitchTest. Full Java/repository gates are not claimed green.
+Rust formatting passed; an Alpine broad Rust attempt reached passing Gateway
+suites and 85 Tool Host tests, then failed the sandbox probe fixture because
+`/usr/bin/python3` was absent. The retry with Python/OpenSSL installed is pending;
+no passing final result is invented. Hosted CI and registry/GitHub publication
+have not executed for this delivery.
+
+Limits/next work: native graph factories, model services/weights, provider
+secrets and approved devices remain destination prerequisites. Importing a
+profile and its package bytes does not qualify runtime readiness or execute a
+workflow. Package publisher trust, deployment/enable review and all #230 effect
+boundaries remain separate from archive integrity. Existing Phase 2 and complete
+V1.4 qualification remain outstanding.
+
+Known tested source inventory: base
+`38a7dbdeeb4e3aa1d09f06838291da6a17f0162b`, 371 changed paths including explicit
+deleted fixture names. SHA-256
+`354c81bafa57992b154547b02215af6d30508db6b40a178f858b4c941c4df4bc`
+uses sorted path + NUL + file SHA-256 (UTF-8 text normalized to LF, binary bytes
+unchanged, or `deleted`) + newline. The three live status documents are excluded
+to avoid a self-reference. This is a tested source digest, not an invented commit.
+
 ## Workflow-level .olo transfer and empty reset — 2026-11-17
 
 Unweighted delivery on `feature/native-langgraph-phase1`, targeting

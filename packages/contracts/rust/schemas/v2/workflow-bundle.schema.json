@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/workflow-bundle.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Portable workflow bundle manifest",
+  "$ref": "#/$defs/WorkflowBundleManifest",
+  "$defs": {
+    "WorkflowBundleBuild": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 128,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "build": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "version",
+        "sourceCommit",
+        "build"
+      ],
+      "description": "WorkflowBundleBuild portable metadata."
+    },
+    "WorkflowBundlePackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 128,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "packageDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^packages/[a-f0-9]{64}\\.olo$"
+        }
+      },
+      "required": [
+        "packageId",
+        "version",
+        "packageDigest",
+        "sha256",
+        "bytes",
+        "path"
+      ],
+      "description": "WorkflowBundlePackage portable metadata."
+    },
+    "WorkflowBundleManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string",
+          "const": "olo-workflow"
+        },
+        "version": {
+          "type": "integer",
+          "const": 2
+        },
+        "workflowId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "referencesSha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "build": {
+          "$ref": "#/$defs/WorkflowBundleBuild"
+        },
+        "connections": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/WorkflowBundleConnection"
+          }
+        },
+        "packages": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/WorkflowBundlePackage"
+          }
+        }
+      },
+      "required": [
+        "format",
+        "version",
+        "workflowId",
+        "sha256",
+        "referencesSha256",
+        "connections",
+        "packages"
+      ],
+      "description": "WorkflowBundleManifest portable metadata."
+    },
+    "WorkflowBundleConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "assignment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "subscription": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+        },
+        "assignmentSpec": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentSpec"
+        },
+        "subscriptionSpec": {
+          "$ref": "trigger.schema.json#/$defs/TriggerSubscriptionSpec"
+        }
+      },
+      "required": [
+        "id",
+        "assignment",
+        "subscription",
+        "assignmentSpec",
+        "subscriptionSpec"
+      ],
+      "description": "Logical trigger mappings restored to destination identities."
+    }
+  },
+  "description": "Current ZIP workflow bundle inventory; hashes do not confer execution authority."
+}

@@ -4,7 +4,7 @@
 #
 # The Java path end to end, as a tool author takes it: `toolgate init` writes the Java starter for Gradle and for
 # Maven against the SDK published to build/sdk-repo, then `toolgate check` compiles it, runs its unit tests and every
-# example, `toolgate pack` builds and validates the .tgpkg, `toolgate dev` answers tools/list over stdio and
+# example, `toolgate pack` builds and validates the .olo, `toolgate dev` answers tools/list over stdio and
 # `toolgate dev --digests` reports the descriptor digests, and the package's one fat jar answers tools/list with
 # `java -jar` and nothing else: no build tool, no class path, an empty environment. Both builds, and the development
 # server, must give the same descriptorSetDigest. Needs a JDK, Maven and cargo.
@@ -32,7 +32,7 @@ for build in gradle maven; do
   (cd "$project" && echo "$request" | "$toolgate" dev >"$out/$build-dev.txt" 2>"$out/$build-dev.log")
   grep -q '"orders.greet"' "$out/$build-dev.txt" || { echo "e2e: toolgate dev did not list the tools"; cat "$out/$build-dev.txt" "$out/$build-dev.log"; exit 1; }
   (cd "$project" && "$toolgate" dev --digests 2>"$out/$build-digests.log" | tee "$out/$build-digests.txt")
-  package="$(find "$project/build/toolgate" "$project/target/toolgate" -maxdepth 1 -name "*.tgpkg" 2>/dev/null | head -n 1 || true)"
+  package="$(find "$project/build/toolgate" "$project/target/toolgate" -maxdepth 1 -name "*.olo" 2>/dev/null | head -n 1 || true)"
   mkdir -p "$out/$build-device"
   (cd "$out/$build-device" && jar xf "$package" artifacts/tool.jar)
   [ "$(cd "$out/$build-device" && find . -type f)" = "./artifacts/tool.jar" ] || { echo "e2e: the package is not one jar"; exit 1; }

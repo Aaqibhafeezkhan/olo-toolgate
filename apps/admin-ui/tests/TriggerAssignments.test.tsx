@@ -54,7 +54,7 @@ it('uploads the exact selected package and creates a raw assignment with an idem
   const client=new ControlClient('token',vi.fn(),transport);
   vi.spyOn(client,'can').mockImplementation(permission=>['package.import','trigger.manage'].includes(permission));
   render(<TriggerAssignments client={client}/>);
-  const file=new File(['signed bytes'],'watch.tgpkg');
+  const file=new File(['signed bytes'],'watch.olo');
   fireEvent.change(screen.getByLabelText('Upload trigger package'),{target:{files:[file]}});
   await screen.findByText('Verified acme.watch 1.0.0.');
   const upload=transport.mock.calls.find(([,options])=>options?.body===file);

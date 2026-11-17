@@ -38,6 +38,8 @@ public class PackageResource {
         return reply(packages.upload(actors.management(),data,correlation.id()));
     }
     @GET @Path("packages") @io.quarkus.security.Authenticated public Response versions(){return reply(packages.versions(actors.management()));}
+    @GET @Path("packages/artifacts/{digest}") @Produces(PACKAGE_MEDIA_TYPE) @io.quarkus.security.Authenticated
+    public Response exportContent(@PathParam("digest")String digest){return Response.ok(packages.exportContent(actors.management(),digest)).header("Cache-Control","no-store").type(PACKAGE_MEDIA_TYPE).build();}
     @GET @Path("packages/deployments") @io.quarkus.security.Authenticated public Response deployments(){return reply(packages.deployments(actors.management()));}
     @POST @Path("packages/deployments") @Consumes("application/json") @io.quarkus.security.Authenticated
     public Response deploy(String document){return reply(packages.deploy(actors.management(),body(document),correlation.id()));}

@@ -63,7 +63,7 @@ public final class CorePackageInventory {
             if (!fields(entry).equals(PACKAGE_FIELDS)) throw new IOException("Invalid core package entry");
             String id = text(entry, "id"), version = text(entry, "version"), filename = text(entry, "artifact");
             text(entry, "project"); text(entry, "sdk");
-            if (!filename.matches("[A-Za-z0-9][A-Za-z0-9._+-]{0,250}\\.tgpkg") || !ids.add(id) || !files.add(filename)) throw new IOException("Duplicate or unsafe core package");
+            if (!filename.matches("[A-Za-z0-9][A-Za-z0-9._+-]{0,250}\\.olo") || !ids.add(id) || !files.add(filename)) throw new IOException("Duplicate or unsafe core package");
             Path artifact = absolute.getParent().resolve(filename);
             byte[] bytes = read(artifact, PackageArchive.MAX_PACKAGE_BYTES);
             try {

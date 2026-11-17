@@ -18,16 +18,16 @@ Project commands (run in a tool project, or name its directory):
   toolgate dev [<dir>] [--http <host:port>] [--digests]
                                                   Build and serve the tools as an MCP server (stdio by default)
   toolgate check [<dir>]                          Compile, run the tests and every example
-  toolgate pack [<dir>] [-o <file.tgpkg>]         Build the package and validate it; also writes
+  toolgate pack [<dir>] [-o <file.olo>]         Build the package and validate it; also writes
                                                   <file>.tool-schema.json for training tool-calling models
   toolgate guide                                  Print the guide to building tools with the SDK
 
 Package commands:
-  toolgate pack <staging-dir> [-o <file.tgpkg>]   Build a package from a staging directory
-  toolgate validate <file.tgpkg | dir>            Archive rules plus manifest, descriptor and digest checks;
+  toolgate pack <staging-dir> [-o <file.olo>]   Build a package from a staging directory
+  toolgate validate <file.olo | dir>            Archive rules plus manifest, descriptor and digest checks;
                                                   a project directory runs check
-  toolgate verify <file.tgpkg>                    Archive rules only, as every hop runs them
-  toolgate schema <file.tgpkg | staging-dir> [--annotations <file>] [-o <file>]
+  toolgate verify <file.olo>                    Archive rules only, as every hop runs them
+  toolgate schema <file.olo | staging-dir> [--annotations <file>] [-o <file>]
                                                   Write the tool schema used to train tool-calling models
   toolgate digest <descriptor.json>...            toolDescriptorDigest of each, and the set digest
   toolgate canonical <descriptor.json>            Print the canonical (NFC + RFC 8785) bytes
@@ -57,6 +57,14 @@ enum Failure {
     Usage,
     Error(Error),
     NotEquivalent,
+}
+
+fn package_filename(path: &Path) -> Result<(), Failure> {
+    if path.extension().is_some_and(|extension| extension == "olo") {
+        Ok(())
+    } else {
+        Err(Failure::Usage)
+    }
 }
 
 impl From<Error> for Failure {
@@ -203,7 +211,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
                 written.len(),
                 dir.display()
             );
-            println!("next:\n  cd {}\n  toolgate dev      serve the tools over stdio\n  toolgate check    run the tests and every example\n  toolgate pack     build the .tgpkg", dir.display());
+            println!("next:\n  cd {}\n  toolgate dev      serve the tools over stdio\n  toolgate check    run the tests and every example\n  toolgate pack     build the .olo", dir.display());
             if options.sdk_repository.is_none() {
                 println!("{}", starter.local_sdk_note);
             }
@@ -240,6 +248,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
                 project_run(Path::new(target), &p)?.check()?;
                 println!("check passed");
             } else {
+                package_filename(Path::new(target))?;
                 print_report(&package::validate(&std::fs::read(target)?)?);
             }
         }
@@ -247,6 +256,9 @@ fn run(args: &[String]) -> Result<(), Failure> {
             let p = Parsed::new(rest, &["-o", "--output", "--build"], &[])?;
             let dir = p.directory()?;
             let output = p.option(&["-o", "--output"]).map(PathBuf::from);
+            if let Some(path) = &output {
+                package_filename(path)?;
+            }
             if dir.join(package::MANIFEST).is_file() {
                 if !p.extra.is_empty() || p.option(&["--build"]).is_some() {
                     return Err(Failure::Usage);
@@ -257,7 +269,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
                     None => {
                         let manifest = strict_json(&std::fs::read(dir.join(package::MANIFEST))?)?;
                         PathBuf::from(format!(
-                            "{}-{}.tgpkg",
+                            "{}-{}.olo",
                             manifest["id"].as_str().unwrap_or("package"),
                             manifest["version"].as_str().unwrap_or("0.0.0")
                         ))
@@ -301,6 +313,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
                 let annotations = tool_schema::annotations_in(target)?;
                 (manifest, target.join("tool-schema.json"), annotations)
             } else {
+                package_filename(target)?;
                 let manifest = package::verify(&std::fs::read(target)?)?.manifest;
                 let annotations = tool_schema::generated_at(&tool_schema::beside(target))?;
                 (manifest, tool_schema::path_for(target), annotations)
@@ -317,6 +330,7 @@ fn run(args: &[String]) -> Result<(), Failure> {
             println!("wrote {}", output.display());
         }
         ("verify", [file]) => {
+            package_filename(Path::new(file))?;
             println!(
                 "packageDigest {}",
                 package::verify(&std::fs::read(file)?)?.package_digest

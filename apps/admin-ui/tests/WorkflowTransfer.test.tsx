@@ -6,6 +6,7 @@ import type {ConfigurationFile} from '../src/pendingContracts';
 import {ControlClient} from '../src/api';
 import {WorkflowManagement,WorkflowWorkspaceProvider} from '../src/WorkflowManagement';
 import {exportWorkflow} from '../src/workflowBundle';
+import {mockWorkflowPackages} from './workflowPackageFixture';
 import fixture from '../../../tests/fixtures/contracts/v2/valid.json';
 
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
@@ -37,7 +38,7 @@ it('replaces and rereads the staged workflow, then refreshes publication without
   await screen.findByText(/PUBLISHED; generation 3/);
   const workflow=profile.workflows!.workflows[0];
   const modified={...profile,workflows:{...profile.workflows!,workflows:[{...workflow,systemPrompt:'Imported replacement prompt'}]}};
-  const bytes=await exportWorkflow(modified,workflow.id,assignments,subscriptions,snapshot);
+  const bytes=await exportWorkflow(modified,workflow.id,assignments,subscriptions,snapshot,await mockWorkflowPackages(modified,assignments));
   const file=new File([new Uint8Array(bytes)],'workflow.olo');
   Object.defineProperty(file,'arrayBuffer',{value:async()=>new Uint8Array(bytes).buffer});
   fireEvent.change(screen.getByLabelText('Workflow .olo file'),{target:{files:[file]}});

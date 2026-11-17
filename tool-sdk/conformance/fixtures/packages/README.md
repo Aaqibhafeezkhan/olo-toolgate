@@ -3,7 +3,7 @@
 
 ## Purpose
 
-These `.tgpkg` files exercise the archive rules of platform-requirements.md §7.6, used by `contract-descriptor/packages.json`. `valid.tgpkg` must be accepted at every hop, and every other file must be rejected. [`expected.json`](expected.json) lists each file's expected result, and the package digest of `valid.tgpkg`.
+These `.olo` files exercise the archive rules of platform-requirements.md §7.6, used by `contract-descriptor/packages.json`. `valid.olo` must be accepted at every hop, and every other file must be rejected. [`expected.json`](expected.json) lists each file's expected result, and the package digest of `valid.olo`.
 
 ## Regenerating
 
@@ -12,7 +12,7 @@ python3 tool-sdk/conformance/fixtures/packages/generate.py          # rewrite th
 python3 tool-sdk/conformance/fixtures/packages/generate.py --check  # verify the committed bytes
 ```
 
-The generator writes entries in a fixed order, with fixed timestamps and no compression, so the output is byte-for-byte reproducible. Entry names retain their literal separators on every platform, including the deliberately invalid backslash in `backslash.tgpkg`. The exception is `zip-bomb-ratio.tgpkg`, which has to be deflated. Its compressed bytes can vary with the zlib version, so it is checked by its structure instead: a 16 MiB entry compressed more than 100:1.
+The generator writes entries in a fixed order, with fixed timestamps and no compression, so the output is byte-for-byte reproducible. Entry names retain their literal separators on every platform, including the deliberately invalid backslash in `backslash.olo`. The exception is `zip-bomb-ratio.olo`, which has to be deflated. Its compressed bytes can vary with the zlib version, so it is checked by its structure instead: a 16 MiB entry compressed more than 100:1.
 
 `toolgate-package.json` in these files is a stub that carries only the artifact path and `artifactDigest`, named as in `PackagedArtifact` v2. It is just enough for the manifest-consistency rule and is not a complete `PackageManifest`.
 

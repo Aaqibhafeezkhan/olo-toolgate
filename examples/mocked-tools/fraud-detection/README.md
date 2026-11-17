@@ -23,7 +23,7 @@ Account ACC-77 normally spends in Portugal: T-1 is a usual grocery payment (0), 
 ```sh
 cp toolgate.dev.example.json toolgate.dev.json   # never commit toolgate.dev.json
 toolgate dev                                      # an MCP server over stdio
-toolgate pack                                     # build/toolgate/fraud-detection-0.1.0.tgpkg
+toolgate pack                                     # build/toolgate/fraud-detection-0.1.0.olo
 ```
 
 Things to ask a model connected to it:

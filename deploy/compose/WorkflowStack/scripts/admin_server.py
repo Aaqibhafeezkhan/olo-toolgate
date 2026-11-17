@@ -306,7 +306,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send(403,dict(error='Same-origin requests required'))
             return
         length=int(self.headers.get('Content-Length','0'))
-        if not 0<=length<=2*1024*1024:
+        limit=64*1024*1024 if urlsplit(self.path).path=='/api/control/v1/packages/uploads' else 2*1024*1024
+        if not 0<=length<=limit:
             self.send(413,dict(error='Request too large'))
             return
         skipped={'host','connection','transfer-encoding','content-length','origin','referer','x-workflowstack-csrf'}

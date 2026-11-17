@@ -111,7 +111,7 @@ class ConformanceCaseTests(unittest.TestCase):
 
     def test_every_package_fixture_has_a_case(self):
         expected = load(PACKAGES/'expected.json')['fixtures']
-        referenced = {Path(f).stem for _, case in self.cases for f in case.get('fixtures', []) if f.endswith('.tgpkg')}
+        referenced = {Path(f).stem for _, case in self.cases for f in case.get('fixtures', []) if f.endswith('.olo')}
         self.assertEqual(set(expected), referenced)
 
     def test_package_fixtures_match_their_generator(self):
@@ -122,7 +122,7 @@ class ConformanceCaseTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('package_fixtures', PACKAGES/'generate.py')
         generator = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(generator)
-        committed = (PACKAGES/'backslash.tgpkg').read_bytes()
+        committed = (PACKAGES/'backslash.olo').read_bytes()
         unsafe_name = 'tools\\evil.json'
         for separator, alternate in (('/', None), ('\\', '/')):
             with self.subTest(separator=separator):

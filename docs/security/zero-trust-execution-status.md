@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Profile/archive naming integration — 2026-11-17
+
+The workflow profile delivery now embeds exact `.olo` tool packages and uses
+`.olo` exclusively for SDK/CLI output and client cache filenames. A tenant-scoped
+administrative byte-export API rechecks current `package.read`; it issues no
+execution authority. Import remains the existing verified package-upload path,
+followed by separate deployment/enable/review requirements. No native effect
+boundary, store migration, compatibility reader, S01–S33 stage credit or overall
+phase-table weight changes here. The first vertical-slice acceptance criteria and
+native-write limitations remain unchanged. See the
+[workflow status](../architecture/workflow-v1-status.md#buildable-profiles-and-embedded-tool-archives--2026-11-17)
+for actual checks, tested revision, limitations and pending verification.
+
 The [revision-10 plan](../plans/zero-trust-tool-execution.md) is the preserved
 proposal linked by issue #230. A merged design or an authored conformance case
 does not establish a passing security claim.

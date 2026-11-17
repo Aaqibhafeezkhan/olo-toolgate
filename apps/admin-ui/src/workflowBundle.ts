@@ -1,14 +1,14 @@
 // Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 import {strToU8,unzipSync,zipSync} from 'fflate';
-import type {DeploymentProfile,WorkflowConfiguration,WorkflowDefinition,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
+import type {DeploymentProfile,WorkflowConfiguration,WorkflowDefinition,TriggerAssignment,TriggerSubscription,WorkflowBundleManifest,WorkflowBundleConnection} from '@olo-labs/toolgate-contracts/v2';
 import type {ConfigurationFile} from './pendingContracts';
 import {referencedData,validateReferences} from './workflowReferences';
+import {inspectPackage,MAX_BUNDLE_BYTES,MAX_PACKAGE_BYTES,sha256,verifyPackageCoverage,type EmbeddedPackage} from './workflowPackages';
 
-const MAX_PROFILE=262144,MAX_REFERENCES=2097152,MAX_ARCHIVE=3145728;
+const MAX_PROFILE=262144,MAX_REFERENCES=2097152;
 const collections=['workflowGroups','modelGroups','modelDeployments','agentDefinitions','workflows','dispatchBindings'] as const;
-type Connection={id:string;subscription:string;assignment:string;assignmentSpec:TriggerAssignment['spec'];subscriptionSpec:TriggerSubscription['spec']};
-type Manifest={format:'olo-workflow';version:1;workflowId:string;sha256:string;referencesSha256:string;connections:Connection[]};
-export type WorkflowBundle={profile:DeploymentProfile;connections:Connection[];references:ConfigurationFile};
+type Connection=WorkflowBundleConnection;
+export type WorkflowBundle={profile:DeploymentProfile;connections:readonly Connection[];references:ConfigurationFile;packages:readonly EmbeddedPackage[]};
 type Mutable<T>=T extends readonly (infer E)[]?Mutable<E>[]:T extends object?{-readonly [K in keyof T]:Mutable<T[K]>}:T;
 const copy=<T,>(value:T):Mutable<T>=>JSON.parse(JSON.stringify(value)) as Mutable<T>;
 function fail(message='Choose a valid workflow .olo bundle.'):never{throw Error(message);}
@@ -16,7 +16,6 @@ const identity=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za
 const object=(value:unknown):value is Record<string,unknown>=>Boolean(value)&&typeof value==='object'&&!Array.isArray(value);
 function canonical(value:unknown):unknown{return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;}
 const same=(a:unknown,b:unknown)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
-async function digest(bytes:Uint8Array){const hash=await crypto.subtle.digest('SHA-256',new Uint8Array(bytes).buffer);return Array.from(new Uint8Array(hash),n=>n.toString(16).padStart(2,'0')).join('');}
 function configuration(profile:DeploymentProfile):WorkflowConfiguration{
   if(!object(profile)||profile.profileVersion!==2||!identity(profile.profileId)||!Array.isArray(profile.packages)||!profile.workflows||collections.some(key=>!Array.isArray(profile.workflows![key])))fail();
   for(const key of collections){const ids=new Set();for(const item of profile.workflows[key]){const id=key==='agentDefinitions'?('agentId' in item?item.agentId:undefined):('id' in item?item.id:undefined);if(!identity(id)||ids.has(id))fail();ids.add(id);}}
@@ -63,9 +62,8 @@ export function removeWorkflow(profile:DeploymentProfile,id:string):DeploymentPr
   return next;
 }
 
-export async function exportWorkflow(profile:DeploymentProfile,id:string,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[],snapshot:ConfigurationFile):Promise<Uint8Array>{
-  const selected=copy(workflowScope(profile,id));
-  const connections=selected.workflows!.dispatchBindings.map(binding=>{
+export function workflowConnections(selected:DeploymentProfile,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[]):Connection[]{
+  return selected.workflows!.dispatchBindings.map(binding=>{
     const subscription=subscriptions.find(item=>item.metadata.uid===binding.subscriptionUid);
     const assignment=assignments.find(item=>item.metadata.uid===binding.sourceAssignmentUid);
     if(!subscription||!assignment)fail('Resolve the workflow trigger mappings before export.');
@@ -73,28 +71,38 @@ export async function exportWorkflow(profile:DeploymentProfile,id:string,assignm
     const names=selected.workflows!.dispatchBindings.filter(item=>item.subscriptionUid===binding.subscriptionUid).map(item=>assignments.find(entry=>entry.metadata.uid===item.sourceAssignmentUid)?.metadata.name).filter((item):item is string=>Boolean(item));
     return {id:binding.id,subscription:subscription.metadata.name,assignment:assignment.metadata.name,assignmentSpec:copy(assignment.spec),subscriptionSpec:{...copy(spec),sources:{assignments:[...new Set(names)]}}};
   });
+}
+
+export async function exportWorkflow(profile:DeploymentProfile,id:string,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[],snapshot:ConfigurationFile,archives:readonly Uint8Array[]=[]):Promise<Uint8Array>{
+  const selected=copy(workflowScope(profile,id));
+  const connections=workflowConnections(selected,assignments,subscriptions);
   const assignmentNames=new Set(connections.map(item=>item.assignment));
   for(const entry of selected.packages)if(entry.triggers)entry.triggers=entry.triggers.filter(item=>assignmentNames.has(item.assignment));
   const bytes=strToU8(JSON.stringify(selected));
   if(bytes.length>MAX_PROFILE)fail('Workflow configuration exceeds the Control size limit.');
-  const references=strToU8(JSON.stringify(referencedData(selected,snapshot)));
+  const referenced=referencedData(selected,snapshot),references=strToU8(JSON.stringify(referenced));
   if(references.length>MAX_REFERENCES)fail('Referenced configuration exceeds the size limit.');
-  const manifest:Manifest={format:'olo-workflow',version:1,workflowId:id,sha256:await digest(bytes),referencesSha256:await digest(references),connections};
-  return zipSync({'manifest.json':strToU8(JSON.stringify(manifest)),'workflow.json':bytes,'referenced-data.json':references},{level:6});
+  if(archives.reduce((total,item)=>total+item.length,0)>MAX_BUNDLE_BYTES)fail('Embedded packages exceed 128 MiB.');
+  const packages:EmbeddedPackage[]=[];for(const archive of archives)packages.push(await inspectPackage(archive));
+  verifyPackageCoverage(selected,referenced,connections,packages);
+  const manifest:WorkflowBundleManifest={format:'olo-workflow',version:2,workflowId:id,sha256:await sha256(bytes),referencesSha256:await sha256(references),connections,packages:packages.map(item=>item.metadata)};
+  const files={'manifest.json':strToU8(JSON.stringify(manifest)),'workflow.json':bytes,'referenced-data.json':references,...Object.fromEntries(packages.map(item=>[item.metadata.path,item.bytes]))};
+  const result=zipSync(files,{level:6});if(result.length>MAX_BUNDLE_BYTES)fail('Workflow bundle exceeds 128 MiB.');return result;
 }
 
 export async function importWorkflow(name:string,bytes:Uint8Array):Promise<WorkflowBundle>{
-  if(!name.endsWith('.olo')||bytes.length>MAX_ARCHIVE||bytes.length<22)fail();
+  if(!name.endsWith('.olo')||bytes.length>MAX_BUNDLE_BYTES||bytes.length<22)fail();
   const seen=new Set<string>();let expanded=0;
   const files=unzipSync(bytes,{filter:entry=>{
-    const limit=entry.name==='referenced-data.json'?MAX_REFERENCES:entry.name==='workflow.json'?MAX_PROFILE:16384;
-    if(!['manifest.json','workflow.json','referenced-data.json'].includes(entry.name)||seen.has(entry.name)||entry.compression!==8||entry.originalSize>limit||(expanded+=entry.originalSize)>MAX_REFERENCES+MAX_PROFILE+16384)fail('Unsupported or oversized workflow archive.');
+    const artifact=/^packages\/[a-f0-9]{64}\.olo$/.test(entry.name);
+    const limit=artifact?MAX_PACKAGE_BYTES:entry.name==='referenced-data.json'?MAX_REFERENCES:entry.name==='workflow.json'?MAX_PROFILE:262144;
+    if(!artifact&&!['manifest.json','workflow.json','referenced-data.json'].includes(entry.name)||seen.has(entry.name)||seen.size>=35||entry.compression!==8||entry.originalSize>limit||(expanded+=entry.originalSize)>256*1024*1024)fail('Unsupported or oversized workflow archive.');
     seen.add(entry.name);return true;
   }});
-  if(seen.size!==3)fail();
+  if(!files['manifest.json']||!files['workflow.json']||!files['referenced-data.json'])fail();
   const decode=(value:Uint8Array)=>JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(value)) as unknown;
   const manifest=decode(files['manifest.json']);
-  if(!object(manifest)||Object.keys(manifest).sort().join(',')!=='connections,format,referencesSha256,sha256,version,workflowId'||manifest.format!=='olo-workflow'||manifest.version!==1||!identity(manifest.workflowId)||!Array.isArray(manifest.connections)||manifest.connections.length>256||manifest.sha256!==await digest(files['workflow.json'])||manifest.referencesSha256!==await digest(files['referenced-data.json']))fail('Workflow bundle verification failed.');
+  if(!object(manifest)||Object.keys(manifest).some(key=>!['build','connections','format','packages','referencesSha256','sha256','version','workflowId'].includes(key))||manifest.format!=='olo-workflow'||manifest.version!==2||!identity(manifest.workflowId)||!Array.isArray(manifest.connections)||manifest.connections.length>256||!Array.isArray(manifest.packages)||manifest.packages.length>32||manifest.sha256!==await sha256(files['workflow.json'])||manifest.referencesSha256!==await sha256(files['referenced-data.json']))fail('Workflow bundle verification failed.');
   const profile=decode(files['workflow.json']) as DeploymentProfile;
   const config=configuration(profile);
   if(Object.keys(profile).some(key=>!['profileVersion','profileId','packages','workflows'].includes(key))||config.workflows.length!==1||config.workflows[0].id!==manifest.workflowId)fail();
@@ -102,7 +110,14 @@ export async function importWorkflow(name:string,bytes:Uint8Array):Promise<Workf
   if(!same(expected,profile))fail('Workflow bundle contains unrelated configuration.');
   const connections=manifest.connections as Connection[];
   if(connections.length!==config.dispatchBindings.length||new Set(connections.map(item=>item.id)).size!==connections.length||connections.some(item=>!object(item)||Object.keys(item).sort().join(',')!=='assignment,assignmentSpec,id,subscription,subscriptionSpec'||!identity(item.id)||!identity(item.assignment)||!identity(item.subscription)||!object(item.assignmentSpec)||!object(item.subscriptionSpec)||!config.dispatchBindings.some(binding=>binding.id===item.id)))fail();
-  return {profile,connections,references:validateReferences(decode(files['referenced-data.json']))};
+  const packages:EmbeddedPackage[]=[];
+  for(const item of manifest.packages){
+    if(!object(item)||typeof item.path!=='string'||!/^packages\/[a-f0-9]{64}\.olo$/.test(item.path)||!files[item.path])fail('Missing package archive.');
+    const entry=await inspectPackage(files[item.path]);if(!same(entry.metadata,item)||packages.some(prior=>prior.metadata.path===item.path))fail('Package inventory verification failed.');packages.push(entry);
+  }
+  if(seen.size!==3+packages.length)fail('Unlisted package archive.');
+  const references=validateReferences(decode(files['referenced-data.json']));verifyPackageCoverage(profile,references,connections,packages);
+  return {profile,connections,references,packages};
 }
 
 /** Replace only the selected workflow. Shared definitions cannot change other workflows implicitly. */

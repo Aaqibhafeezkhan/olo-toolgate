@@ -33,7 +33,7 @@ final class PackageArchiveBaselineTest {
         var root = root(); var out = new TreeMap<String, byte[]>();
         for (var dir : new String[]{"tests/fixtures/packages/cases", "tool-sdk/conformance/fixtures/packages"})
             try (var files = Files.list(root.resolve(dir))) {
-                for (var file : files.filter(p -> p.toString().endsWith(".tgpkg")).toList())
+                for (var file : files.filter(p -> p.toString().endsWith(".olo")).toList())
                     out.put(dir + "/" + file.getFileName(), Files.readAllBytes(file));
             }
         return out;

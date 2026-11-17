@@ -250,7 +250,7 @@ product features between two versions of a customer's own package, not compatibi
 
    Either can be implemented as **POLL** (the SDK calls `check()` every N seconds) or **PUSH** (the author's code
    registers a native listener and calls the SDK's async `emit()` when something happens). `toolgate pack` generates
-   the trigger's full descriptor and the runnable artifact, in the same `.tgpkg` a tool package uses.
+   the trigger's full descriptor and the runnable artifact, in the same `.olo` a tool package uses.
 2. **Upload.** A tenant administrator uploads the package on a dedicated **Triggers** page. In v1 this page is raw: a
    file upload plus a JSON/YAML editor and a raw JSON response view.
 3. **Allocation.** The administrator allocates a trigger to a Tool Host pool (server) or to devices and Device Groups
@@ -308,7 +308,7 @@ Section 22 lists these.
 | Need | Existing mechanism (on `main`) | Use in v1 |
 |---|---|---|
 | Annotation → descriptor | Java `DescriptorProcessor`, `@ToolPackage`, `@ServerTool`, `@ClientTool`, `@Param`, `@Example`, `@HttpRoute`, `@TcpDestination` (`tcp().connect`), `@Secret`, `@Global`, `@DeviceFileAccess`; Python `@tool_package`, `@server_tool`, `@client_tool` | New trigger annotations; every capability annotation reused as-is |
-| Package and digests | `.tgpkg`, `PackageManifest` v2, `descriptorSetDigest`, `artifactDigest`, `packageDigest` (ADR 014); `toolgate check`, `toolgate pack` | Triggers are a new export kind |
+| Package and digests | `.olo`, `PackageManifest` v2, `descriptorSetDigest`, `artifactDigest`, `packageDigest` (ADR 014); `toolgate check`, `toolgate pack` | Triggers are a new export kind |
 | Upload, review, enable, security delta, version lifecycle | ADR 014, `POST /api/control/v1/packages/uploads` | Unchanged |
 | Server placement and config | Tool Hosts enroll as devices, sit in pools, fetch assignments; `DeploymentBinding` (ADR 013, ADR 020) | A server assignment produces a binding revision |
 | Server egress and secrets | Broker `ROUTE_CALL`, CONNECT/TCP tunnel, `SECRET_REDEEM`, `access/secrets/deliver`, fencing-token-bound capability (ADR 013, ADR 027) | Bound to a trigger lease instead of a permit |
@@ -1315,7 +1315,7 @@ condition.
 
 | Method and route | Permission | Purpose |
 |---|---|---|
-| `POST /api/control/v1/packages/uploads` (existing) | `package.upload` | Upload a `.tgpkg` with triggers |
+| `POST /api/control/v1/packages/uploads` (existing) | `package.upload` | Upload a `.olo` with triggers |
 | existing review / enable routes | existing | Approve and enable; the security delta covers trigger capabilities and modes |
 | `GET /triggers/definitions` | `trigger.read` | Definitions in enabled versions, with mode, executors, schemas |
 | `POST /triggers/assignments` | `trigger.manage` | Create (`DEPLOY` with the initial desired state) |

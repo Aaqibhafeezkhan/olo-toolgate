@@ -5572,5 +5572,64 @@
     "digest": "sha256:d6bbacb512d4425dc6b0ae09c17cd3fbd776cb0a8ebdf4d770362e7d464a13cd",
     "entryPoint": "supervisor",
     "config": {}
+  },
+  "WorkflowBundleBuild": {
+    "version": "1.0.0",
+    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "build": "local"
+  },
+  "WorkflowBundlePackage": {
+    "packageId": "example.tools",
+    "version": "1.0.0",
+    "packageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "bytes": 100,
+    "path": "packages/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.olo"
+  },
+  "WorkflowBundleManifest": {
+    "format": "olo-workflow",
+    "version": 2,
+    "workflowId": "example",
+    "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "referencesSha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "connections": [],
+    "packages": []
+  },
+  "WorkflowBundleConnection": {
+    "id": "binding",
+    "assignment": "watch",
+    "subscription": "events",
+    "assignmentSpec": {
+      "trigger": "examples.hotfolder-watch/new-file",
+      "packageVersion": "1.0.0",
+      "target": {
+        "executor": "CLIENT",
+        "devices": [
+          "device-42"
+        ],
+        "deviceGroups": [
+          "finance-desktops"
+        ],
+        "excludeDevices": [
+          "device-7"
+        ]
+      },
+      "config": {
+        "folder": "inbox"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "owner": "user:alice",
+      "sources": {
+        "assignments": [
+          "hotfolder-inbox"
+        ]
+      },
+      "filter": "event.type == 'examples.hotfolder.file-dropped.v1'",
+      "includeState": false,
+      "expiresAtUnixMs": 1793529000000
+    }
   }
 }

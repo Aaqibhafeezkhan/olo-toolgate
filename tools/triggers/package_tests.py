@@ -86,7 +86,7 @@ def run(entry, sdk_repo, cli, sdk_version):
                '-PtoolgateSdkRepo='+str(sdk_repo), '-PtoolgateSdkVersion='+sdk_version,
                prefix+'check', prefix+'toolgatePackage']
     subprocess.run(command, cwd=ROOT, env=env, check=True)
-    artifacts = list((package/'build/toolgate').glob('*.tgpkg'))
+    artifacts = list((package/'build/toolgate').glob('*.olo'))
     if len(artifacts) != 1:
         raise ValueError('Expected one current package artifact')
     artifact = artifacts[0]

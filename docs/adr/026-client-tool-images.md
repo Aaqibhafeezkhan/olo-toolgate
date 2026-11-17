@@ -4,7 +4,7 @@
 
 ## Context
 
-ADR 014 decided that devices never receive a `.tgpkg`: on enable, Control converts client-eligible exports into a
+ADR 014 decided that devices never receive a `.olo`: on enable, Control converts client-eligible exports into a
 digest-pinned OCI image built from an approved base and issues the RS256 release JWS over a `FleetPackageDocument`.
 Nothing implemented that conversion, so SDK packages could not run on client devices. The client runs managed tools
 only from images already present or pulled by digest, in a sandbox with a read-only root, no network, uid 65532, all
@@ -48,7 +48,7 @@ capabilities dropped, its seccomp profile, 64 pids and `noexec` tmpfs `/work` an
 
 ## Alternatives Considered
 
-- Ship `.tgpkg` to devices or bind-mount jars: rejected by ADR 014 (second trust format, extraction on devices).
+- Ship `.olo` to devices or bind-mount jars: rejected by ADR 014 (second trust format, extraction on devices).
 - Build with a container daemon or BuildKit inside Control: requires a privileged builder next to tenant state.
 - A registry embedded in Control: devices would need per-engine trust for Control's CA; operators already run registries.
 

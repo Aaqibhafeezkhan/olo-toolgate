@@ -490,7 +490,7 @@ async def lookup(order_id: Annotated[str, Param(name="orderId", description="Id"
     std::fs::create_dir_all(store.join("packages")).unwrap();
     std::fs::write(
         store.join("packages").join(format!(
-            "{}.tgpkg",
+            "{}.olo",
             report.package_digest.trim_start_matches("sha256:")
         )),
         &package,

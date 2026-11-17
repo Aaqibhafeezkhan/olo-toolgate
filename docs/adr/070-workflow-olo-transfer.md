@@ -3,6 +3,10 @@
 
 Status: accepted. Supersedes ADR 069's whole-deployment archive behavior.
 
+The archive format and separate-tool-artifact limitation below are superseded by
+[ADR 071](071-profile-builds-and-embedded-packages.md); this decision records the
+earlier configuration-only delivery.
+
 One ZIP-compressed `.olo` transfers one workflow, its local definition closure,
 named trigger declarations/connections and referenced directory configuration.
 It contains no README, Docker images, model weights, databases, human accounts,

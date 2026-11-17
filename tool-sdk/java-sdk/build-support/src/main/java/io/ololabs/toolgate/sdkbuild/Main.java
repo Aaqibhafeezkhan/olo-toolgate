@@ -12,7 +12,7 @@ import java.util.List;
  *
  * <pre>
  * check &lt;project dir&gt;
- * stage --jar &lt;app.jar&gt; --version &lt;semver&gt; --out &lt;dir&gt; [--lib &lt;jar&gt;]... [--pack &lt;file.tgpkg&gt;]
+ * stage --jar &lt;app.jar&gt; --version &lt;semver&gt; --out &lt;dir&gt; [--lib &lt;jar&gt;]... [--pack &lt;file.olo&gt;]
  * </pre>
  *
  * Exit codes: 0 success, 1 a check or the packer failed, 2 usage.
@@ -76,7 +76,7 @@ public final class Main {
     }
 
     private static int usage() {
-        System.err.println("usage: check <project dir> | stage --jar <app.jar> --version <semver> --out <dir> [--lib <jar>]... [--pack <file.tgpkg>]");
+        System.err.println("usage: check <project dir> | stage --jar <app.jar> --version <semver> --out <dir> [--lib <jar>]... [--pack <file.olo>]");
         return 2;
     }
 }

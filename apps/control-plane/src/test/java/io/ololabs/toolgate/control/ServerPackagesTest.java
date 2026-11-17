@@ -263,6 +263,21 @@ final class ServerPackagesTest {
             + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\"}}", "request-4")).status());
     }
 
+    @Test void packageExportReauthorizesTheCurrentReader() throws Exception {
+        var codec = new ContractCodec();
+        var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("export.sqlite"))), codec);
+        var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-a");
+        var actor = TestSupport.seed(store, codec, tenant, "root");
+        var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
+        byte[] data = zip(files());
+        String digest = node(packages.upload(actor, data, "export-upload").body()).path("packageDigest").asText();
+        assertArrayEquals(data, packages.exportContent(actor, digest));
+        // Transfer the reviewed management team's membership, retaining an enabled
+        // administrator while the original actor/session loses current authority.
+        TestSupport.seed(store, codec, tenant, "backup");
+        assertEquals(403, assertThrows(Failure.class, () -> packages.exportContent(actor, digest)).status());
+    }
+
     @Test void deploymentWritesDisabledToolsAndTheHostFetchesThem() throws Exception {
         var codec = new ContractCodec(); var store = new PostgresStore(io.ololabs.toolgate.control.fixtures.Tenants.database(SqliteState.open(directory.resolve("packages.sqlite"))), codec);
         var tenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant"); var actor = TestSupport.seed(store, codec, tenant, "root");
@@ -272,6 +287,11 @@ final class ServerPackagesTest {
         assertEquals(201, uploaded.status());
         String digest = node(uploaded.body()).get("packageDigest").asText();
         assertEquals(200, packages.upload(actor, data, "request-2").status());
+        assertArrayEquals(data, packages.exportContent(actor, digest));
+        var otherTenant = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
+        var otherActor = TestSupport.seed(store, codec, otherTenant, "root");
+        assertEquals(404, assertThrows(Failure.class, () -> packages.exportContent(otherActor, digest)).status());
+        assertEquals(400, assertThrows(Failure.class, () -> packages.exportContent(actor, "bad-digest")).status());
 
         assertEquals(400, assertThrows(Failure.class, () -> packages.deploy(actor, "{\"packageDigest\":\"" + digest + "\",\"globals\":{}}", "request-3")).status());
         assertEquals(400, assertThrows(Failure.class, () -> packages.deploy(actor, "{\"packageDigest\":\"" + digest + "\",\"globals\":{\"ItemsApiHost\":\"items.example.com\",\"Other\":1}}", "request-3")).status());

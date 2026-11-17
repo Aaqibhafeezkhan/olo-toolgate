@@ -4963,6 +4963,51 @@ pub struct WorkflowAgentStage {
     pub agent_id: String,
     pub result_mode: WorkflowAgentResultMode,
 }
+/// WorkflowBundleBuild portable metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowBundleBuild {
+    pub version: String,
+    pub source_commit: String,
+    pub build: String,
+}
+/// Logical trigger mappings restored to destination identities.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowBundleConnection {
+    pub id: String,
+    pub assignment: String,
+    pub subscription: String,
+    pub assignment_spec: TriggerAssignmentSpec,
+    pub subscription_spec: TriggerSubscriptionSpec,
+}
+/// WorkflowBundleManifest portable metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowBundleManifest {
+    #[serde(deserialize_with = "const_workflow_bundle_manifest_format")]
+    pub format: String,
+    #[serde(deserialize_with = "const_workflow_bundle_manifest_version")]
+    pub version: u64,
+    pub workflow_id: String,
+    pub sha256: String,
+    pub references_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<WorkflowBundleBuild>,
+    pub connections: Vec<WorkflowBundleConnection>,
+    pub packages: Vec<WorkflowBundlePackage>,
+}
+/// WorkflowBundlePackage portable metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowBundlePackage {
+    pub package_id: String,
+    pub version: String,
+    pub package_digest: String,
+    pub sha256: String,
+    pub bytes: u64,
+    pub path: String,
+}
 /// Profile declaration for WorkflowConfiguration; eligibility and configuration confer no runtime authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -5365,6 +5410,12 @@ const_field!(
 );
 const_field!(const_trigger_view_event_specversion, String, "1.0");
 const_field!(
+    const_workflow_bundle_manifest_format,
+    String,
+    "olo-workflow"
+);
+const_field!(const_workflow_bundle_manifest_version, u64, 2);
+const_field!(
     const_workflow_context_decision_kind,
     String,
     "finish_context"
@@ -5456,6 +5507,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/trigger.schema.json",
         include_str!("../schemas/v2/trigger.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/workflow-bundle.schema.json",
+        include_str!("../schemas/v2/workflow-bundle.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/workflow-decision.schema.json",

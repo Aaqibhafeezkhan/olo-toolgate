@@ -1,6 +1,7 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 .git
+profiles/bin
 .dev
 .data
 examples/langchain/.state

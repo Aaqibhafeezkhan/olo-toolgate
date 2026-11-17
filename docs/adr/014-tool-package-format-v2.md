@@ -12,7 +12,7 @@ The plan ([platform-requirements.md](../contracts/platform-requirements.md) §7,
 ## Decision
 
 1. **One authoritative schema.** `packages/contracts/schemas/v2/package.schema.json` defines `PackageManifest` v2 (`schemaVersion: 2`) and `ToolDefinition` v2, which embeds the semantic descriptor from `descriptor.schema.json` (generation 1). Shared ids come from `identifiers.schema.json`. Every documentation example is generated from fixtures under `tests/fixtures/contracts/v2/` and validated in CI. v1 manifests stay readable and are upgraded on read; the contract set takes a MAJOR bump.
-2. **Package layout.** A `.tgpkg` is a deterministic ZIP (sorted entries, fixed timestamps) holding `toolgate-package.json`, `tools/`, `marketplace/`, `tests/self-tests.json`, `artifacts/`, `sbom/`, a canonical `CHECKSUMS.sha256` and an optional `signatures/` directory (platform-requirements.md §7.2).
+2. **Package layout.** A `.olo` is a deterministic ZIP (sorted entries, fixed timestamps) holding `toolgate-package.json`, `tools/`, `marketplace/`, `tests/self-tests.json`, `artifacts/`, `sbom/`, a canonical `CHECKSUMS.sha256` and an optional `signatures/` directory (platform-requirements.md §7.2).
 3. **Three identities, never conflated** (platform-requirements.md §7.2):
    - `toolDescriptorDigest` per tool and `descriptorSetDigest` per package: SHA-256 of the RFC 8785 canonical semantic descriptor. Must be equal in standalone and governed mode. Used for mode equivalence, the security delta, catalog entries and the permit.
    - `artifactDigest`: SHA-256 of one executable artifact's exact bytes. Used by the content-addressed store, the launcher and the permit.
@@ -20,7 +20,7 @@ The plan ([platform-requirements.md](../contracts/platform-requirements.md) §7,
 4. **Signing without circularity.** Signatures are DSSE envelopes over an in-toto statement whose subject is the `packageDigest`. Publisher signatures are optional; organization release and Marketplace signatures are always detached and stored by Control or the Marketplace (platform-requirements.md §7.3).
 5. **Verification at every hop.** CLI pack, Control upload, artifact mirror, Tool Host and client all apply the ZIP rules, exact file set, canonical checksum format and manifest consistency of platform-requirements.md §7.6. Any failure rejects; nothing is repaired. Verified artifacts are copied into a read-only content-addressed store and mounted only from it.
 6. **Artifacts and launcher.** Server tools run on approved, signed, digest-pinned base runtime images that hold only a language runtime and `toolgate-launch`; the SDK runtime ships inside the tool artifact (platform-requirements.md §7.4).
-7. **Conversion to fleet releases.** Devices never receive a `.tgpkg`. On enable, Control converts the upload: client tools ship as OCI images built from an approved base and pinned by digest, and Control issues the RS256 release JWS over a `FleetPackageDocument`, exactly as today. DSSE over the `packageDigest` is upload-side provenance only. Client-tool packages are limited to the existing 32 tools per client until a client release raises it.
+7. **Conversion to fleet releases.** Devices never receive a `.olo`. On enable, Control converts the upload: client tools ship as OCI images built from an approved base and pinned by digest, and Control issues the RS256 release JWS over a `FleetPackageDocument`, exactly as today. DSSE over the `packageDigest` is upload-side provenance only. Client-tool packages are limited to the existing 32 tools per client until a client release raises it.
 8. **Library composition** follows platform-requirements.md §7.7: conflicts fail, only explicit narrowing mappings are allowed, and composition is recorded in the descriptor.
 9. **Upload and one-click enable** (platform-requirements.md §8.1). `POST /api/control/v1/packages/uploads` stores a sealed, immutable version and drafts the review. Enable submits a maker/checker configuration change (auto-approved in Quickstart and dev), signs the organization release, and creates fleet and Tool Host assignments and grants. Every call still goes through policy, ASK, permits and audit.
 10. **API compatibility and security delta are separate checks** (platform-requirements.md §8.3). The security delta, including route-by-route `ServiceProfile` widening, always needs re-approval whatever the version number. An unclassifiable change counts as widening.
@@ -31,7 +31,7 @@ Contract surface: the upload, review, enable and lifecycle endpoints are specifi
 
 ## Alternatives Considered
 
-- **Ship `.tgpkg` to devices and extract it there.** Rejected (row R12): reverses the "no ZIP or TAR on clients" invariant and adds a second trust format.
+- **Ship `.olo` to devices and extract it there.** Rejected (row R12): reverses the "no ZIP or TAR on clients" invariant and adds a second trust format.
 - **One package digest for everything.** Rejected (row AE): standalone and governed builds differ in bytes, so mode equivalence would be either false or impossible.
 - **Digest of the ZIP file, or signatures inside the checksummed set.** Rejected: adding a signature would change the identity it signs.
 - **Extend v1 compatibly.** Rejected (row 8): v1 cannot carry descriptors, effect safety or routes without ambiguity.

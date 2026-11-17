@@ -8,4 +8,4 @@ RUN --mount=type=cache,target=/root/.gradle cd /fixture && \
     /workspace/gradlew --no-daemon -PtoolgateSdkRepo=/workspace/build/sdk-repo \
     -PtoolgateSdkVersion=$(cat /workspace/VERSION) toolgatePackage
 FROM scratch
-COPY --from=build /fixture/build/toolgate/signal-watch-0.1.0.tgpkg /signal-watch.tgpkg
+COPY --from=build /fixture/build/toolgate/signal-watch-0.1.0.olo /signal-watch.olo

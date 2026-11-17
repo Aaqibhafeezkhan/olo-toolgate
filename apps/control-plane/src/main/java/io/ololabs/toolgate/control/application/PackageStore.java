@@ -5,7 +5,7 @@ package io.ololabs.toolgate.control.application;
 /** Tenant-transactional server packages (platform-requirements.md §7, §8): sealed uploads by digest, the service profile and globals
  *  documents Tool Hosts fetch by digest, one current deployment per package id, and registered Tool Hosts. */
 public interface PackageStore {
-    /** document is the PackageVersion; content the exact `.tgpkg` bytes. */
+    /** document is the PackageVersion; content the exact `.olo` bytes. */
     record Version(String digest,String packageId,String version,long uploadedAt,String document) {}
     Version version(String digest);
     java.util.List<Version> versions(int limit);

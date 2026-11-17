@@ -82,8 +82,8 @@ export function ServerPackages({ client, superAdmin=false }: { client: ControlCl
       <div className="table-wrap"><Table><caption>Uploaded versions, newest first</caption><thead><tr><th scope="col">Package</th><th scope="col">Version</th><th scope="col">Tools</th><th scope="col">Digest</th><th scope="col">Deployed</th></tr></thead>
         <tbody>{versions.map(v => <tr key={v.packageDigest}><th scope="row">{v.packageId}</th><td>{v.version}</td><td>{(v.manifest?.tools ?? []).map(t => t.descriptor.toolId).join(', ')}</td><td><code title={v.packageDigest}>{v.packageDigest.slice(7, 19)}</code></td><td>{running.has(v.packageDigest) ? `Revision ${running.get(v.packageDigest)?.revision} on ${runsOn(running.get(v.packageDigest)!)}` : 'No'}</td></tr>)}</tbody></Table></div>}
     <section className="guidance"><h2>Upload a package</h2><form onSubmit={upload}>
-      <label htmlFor="server-package-file">Package file (.tgpkg)</label>
-      <input id="server-package-file" type="file" accept=".tgpkg" required disabled={!canImport} onChange={e => setFile(e.target.files?.[0])} />
+      <label htmlFor="server-package-file">Package file (.olo)</label>
+      <input id="server-package-file" type="file" accept=".olo" required disabled={!canImport} onChange={e => setFile(e.target.files?.[0])} />
       <button disabled={busy || !file || !canImport}>Upload and verify</button></form></section>
     <section className="guidance"><h2>Deploy a version</h2><form onSubmit={deploy}>
       <label htmlFor="server-package-version">Version</label>

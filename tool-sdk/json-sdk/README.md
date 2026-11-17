@@ -1,7 +1,7 @@
 # JSON Tool SDK
 
 Author a tool as a `toolgate.json` project, compile it through the Java SDK and
-produce the same `.tgpkg` package used by Java projects. JSON is an authoring
+produce the same `.olo` package used by Java projects. JSON is an authoring
 language; the host never interprets this file during an invocation.
 
 Build the distribution from the repository:

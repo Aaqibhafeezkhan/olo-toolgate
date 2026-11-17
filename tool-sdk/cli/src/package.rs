@@ -1,6 +1,6 @@
 // Copyright 2026 OLO Labs
 // SPDX-License-Identifier: Apache-2.0
-//! `.tgpkg` verification, validation and packing (platform-requirements.md §7.2 and §7.6).
+//! `.olo` verification, validation and packing (platform-requirements.md §7.2 and §7.6).
 //!
 //! - [`verify`] applies the archive rules every hop runs: the zip rules, the exact file set
 //!   against a canonical `CHECKSUMS.sha256`, and manifest artifact digests.

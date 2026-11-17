@@ -270,7 +270,7 @@ impl Store {
             return Ok((dir, manifest));
         }
         let data = read(
-            &self.store_dir.join("packages").join(format!("{hex}.tgpkg")),
+            &self.store_dir.join("packages").join(format!("{hex}.olo")),
             "the package",
         )?;
         let report = package::validate(&data)

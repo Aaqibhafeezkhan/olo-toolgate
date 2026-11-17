@@ -28,7 +28,7 @@
         "Accepted at every hop with the digest in expected.json"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/valid.tgpkg",
+        "tool-sdk/conformance/fixtures/packages/valid.olo",
         "tool-sdk/conformance/fixtures/packages/expected.json"
       ],
       "status": "authored"
@@ -54,7 +54,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/zip-slip.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/zip-slip.olo"
       ],
       "status": "authored"
     },
@@ -79,7 +79,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/absolute-path.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/absolute-path.olo"
       ],
       "status": "authored"
     },
@@ -104,7 +104,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/backslash.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/backslash.olo"
       ],
       "status": "authored"
     },
@@ -129,7 +129,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/drive-letter.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/drive-letter.olo"
       ],
       "status": "authored"
     },
@@ -154,7 +154,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/duplicate-entry.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/duplicate-entry.olo"
       ],
       "status": "authored"
     },
@@ -179,7 +179,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/case-collision.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/case-collision.olo"
       ],
       "status": "authored"
     },
@@ -204,7 +204,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/nfc-collision.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/nfc-collision.olo"
       ],
       "status": "authored"
     },
@@ -229,7 +229,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/symlink.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/symlink.olo"
       ],
       "status": "authored"
     },
@@ -254,7 +254,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/encrypted-entry.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/encrypted-entry.olo"
       ],
       "status": "authored"
     },
@@ -279,7 +279,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/zip-bomb-ratio.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/zip-bomb-ratio.olo"
       ],
       "status": "authored"
     },
@@ -304,7 +304,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/data-outside-central-directory.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/data-outside-central-directory.olo"
       ],
       "status": "authored"
     },
@@ -329,7 +329,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/unlisted-file.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/unlisted-file.olo"
       ],
       "status": "authored"
     },
@@ -354,7 +354,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/missing-listed-file.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/missing-listed-file.olo"
       ],
       "status": "authored"
     },
@@ -379,7 +379,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-crlf.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/checksums-crlf.olo"
       ],
       "status": "authored"
     },
@@ -404,7 +404,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-unsorted.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/checksums-unsorted.olo"
       ],
       "status": "authored"
     },
@@ -429,7 +429,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-uppercase-hex.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/checksums-uppercase-hex.olo"
       ],
       "status": "authored"
     },
@@ -454,7 +454,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-comment.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/checksums-comment.olo"
       ],
       "status": "authored"
     },
@@ -479,7 +479,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/checksums-blank-line.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/checksums-blank-line.olo"
       ],
       "status": "authored"
     },
@@ -504,7 +504,7 @@
         "Nothing is repaired automatically"
       ],
       "fixtures": [
-        "tool-sdk/conformance/fixtures/packages/manifest-digest-mismatch.tgpkg"
+        "tool-sdk/conformance/fixtures/packages/manifest-digest-mismatch.olo"
       ],
       "status": "authored"
     },

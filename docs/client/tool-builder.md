@@ -3,7 +3,7 @@
 Tool Builder at `/console/#builder` edits canonical JSON SDK projects. Its worker
 uses `tool-sdk/json-sdk`, which generates Java SDK source, processes the SDK
 annotations, checks examples, stages the standard runtime and invokes the
-canonical Rust `.tgpkg` packager. The source file is authoring data, not a runtime
+canonical Rust `.olo` packager. The source file is authoring data, not a runtime
 registration. See [JSON SDK](../../tool-sdk/json-sdk/README.md) and
 [the example project](../../examples/tool-builder-json/README.md).
 
@@ -17,7 +17,7 @@ registration. See [JSON SDK](../../tool-sdk/json-sdk/README.md) and
    digest, even if someone edits the draft while a build is queued.
 4. Select **Build package**. The queue reports queued, compiling/checking,
    ready or a safe failure code.
-5. Download **package** (`.tgpkg`) and **source** (the one canonical JSON SDK
+5. Download **package** (`.olo`) and **source** (the one canonical JSON SDK
    project ZIP). The exported source rebuilds with the same SDK distribution,
    JDK and CLI. Generated Java is internal to compilation.
 6. To continue in Tool Builder from a source ZIP, edited or not, open a project

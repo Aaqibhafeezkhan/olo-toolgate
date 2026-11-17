@@ -20,7 +20,7 @@
         "control",
         "endpoint-client"
       ],
-      "when": "A client-tool .tgpkg is uploaded and enabled",
+      "when": "A client-tool .olo is uploaded and enabled",
       "then": [
         "Devices receive the RS256 FleetPackageDocument and OCI image; no zip reaches the device"
       ],

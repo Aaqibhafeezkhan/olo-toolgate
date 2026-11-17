@@ -1,0 +1,10 @@
+{
+  "packages": [
+    {
+      "packageId": "examples.log-watch",
+      "version": "0.1.0",
+      "project": "examples/java-tools",
+      "task": ":log-watch:toolgatePackage"
+    }
+  ]
+}

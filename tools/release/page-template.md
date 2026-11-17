@@ -26,6 +26,17 @@ Choose a versioned asset matching your operating system and CPU:
 
 Linux and macOS `.tar.gz` distributions are also attached. Prefer filenames containing `$version`; unversioned filenames are compatibility aliases. Endpoint installers are unsigned; macOS installers are not notarized.
 
+### Workflow profiles and tool packages
+
+Versioned workflow `.olo` assets include their referenced configuration and exact
+required tool/trigger `.olo` archives. The attached `olo-profiles-<artifact-version>.json`
+records each workflow, product/profile version, source commit, package versions,
+digests and byte sizes. Use its filenames to select the matching release assets.
+Import a workflow on the console Workflows page, then import/deploy its embedded
+packages under the existing Control policy. Model services, vault secrets,
+approved devices and trusted native graph factories require destination setup.
+See [profile build and import instructions]($repo/blob/$tag/profiles/README.md).
+
 ### Java contracts
 
 ```xml

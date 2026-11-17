@@ -86,7 +86,7 @@ public final class JsonSdk {
         if (Files.exists(output, LinkOption.NOFOLLOW_LINKS)) throw new IllegalArgumentException("Export directory must be new");
         var build = stage(source, work);
         Files.createDirectories(output);
-        Path packageFile = output.resolve("package.tgpkg"), sourceFile = output.resolve("source.zip");
+        Path packageFile = output.resolve("package.olo"), sourceFile = output.resolve("source.zip");
         pack(build, packageFile, environment);
         var verified = io.ololabs.toolgate.packagearchive.PackageArchive.validate(Files.readAllBytes(packageFile));
         byte[] archive = sourceArchive(source);
@@ -95,7 +95,7 @@ public final class JsonSdk {
                 verified.descriptorSetDigest(), digest(build.project().source()), digest(archive));
         var receipt = JsonProject.JSON.createObjectNode().put("schemaVersion", 1).put("sdkVersion", JsonProject.sdkVersion())
                 .put("packageId", build.project().id()).put("version", build.project().version())
-                .put("packageFile", "package.tgpkg").put("sourceFile", "source.zip")
+                .put("packageFile", "package.olo").put("sourceFile", "source.zip")
                 .put("artifactDigest", result.artifactDigest()).put("packageDigest", result.packageDigest())
                 .put("descriptorSetDigest", result.descriptorSetDigest()).put("sourceDigest", result.sourceDigest())
                 .put("sourceArchiveDigest", result.sourceArchiveDigest());
@@ -118,7 +118,7 @@ public final class JsonSdk {
                 + "    toolgate-json-sdk check .\n    toolgate-json-sdk pack .\n\n"
                 + "Commit this canonical project to your repository to edit and rebuild it.\n"
                 + "To include it in ToolGate's core inventory, place it under core-mcp/<package> and select sdk=json.\n"
-                + "The built .tgpkg uses the same package and execution contract as the Java SDK.\n").getBytes(StandardCharsets.UTF_8));
+                + "The built .olo uses the same package and execution contract as the Java SDK.\n").getBytes(StandardCharsets.UTF_8));
         var bytes = new ByteArrayOutputStream();
         try (var zip = new ZipOutputStream(bytes, StandardCharsets.UTF_8)) {
             for (var file : files.entrySet()) {

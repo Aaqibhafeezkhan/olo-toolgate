@@ -150,7 +150,7 @@ def main(argv):
     if '--check' in argv:
         bad = []
         for name, data in out.items():
-            path = HERE / f'{name}.tgpkg'
+            path = HERE / f'{name}.olo'
             if not path.is_file():
                 bad.append(f'missing {path.name}')
             elif name in DEFLATED:
@@ -160,14 +160,14 @@ def main(argv):
                 bad.append(f'{path.name} differs from a fresh build')
         if (HERE / 'expected.json').read_bytes() != exp:
             bad.append('expected.json differs from a fresh build')
-        extra = {p.stem for p in HERE.glob('*.tgpkg')} - set(out)
-        bad.extend(f'unexpected {name}.tgpkg' for name in sorted(extra))
+        extra = {p.stem for p in HERE.glob('*.olo')} - set(out)
+        bad.extend(f'unexpected {name}.olo' for name in sorted(extra))
         if bad:
             raise SystemExit('\n'.join(bad))
         print(f'{len(out)} package fixtures match the generator')
         return
     for name, data in out.items():
-        (HERE / f'{name}.tgpkg').write_bytes(data)
+        (HERE / f'{name}.olo').write_bytes(data)
     (HERE / 'expected.json').write_bytes(exp)
     print(f'wrote {len(out)} package fixtures')
 

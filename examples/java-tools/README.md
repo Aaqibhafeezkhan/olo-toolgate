@@ -3,7 +3,7 @@
 
 Fourteen small, working packages for everyday operations and enterprise work, built with the ToolGate Java Tool SDK. Read them to see how a real tool is put together, run them as they are, or copy one as the start of your own.
 
-Every example is a complete package: one `@ToolPackage`, its tools, unit tests with `ToolHarness`, `@Example` self-tests, and a `.tgpkg` whose `artifacts/tool.jar` is one self-contained fat jar. Each runs as a plain MCP server (standalone) or under ToolGate (governed) without changes. New to the SDK? Start with the [Tool SDK guide](../../TOOL-SDK-GUIDE.md).
+Every example is a complete package: one `@ToolPackage`, its tools, unit tests with `ToolHarness`, `@Example` self-tests, and a `.olo` whose `artifacts/tool.jar` is one self-contained fat jar. Each runs as a plain MCP server (standalone) or under ToolGate (governed) without changes. New to the SDK? Start with the [Tool SDK guide](../../TOOL-SDK-GUIDE.md).
 
 | Example | Tools (MCP name) | What it does | Shows |
 |---|---|---|---|
@@ -50,7 +50,7 @@ Then, here:
 
 ```sh
 ./gradlew check                     # every example: compile, unit tests and @Example self-tests
-./gradlew toolgatePackage           # every example: build/toolgate/<example>-0.1.0.tgpkg
+./gradlew toolgatePackage           # every example: build/toolgate/<example>-0.1.0.olo
 ```
 
 Or work in one example directory with the CLI, exactly as in a project made by `toolgate init`:
@@ -81,9 +81,9 @@ Each example's `gradlew` runs the shared build in this directory, so the CLI wor
 }
 ```
 
-The jar is `artifacts/tool.jar` inside the `.tgpkg` (a zip). Destinations are `TOOLGATE_DESTINATION_<HOSTSETTING>` and secrets `TOOLGATE_SECRET_<NAME>`.
+The jar is `artifacts/tool.jar` inside the `.olo` (a zip). Destinations are `TOOLGATE_DESTINATION_<HOSTSETTING>` and secrets `TOOLGATE_SECRET_<NAME>`.
 
-**Under ToolGate**, upload the `.tgpkg` in *Server packages*, deploy it with the settings filled in, then enable, allow and grant the tools ([guide, section 13](../../TOOL-SDK-GUIDE.md#13-run-it-under-toolgate)). Paths in settings must be absolute: a Tool Host starts each call in its own working directory with an empty environment. Use *Tool Hosts* on the deployment to run, say, `system-health` on every server, and `script-runner` only on the machine that holds the scripts.
+**Under ToolGate**, upload the `.olo` in *Server packages*, deploy it with the settings filled in, then enable, allow and grant the tools ([guide, section 13](../../TOOL-SDK-GUIDE.md#13-run-it-under-toolgate)). Paths in settings must be absolute: a Tool Host starts each call in its own working directory with an empty environment. Use *Tool Hosts* on the deployment to run, say, `system-health` on every server, and `script-runner` only on the machine that holds the scripts.
 
 ## Copying an example
 

@@ -44,7 +44,7 @@ public class BuilderResource {
     private Response download(String id, boolean source) {
         return Response.ok(service.download(actor(), id, source), source ? "application/zip" : "application/vnd.ololabs.toolgate.package+zip")
                 .header("Cache-Control", "no-store").header("X-Content-Type-Options", "nosniff")
-                .header("Content-Disposition", "attachment; filename=\"" + (source ? "source.zip" : "package.tgpkg") + "\"").build();
+                .header("Content-Disposition", "attachment; filename=\"" + (source ? "source.zip" : "package.olo") + "\"").build();
     }
     @GET @Path("builds/{id}/package") public Response packageFile(@PathParam("id") String id) { return download(id, false); }
     @GET @Path("builds/{id}/source") public Response sourceFile(@PathParam("id") String id) { return download(id, true); }

@@ -133,7 +133,7 @@ def starter_package(revocation=False):
                     source.write_text(text);changed+=1
             if changed!=1:raise ValueError('Expected exactly one owned starter wait fixture')
         run([str(toolgate),'pack'],cwd=out)
-        return (out/'build/toolgate/orders-0.1.0.tgpkg').read_bytes()
+        return (out/'build/toolgate/orders-0.1.0.olo').read_bytes()
 
 
 

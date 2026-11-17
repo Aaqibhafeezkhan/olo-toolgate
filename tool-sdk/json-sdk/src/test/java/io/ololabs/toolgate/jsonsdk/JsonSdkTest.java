@@ -66,7 +66,7 @@ class JsonSdkTest {
         // Unzipped, edited elsewhere and zipped again with its folder, a local dev file and build output.
         var edited = new String(example(), StandardCharsets.UTF_8).replace("\"version\": \"1.0.0\"", "\"version\": \"1.0.1\"");
         var files = new java.util.LinkedHashMap<String, byte[]>();
-        files.put("hello/build/toolgate/old.tgpkg", new byte[]{1, 2});
+        files.put("hello/build/toolgate/old.olo", new byte[]{1, 2});
         files.put("hello/toolgate.json", edited.getBytes(StandardCharsets.UTF_8));
         files.put("hello/README.md", "notes".getBytes(StandardCharsets.UTF_8));
         files.put("hello/toolgate.dev.json", "{}".getBytes(StandardCharsets.UTF_8));

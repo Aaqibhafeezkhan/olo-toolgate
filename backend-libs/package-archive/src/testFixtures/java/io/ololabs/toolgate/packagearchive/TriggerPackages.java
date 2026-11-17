@@ -16,7 +16,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Builds `.tgpkg` packages with trigger exports the way {@code toolgate pack} writes them: canonical manifest and
+ * Builds `.olo` packages with trigger exports the way {@code toolgate pack} writes them: canonical manifest and
  * descriptors, {@code triggerDescriptorDigest}, {@code descriptorSetDigest} over the exports, a canonical
  * {@code CHECKSUMS.sha256} and a stored zip. For tests only.
  */

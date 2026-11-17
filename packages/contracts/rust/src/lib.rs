@@ -3580,6 +3580,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/trigger.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/workflow-bundle.schema.json",
+        include_str!("../schemas/v2/workflow-bundle.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/workflow-decision.schema.json",
         include_str!("../schemas/v2/workflow-decision.schema.json"),
     ),

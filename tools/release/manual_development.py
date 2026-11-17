@@ -113,6 +113,9 @@ def build():
     pom = ROOT/'packages/contracts/java/build/publications/mavenJava/pom-default.xml'
     shutil.copyfile(pom, ASSETS/('toolgate-contracts-'+info['libraryVersion']+'.pom'))
     run(sys.executable, 'tools/release/bundle.py', '--output', str(ASSETS))
+    run(sys.executable, 'profiles/build.py', '--version', version)
+    run(sys.executable, 'tools/release/profiles.py', '--source', 'profiles/bin', '--output', str(ASSETS),
+        '--version', version, '--commit', info['commit'])
     for document in ('RELEASE-NOTES.md', 'RELEASE-NOTES.generated.md', 'contributors.json'):
         shutil.copyfile(ROOT/'release-notes'/document, ASSETS/document)
     chart = OUTPUT/'chart'
