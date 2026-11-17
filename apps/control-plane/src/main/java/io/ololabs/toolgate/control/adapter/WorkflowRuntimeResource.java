@@ -46,8 +46,16 @@ public class WorkflowRuntimeResource {
     public Response claim(String document) {
         var worker = worker();
         if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 16384) throw Failure.validation();
-        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowRunClaimRequest.class);
-        return reply(leases(worker).claim(worker, request.compilerDigest(), request.graphDigests(), correlation.id()));
+        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities.class);
+        return reply(leases(worker).claim(worker, request.instanceId(), request.compilerDigest(), request.graphDigests(), correlation.id()));
+    }
+
+    @POST @Path("workers:heartbeat") @Consumes("application/json") @RolesAllowed(ROLE)
+    public Response heartbeat(String document) {
+        var worker = worker();
+        if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 16384) throw Failure.validation();
+        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities.class);
+        return reply(leases(worker).heartbeat(worker, request.instanceId(), request.compilerDigest(), request.graphDigests(), correlation.id()));
     }
 
     @GET @Path("graph-candidates/{profileId}/{digest}/{workflowId}") @RolesAllowed(ROLE)

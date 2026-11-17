@@ -5325,13 +5325,6 @@ pub enum WorkflowRemediationMode {
     #[serde(rename = "APPLY")]
     Apply,
 }
-/// Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct WorkflowRunClaimRequest {
-    pub compiler_digest: String,
-    pub graph_digests: Vec<String>,
-}
 /// Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -5432,6 +5425,14 @@ pub struct WorkflowToolDecision {
     pub kind: String,
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowWorkerCapabilities {
+    pub compiler_digest: String,
+    pub graph_digests: Vec<String>,
+    pub instance_id: String,
 }
 const_field!(const_broker_request_frame_kind, String, "BROKER_REQUEST");
 const_field!(const_broker_response_frame_kind, String, "BROKER_RESPONSE");

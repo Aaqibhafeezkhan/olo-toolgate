@@ -9,6 +9,24 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /internal/v1/runtime/workers:heartbeat:
+    post:
+      operationId: reportWorkflowWorkerPresence
+      security:
+      - runtimeServiceToken: []
+      summary: Renew bounded worker capability presence without claiming queued work
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowWorkerCapabilities
+      responses:
+        '204': {description: Server-expiring presence recorded for the verified tenant runtime identity}
+        '400': {description: Invalid capability declaration}
+        '401': {description: Direct TLS and verified tenant runtime identity required}
+        '403': {description: Worker instance is owned by a different authenticated principal}
+        '409': {description: Tenant worker-presence limit reached}
   /internal/v1/runtime/claim:
     post:
       operationId: claimCompatibleWorkflowRun
@@ -20,7 +38,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowRunClaimRequest
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowWorkerCapabilities
       responses:
         '200':
           description: Private immutable leased run snapshot; no provider credentials included

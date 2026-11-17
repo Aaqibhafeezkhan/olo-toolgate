@@ -469,7 +469,6 @@ fn v2_fixture_round_trips() {
         WorkflowProfileState,
         WorkflowProfileStatus,
         WorkflowRemediationMode,
-        WorkflowRunClaimRequest,
         WorkflowStackDeployment,
         WorkflowStackFolderAgent,
         WorkflowStackModelEngine,
@@ -479,6 +478,7 @@ fn v2_fixture_round_trips() {
         WorkflowStackRuntime,
         WorkflowStackTriggerSource,
         WorkflowToolDecision,
+        WorkflowWorkerCapabilities,
     );
 }
 

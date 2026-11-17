@@ -29,6 +29,37 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
         return statement;
     }
 
+    @Override public void reportWorker(Worker worker, long now) {
+        try (var expired = statement("DELETE FROM control_workflow_workers WHERE tenant_id=? AND expires_at<=?")) {
+            expired.setLong(2, now); expired.executeUpdate();
+            try (var count = statement("SELECT count(*) FROM control_workflow_workers WHERE tenant_id=?"); var rows = count.executeQuery()) {
+                rows.next();
+                if (rows.getInt(1) >= 256) {
+                    try (var existing = statement("SELECT 1 FROM control_workflow_workers WHERE tenant_id=? AND instance_id=?", worker.instanceId()); var found = existing.executeQuery()) {
+                        if (!found.next()) throw Failure.conflict();
+                    }
+                }
+            }
+            String inventory = "\n" + String.join("\n", worker.graphDigests()) + "\n";
+            try (var update = statement("""
+                    INSERT INTO control_workflow_workers(tenant_id,instance_id,owner_id,compiler_digest,graph_inventory,expires_at)
+                    VALUES(?,?,?,?,?,?) ON CONFLICT(tenant_id,instance_id) DO UPDATE SET
+                    compiler_digest=excluded.compiler_digest,graph_inventory=excluded.graph_inventory,expires_at=excluded.expires_at
+                    WHERE control_workflow_workers.owner_id=excluded.owner_id
+                    """, worker.instanceId(), worker.ownerId(), worker.compilerDigest(), inventory)) {
+                update.setLong(6, worker.expiresAt());
+                if (update.executeUpdate() != 1) throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.FORBIDDEN, 403, "Worker identity is already owned");
+            }
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+
+    @Override public int compatibleWorkers(String compilerDigest, String graphDigest, long now) {
+        try (var query = statement("SELECT count(*) FROM control_workflow_workers WHERE tenant_id=? AND compiler_digest=? AND expires_at>? AND graph_inventory LIKE ?", compilerDigest)) {
+            query.setLong(3, now); query.setString(4, "%\n" + graphDigest + "\n%");
+            try (var rows = query.executeQuery()) { rows.next(); return rows.getInt(1); }
+        } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+
     @Override public Admission admission(String subscriptionUid, String cursor) {
         try (var statement = statement("""
                 SELECT owner_id,admission_id,disposition,run_id FROM control_workflow_admissions

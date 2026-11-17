@@ -1343,7 +1343,7 @@
         "features"
       ]
     },
-    "WorkflowRunClaimRequest": {
+    "WorkflowWorkerCapabilities": {
       "type": "object",
       "additionalProperties": false,
       "description": "Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority.",
@@ -1359,11 +1359,16 @@
           "minItems": 0,
           "maxItems": 128,
           "uniqueItems": true
+        },
+        "instanceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier",
+          "description": "Unique worker process instance, stable across polling and credential refresh; not an authorization token."
         }
       },
       "required": [
         "compilerDigest",
-        "graphDigests"
+        "graphDigests",
+        "instanceId"
       ]
     }
   }

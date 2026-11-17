@@ -513,7 +513,20 @@ final class WorkflowProfilesTest {
         assertEquals(409, assertThrows(Failure.class,
             () -> service.publish(rig.admin, "support", publish(digest, 0), "uncompiled-graphs")).status());
         new WorkflowGraphPreparation(codec, service, this::compiled).prepare(rig.admin, "support", publish(digest, 0), "prepare-graphs");
+        assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "no-worker")).status());
+        String graphDigest = value.path("workflows").path("workflows").get(0).path("graph").path("digest").asText();
+        rig.store.transaction(rig.tenant, true, tx -> {
+            tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker("worker-a", "a".repeat(64), "sha256:" + "b".repeat(64), List.of(graphDigest), System.currentTimeMillis()+60000), System.currentTimeMillis()); return null;
+        });
         assertTrue(node(service.publish(rig.admin, "support", publish(digest, 0), "publish")).path("dependenciesReady").asBoolean());
+        rig.store.transaction(rig.tenant, true, tx -> {
+            tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker("worker-a", "a".repeat(64), "sha256:" + "b".repeat(64), List.of(graphDigest), System.currentTimeMillis()-1), System.currentTimeMillis()); return null;
+        });
+        assertFalse(node(service.get(rig.admin, "support", digest)).path("dependenciesReady").asBoolean(), "expired worker presence blocks new admission even before cleanup");
+        rig.store.transaction(rig.tenant, true, tx -> {
+            tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker("worker-a", "a".repeat(64), "sha256:" + "b".repeat(64), List.of(graphDigest), System.currentTimeMillis()+60000), System.currentTimeMillis()); return null;
+        });
+        assertTrue(node(service.get(rig.admin, "support", digest)).path("dependenciesReady").asBoolean());
         rig.store.transaction(rig.tenant, true, tx -> {
             var before = tx.load(); var entries = new HashMap<>(before.entries());
             TestSupport.put(entries, codec, Ids.Kind.AGENT_GROUP, new io.ololabs.toolgate.contracts.ControlAgentGroup("support-agents", "Support", null, true, 2L, List.of(), List.of(), null));

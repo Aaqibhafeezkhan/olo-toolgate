@@ -34,6 +34,7 @@ public final class WorkflowProfileDependencies implements WorkflowProfiles.Readi
             if (!build.tenantId().equals(tenant.value()) || !build.profileId().equals(profile.profileId())
                     || !build.profileDigest().equals(profileDigest) || !build.workflowId().equals(workflow.id())
                     || !(build.generation() == generation || active && build.generation() == generation - 1)) return false;
+            if (tx.workflowRuns().compatibleWorkers(build.compilerDigest(), workflow.graph().digest(), clock.millis()) < 1) return false;
         }
         // Tool execution readiness cases cannot be assumed from package installation alone.
         if (profile.readiness() != null && !profile.readiness().isEmpty()) return false;

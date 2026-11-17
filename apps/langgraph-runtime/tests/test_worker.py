@@ -7,13 +7,36 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+import threading
 from unittest.mock import Mock
 
 from toolgate_runtime.runner import Denied, RunOutcome, StepGrant, ToolOutcome
-from toolgate_runtime.worker import ExecutionEvidence, log_result
+from toolgate_runtime.worker import ExecutionEvidence, WorkerPresence, log_result
+from toolgate_runtime.run_transport import RunTransportError
 
 
 class ExecutionEvidenceTests(unittest.TestCase):
+    def test_presence_renews_while_execution_is_busy_without_claiming_another_run(self):
+        control=Mock();renewed=threading.Event()
+        control.heartbeat.side_effect=lambda:renewed.set() if control.heartbeat.call_count>1 else None
+        presence=WorkerPresence(control,interval=.01)
+        try:
+            presence.start()
+            self.assertTrue(renewed.wait(1),'busy execution must not stop capability renewal')
+            presence.require_current()
+            control.claim.assert_not_called()
+        finally:presence.close()
+        self.assertFalse(presence.thread.is_alive())
+
+    def test_presence_failure_stops_new_claims_without_exposing_the_error(self):
+        control=Mock();control.heartbeat.side_effect=[None,RunTransportError('private credential details')]
+        presence=WorkerPresence(control,interval=.01)
+        try:
+            presence.start();self.assertTrue(presence.failed.wait(1))
+            with self.assertRaisesRegex(RunTransportError,'^Worker presence is unavailable$'):presence.require_current()
+            control.claim.assert_not_called()
+        finally:presence.close()
+
     def setUp(self):
         self.adapter = Mock()
         self.evidence = ExecutionEvidence(self.adapter)

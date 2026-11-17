@@ -1,6 +1,16 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Runtime worker presence integration — 2026-11-18
+
+#295 publication/admission now checks recent compatible LangGraph worker
+capabilities. The new heartbeat is between the runtime and Control, not a new
+Device/Gateway trigger channel or package-specific subscription. The existing
+trigger admission regression still passes on SQLite/PostgreSQL; actual scope,
+checks and remaining activation/acceptance limits are in the
+[workflow checkpoint](workflow-v1-status.md#expiring-compatible-worker-presence--2026-11-18).
+No #274 module/Done-when change or new earned weight: **27% remains earned**.
+
 ## Embedded trigger/tool package source — 2026-11-18
 
 The #295 portable bundle path now consumes exact tenant-verified embedded

@@ -53,15 +53,28 @@ public final class WorkflowLeases {
         @Override public String toString() { return "Snapshot[runId=" + runId + "]"; }
     }
 
-    public Store.Reply claim(DirectoryService.Actor worker, String compilerDigest, List<String> graphDigests, String requestId) {
+    private io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities capabilities(String instanceId, String compilerDigest, List<String> graphDigests) {
+        if (instanceId == null || compilerDigest == null || graphDigests == null) throw Failure.validation();
+        return codec.model(codec.json(Map.of("instanceId", instanceId, "compilerDigest", compilerDigest, "graphDigests", graphDigests)),
+            io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities.class);
+    }
+    private long presence(Store.Session tx, DirectoryService.Actor worker, io.ololabs.toolgate.contracts.v2.WorkflowWorkerCapabilities capabilities) {
+        long now = clock.millis();
+        if (now < 1 || now > 9007199254740991L - 30000) throw Failure.unavailable();
+        tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker(capabilities.instanceId(), worker.id(), capabilities.compilerDigest(), capabilities.graphDigests(), now + 30000), now);
+        return now;
+    }
+    public Store.Reply heartbeat(DirectoryService.Actor worker, String instanceId, String compilerDigest, List<String> graphDigests, String requestId) {
         Ids.valid(requestId);
-        if (compilerDigest == null || graphDigests == null) throw Failure.validation();
-        // Validate the same canonical capability declaration used by the authenticated HTTP adapter.
-        var capabilities = codec.model(codec.json(Map.of("compilerDigest", compilerDigest, "graphDigests", graphDigests)),
-            io.ololabs.toolgate.contracts.v2.WorkflowRunClaimRequest.class);
+        var capabilities = capabilities(instanceId, compilerDigest, graphDigests);
+        return store.transaction(worker.tenant(), true, tx -> { presence(tx, worker, capabilities); return new Store.Reply(204, null, 0); });
+    }
+    public Store.Reply claim(DirectoryService.Actor worker, String instanceId, String compilerDigest, List<String> graphDigests, String requestId) {
+        Ids.valid(requestId);
+        var capabilities = capabilities(instanceId, compilerDigest, graphDigests);
         return store.transaction(worker.tenant(), true, tx -> {
             var runs = tx.workflowRuns();
-            long now = clock.millis();
+            long now = presence(tx, worker, capabilities);
             runs.expire(now);
             var run = runs.nextQueued(capabilities.compilerDigest(), capabilities.graphDigests());
             if (run == null) return new Store.Reply(204, null, 0);

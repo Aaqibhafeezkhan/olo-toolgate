@@ -96,7 +96,7 @@ Gateway/client transport or callback endpoint is introduced.
 This is component provisioning/readiness, not the complete activation protocol.
 Candidate trigger changes still need preparation/activation handover isolation;
 imported candidates also need durable automatic deployment reconciliation and
-compatible-worker presence before publication. Until that is delivered, retry
+complete runtime/provider readiness before publication. Until that is delivered, retry
 the provision action after device installation/check-in. The persistent stack,
 provider readiness and unchanged-container end-to-end demo remain unqualified.
 
@@ -121,6 +121,14 @@ own model group. Vault values stay in the existing vault; readiness checks that
 the tenant's secret reference exists under the declared enabled groups. This is
 a dependency/reference check, not a provider credential validity test or live
 inference. No provider request is made during upload, review or publication.
+
+Start compatible runtime workers before publication. Workers advertise one
+process ID, compiler and verified graph-package inventory on claims and on a
+separate five-second heartbeat. Control requires matching tenant/owner-bound
+presence with a 30-second server expiry for each prepared graph. This continues
+during long runs without claiming more work. Expiry blocks new admissions;
+already admitted run leases/configuration remain independent. This is recent
+capability evidence, not instantaneous health or per-replica graph preparation.
 
 Publication requires current enabled agents/groups/tools, matching group
 membership, scoped vault references and the **same profile digest's** READY

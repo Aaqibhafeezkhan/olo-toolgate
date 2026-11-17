@@ -6,20 +6,22 @@ declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
 /** Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority. */
-final readonly class WorkflowRunClaimRequest implements \JsonSerializable {
+final readonly class WorkflowWorkerCapabilities implements \JsonSerializable {
     public function __construct(
         public string $compilerDigest,
-        public array $graphDigests
+        public array $graphDigests,
+        public string $instanceId
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['compilerDigest', 'graphDigests']) || array_diff(['compilerDigest', 'graphDigests'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['compilerDigest', 'graphDigests', 'instanceId']) || array_diff(['compilerDigest', 'graphDigests', 'instanceId'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['compilerDigest'],
-            array_map(static fn ($item) => $item, $data['graphDigests'])
+            array_map(static fn ($item) => $item, $data['graphDigests']),
+            $data['instanceId']
         );
     }
 

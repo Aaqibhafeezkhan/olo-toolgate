@@ -63,7 +63,7 @@ class RunTransportTests(unittest.TestCase):
         ack = self.control.finish(lease, RunOutcome("SUCCEEDED"), timeout_seconds=5)
         self.assertEqual("SUCCEEDED", ack.state)
         self.assertEqual([
-            ("https://control.example/internal/v1/runtime/claim", "Bearer workload.credential", {'compilerDigest':COMPILER_DIGEST,'graphDigests':list(GraphPackages().installed_digests())}, 10),
+            ("https://control.example/internal/v1/runtime/claim", "Bearer workload.credential", {'instanceId':self.control.instance_id,'compilerDigest':COMPILER_DIGEST,'graphDigests':list(GraphPackages().installed_digests())}, 10),
             ("https://control.example/internal/v1/runtime/runs/run-1/finish", "Bearer workload.credential",
              {"leaseId": "lease-1", "leaseToken": "x" * 43, "state": "SUCCEEDED", "result": None, "code": None}, 5),
         ], self.requests)
@@ -73,6 +73,18 @@ class RunTransportTests(unittest.TestCase):
         self.assertIsNone(self.control.claim())
         with self.assertRaisesRegex(RunTransportError, "Invalid Control run snapshot"):
             self.control.claim()
+        self.responses.append(Response(200,None))
+        with self.assertRaises(RunTransportError):self.control.claim()
+
+    def test_heartbeat_keeps_one_process_identity_without_claiming_work(self):
+        self.responses.extend([Response(204,None),Response(204,None),Response(200,{}),Response(200,None)])
+        self.control.heartbeat();self.control.heartbeat()
+        self.assertRegex(self.control.instance_id,r'^worker-[a-f0-9]{32}$')
+        self.assertEqual(self.requests[0][2],self.requests[1][2])
+        self.assertTrue(all(request[0].endswith('/workers:heartbeat') for request in self.requests))
+        self.assertNotEqual(self.control.instance_id,ControlRuns('https://control.example',lambda:'other').instance_id)
+        with self.assertRaisesRegex(RunTransportError,'heartbeat acknowledgement'):self.control.heartbeat()
+        with self.assertRaises(RunTransportError):self.control.heartbeat()
 
     def test_claim_rejects_a_snapshot_for_an_unadvertised_compiler_or_graph(self):
         for snapshot in ({**self.snapshot,'compilerDigest':'sha256:'+'0'*64},

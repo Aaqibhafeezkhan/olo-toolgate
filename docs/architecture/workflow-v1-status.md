@@ -1,6 +1,44 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Expiring compatible worker presence — 2026-11-18
+
+Known base `78042804`. Canonical `WorkflowWorkerCapabilities` now carries one
+process instance ID plus compiler/verified installed graph digests. Claim and a
+separate authenticated direct-TLS heartbeat record tenant/owner-bound presence
+with a server-selected 30-second expiry. Renewal during a busy run does not
+claim another job. Publication/new admission require at least one recent
+compatible worker for each prepared graph; expired observations fail readiness
+without waiting for cleanup. Current admitted-run configuration/leases remain
+independent of this new-admission readiness check.
+
+Worker presence is bounded to 256 unexpired instances per tenant, uses fresh
+SQLite/PostgreSQL storage with RLS/identity guards/capacity accounting, and
+expires unused observations on subsequent reports. Another authenticated
+principal cannot replace an instance it does not own. A heartbeat failure stops
+subsequent claims; it neither retries effects nor falsely finishes an active
+run. The transport also refuses HTTP 200 JSON null as a queue/heartbeat success.
+Old bodyless/instance-less capability messages and obsolete generated contract
+names have no compatibility path.
+
+Provisioned verification passed **30 Control tests and two Java contract tests**,
+including SQLite/PostgreSQL owner/tenant/compiler/graph/expiry/limit cases,
+heartbeat-without-claim, publication refusal without workers, and RLS/privilege
+inventory. The hardened runtime image passed **111 tests without skips**.
+Seven canonical corpus tests, four ownership/capacity tests, PHP 459 v2 round
+trips, Rust two v2 round trips, UI/contract type checks, two TypeScript wire
+tests, generated preflight and source quality passed. The earlier full Java
+Windows fixture limitation remains; no full repository or live demo pass is
+inferred from these component gates.
+
+This is recent trusted-worker capability evidence, not remote attestation,
+instantaneous liveness, per-replica topology preparation or crash/checkpoint
+recovery. A stopped process can remain observed until its 30-second expiry.
+Durable deployment reconciliation, isolated prepare/activate trigger handover,
+external provider readiness/routing, fresh persistent stack wiring, remaining
+graph features, recovery/invalidation/cleanup and live unchanged-container
+acceptance remain outstanding. #295 stays **0/100**; #274 stays **27%**.
+
 ## Embedded package source portability — 2026-11-18
 
 Known base `fe5dcef0`. Canonical package source `BUNDLE` requires an exact digest

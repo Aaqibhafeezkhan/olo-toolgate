@@ -492,7 +492,8 @@ the component boundary, with persisted one-device selection and group-fenced
 targets; automatic deployment reconciliation and activation handover remain
 pending. Step 4 has JSON and
 installed native-factory rebuilding, admin preparation, durable receipts and
-compiler pinning; external LLM routing and replica readiness remain pending.
+compiler pinning and expiring compatible-worker presence for publication/new
+admission. External LLM routing and per-replica topology readiness remain pending.
 Step 5 has admitted-run A/B configuration isolation; coordinated device handover,
 invalidation and cleanup remain pending. Step 6 has component/image tests, with
 full-stack recovery and the live demo still pending. The authoritative executed

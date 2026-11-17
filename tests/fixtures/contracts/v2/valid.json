@@ -5734,10 +5734,11 @@
       "value"
     ]
   },
-  "WorkflowRunClaimRequest": {
+  "WorkflowWorkerCapabilities": {
     "compilerDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "graphDigests": [
       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    ]
+    ],
+    "instanceId": "worker-1"
   }
 }

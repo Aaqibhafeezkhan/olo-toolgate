@@ -402,5 +402,18 @@ digests in every `POST /internal/v1/runtime/claim` body. Control leaves incompat
 runs queued. The bounded inventory verifies package bytes without importing graph
 factories; `--graph-directory` adds operator-installed packages to the built-in
 inventory. Empty inventories claim no work. A worker checks the returned lease
-against its advertised identities before execution. This protects queue selection;
-it does not yet provide a durable worker-presence/readiness barrier for publication.
+against its advertised identities before execution.
+
+Both claim and `POST /internal/v1/runtime/workers:heartbeat` use canonical
+`WorkflowWorkerCapabilities`: `instanceId`, `compilerDigest`, and `graphDigests`.
+Each process creates one instance ID and retains it across credential refresh.
+Control records tenant/owner-bound presence for 30 seconds, with at most 256
+unexpired instances per tenant. A background heartbeat renews every five seconds
+while a workflow is busy, without claiming another run. Failure stops subsequent
+claims; current run leases and step authorization remain independent. A crashed
+or stopped process disappears from readiness at expiry, even without a sweep.
+
+Publication and new admission require recent compatible worker presence for each
+prepared graph. This is bounded capability/liveness evidence, not remote code
+attestation, proof of instantaneous health, per-replica graph compilation or
+checkpoint/crash recovery. Other deployment and provider readiness still apply.

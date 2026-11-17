@@ -1,6 +1,20 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Expiring runtime worker observations — 2026-11-18
+
+The #295 integration now fences recent worker capabilities by tenant, stable
+authenticated owner and process instance, with a server-selected expiry and
+bounded storage. Publication/new admission require matching recent compiler/
+graph inventory; existing run leases and current step authorization stay
+independent. These are trusted service observations, not remote attestation or
+proof of instantaneous availability. SQLite/PostgreSQL negatives, RLS inventory
+and hardened-image tests passed within the
+[workflow checkpoint's scope](../architecture/workflow-v1-status.md#expiring-compatible-worker-presence--2026-11-18).
+No #230 stage, overall phase/first-slice acceptance table, weight or execution
+security guarantee is completed or expanded. Recovery and integrated acceptance
+remain outstanding.
+
 ## Embedded workflow package source — 2026-11-18
 
 The #295 `BUNDLE` source consumes only an exact already verified tenant artifact;

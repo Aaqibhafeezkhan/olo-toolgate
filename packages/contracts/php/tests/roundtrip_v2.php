@@ -463,7 +463,6 @@ $models = [
     'WorkflowProfileState',
     'WorkflowProfileStatus',
     'WorkflowRemediationMode',
-    'WorkflowRunClaimRequest',
     'WorkflowStackDeployment',
     'WorkflowStackFolderAgent',
     'WorkflowStackModelEngine',
@@ -472,7 +471,8 @@ $models = [
     'WorkflowStackPlatform',
     'WorkflowStackRuntime',
     'WorkflowStackTriggerSource',
-    'WorkflowToolDecision'
+    'WorkflowToolDecision',
+    'WorkflowWorkerCapabilities'
 ];
 $count = 0;
 foreach ($fixtures as $name => $fixture) {

@@ -8,6 +8,7 @@ ROOT=Path(__file__).resolve().parents[2]
 START='-- BEGIN TENANT CAPACITY\n'
 END='-- END TENANT CAPACITY\n'
 TRACKED={
+ 'control_workflow_workers':(['instance_id','owner_id','compiler_digest','graph_inventory'],None),
  'control_workflow_device_placements':(['profile_id','device_id'],None),
  'control_workflow_graph_builds':(['document'],None),
  'control_workflow_runs':(['document','compiler_digest','graph_digest'],"{row}.state IN ('QUEUED','RUNNING')"),

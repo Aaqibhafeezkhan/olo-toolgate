@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 import re
 import uuid
 from urllib.error import HTTPError
@@ -69,6 +70,7 @@ class ControlRuns(ControlTriggers):
     def __init__(self,*args,graph_directory=None,**kwargs):
         super().__init__(*args,**kwargs)
         self.graph_packages=GraphPackages(graph_directory)
+        self.instance_id='worker-'+uuid.uuid4().hex
 
     def _runtime_request(self, path, payload, *, timeout_seconds, allow_empty=False):
         try:
@@ -90,7 +92,9 @@ class ControlRuns(ControlTriggers):
                 raw = response.read(262145)
                 if len(raw) > 262144:
                     raise ValueError("Runtime response exceeds limit")
-                return json.loads(raw, object_pairs_hook=_object, parse_constant=_constant)
+                value=json.loads(raw, object_pairs_hook=_object, parse_constant=_constant)
+                if not isinstance(value,dict):raise ValueError('Runtime response must be an object')
+                return value
         except HTTPError as failure:
             with failure:
                 if failure.code in (401, 403, 409) and not allow_empty:
@@ -103,7 +107,7 @@ class ControlRuns(ControlTriggers):
 
     def claim(self):
         graphs=self.graph_packages.installed_digests()
-        value = self._runtime_request("claim", {'compilerDigest':COMPILER_DIGEST,'graphDigests':list(graphs)}, timeout_seconds=self.timeout, allow_empty=True)
+        value = self._runtime_request("claim", {'instanceId':self.instance_id,'compilerDigest':COMPILER_DIGEST,'graphDigests':list(graphs)}, timeout_seconds=self.timeout, allow_empty=True)
         if value is None:
             return None
         try:
@@ -113,6 +117,12 @@ class ControlRuns(ControlTriggers):
             return lease
         except (ValueError, TypeError):
             raise RunTransportError("Invalid Control run snapshot") from None
+
+    def heartbeat(self):
+        value=self._runtime_request('workers:heartbeat', {'instanceId':self.instance_id,'compilerDigest':COMPILER_DIGEST,
+            'graphDigests':list(self.graph_packages.installed_digests())},timeout_seconds=min(self.timeout,10),allow_empty=True)
+        if value is not None:
+            raise RunTransportError('Invalid worker heartbeat acknowledgement')
 
     @staticmethod
     def _run_path(lease, operation):

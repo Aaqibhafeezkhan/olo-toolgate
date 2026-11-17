@@ -241,6 +241,45 @@ final class TriggerDeliveryTest {
         }
     }
 
+    @Test void workerPresenceIsBoundedTenantOwnerAndCompilerScopedAndExpires() throws Exception {
+        for (var backend : stores()) {
+            var w = world(backend.store(), "tenant-a", null, List.of());
+            var keys = new TenantVaultKeys(codec, new LocalVaultWrappingProvider("fixture", Map.of("fixture", new byte[32])));
+            var profiles = new WorkflowProfiles(w.store(), codec, (tx,p,digest) -> true, keys);
+            var leases = new WorkflowLeases(w.store(), codec, w.clock(), profiles, keys);
+            var worker = new DirectoryService.Actor(w.tenant(), "b".repeat(64), false);
+            String compiler = "sha256:" + "a".repeat(64), graph = "sha256:" + "c".repeat(64);
+            java.util.function.IntSupplier ready = () -> w.store().transaction(w.tenant(), false, tx -> tx.workflowRuns().compatibleWorkers(compiler,graph,w.clock().millis()));
+            assertEquals(0,ready.getAsInt());
+            assertEquals(204,leases.heartbeat(worker,"worker-a",compiler,List.of(graph),"heartbeat").status());
+            assertEquals(1,ready.getAsInt());
+            assertEquals(204,leases.heartbeat(worker,"worker-a",compiler,List.of(graph),"renew").status());
+            assertEquals(1,ready.getAsInt(),"one instance cannot count as two replicas");
+            var impostor = new DirectoryService.Actor(w.tenant(), "d".repeat(64), false);
+            assertEquals(403,assertThrows(Failure.class,() -> leases.heartbeat(impostor,"worker-a",compiler,List.of(graph),"steal")).status());
+            assertEquals(1,ready.getAsInt());
+            assertEquals(0,(int)w.store().transaction(w.tenant(),false,tx -> tx.workflowRuns().compatibleWorkers("sha256:"+"f".repeat(64),graph,w.clock().millis())));
+            assertEquals(0,(int)w.store().transaction(w.tenant(),false,tx -> tx.workflowRuns().compatibleWorkers(compiler,"sha256:"+"f".repeat(64),w.clock().millis())));
+            var other = io.ololabs.toolgate.control.fixtures.Tenants.id("tenant-b");
+            TestSupport.seed(w.store(),codec,other,"root");
+            assertEquals(0,(int)w.store().transaction(other,false,tx -> tx.workflowRuns().compatibleWorkers(compiler,graph,w.clock().millis())));
+            w.clock().millis += 30000;
+            assertEquals(0,ready.getAsInt(),"expiry is evaluated during readiness without a cleanup sweep");
+            assertEquals(204,leases.heartbeat(worker,"worker-a",compiler,List.of(),"no-graphs").status());
+            assertEquals(0,ready.getAsInt());
+            w.store().transaction(w.tenant(),true,tx -> {
+                for(int i=1;i<256;i++) tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker("worker-"+i,worker.id(),compiler,List.of(graph),w.clock().millis()+30000),w.clock().millis());
+                return null;
+            });
+            assertEquals(409,assertThrows(Failure.class,() -> leases.heartbeat(worker,"overflow",compiler,List.of(graph),"overflow")).status());
+            assertEquals(204,leases.heartbeat(worker,"worker-a",compiler,List.of(graph),"existing-at-limit").status());
+            assertEquals(256,ready.getAsInt());
+            w.clock().millis += 30000;
+            assertEquals(204,leases.heartbeat(worker,"replacement",compiler,List.of(graph),"expired-cleanup").status());
+            assertEquals(1,ready.getAsInt());
+        }
+    }
+
     private long rows(World w, TriggerStore.Kind kind) { return w.store().transaction(w.tenant(), false, tx -> tx.triggers().count(kind)); }
 
     private JsonNode deliveries(World w, String consumer) throws Exception {
@@ -600,23 +639,25 @@ final class TriggerDeliveryTest {
             var leases = new WorkflowLeases(w.store(), codec, w.clock(), profiles, keys);
             var compiler = "sha256:" + "c".repeat(64);
             var graphs = List.of(config.path("workflows").get(0).path("graph").path("digest").asText());
-            assertEquals(204, leases.claim(worker, "sha256:" + "0".repeat(64), graphs, "wrong-compiler").status());
-            assertEquals(204, leases.claim(worker, compiler, List.of("sha256:" + "0".repeat(64)), "wrong-graph").status());
-            assertEquals(204, leases.claim(worker, compiler, List.of(), "no-graphs").status());
-            assertEquals(400, status(() -> leases.claim(worker, compiler, List.of(graphs.getFirst(), graphs.getFirst()), "duplicate-graphs")));
-            assertEquals(400, status(() -> leases.claim(worker, "bad", graphs, "malformed-compiler")));
+            assertEquals(204, leases.heartbeat(worker, "worker-a", compiler, graphs, "heartbeat-before-claim").status());
+            assertEquals("QUEUED", w.store().transaction(w.tenant(), false, tx -> tx.workflowRuns().state(runId)), "heartbeats must not claim queued work");
+            assertEquals(204, leases.claim(worker, "worker-a", "sha256:" + "0".repeat(64), graphs, "wrong-compiler").status());
+            assertEquals(204, leases.claim(worker, "worker-a", compiler, List.of("sha256:" + "0".repeat(64)), "wrong-graph").status());
+            assertEquals(204, leases.claim(worker, "worker-a", compiler, List.of(), "no-graphs").status());
+            assertEquals(400, status(() -> leases.claim(worker, "worker-a", compiler, List.of(graphs.getFirst(), graphs.getFirst()), "duplicate-graphs")));
+            assertEquals(400, status(() -> leases.claim(worker, "worker-a", "bad", graphs, "malformed-compiler")));
             w.store().transaction(w.tenant(), false, tx -> {
                 assertEquals("QUEUED", tx.workflowRuns().state(runId), "incompatible requests must not consume or fail the run");
                 return null;
             });
-            var claim = leases.claim(worker, compiler, graphs, "claim");
+            var claim = leases.claim(worker, "worker-a", compiler, graphs, "claim");
             assertEquals(200, claim.status());
             var snapshot = JSON.readTree(claim.body());
             assertEquals(runId, snapshot.path("runId").asText());
             assertEquals("alpha", snapshot.path("message").asText());
             assertEquals("investigator", snapshot.path("agents").path(0).path("agentId").asText());
             assertFalse(claim.body().contains("https://models.example"));
-            assertEquals(204, leases.claim(worker, compiler, graphs, "claim-again").status());
+            assertEquals(204, leases.claim(worker, "worker-a", compiler, graphs, "claim-again").status());
             var leaseId = snapshot.path("leaseId").asText();
             var token = snapshot.path("leaseToken").asText();
             // Publishing B changes new admissions, while the leased A run keeps its exact configuration.
@@ -690,7 +731,7 @@ final class TriggerDeliveryTest {
             w.router().route();
             String nextCursor = parse(session.pump()).getLast().path("cursor").asText();
             var nextAdmission = JSON.readTree(service.admit(w.admin(), codec.json(Map.of("subscriptionUid", uid, "cursor", nextCursor)), "admit-next").body());
-            var nextSnapshot = JSON.readTree(leases.claim(worker, compiler, graphs, "claim-next").body());
+            var nextSnapshot = JSON.readTree(leases.claim(worker, "worker-a", compiler, graphs, "claim-next").body());
             assertEquals(nextAdmission.path("runId"), nextSnapshot.path("runId"));
             assertEquals(nextDigest, nextSnapshot.path("profileDigest").asText());
             assertEquals("revision-2", nextSnapshot.path("workflowVersionId").asText());
