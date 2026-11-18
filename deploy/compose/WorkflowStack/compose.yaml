@@ -113,6 +113,9 @@ services:
       retries: 36
   workflow-worker:
     image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
+    entrypoint: [/opt/toolgate-runtime/bin/python, -m, toolgate_runtime.worker]
+    healthcheck:
+      disable: true
     network_mode: service:registry
     command: [--control-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --gateway-origin, 'https://localhost:${TOOLGATE_TLS_PORT:-48451}', --control-ca-file, /custody/gateway-ca.crt, --gateway-ca-file, /custody/gateway-ca.crt, --token-file, /custody/worker.token, --result-directory, /results, --graph-directory, /configuration/graphs]
     volumes:
@@ -125,6 +128,8 @@ services:
     restart: unless-stopped
   workflow-listener:
     image: ${TOOLGATE_RUNTIME_IMAGE:-olo-toolgate-langgraph-runtime:profile-stack}
+    healthcheck:
+      disable: true
     network_mode: service:registry
     entrypoint: [/opt/toolgate-runtime/bin/python, /deployment/listener.py]
     environment:

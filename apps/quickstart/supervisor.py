@@ -913,6 +913,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.reply(200, {'accessToken': token}, headers={'Set-Cookie': self.session_cookie(token)[1]})
             protected = path.startswith(('/api/control/', '/api/quickstart/'))
             if protected: session(self.headers.get('Authorization',''))
+            if path=='/api/quickstart/v1/runtime-credential' and self.command=='POST':
+                if not os.environ.get('TOOLGATE_QUICKSTART_WORKFLOW_STACK')=='true' or strict(raw)!={}:raise PermissionError()
+                token_=self.headers['Authorization'][7:]
+                authority=control('/api/control/v1/admin-session',token_)
+                if authority.get('role')!='SUPER_ADMIN':raise PermissionError()
+                credential=jwt(['toolgate-workflow-runtime'],'langgraph-service',directory_bound=False)
+                return self.reply(200,dict(accessToken=credential,tenantId=TENANT,expiresAtUnixMs=(int(time.time())+900)*1000))
             workload = re.fullmatch(r'/api/quickstart/v1/workloads/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/reauthorize', path)
             if workload and self.command=='POST':
                 return self.reply(200, {'token': reauthorize(workload.group(1), self.headers['Authorization'][7:], self.server.signal_gateway)})

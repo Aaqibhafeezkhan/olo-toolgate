@@ -475,6 +475,7 @@ jobs:
         mkdir -p build/langgraph-runtime
         docker build --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$RELEASE_SHA" -t olo-toolgate-langgraph-runtime:tested apps/langgraph-runtime
         docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true olo-toolgate-langgraph-runtime:tested --help
+        docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint /opt/toolgate-runtime/bin/python olo-toolgate-langgraph-runtime:tested -m toolgate_runtime.worker --help
         docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint /opt/toolgate-runtime/bin/python olo-toolgate-langgraph-runtime:tested -m toolgate_runtime.trigger_listener --help
         docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges:true --entrypoint /opt/toolgate-runtime/bin/python olo-toolgate-langgraph-runtime:tested -m pip check
         docker build --target verification --build-arg VERSION="$(cat VERSION)" --build-arg REVISION="$RELEASE_SHA" -t olo-toolgate-langgraph-runtime:verification apps/langgraph-runtime

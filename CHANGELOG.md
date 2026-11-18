@@ -6,6 +6,13 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Consolidate the persistent debug deployment into Quickstart, LangGraph and
+  Device. Embed the demo registry in Quickstart, dispatch triggers in the backend,
+  and supervise the graph API and worker in one stateless runtime. Keep bounded
+  internal graph caches; provision service credentials through external operator
+  scripts without changing Admin credentials. Fresh installation selection
+  preserves unsupported old stores rather than converting them.
+
 - Prepare self-contained bot imports in the console, retaining graph-only trigger
   packages and reporting staged device readiness. Repair generated operation
   metadata and native refusal fixtures; retry transient license metadata failures

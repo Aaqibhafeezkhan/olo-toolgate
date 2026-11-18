@@ -581,6 +581,8 @@ final class TriggerDeliveryTest {
             String cursor = parse(session.pump()).getFirst().path("cursor").asText();
             var service = new WorkflowAdmissions(w.store(), codec, w.clock(), w.stream(), profiles, keys);
             String request = codec.json(Map.of("subscriptionUid", uid, "cursor", cursor));
+            var backendDispatch=new WorkflowTriggerDispatch(w.store(),codec,w.stream(),w.subscriptions(),profiles,service);
+            assertEquals(0,backendDispatch.tick(w.tenant()),"missing service authority cannot admit or ACK");
             assertEquals(403, status(() -> service.admit(w.admin(), request, "denied")));
             assertEquals(400, status(() -> service.admit(w.admin(), request.replace("}", ",\"workflowId\":\"forged\"}"), "forged")));
 
@@ -617,10 +619,12 @@ final class TriggerDeliveryTest {
                 tx.save(before, new Directory(before.revision() + 1, entries));
                 return null;
             });
+            assertEquals(1,backendDispatch.tick(w.tenant()),"backend dispatch needs no external listener or Admin token");
+            assertEquals(0,backendDispatch.tick(w.tenant()),"durable ACK prevents redispatch after a fresh tick");
             var response = service.admit(w.admin(), request, "admit");
-            assertEquals(201, response.status());
+            assertEquals(200, response.status());
             var admitted = JSON.readTree(response.body());
-            assertEquals("ADMITTED", admitted.path("disposition").asText());
+            assertEquals("DUPLICATE", admitted.path("disposition").asText());
             var runId = admitted.path("runId").asText();
             w.store().transaction(w.tenant(), false, tx -> {
                 var run = tx.workflowRuns().queued(runId);

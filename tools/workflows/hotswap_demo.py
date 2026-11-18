@@ -65,17 +65,7 @@ def login():
         request=urllib.request.Request('http://127.0.0.1:18090/api/quickstart/v1/login',
             json.dumps(body).encode(),{'Content-Type':'application/json'},method='POST')
         with opener.open(request,timeout=20) as response:return json.load(response)['accessToken']
-    # Initial-password rotation is an explicit local operator operation, before
-    # the A/B identity snapshot. Existing changed credentials are reused.
-    initial=command(COMPOSE+['exec','-T','quickstart','/opt/quickstart-python/bin/python','-c',
-        "from pathlib import Path; print(Path('/data/bootstrap-password').exists())"],text=True).stdout.strip()=='True'
-    if initial:
-        replacement=secrets.token_urlsafe(32)
-        pending=PRIVATE/'password.next'
-        with open(pending,'x',encoding='ascii',opener=lambda p,f:os.open(p,f,0o600)) as stream:stream.write(replacement+'\n')
-        token=authenticate(dict(username='admin',password=password,newPassword=replacement))
-        os.replace(pending,PRIVATE/'password.txt')
-    else:token=authenticate(dict(username='admin',password=password))
+    token=authenticate(dict(username='admin',password=password))
     path=PRIVATE/'operator.token'
     with open(path,'w',encoding='ascii',opener=lambda p,f:os.open(p,f,0o600)) as stream:stream.write(token)
     if not ca_path.exists():ca_path.write_text(ca,encoding='ascii')
@@ -140,7 +130,7 @@ def result(revision):
 
 
 def observations():
-    logs=command(COMPOSE+['logs','--no-log-prefix','worker'],text=True).stdout
+    logs=command(COMPOSE+['logs','--no-log-prefix','langgraph'],text=True).stdout
     return [json.loads(line) for line in logs.splitlines() if line.startswith('{') and 'runId' in json.loads(line)]
 
 

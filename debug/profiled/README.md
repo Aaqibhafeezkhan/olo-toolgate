@@ -6,6 +6,44 @@ trigger, graph configuration, agent model and output paths while the same core
 containers and device keep running. Run commands in **PowerShell from the
 repository root**, for example `D:\git\olo-toolgate`.
 
+The core composition contains exactly **three** containers:
+
+| Container | Responsibilities |
+| --- | --- |
+| `quickstart` | Gateway/backend, Admin UI, backend trigger dispatch, embedded demo OCI registry |
+| `langgraph` | Private graph API and execution worker; no trigger listener or identity issuer |
+| `device` | Persistent device runtime, installed tools and triggers |
+
+The three services are the persistent core. Native tool calls may launch
+short-lived isolated execution containers through the Device's Docker runtime.
+An optional external model fixture or monitoring system is separate from the
+core stack.
+
+LangGraph uses bounded process-local memory caches only (128 compiled topologies
+per process). They are disposable and
+are not execution authority. Runs, admissions and results remain in the backend.
+An external cache is deferred. There is no new checkpoint/resume guarantee.
+Production separates Admin UI from Gateway/backend and supplies external registry
+and storage; the LangGraph image is the same. Models/monitoring are external.
+
+This fresh composition rejects the obsolete multi-container stack definition and
+custody format. It does not convert or delete existing stores. For an existing
+installation, stop its old composition, preserve its storage, and choose fresh
+installation storage explicitly before using the new layout. Once the old
+project has no containers, this command selects new named volumes and preserves
+the previous manifest/storage selection under `state/history/`:
+
+```powershell
+. .\debug\profiled\python.ps1
+$debugPython = Find-DebugPython
+& $debugPython debug/profiled/stack.py start --fresh
+```
+
+It does not delete old volumes or reuse their unsupported custody. Saved Admin
+credential files are reconciled to the new installation with the prior files
+preserved privately under `credentials/admin/history/`. This explicit creation of
+a new installation differs from restarting an existing one.
+
 ## 1. Prerequisites and installation settings
 
 Install and start Docker Desktop with its Linux container engine. Allow Docker
@@ -77,6 +115,27 @@ to fix login. Changed private predecessors are retained in private history.
 Admin HTTP, direct Control TLS and registry ports bind to loopback **18090,
 18450 and 18552**. This local demo needs no Windows inbound firewall opening.
 Remote access, host mounts and extra ports are operator/cloud-ops responsibilities.
+
+### Runtime service credential provisioning
+
+Startup and restart invoke an **external operator script**, which authenticates
+through backend APIs using the saved Admin password and installs a dedicated
+`toolgate-workflow-runtime` credential. The Admin password is never rotated by
+startup, restart or the demo. No renewal sidecar/background renewal loop exists.
+LangGraph mounts only its private installation subtree read-only; it receives no
+Admin token, backend database or signing key.
+
+The local service credential expires after 15 minutes. Before/after expiry,
+explicitly run this command from the repository root to replace it:
+
+```powershell
+& $debugPython debug/profiled/stack.py provision-runtime
+```
+
+Running workers reload the token file on backend requests. If expiry has already
+stopped a required process, Docker restarts the LangGraph service; it does not
+retry uncertain tool effects. Service tokens are not printed. Certificate rotation
+is an explicit operator operation; it is separate from service-token issuance.
 
 ## 3. Build the portable workflow bundles
 
@@ -247,7 +306,7 @@ summary/archive destination and is intended for one file at a time.
 
 ```powershell
 docker @compose ps
-docker @compose logs --tail 80 worker listener device
+docker @compose logs --tail 80 langgraph quickstart device
 .\debug\profiled\stop.bat
 .\debug\profiled\start.bat
 # Explicit infrastructure restart, unrelated to workflow switching:
@@ -391,7 +450,7 @@ external model router rather than the demo custody/bridge.
 Monitoring belongs to installation settings, **not bot JSON or `.olo`**.
 The generated composition passes `installation.env` to Quickstart/Control and
 Gateway; it does not automatically create an observability stack or forward
-arbitrary exporter environment into runtime/device containers. Worker/listener
+arbitrary exporter environment into runtime/device containers. LangGraph worker and backend dispatch
 stdout and the Admin audit/Operator Insights/result APIs are available locally.
 Inspect results with `GET /api/control/v1/workflow-runs/<run-id>` through
 `tools/admin/control.py @api --path ...`; private results require live Super Admin.

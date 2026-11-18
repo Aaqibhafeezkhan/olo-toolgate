@@ -16,7 +16,6 @@ HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[1]
 STATE=HERE/'state'
 PROJECT='toolgate-profiled'
-REGISTRY='registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e'
 BASE='eclipse-temurin@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c'
 
 
@@ -143,19 +142,14 @@ def sync_credentials(command,timeout=180):
 
 
 def definition(selected,base=None):
-    owner={'io.ololabs.toolgate.profiled-root':str(HERE),'io.ololabs.toolgate.profiled-format':'1'}
-    script=str(HERE/'services.py')+':/installation/services.py:ro'
+    owner={'io.ololabs.toolgate.profiled-root':str(HERE),'io.ololabs.toolgate.profiled-format':'2'}
     control='https://localhost:18450'
     secure=dict(read_only=True,cap_drop=['ALL'],security_opt=['no-new-privileges:true'])
     services={
-        'registry':dict(image=REGISTRY,environment={'REGISTRY_HTTP_ADDR':'0.0.0.0:18552'},
+        'quickstart':dict(image=selected['quickstart'],user='0:0',
+            entrypoint=['/opt/quickstart-python/bin/python','/opt/quickstart/workflow_installation.py'],
             ports=['127.0.0.1:18090:8080','127.0.0.1:18450:8443','127.0.0.1:18552:18552'],
-            volumes=['registry:/var/lib/registry'],restart='unless-stopped'),
-        'initialize':dict(image=selected['quickstart'],user='0:0',entrypoint=['/opt/quickstart-python/bin/python','/installation/services.py','initialize'],
-            network_mode='none',volumes=[script,'custody:/custody'],cap_add=['CHOWN','FOWNER','DAC_OVERRIDE'],**secure),
-        'quickstart':dict(image=selected['quickstart'],network_mode='service:registry',
-            depends_on={'registry':{'condition':'service_started'},'initialize':{'condition':'service_completed_successfully'}},
-            environment={'TOOLGATE_QUICKSTART_ADMIN_ONLY':'true','TOOLGATE_DISABLE_ADMIN_PASSWORD':'false',
+            environment={'TOOLGATE_QUICKSTART_WORKFLOW_STACK':'true','TOOLGATE_QUICKSTART_ADMIN_ONLY':'true','TOOLGATE_DISABLE_ADMIN_PASSWORD':'false',
                 'TOOLGATE_CONTROL_PROFILE_PATH':'','TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH':'',
                 'TOOLGATE_TRIGGERS_CONTROL_CORE_ENABLED':'true',
                 'TOOLGATE_QUICKSTART_DATABASE_MODE':'sqlite','TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS':'true',
@@ -170,26 +164,22 @@ def definition(selected,base=None):
                 'TOOLGATE_CONTROL_CLIENT_IMAGES_REPOSITORY':'toolgate/client-tools',
                 'TOOLGATE_CONTROL_CLIENT_IMAGES_BASE':base or 'toolgate/java-base@sha256:'+'0'*64,
                 'TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS':'LINUX'},
-            volumes=['data:/data','custody:/custody:ro'],tmpfs=['/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532'],
-            restart='unless-stopped',stop_grace_period='35s',**secure),
+            volumes=['data:/data','custody:/custody','registry:/registry'],tmpfs=['/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532'],
+            restart='unless-stopped',stop_grace_period='35s',cap_add=['CHOWN','FOWNER','DAC_OVERRIDE','SETUID','SETGID'],**secure),
         'device':dict(image=selected['device'],hostname='toolgate-profiled-device',
             depends_on={'quickstart':{'condition':'service_healthy'}},
-            environment={'TOOLGATE_DEVICE_UPSTREAM':'registry','TOOLGATE_DEVICE_HTTP_PORT':'18090',
+            environment={'TOOLGATE_DEVICE_UPSTREAM':'quickstart','TOOLGATE_DEVICE_HTTP_PORT':'18090',
                          'TOOLGATE_DEVICE_TLS_PORT':'18450','TOOLGATE_DEVICE_WAIT_TIMEOUT':'0'},
             volumes=['device-config:/etc/olo-toolgate','device-state:/var/lib/olo-toolgate','files:/var/lib/olo-toolgate/files',
                      dict(type='volume',source='custody',target='/installation-trust',read_only=True,volume=dict(subpath='device')),
                      '/var/run/docker.sock:/var/run/docker.sock'],
             tmpfs=['/run:rw,nosuid,size=8m,mode=755'],cap_drop=['ALL'],security_opt=['no-new-privileges:true'],restart='unless-stopped'),
-        'identity':dict(image=selected['quickstart'],user='0:0',network_mode='service:registry',
+        'langgraph':dict(image=selected['runtime'],network_mode='service:quickstart',
             depends_on={'quickstart':{'condition':'service_healthy'}},
-            entrypoint=['/opt/quickstart-python/bin/python','-u','/installation/services.py','identities'],
-            environment={'CONTROL_ORIGIN':control},volumes=[script,'data:/data:ro','custody:/custody'],
-            cap_add=['CHOWN','FOWNER','DAC_OVERRIDE'],restart='unless-stopped',**secure)}
-    for module in ('worker','graph','listener'):
-        services[module]=dict(image=selected['runtime'],network_mode='service:registry',
-            depends_on={'identity':{'condition':'service_started'}},
-            entrypoint=['/opt/toolgate-runtime/bin/python','-u','/installation/services.py',module],
-            environment={'CONTROL_ORIGIN':control},volumes=[script,'custody:/custody:ro'],restart='unless-stopped',**secure)
+            command=['--configuration','/installation/service.json'],
+            volumes=[dict(type='volume',source='custody',target='/installation',read_only=True,volume=dict(subpath='langgraph'))],
+            tmpfs=['/tmp:rw,noexec,nosuid,size=64m,uid=65532,gid=65532'],
+            restart='unless-stopped',stop_grace_period='35s',**secure)}
     settings=HERE/'installation.env'
     if settings.exists():services['quickstart']['env_file']=[str(settings)]
     for service in services.values():service['labels']=owner
@@ -198,7 +188,14 @@ def definition(selected,base=None):
 
 
 def registry_base(command):
-    run(command+['up','-d','--no-recreate','registry'])
+    run(command+['up','-d','--no-recreate','--pull','never','quickstart'])
+    deadline=time.monotonic()+90
+    while True:
+        try:
+            with urllib.request.urlopen('http://localhost:18552/v2/',timeout=2):break
+        except OSError:
+            if time.monotonic()>deadline:raise ValueError('Embedded registry unavailable')
+            time.sleep(1)
     if not image_exists(BASE):run(['docker','pull','--platform','linux/amd64',BASE])
     target='localhost:18552/toolgate/java-base:approved'
     run(['docker','tag',BASE,target]);run(['docker','push',target])
@@ -208,38 +205,86 @@ def registry_base(command):
         return 'toolgate/java-base@sha256:'+hashlib.sha256(response.read()).hexdigest()
 
 
+def provision_runtime(command):
+    """External operator action: backend API issuance, then private file delivery; never changes Admin password."""
+    folder=HERE/'credentials/admin'
+    password=(folder/'password.txt').read_text(encoding='utf-8-sig').rstrip('\r\n')
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def request(path,body,token=None):
+        headers={'Content-Type':'application/json'}
+        if token:headers['Authorization']='Bearer '+token
+        query=urllib.request.Request('http://127.0.0.1:18090'+path,json.dumps(body).encode(),headers,method='POST')
+        with opener.open(query,timeout=20) as response:return json.load(response)
+    deadline=time.monotonic()+180
+    while True:
+        try:
+            with opener.open('http://127.0.0.1:18090/health/ready',timeout=3) as response:
+                if response.status==200:break
+        except OSError:
+            if time.monotonic()>deadline:raise ValueError('Quickstart API readiness unavailable; credentials preserved')
+            time.sleep(1)
+    token=request('/api/quickstart/v1/login',{'username':'admin','password':password})['accessToken']
+    credential=request('/api/quickstart/v1/runtime-credential',{},token)
+    run(command+['exec','-T','--user','0:0','quickstart','/opt/quickstart-python/bin/python',
+        '/opt/quickstart/workflow_installation.py','provision'],input=json.dumps(credential),text=True)
+    print('Runtime service credential provisioned by operator API script; Admin password unchanged.',flush=True)
+
+
 def check_owned():
     raw=run(['docker','volume','ls','--filter','name='+storage_prefix()+'_','--format','{{.Name}}'],capture_output=True,text=True).stdout
     for name in raw.splitlines():
         item=json.loads(run(['docker','volume','inspect',name],capture_output=True,text=True).stdout)[0]
         labels=item.get('Labels') or {}
-        if labels.get('io.ololabs.toolgate.profiled-root')!=str(HERE) or labels.get('io.ololabs.toolgate.profiled-format')!='1':
+        if labels.get('io.ololabs.toolgate.profiled-root')!=str(HERE) or labels.get('io.ololabs.toolgate.profiled-format')!='2':
             raise ValueError('Existing volume is unsupported or belongs elsewhere; preserved: '+name)
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation',choices=['start','stop','restart','validate'])
+    parser.add_argument('operation',choices=['start','stop','restart','validate','provision-runtime'])
+    parser.add_argument('--fresh',action='store_true',help='Select fresh installation storage; preserve obsolete stores and manifests')
     args=parser.parse_args()
+    if args.fresh and args.operation!='start':parser.error('--fresh applies only to start')
     try:engine=subprocess.run(['docker','info','--format','{{.OSType}}'],capture_output=True,text=True)
     except FileNotFoundError:raise ValueError('Install Docker Desktop and start its Linux container engine, then run start.bat again.') from None
     if engine.returncode!=0 or engine.stdout.strip()!='linux':
         raise ValueError('Start Docker Desktop with its Linux container engine, then run start.bat again.')
     STATE.mkdir(parents=True,exist_ok=True)
+    if args.fresh:
+        existing=run(['docker','ps','-aq','--filter','label=com.docker.compose.project='+PROJECT],capture_output=True,text=True).stdout.strip()
+        if existing:raise ValueError('Stop and remove the selected project containers explicitly before selecting fresh storage; volumes preserved')
+        previous=STATE/'history'/uuid.uuid4().hex;previous.mkdir(parents=True,mode=0o700)
+        for name in ('compose.json','storage.json'):
+            path=STATE/name
+            if path.exists():(previous/name).write_bytes(path.read_bytes())
+        (STATE/'storage.json').write_text(json.dumps(dict(formatVersion=1,prefix=PROJECT+'-three-'+uuid.uuid4().hex))+'\n',encoding='utf-8')
+        # New composition only; the previous manifest remains available for explicit operator recovery.
+        selected=images()
+        compose(definition(selected))
+    if args.operation=='provision-runtime':
+        check_owned();provision_runtime(['docker','compose','-p',PROJECT,'-f',str(STATE/'compose.json')]);return
     if args.operation in ('stop','restart'):
         if not (STATE/'compose.json').exists():raise ValueError('No managed installation exists')
         check_owned();command=['docker','compose','-p',PROJECT,'-f',str(STATE/'compose.json')]
         run(command+[args.operation])
-        if args.operation=='restart':sync_credentials(command)
+        if args.operation=='restart':
+            sync_credentials(command);provision_runtime(command)
         return
-    check_owned()
     if args.operation=='validate':
         document=definition({key:image_tag(key) for key in ('quickstart','device','runtime')})
         run(['docker','compose','-p',PROJECT,'-f','-','config','--quiet'],input=json.dumps(document),text=True);return
+    check_owned()
+    existing=STATE/'compose.json'
+    if existing.exists() and set(json.loads(existing.read_text(encoding='utf-8'))['services'])!={'quickstart','langgraph','device'}:
+        raise ValueError('Obsolete stack definition; preserve existing storage and select a fresh installation before starting')
     selected=images()
     # Registry/base are installation prerequisites; no workflow data enters this path.
     command=compose(definition(selected))
     base=registry_base(command)
+    run(command+['exec','-T','--user','0:0','quickstart','/opt/quickstart-python/bin/python',
+        '/opt/quickstart/workflow_installation.py','base'],input=base,text=True)
+    sync_credentials(command)
+    provision_runtime(command)
     command=compose(definition(selected,base))
     run(command+['up','-d','--no-recreate','--pull','never'])
     print('Blank console: http://127.0.0.1:18090/console/; existing installations preserve their profiles.',flush=True)

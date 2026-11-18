@@ -47,11 +47,12 @@ class StackManagementTests(unittest.TestCase):
 
     def test_blank_composition_contains_no_model_or_workflow_seed(self):
         document=stack.definition({m:'image-'+m for m in ('quickstart','device','runtime')})
-        self.assertEqual({'registry','initialize','quickstart','device','identity','worker','graph','listener'},set(document['services']))
+        self.assertEqual({'quickstart','device','langgraph'},set(document['services']))
         env=document['services']['quickstart']['environment']
         self.assertEqual('',env['TOOLGATE_CONTROL_PROFILE_PATH'])
         self.assertEqual('',env['TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH'])
-        self.assertNotIn('/var/run/docker.sock:/var/run/docker.sock',document['services']['identity']['volumes'])
+        self.assertNotIn('/var/run/docker.sock:/var/run/docker.sock',document['services']['quickstart']['volumes'])
+        self.assertEqual('langgraph',document['services']['langgraph']['volumes'][0]['volume']['subpath'])
 
 
 @unittest.skipUnless(os.name=='nt' and shutil.which('powershell.exe'),'Windows PowerShell required')

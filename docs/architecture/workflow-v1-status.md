@@ -1,6 +1,63 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Three-container Quickstart integration — 2026-11-18
+
+Known tested base `2a0dd960`; changed non-document source inventory SHA-256
+`6ee0ed5e18b8db0def775a027de5a940e27e26e27ec5e29841eeb14eb2cf91b7` (17 paths, including deletion;
+`build/three-container-source-inventory.json`). This is an actual inventory,
+not a guessed commit SHA. ADR 076 records the ownership and custody decision.
+
+Delivered bounded scope:
+
+- Persistent `quickstart`, `langgraph`, `device` services only. Quickstart owns
+  the embedded demo OCI registry/bootstrap; graph API and worker share one
+  supervised LangGraph container. Backend automatic dispatch reuses current
+  subscription owner/source checks, durable admission and acknowledged cursors.
+  It derives work from published bots, without runtime Admin credentials or a
+  separate subscription listener. Short-lived tool execution containers and an
+  external model fixture remain distinct from the three core services.
+- External operator API script provisions the dedicated 15-minute runtime
+  credential and supports explicit replacement. No credential-renewal sidecar
+  or Admin password rotation. LangGraph mounts only its own read-only credential
+  subtree, never backend storage, Admin credentials or issuer signing keys.
+- Bounded internal compiled-topology caches remain enabled (128 entries per
+  process). They are disposable; backend configuration/run records are durable.
+  Fresh storage/custody only; unsupported old installations are refused intact.
+  Explicit `--fresh` selects new storage and preserves old manifests/stores.
+  The operator explicitly authorized removing the previous local containers and
+  volumes for this acceptance. No bot import/switch populates device files.
+
+Executed checks: Linux runtime suite **115 passed**; Linux Quickstart suite
+**56 passed**, including scoped runtime issuance, denied non-Super Admin issuance
+and unchanged password verifier; focused SQLite/PostgreSQL trigger delivery and
+workflow catalog suite **35 passed**; 16 focused launcher/credential/device tests
+and 17 CI/matrix/composition tests passed. The Windows symlink case passes when
+run in Linux. Preflight (1,606 bindings), source quality/secret checks, Compose
+validation, 10 documentation checker tests and repository link checks pass.
+
+Live fresh-stack A/B acceptance **PASSED**: both watched files completed the
+configured agent/model/read/write/move flow, B activated while A was in flight,
+three core container IDs/start times/restarts/PIDs and Admin credentials stayed
+unchanged, and A retired after draining. Exact Control details show six finalized
+SUCCEEDED calls, four TARGET_CONFIRMED UNFENCED mutations and no unresolved/fenced
+effects. Runs: `run-999eb384-65e1-411f-87b0-4b4d111b90f9` and
+`run-13dd5aaa-3a3e-4e6d-949e-db4c1c3a2983`;
+`build/hotswap-demo/evidence.json`. Cold runtime restart changed graph API cache
+entries **2 → 0**; backend graph preparation returned READY and rebuilt **1**
+entry. Repeated startup/external token provisioning preserved all three core
+processes, Admin identity/password and device content hashes.
+
+Broad checks are not passes: `tools/check.py` stopped in its 542-case CI suite
+on an obsolete eight-service assertion (fixed and rerun) and Windows symlink
+privilege. Full `javaCheck` finished with 27 ordinary-test PostgreSQL connection
+failures and three enterprise failures (one Windows POSIX permission fixture,
+two PostgreSQL failures). Component acceptance above does not waive these gates.
+Hosted/full Linux gates and production four-component/proxy acceptance remain
+outstanding. External persistent cache configuration, checkpoint/resume,
+distributed recovery and full roadmap matrices remain future work.
+**Weighted baseline remains 0/100; no phase, scope or denominator change.**
+
 ## Shared SDK preparation CI repair — 2026-11-18
 
 Known tested base `350d012dfe23f3d6fba58e1361a20ddb1f5b1271`.

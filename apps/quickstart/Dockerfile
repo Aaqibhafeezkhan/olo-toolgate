@@ -24,6 +24,7 @@ RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/regi
 
 FROM ${CONTROL_IMAGE}
 USER root
+COPY --from=registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e /bin/registry /usr/local/bin/distribution
 COPY --from=docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/bin/docker
 COPY apps/quickstart/requirements.txt /opt/quickstart-requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv libpq5 && \
@@ -43,7 +44,7 @@ COPY tools/access/presets.py /opt/toolgate/workflow-stack/operator/tools/access/
 COPY config/initial/ /opt/toolgate/workflow-stack/operator/config/initial/
 COPY packages/contracts/management-permissions.json /opt/toolgate/workflow-stack/operator/packages/contracts/management-permissions.json
 COPY VERSION /opt/toolgate/workflow-stack/operator/VERSION
-COPY apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py apps/quickstart/audit_chain.py VERSION /opt/quickstart/
+COPY apps/quickstart/workflow_installation.py apps/quickstart/supervisor.py apps/quickstart/enterprise_bootstrap.py apps/quickstart/audit_chain.py VERSION /opt/quickstart/
 COPY packages/contracts/management-permissions.json /opt/quickstart/management-permissions.json
 # The default deployment profile; a deployment selects another with TOOLGATE_CONTROL_PROFILE_PATH.
 COPY deploy/profiles/fresh.json /opt/toolgate/profiles/fresh.json

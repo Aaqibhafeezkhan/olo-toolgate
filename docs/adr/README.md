@@ -136,3 +136,5 @@ Use `000-template.md`.
 - [ADR 073: Super Admin settings authority](073-super-admin-settings-authority.md)
 
 - [ADR 074: Local launcher credential reconciliation](074-local-launcher-credential-reconciliation.md)
+
+- [ADR 076: Three-container workflow stack](076-three-container-workflow-stack.md)

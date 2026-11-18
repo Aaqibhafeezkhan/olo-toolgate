@@ -13,3 +13,8 @@ remains Apache-2.0. Native libpq notices remain under `/usr/share/doc/libpq5/`.
 Typing-extensions 4.15.0 is PSF-2.0. The other packages retain their upstream
 notices. Container SBOM and dependency/license scans include these runtime
 dependencies.
+
+The Quickstart image includes CNCF Distribution (registry), Apache-2.0,
+from the digest-pinned official registry:3.0.0 image. Source and notices:
+https://github.com/distribution/distribution/tree/v3.0.0 . The registry is used
+only when the explicit local workflow-stack entrypoint is selected.

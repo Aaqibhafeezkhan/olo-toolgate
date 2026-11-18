@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 public class TriggerRouterBootstrap {
     private static final org.jboss.logging.Logger LOG = org.jboss.logging.Logger.getLogger(TriggerRouterBootstrap.class);
     @Inject TriggerBootstrap triggers; @Inject TenantWork tenants;
+    @Inject PostgresStore store; @Inject ContractCodec codec; @Inject VaultKeyBootstrap keys;
     private ScheduledExecutorService executor;
     private volatile long lastPurge;
 
@@ -31,6 +32,14 @@ public class TriggerRouterBootstrap {
             var router = triggers.router(tenant);
             for (int batch = 0; batch < 5 && router.route() > 0; batch++) { }
             router.dispatch();
+            var clock=java.time.Clock.systemUTC();
+            var vault=keys.required();
+            var subscriptions=triggers.subscriptions(tenant);
+            var stream=triggers.stream(tenant);
+            var profiles=new io.ololabs.toolgate.control.application.WorkflowProfiles(store,codec,
+                new io.ololabs.toolgate.control.application.WorkflowProfileDependencies(codec,clock,subscriptions,triggers.forTenant(tenant),tenant),vault);
+            var admissions=new io.ololabs.toolgate.control.application.WorkflowAdmissions(store,codec,clock,stream,profiles,vault);
+            new io.ololabs.toolgate.control.application.WorkflowTriggerDispatch(store,codec,stream,subscriptions,profiles,admissions).tick(tenant);
             if (System.currentTimeMillis() - lastPurge >= 60_000) router.purge();
         });
         executor = Executors.newSingleThreadScheduledExecutor(r -> { var t = new Thread(r, "toolgate-trigger-router"); t.setDaemon(true); return t; });

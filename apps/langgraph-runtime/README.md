@@ -300,7 +300,36 @@ See the [live status](../../docs/architecture/workflow-v1-status.md) and
 
 ## V1.3 trigger subscriber
 
-The standalone image packages the worker, listener, and LangGraph executor.
+The default image entrypoint runs `toolgate_runtime.service`: a supervised graph
+API and execution worker. Trigger routing belongs to Gateway/backend; there is
+no listener or identity issuer in the standard deployment. Process-local graph
+caches are bounded and disposable. Durable state and run leases belong to Control.
+
+Pass `--configuration /installation/service.json` with installation-owned JSON:
+
+```json
+{
+  "graphConfiguration": "/installation/graph.json",
+  "controlOrigin": "https://control.example",
+  "gatewayOrigin": "https://gateway.example",
+  "tokenFile": "/installation/worker.token",
+  "caFile": "/installation/ca.crt"
+}
+```
+
+The graph configuration retains the private mTLS contract described above. Mount
+only this service's credential/configuration directory read-only. The service
+writes no durable run state. Provision/replace credentials through external
+operator tooling; Admin passwords and signing keys never belong in this image.
+Required child failure stops siblings and exits nonzero. SIGTERM stops both;
+container health probes loopback `/health/ready` on port 19461. This reports local
+process/listener readiness, not permission to run any particular workflow.
+Single-instance Quickstart uses local caches. Production may scale identical
+instances behind a graph-API proxy with backend-issued exclusive run leases;
+external cache and checkpoint/resume remain separate future work.
+
+The image also retains explicit worker/listener module commands for protocol
+testing; the standard three-container stack does not launch a runtime listener.
 Release builds publish `olo-toolgate-langgraph-runtime:<release-version>` to
 `ghcr.io/olo-labs` and the configured Docker Hub namespace
 (`DOCKERHUB_NAMESPACE`, or `DOCKERHUB_USERNAME` when unset). For example, a

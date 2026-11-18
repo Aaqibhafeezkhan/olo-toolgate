@@ -1,6 +1,20 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Backend-owned three-container demo dispatch — 2026-11-18
+
+Known base `2a0dd960`; source inventory and checks are in the workflow status's
+three-container checkpoint. Backend routing now dispatches published bot
+subscriptions using current #274 stream owner/source authorization, admission
+receipts and durable ACK cursors; the standard runtime no longer runs a listener
+or holds an Admin token. The bounded dispatcher admits/ACKs only after durable
+admission; denied admissions stay unacknowledged. SQLite/PostgreSQL delivery and
+workflow tests pass (35 cases), and the fresh three-core-container A/B demo
+passes two real triggers with six finalized tool calls. Existing trigger wire
+contracts are unchanged. No module scope/Done-when or denominator changes:
+**27% remains earned**. Full M12/module matrices, production scale/fairness
+qualification and reference-aware reconciliation remain outstanding.
+
 ## Shared trigger SDK CI throttling repair — 2026-11-18
 
 Known tested base `350d012dfe23f3d6fba58e1361a20ddb1f5b1271`.
