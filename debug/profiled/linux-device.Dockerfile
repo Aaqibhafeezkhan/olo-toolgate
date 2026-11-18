@@ -17,17 +17,25 @@ RUN --mount=type=cache,id=toolgate-devices-registry,target=/usr/local/cargo/regi
     cargo build --release --locked -p olo-toolgate-client --bin olo-toolgate-client && \
     cp target/release/olo-toolgate-client /client
 
+FROM builder AS native-file-verification
+COPY tests/fixtures tests/fixtures
+RUN --mount=type=cache,id=toolgate-devices-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=toolgate-devices-target,target=/src/target,sharing=locked \
+    cargo test --release --locked -p olo-toolgate-client execution::native_files::tests -- --nocapture
+
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /etc/systemd/system /etc/olo-toolgate /var/lib/olo-toolgate /usr/local/lib/olo-toolgate \
     && chmod 700 /var/lib/olo-toolgate
 COPY --from=builder /client /opt/toolgate/client
-COPY debug/profiled/device-entrypoint.py /opt/toolgate/device-entrypoint.py
+COPY --from=docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/bin/docker
+COPY debug/profiled/device-entrypoint.py /opt/toolgate/device_entrypoint.py
+COPY debug/profiled/device.py /opt/toolgate/device.py
 COPY debug/profiled/device-systemctl.sh /usr/bin/systemctl
 COPY LICENSE NOTICE.md /usr/share/licenses/olo-toolgate/
 RUN chmod 755 /opt/toolgate/client /usr/bin/systemctl
 LABEL org.opencontainers.image.title="ToolGate Linux debug device" \
       org.opencontainers.image.licenses="Apache-2.0"
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["python3", "-u", "/opt/toolgate/device-entrypoint.py"]
+ENTRYPOINT ["python3", "-u", "/opt/toolgate/device.py"]

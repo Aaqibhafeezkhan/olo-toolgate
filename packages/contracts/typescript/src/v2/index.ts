@@ -1187,6 +1187,66 @@ export interface McpVerification {
 export type McpVerificationStatus = "CURRENT" | "UNVERIFIED";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";
 export type NamespacePrefix = string;
+/** ADR 075 NativeFileAck; only protected qualified filesystem broker evidence. */
+export interface NativeFileAck {
+  readonly accepted: true;
+}
+/** Current installed file-only candidate; metadata is not execution authority. */
+export interface NativeFileCandidate {
+  readonly deviceId: string;
+  readonly toolId: string;
+  readonly managedDigest: string;
+  readonly imageDigest: string;
+  readonly writeAccess: boolean;
+}
+/** Bounded metadata for explicit operator qualification. */
+export interface NativeFileCandidatePage {
+  readonly items: ReadonlyArray<NativeFileCandidate>;
+}
+/** ADR 075 NativeFileEffectBegin; only protected qualified filesystem broker evidence. */
+export interface NativeFileEffectBegin {
+  readonly requestId: string;
+  readonly leaseId: string;
+  readonly fencingToken: string;
+  readonly ordinal: number;
+  readonly intent: NativeFileIntent;
+}
+/** ADR 075 NativeFileEffectGrant; only protected qualified filesystem broker evidence. */
+export interface NativeFileEffectGrant {
+  readonly effectId: string;
+  readonly intentDigest: string;
+}
+/** ADR 075 NativeFileEffectReceipt; only protected qualified filesystem broker evidence. */
+export interface NativeFileEffectReceipt {
+  readonly requestId: string;
+  readonly leaseId: string;
+  readonly fencingToken: string;
+  readonly effectId: string;
+  readonly beforeSha256?: string;
+  readonly afterSha256: string;
+}
+/** ADR 075 NativeFileIntent; only protected qualified filesystem broker evidence. */
+export interface NativeFileIntent {
+  readonly operation: NativeFileOperation;
+  readonly path: string;
+  readonly destination?: string;
+  readonly contentSha256?: string;
+}
+export type NativeFileOperation = "WRITE" | "RENAME";
+/** ADR 075 NativeFileQualification; only protected qualified filesystem broker evidence. */
+export interface NativeFileQualification {
+  readonly deviceId: string;
+  readonly deviceGroupId: string;
+  readonly imageDigest: string;
+  readonly expiresAtUnixMs: number;
+  readonly acknowledgedRisk: "UNFENCED_FILESYSTEM";
+}
+/** ADR 075 NativeFileScopeClosed; only protected qualified filesystem broker evidence. */
+export interface NativeFileScopeClosed {
+  readonly requestId: string;
+  readonly leaseId: string;
+  readonly fencingToken: string;
+}
 /** Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors. */
 export interface NativeMcpEffectReview {
   readonly toolId: string;

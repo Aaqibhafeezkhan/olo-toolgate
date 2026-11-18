@@ -16,7 +16,7 @@ function populated(input:FieldSchema,file?:string):unknown{
   if(s.items)return [populated(s.items,resolved.file)];
   return initialField(input,file);
 }
-it('exposes every reachable canonical property including optional nested profile fields',()=>{
+it('exposes every reachable canonical property including optional nested bot fields',()=>{
   const value=populated(profileSchema);
   render(<ProfileFields value={value} change={vi.fn()}/>);
   function check(input:FieldSchema,file?:string){const resolved=resolveField(input,file),s=resolved.schema;
@@ -30,21 +30,21 @@ it('exposes every reachable canonical property including optional nested profile
   }
   check(profileSchema);
 });
-it('loads exact bytes, edits workflow fields and invalidates lifecycle authority on edits',async()=>{
+it('loads exact bytes, edits bot fields and invalidates lifecycle authority on edits',async()=>{
   const loaded=populated(profileSchema) as Record<string,unknown>;loaded.profileId='example';
   const transport=vi.fn<typeof fetch>().mockImplementation(async url=>response(String(url).endsWith('/document')?loaded:status));
   render(<WorkflowProfiles client={new ControlClient('token',vi.fn(),transport)}/>);
-  fireEvent.click(screen.getByText('Manage workflow profile'));
-  fireEvent.change(screen.getByLabelText('Profile identifier'),{target:{value:'example'}});
+  fireEvent.click(screen.getByText('Manage bot'));
+  fireEvent.change(screen.getByLabelText('Bot identifier'),{target:{value:'example'}});
   fireEvent.change(screen.getByLabelText('Revision digest'),{target:{value:digest}});
-  fireEvent.click(screen.getByText('Load revision'));await screen.findByLabelText('Profile lifecycle');
+  fireEvent.click(screen.getByText('Load revision'));await screen.findByLabelText('Bot lifecycle');
   fireEvent.change(screen.getByLabelText('parameterSchema'),{target:{value:'{'}});
-  expect(screen.queryByLabelText('Profile lifecycle')).toBeNull();
+  expect(screen.queryByLabelText('Bot lifecycle')).toBeNull();
   expect((screen.getByLabelText('parameterSchema') as HTMLTextAreaElement).validity.valid).toBe(false);
   fireEvent.change(screen.getByLabelText('parameterSchema'),{target:{value:'{}'}});
   fireEvent.change(screen.getAllByLabelText('systemPrompt')[0],{target:{value:'Changed supervisor prompt'}});
-  expect(screen.queryByLabelText('Profile lifecycle')).toBeNull();
-  fireEvent.submit(screen.getByText('Stage profile revision').closest('form')!);
+  expect(screen.queryByLabelText('Bot lifecycle')).toBeNull();
+  fireEvent.submit(screen.getByText('Stage bot revision').closest('form')!);
   await waitFor(()=>expect(transport.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
   const body=JSON.parse(transport.mock.calls.find(([,init])=>init?.method==='POST')![1]!.body as string);
   expect(body.workflows.agentDefinitions[0].systemPrompt).toBe('Changed supervisor prompt');
@@ -60,16 +60,16 @@ it('stages, reviews, provisions and publishes only an exact ready revision and g
     return response(current,init?.method==='POST'?201:200);
   });
   render(<WorkflowProfiles client={new ControlClient('token',vi.fn(),transport)}/>);
-  fireEvent.click(screen.getByText('Manage workflow profile'));
+  fireEvent.click(screen.getByText('Manage bot'));
   fireEvent.change(screen.getByLabelText('profileId'),{target:{value:'example'}});
-  fireEvent.submit(screen.getByText('Stage profile revision').closest('form')!);
+  fireEvent.submit(screen.getByText('Stage bot revision').closest('form')!);
   await screen.findByText('example: DRAFT');
   expect((screen.getByText('Publish reviewed revision') as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByText('Review exact revision'));await screen.findByText('example: REVIEWED');
   expect((screen.getByText('Publish reviewed revision') as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByText('Provision reviewed packages'));await screen.findByText('Package provisioning: READY');
   expect((screen.getByText('Publish reviewed revision') as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByText('Prepare reviewed graphs'));await screen.findByText('Prepared 1 workflow graphs. Refresh readiness before publication.');
+  fireEvent.click(screen.getByText('Prepare reviewed graphs'));await screen.findByText('Prepared 1 bot graphs. Refresh readiness before publication.');
   const build=transport.mock.calls.find(([url])=>String(url).endsWith('/graphs:prepare'))!;
   expect(JSON.parse(build[1]!.body as string)).toEqual({profileDigest:digest,expectedGeneration:0});
   fireEvent.click(screen.getByText('Publish reviewed revision'));await screen.findByText('example: PUBLISHED');
@@ -80,8 +80,8 @@ it('stages, reviews, provisions and publishes only an exact ready revision and g
 it('reports denied staging without exposing review or publication',async()=>{
   const transport=vi.fn<typeof fetch>().mockResolvedValue(response({},403));
   render(<WorkflowProfiles client={new ControlClient('token',vi.fn(),transport)}/>);
-  fireEvent.click(screen.getByText('Manage workflow profile'));
-  fireEvent.submit(screen.getByText('Stage profile revision').closest('form')!);
-  await screen.findByRole('alert');expect(screen.queryByLabelText('Profile lifecycle')).toBeNull();
+  fireEvent.click(screen.getByText('Manage bot'));
+  fireEvent.submit(screen.getByText('Stage bot revision').closest('form')!);
+  await screen.findByRole('alert');expect(screen.queryByLabelText('Bot lifecycle')).toBeNull();
   expect(transport).toHaveBeenCalledTimes(1);
 });

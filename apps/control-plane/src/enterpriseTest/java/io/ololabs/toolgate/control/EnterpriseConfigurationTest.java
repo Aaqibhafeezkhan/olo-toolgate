@@ -33,19 +33,38 @@ class EnterpriseConfigurationTest {
         assertEquals("{\"requiredReviews\":0}",settings().reviewPolicy(checker).body());
         fixture.store.transaction(requester.tenant(),false,tx->{assertTrue(tx.load().entries().containsKey(Ids.Kind.USER.id("direct-user")));assertTrue(tx.auditPage(0,100).contains("CONFIGURATION_DIRECT_NO_REVIEW"));return null;});
     }
-    @Test void settingsUseFeaturePermissionsAndThresholdChangesNeedCurrentReviewsWithoutBypass(){
+    @Test void scopedThresholdChangesNeedCurrentReviews(){
         assertEquals(200,settings().get(requester).status());
-        superAdministrator("admin");var reply=settings().patch(requester,"{\"configuration\":{\"requiredReviews\":0}}",1,"threshold","request");assertEquals(202,reply.status());
+        var reply=settings().patch(requester,"{\"configuration\":{\"requiredReviews\":0}}",1,"threshold","request");assertEquals(202,reply.status());
         var c=fixture.graph.codec.model(reply.body(),EnterpriseConfigurationChange.class);assertEquals(ControlEntityKind.SETTINGS,c.command().kind());assertEquals(2L,c.requiredReviews());assertEquals(2,(int)fixture.store.transaction(requester.tenant(),false,tx->ServerSettingsService.requiredReviews(tx,fixture.graph.codec)));
         c=transition(requester,c,"SUBMIT");var submitted=c;
-        // The requester's Super Admin role neither reviews its own threshold change nor satisfies the quorum.
+        // A scoped requester cannot review its own threshold change.
         assertEquals(403,assertThrows(Failure.class,()->transition(requester,submitted,"APPROVE")).status());
         c=transition(checker,c,"APPROVE");assertEquals(EnterpriseConfigurationState.PENDING,c.state());var once=c;assertEquals(403,assertThrows(Failure.class,()->transition(requester,once,"APPLY")).status());
         var bob=fixture.directory.portalActor(EnterpriseConformanceTest.TENANT,"c".repeat(64),"bob");c=transition(bob,c,"APPROVE");assertEquals(EnterpriseConfigurationState.APPROVED,c.state());
         c=transition(requester,c,"APPLY");assertEquals(EnterpriseConfigurationState.APPLIED,c.state());
         assertEquals(0L,fixture.graph.codec.model(settings().get(requester).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class).configuration().requiredReviews());
-        // At 0 a Super Admin changes the threshold directly.
+        // At 0 an authorized administrator changes the threshold directly.
         var direct=settings().patch(requester,"{\"configuration\":{\"requiredReviews\":1}}",2,"threshold-direct","request");assertEquals(200,direct.status());
+    }
+    @Test void liveSuperAdministratorChangesThresholdDirectlyAndIsAudited(){
+        superAdministrator("admin");var reply=settings().patch(requester,"{\"configuration\":{\"requiredReviews\":0}}",1,"super-threshold","request");
+        assertEquals(200,reply.status());assertEquals(0L,fixture.graph.codec.model(reply.body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class).configuration().requiredReviews());
+        fixture.store.transaction(requester.tenant(),false,tx->{assertTrue(tx.auditPage(0,100).contains("SERVER_SETTINGS_UPDATE_SUPER_ADMIN"));return null;});
+    }
+    @Test void liveSuperAdministratorCanFinishAnExplicitSettingsDraft(){
+        superAdministrator("admin");var command=new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.UPDATE,ControlEntityKind.SETTINGS,ServerSettingsService.ENTITY,"{\"configuration\":{\"requiredReviews\":0}}",1L);
+        var c=fixture.graph.codec.model(changes.create(requester,command,"super-settings-draft","request").body(),EnterpriseConfigurationChange.class);
+        c=transition(requester,c,"SUBMIT");c=transition(requester,c,"APPROVE");c=transition(requester,c,"APPLY");assertEquals(EnterpriseConfigurationState.APPLIED,c.state());
+        assertEquals(0L,fixture.graph.codec.model(settings().get(requester).body(),io.ololabs.toolgate.contracts.v2.ControlServerSettings.class).configuration().requiredReviews());
+    }
+    @Test void cachedSuperFlagCannotBypassThresholdReviews(){
+        var forged=new DirectoryService.Actor(requester.tenant(),requester.id(),true,true,requester.userId());
+        assertEquals(202,settings().patch(forged,"{\"configuration\":{\"requiredReviews\":0}}",1,"forged-threshold","request").status());
+    }
+    @Test void superAdministratorCannotDeleteOwnUser(){
+        superAdministrator("admin");long revision=fixture.store.transaction(requester.tenant(),false,tx->tx.load().entries().get(Ids.Kind.USER.id("admin")).revision());
+        assertEquals(409,assertThrows(Failure.class,()->fixture.directory.mutate(requester,Ids.Kind.USER,"admin","DELETE",null,revision,"self-delete","request")).status());
     }
     EnterpriseConfigurationChange propose(){var c=new EnterpriseConfigurationCommand(EnterpriseConfigurationOperation.CREATE,ControlEntityKind.USER,"pending-user",fixture.graph.codec.json(new ControlUser("pending-user","Pending",false,1L, null, null, null)),0L);return fixture.graph.codec.model(changes.create(requester,c,"proposal-key","request").body(),EnterpriseConfigurationChange.class);}
     EnterpriseConfigurationChange transition(DirectoryService.Actor actor,EnterpriseConfigurationChange c,String action){return fixture.graph.codec.model(changes.transition(actor,c.id(),fixture.graph.codec.json(new EnterpriseConfigurationTransition(c.revision(),EnterpriseConfigurationAction.valueOf(action))),UUID.randomUUID().toString(),"request").body(),EnterpriseConfigurationChange.class);}

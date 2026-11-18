@@ -154,7 +154,7 @@ public final class ClientReleases {
             tests.addObject().put("toolId", toolId).<ObjectNode>set("arguments", example[0]).set("expectedOutput", example[1]);
             var effect = JSON.objectNode().put("toolId", toolId).put("safety", d.path("effect").path("safety").asText("UNKNOWN"));
             records.add(new ObjectNode[]{controlTool, extractor, effect,
-                DeviceFileReadQualification.evidence(d, registration, runtime)});
+                DeviceFileQualification.evidence(d, registration, runtime)});
         }
         if (!triggers.isEmpty()) {
             var registrations = document.putArray("triggers");
@@ -318,7 +318,7 @@ public final class ClientReleases {
                 if (previousEvidence == null) tx.packages().saveDocument(evidence, descriptor);
                 else if (!previousEvidence.equals(descriptor)) throw Failure.conflict();
                 if (pair[3] != null) {
-                    String key = DeviceFileReadQualification.key(codec, toolId, tool.path("packageDigest").asText());
+                    String key = DeviceFileQualification.key(codec, toolId, tool.path("packageDigest").asText());
                     String proof = codec.json(pair[3]);
                     String previous = tx.packages().document(key);
                     if (previous == null) tx.packages().saveDocument(key, proof);

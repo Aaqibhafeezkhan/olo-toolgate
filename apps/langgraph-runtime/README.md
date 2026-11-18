@@ -4,7 +4,7 @@
 Phase 1 adds required profile `graph` selection: packageId, version, canonical
 manifest digest, named entryPoint and JSON config. The same declaration is pinned
 in the claimed run. The worker loads a fresh native StateGraph from an
-operator-installed immutable directory. Graph-less profiles/leases are refused;
+operator-installed immutable directory. Graph-less bot/leases are refused;
 there is no fallback or migration. Existing `agentStages` belongs to the installed
 supervisor package, not to the generic native graph loader.
 

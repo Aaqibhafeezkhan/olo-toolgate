@@ -2201,6 +2201,96 @@ pub enum MissingKeyPolicy {
     #[serde(rename = "ALLOW_WITH_DEDUPE")]
     AllowWithDedupe,
 }
+/// ADR 075 NativeFileAck; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileAck {
+    #[serde(deserialize_with = "const_native_file_ack_accepted")]
+    pub accepted: bool,
+}
+/// Current installed file-only candidate; metadata is not execution authority.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileCandidate {
+    pub device_id: String,
+    pub tool_id: String,
+    pub managed_digest: String,
+    pub image_digest: String,
+    pub write_access: bool,
+}
+/// Bounded metadata for explicit operator qualification.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileCandidatePage {
+    pub items: Vec<NativeFileCandidate>,
+}
+/// ADR 075 NativeFileEffectBegin; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileEffectBegin {
+    pub request_id: String,
+    pub lease_id: String,
+    pub fencing_token: String,
+    pub ordinal: u64,
+    pub intent: NativeFileIntent,
+}
+/// ADR 075 NativeFileEffectGrant; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileEffectGrant {
+    pub effect_id: String,
+    pub intent_digest: String,
+}
+/// ADR 075 NativeFileEffectReceipt; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileEffectReceipt {
+    pub request_id: String,
+    pub lease_id: String,
+    pub fencing_token: String,
+    pub effect_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before_sha256: Option<String>,
+    pub after_sha256: String,
+}
+/// ADR 075 NativeFileIntent; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileIntent {
+    pub operation: NativeFileOperation,
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_sha256: Option<String>,
+}
+/// Canonical NativeFileOperation wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NativeFileOperation {
+    #[serde(rename = "WRITE")]
+    Write,
+    #[serde(rename = "RENAME")]
+    Rename,
+}
+/// ADR 075 NativeFileQualification; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileQualification {
+    pub device_id: String,
+    pub device_group_id: String,
+    pub image_digest: String,
+    pub expires_at_unix_ms: u64,
+    #[serde(deserialize_with = "const_native_file_qualification_acknowledged_risk")]
+    pub acknowledged_risk: String,
+}
+/// ADR 075 NativeFileScopeClosed; only protected qualified filesystem broker evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeFileScopeClosed {
+    pub request_id: String,
+    pub lease_id: String,
+    pub fencing_token: String,
+}
 /// Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -5458,6 +5548,12 @@ const_field!(const_kill_trust_key_e, String, "AQAB");
 const_field!(const_log_frame_kind, String, "LOG");
 const_field!(const_mcp_proxy_document_format_version, u64, 1);
 const_field!(const_mcp_scan_claims_iss, String, "control");
+const_field!(const_native_file_ack_accepted, bool, true);
+const_field!(
+    const_native_file_qualification_acknowledged_risk,
+    String,
+    "UNFENCED_FILESYSTEM"
+);
 const_field!(const_package_manifest_schema_version, u64, 2);
 const_field!(const_permit_header_alg, String, "RS256");
 const_field!(
@@ -5596,6 +5692,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
     (
         "https://schemas.ololabs.io/toolgate/v2/mcp-proxy.schema.json",
         include_str!("../schemas/v2/mcp-proxy.schema.json"),
+    ),
+    (
+        "https://schemas.ololabs.io/toolgate/v2/native-files.schema.json",
+        include_str!("../schemas/v2/native-files.schema.json"),
     ),
     (
         "https://schemas.ololabs.io/toolgate/v2/package.schema.json",

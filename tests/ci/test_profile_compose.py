@@ -211,7 +211,7 @@ class ProfileComposeTests(unittest.TestCase):
             {'from':['stage-2'],'to':'END'}],graph['edges'])
         self.assertEqual({'$path':'/values/stage-2'},graph['output'])
         self.assertEqual(workflow['resultSchema'],graph['outputSchema'])
-        source=json.loads((ROOT/'profiles/configurations/text-summary/workflow-profile.json').read_text())
+        source=json.loads((ROOT/'bot/configurations/text-summary/bot.json').read_text())
         self.assertEqual(workflow['graph'],source['workflows']['workflows'][0]['graph'])
         self.assertEqual('uid',configuration.resolve('${SUBSCRIPTION_UID}',{'${SUBSCRIPTION_UID}':'uid'}))
         with self.assertRaises(ValueError):

@@ -3552,6 +3552,10 @@ pub const CANONICAL_SCHEMAS: &[(&str, &str)] = &[
         include_str!("../schemas/v2/mcp-proxy.schema.json"),
     ),
     (
+        "https://schemas.ololabs.io/toolgate/v2/native-files.schema.json",
+        include_str!("../schemas/v2/native-files.schema.json"),
+    ),
+    (
         "https://schemas.ololabs.io/toolgate/v2/package.schema.json",
         include_str!("../schemas/v2/package.schema.json"),
     ),

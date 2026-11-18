@@ -1,6 +1,163 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Qualified native file execution and Bots authoring — 2026-11-18
+
+Known tested base `11565e5a75a04d6daada9d3544a7931a1a46d211`; working non-document source inventory SHA-256
+`2a51170e42f64e3c7568d36de865a120befa3341813d4bd78afe3cffe4442d8b` (154 files; `build/hotswap-source-snapshot.json`). This records an
+actual tested source inventory, not the SHA of the commit being created.
+
+Delivered bounded scope:
+
+- Blank persistent debug installation, source-qualified production image reuse,
+  private standalone Python bootstrap and credential reconciliation; explicit
+  device approval/enabling/group allocation through current Admin APIs.
+- ADR 075 operator-qualified Linux file-only Java execution: live Super Admin
+  qualifies exact installed device/group/image with expiry. Protected-owner
+  WRITE/RENAME intents precede mutations; durable content witnesses and post-
+  shutdown scope closure feed logical effects, immutable manifests, finalization,
+  history and UNFENCED counts. No fabricated HTTP generations or automatic native
+  replay. Missing/conflicting evidence remains UNKNOWN/reconciliation-required.
+  Fresh schemas only, forced tenant RLS, immutable facts and capacity accounting.
+- Root authoring directory is `bot`, with `bot.json`, `package-build.json`,
+  `referenced-config.json` and `trigger-connections.json`; build/publication,
+  bundle consumers and CI use that path. UI navigation is Overview, Bots, Agents.
+  Existing execution API/schema identifiers remain workflow/profile contracts;
+  no old filesystem import path or conversion reader is added.
+- Bot import/switch never creates/seeds/moves/deletes device content. The operator
+  explicitly prepares folders and permissions. The runbook provides automatic
+  acceptance and prepare-only/manual input/switch/output commands, exact contents,
+  credentials, OpenRouter external bridge, and installation-owned monitoring.
+  Live Super Admin management includes transfer/configuration; self-deletion is
+  refused. Management authority does not manufacture runtime effect evidence.
+
+Executed checks: 53 focused Python cases; 22 authoring-path/older composition
+regressions; UI typecheck and full UI suite (312 pass, one optional built-bundle
+skip); 9 native effect cases, 2 read-admission cases, 2 qualification cases,
+5 PostgreSQL RLS cases, 2 capacity cases, and Java contract tests with an owned
+real PostgreSQL instance. Linux device library: 61 pass, zero failures/ignores;
+5 actual filesystem broker tests also pass. Rust formatting, 1,606-binding
+preflight, source quality and whitespace pass. Nginx bridge configuration and
+local collector configuration validate against actual images; vendor account
+inference/ingestion is not claimed.
+
+Broad checks remain limited: full `tools/check.py` stopped on Windows symlink
+privilege; the post-rename CI run also found one authoring-path regression, fixed
+and rerun in the 22-case suite. Full `javaCheck` failed the Windows POSIX-permission
+fixture plus four PostgreSQL cases with connection-refused/EOF infrastructure
+errors. These are failed broad gates, not passes or waived assertions.
+
+Live acceptance: **PASSED** on a fresh Admin-only installation. Both real
+`hotfolder-watch` events completed configured file-agent read, summarizer-agent
+model invocation, summary write and source archive. B published while A's model
+call was in flight; both exact summaries and unchanged archived originals match.
+Seven core/device containers retain their IDs/start times/restart counts/host PIDs;
+device ID, Admin identity/session authority and password remain unchanged. A's
+old trigger reached Stopped after both pinned runs drained. The exact Control
+detail API confirms six finalized SUCCEEDED tool operations: two zero-effect
+qualified reads and four TARGET_CONFIRMED mutations, four UNFENCED effects,
+zero fenced/unresolved effects, and no retry permission. Evidence is retained in
+`build/hotswap-demo/evidence.json`; run IDs are `run-02e97a2c-c7a9-4150-9ff4-7518210b9562` and `run-0ddc829d-903e-4a7a-b103-28323bd26b23`.
+No executor success or file observation is substituted for Control finality.
+
+The final harness waits for run completion before reading archived files,
+excludes only identity audit counters (not authority/session epochs), and obtains
+projected business outcomes from each exact invocation detail route. The external
+model fixture's provider-only custody mount was tightened after acceptance and
+separately verified, then restarted healthy without touching core/device state.
+Earlier failed harness attempts remain diagnostic history, not acceptance passes.
+
+Remaining: durable server deployment reconciliation, equivalent one-click UI
+orchestration, immutable-revision candidate readiness isolation, generic old-
+assignment reference-aware retirement, recovery/cleanup, distributed/cross-host
+qualification, real-provider acceptance and release publication. Native scope is
+an explicitly trusted Linux filesystem owner, not OS attestation, physical
+fencing or exactly-once execution. #295 stays **0/100**, #274 stays **27%**;
+no full #230 stage/phase/claim or baseline denominator changes.
+
+## Persistent local stack, device scripts and launcher recovery — 2026-11-18
+
+Known base `ea1643608cb2b84f60808d42bad5aa97640612fa`; uncommitted source
+snapshot SHA-256 `72ccae4d9a0b736126c6d15472589b8955391042f57ce7b297373d2813fa68f4`
+(41 changed source/configuration files, inventory retained in
+`build/hotswap-source-snapshot.json`). This is a working checkpoint, not a new
+commit or complete roadmap phase.
+
+Delivered locally:
+
+- `debug/profiled/start.bat` delegates to one persistent composition, source-qualified
+  image caching and `--no-recreate`. Missing images build with production Dockerfiles;
+  Node/npm, Java, Rust and build-time Python dependencies run inside Docker.
+  Missing host Python bootstraps a SHA-256-pinned official 3.14.10 embeddable runtime
+  under `.dev/profiled`, without administrator installation or PATH changes. The
+  source inventory also works without Git. Docker Desktop/Linux remains required.
+- Start **and restart** privately verify saved credentials against current Quickstart
+  custody. Reuse a matching password; refresh a stale/missing local copy only from
+  a still-valid initial password. Write protected local files atomically and keep
+  changed predecessors in private history. No server password reset or recovery
+  from a verifier. A manually changed password unknown to the local file must be
+  supplied by the operator. Trust mismatch without valid initial custody refuses
+  reuse. ADR 074 records this local Docker custody boundary.
+- A persistent native device, signed package engine, following trigger listener,
+  graph mTLS API and runtime are wired without an in-core model server. Privileged
+  fixture identity issuance is read-only against Control custody and has no Docker
+  socket. Installation environment/trust/monitoring stays outside profiles.
+  Device restart no longer erases the persisted applied runtime/tool inventory.
+- `tools/admin/provision_devices.py` uses the Admin `#config-device` settings API
+  for explicit auto approval, finishes an existing **named** enrollment after a
+  fresh exact-key review, then enables and unions requested groups through revision-
+  guarded APIs. It does not allocate arbitrary discovered devices. Profile data
+  cannot approve, enable or allocate devices implicitly.
+- `tools/admin/import_workflow.py` verifies embedded packages, refuses transferred
+  identities/credentials/device membership and shared-definition conflicts, merges
+  references, establishes destination-local service bindings, stages/reviews,
+  provisions and prepares graphs, then readiness-gates publication. Pending responses
+  are not completion. The profile builder now retains trigger packages declared by
+  dispatch connections without deployment fields and converts SDK descriptors into
+  valid Control tool definitions. Two JSON A/B source configurations include READMEs.
+- Live Super Admin can change review thresholds directly, with a distinct audit;
+  cached actor flags confer no exception. Shared CRUD/import mutation authorization
+  rejects deleting the signed-in user's own record. Bootstrap/last-admin protections
+  remain. ADR 073 does not grant independent execution evidence or finality.
+
+Executed evidence: recreated only the explicitly authorized `toolgate-profiled`
+project/storage, leaving Marketplace alone; observed one Admin, zero published
+profiles and zero packages before import (`build/hotswap-demo/blank-setup.json`).
+The device connected after API approval, was allocated through APIs, and both exact
+embedded packages became VERIFIED/applied. Workflow A published and a real watched
+file admitted `run-893f9729-eebe-48e9-aed3-a247f837f4e3`. It FAILED conservatively
+with `TOOL_OUTCOME_UNKNOWN` on `examples.hotfolder/read_text`; no successful summary,
+move, B activation or unchanged-process A/B acceptance is claimed.
+
+A real download/hash/extraction/private-runtime probe passed, including the .NET-only
+PowerShell bootstrap. A real stop/start with host Python, Node **and Git removed
+from PATH** passed; subsequent `restart.bat` and actual Admin login passed with the
+same device ID and installed publication. Credentials were verified without logging
+values. Seven launcher/cache/corrupt-download tests, six credential-reconciliation
+cases, ten Admin transport tests, ten device provisioning cases, eight import cases,
+nine profile build cases, fourteen device image cases, ten runtime transport and
+eight worker evidence cases passed. Final focused Java verification passed 18 configuration cases, seven setup-admin
+protection cases and three independent-target-review cases on SQLite, plus one
+real PostgreSQL bootstrap-protection case (29 total, no failures/skips). Preflight regenerated-check verification (1,585 files),
+source quality and whitespace passed. Full `python tools/check.py` failed on Windows
+locale-sensitive release fixtures; a UTF-8 CI-suite rerun reached 535 cases with
+one remaining Windows symlink-privilege error and 11 explicit skips. It is not a
+full repository pass. Full `javaCheck` exposed the new self-deletion guard
+returning a generic message instead of the setup-admin reason; that message was
+corrected. The already-failed broad run was stopped during unrelated long-running
+Control cases; the final affected suites above passed. No full Java pass is claimed.
+
+Remaining: qualified native broker receipts and complete file-read/write/move
+business finality; immutable-revision candidate readiness isolation (preparing B
+currently replaces profile-level provisioning facts); old trigger drain/retirement;
+durable server-owned deployment reconciliation and equivalent UI orchestration;
+provider readiness/routing, cleanup, recovery and complete phase acceptance. Runtime
+transport diagnostics record only bounded stages/types, never response bodies or
+credentials. Neither SDK return, package readiness, administrator authority nor
+structural validation substitutes for independent effect evidence. #295 remains
+**0/100**, #274 remains **27%**, and no #230 stage/security guarantee is completed.
+
+
 ## Trivy identity for the existing temporary exception — 2026-11-18
 
 Known base `f997222d`. CI run `44157956377`, scan job `134321768231`, failed
@@ -496,10 +653,10 @@ supersedes the earlier configuration-only bundle format. The #295 baseline
 remains **0/100**; #274 stays **27%**. No #230 stage or full-phase exit criterion
 is credited by this packaging work.
 
-Delivered: `profiles/configurations/` owns five supplied editable profile build
-inputs and per-configuration READMEs. `profiles/build.bat` and `build.sh` produce
+Delivered: `bot/configurations/` owns five supplied editable profile build
+inputs and per-configuration READMEs. `bot/build.bat` and `build.sh` produce
 versioned workflow `.olo` files, a product/source/package version inventory and
-checksums in ignored `profiles/bin/`. Local native tooling or an isolated Docker
+checksums in ignored `bot/bin/`. Local native tooling or an isolated Docker
 toolchain builds the declared tool recipes; prebuilt `.olotool` inputs are supported.
 The container build uses an export of non-ignored source inputs, not private
 stack state, host credentials or a Docker socket. File-only recipes do not need
@@ -1818,7 +1975,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; one-device placement and current applied-device readiness added, complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
-| V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment, workflow replacement without restart, multi-workflow/shared-definition handling and admin-preserving blank reset locally exercised; complete fresh-install/cross-host qualification and release publication pending | 0% |
+| V1.4 — End-to-end qualification | 10% | 100% | In progress; blank persistent-stack initialization and standalone launcher/credential restart locally verified; bounded fresh-stack two-bot hot swap and qualified Linux file effects pass; full phase matrix, cross-host qualification and release publication remain pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
 V1.2 carries the largest share because admission, runtime identity, model proxy,

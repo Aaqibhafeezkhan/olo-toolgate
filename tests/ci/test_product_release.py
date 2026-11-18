@@ -315,7 +315,7 @@ class PackageVersionTests(unittest.TestCase):
             tar(f'olo-toolgate-admin-ui-{version}.tar',{'release.json':json.dumps(dict(version=version,contracts=version))})
             with zipfile.ZipFile(assets/f'olo-toolgate-contracts-php-{version}.zip','w') as archive:
                 archive.writestr('src/ContractSet.php',f"public const VERSION = '{version}';")
-            from profiles.bundle import pack,digest
+            from bot.bundle import pack,digest
             config=copy.deepcopy(json.loads((ROOT/'tests/fixtures/contracts/v2/valid.json').read_text(encoding='utf-8'))['WorkflowConfiguration'])
             config['dispatchBindings']=[]
             for agent in config['agentDefinitions']:agent['contextSources']=[]

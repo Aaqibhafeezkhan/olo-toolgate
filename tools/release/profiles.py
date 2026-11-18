@@ -9,7 +9,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
-from profiles.bundle import digest,verify
+from bot.bundle import digest,verify
 
 
 def collect(source,output,version=None,commit=None):

@@ -1,0 +1,33 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+# External debug adapter only; credentials arrive from ToolGate's vault grant.
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+events { worker_connections 128; }
+http {
+  access_log off;
+  client_body_temp_path /tmp/client_body;
+  proxy_temp_path /tmp/proxy;
+  fastcgi_temp_path /tmp/fastcgi;
+  uwsgi_temp_path /tmp/uwsgi;
+  scgi_temp_path /tmp/scgi;
+  server {
+    listen 9443 ssl;
+    server_name demo-provider;
+    ssl_certificate /custody/provider/server.crt;
+    ssl_certificate_key /custody/provider/server.key;
+    client_max_body_size 128k;
+    location = /v1/chat/completions {
+      proxy_pass https://openrouter.ai/api/v1/chat/completions;
+      proxy_ssl_server_name on;
+      proxy_ssl_name openrouter.ai;
+      proxy_ssl_verify on;
+      proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+      proxy_set_header Host openrouter.ai;
+      proxy_set_header Authorization $http_authorization;
+      proxy_connect_timeout 3s;
+      proxy_read_timeout 18s;
+      proxy_send_timeout 18s;
+    }
+    location / { return 404; }
+  }
+}

@@ -19,6 +19,9 @@ from .compiler_identity import COMPILER_DIGEST
 
 class RunTransportError(Exception):
     """A bounded error that carries no response body or credential."""
+    def __init__(self,message,stage=None):
+        super().__init__(message)
+        self.stage=stage if stage in ('transport','headers','json','identity','result') else None
 
 
 def _record(value, fields):
@@ -221,6 +224,7 @@ class GatewayRuntime(ControlTriggers):
             params.update(name=tool_id, arguments=arguments)
             headers["MCP-Name"] = tool_id
         body = json.dumps({"jsonrpc": "2.0", "id": rpc_id, "method": method, "params": params}, allow_nan=False).encode()
+        stage='transport'
         try:
             timeout = min(self.timeout, timeout_seconds)
             if len(body) > 98304 or timeout <= 0:
@@ -228,14 +232,18 @@ class GatewayRuntime(ControlTriggers):
             request = Request(self.origin + "/mcp", body, headers, method="POST")
             with self._opener.open(request, timeout=timeout) as response:
                 raw = response.read(98305)
+                stage='headers'
                 if response.status != 200 or len(raw) > 98304 or response.headers.get_content_type() != "application/json":
                     raise ValueError("Invalid MCP response")
+                stage='json'
                 value = json.loads(raw, object_pairs_hook=_object, parse_constant=_constant)
+                stage='identity'
                 if value.get("jsonrpc") != "2.0" or value.get("id") != rpc_id:
                     raise ValueError("Invalid MCP reply identity")
                 if isinstance(value.get("error"), dict) and value["error"].get("data", {}).get("state") == "OUTCOME_UNKNOWN":
                     return {"_meta": {"io.ololabs.toolgate/operationOutcome": {"state": "OUTCOME_UNKNOWN"}}}
                 if not isinstance(value.get("result"), dict) or "error" in value:
+                    stage='result'
                     raise ValueError("Invalid MCP result")
                 return value["result"]
         except HTTPError as failure:
@@ -246,9 +254,9 @@ class GatewayRuntime(ControlTriggers):
                     return {"tools": []}
                 if failure.code in (401, 403):
                     raise Denied("Gateway refused the tool request") from None
-            raise RunTransportError("Gateway tool request failed") from None
+            raise RunTransportError("Gateway tool request failed",stage) from None
         except Exception:
-            raise RunTransportError("Gateway tool request failed") from None
+            raise RunTransportError("Gateway tool request failed",stage) from None
 
     def discover_tools(self, lease, grant, *, timeout_seconds):
         result = self._mcp(lease, grant, "tools/list", timeout_seconds)

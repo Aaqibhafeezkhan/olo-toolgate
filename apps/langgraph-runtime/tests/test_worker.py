@@ -71,6 +71,15 @@ class ExecutionEvidenceTests(unittest.TestCase):
                 self.adapter.call_tool.assert_called_once()
                 self.assertNotIn('private', json.dumps(self.evidence.summary()))
 
+    def test_diagnostic_stages_are_bounded_and_never_log_error_content(self):
+        for stage,expected in [('json','json'),('private-response-body',None)]:
+            self.adapter.call_tool.side_effect=RunTransportError('private-token-body',stage)
+            with self.assertRaises(RunTransportError):self.evidence.call_tool(None,self.grant,'files/list',{})
+            observation=self.evidence.summary()['tools'][-1]
+            self.assertEqual(expected,observation.get('failureStage'))
+            self.assertEqual('OUTCOME_UNKNOWN',observation['state'])
+            self.assertNotIn('private',json.dumps(observation))
+
     def test_evidence_is_scoped_to_each_run(self):
         self.adapter.infer.return_value = {'kind': 'finish', 'result': {}}
         self.evidence.infer(None, self.grant)

@@ -22,13 +22,13 @@ it('imports Python-built profiles and verifies console exports with the Python r
     const references={formatVersion:2,tenantId:'destination',revision:0,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
     writeFileSync(join(work,'profile.json'),JSON.stringify(selected));writeFileSync(join(work,'references.json'),JSON.stringify(references));
     const python=process.platform==='win32'?'python':'python3';
-    execFileSync(python,['-c',"import json,sys;from pathlib import Path;from profiles.bundle import pack;p=Path(sys.argv[1]);data,_=pack(json.loads((p/'profile.json').read_text()),json.loads((p/'references.json').read_text()),[],[Path('tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()],dict(version='1.0.0',sourceCommit='a'*40,build='test'));(p/'python.olo').write_bytes(data)",work],{cwd:root});
+    execFileSync(python,['-c',"import json,sys;from pathlib import Path;from bot.bundle import pack;p=Path(sys.argv[1]);data,_=pack(json.loads((p/'profile.json').read_text()),json.loads((p/'references.json').read_text()),[],[Path('tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()],dict(version='1.0.0',sourceCommit='a'*40,build='test'));(p/'python.olo').write_bytes(data)",work],{cwd:root});
     const loaded=await importWorkflow('python.olo',new Uint8Array(readFileSync(join(work,'python.olo'))));
     expect(loaded.packages[0].bytes).toEqual(bytes);
     expect(loaded.profile.workflows!.workflows).toHaveLength(1);
     const output=await exportWorkflow(selected,selected.workflows.workflows[0].id,[],[],references,[bytes]);
     writeFileSync(join(work,'console.olo'),output);
-    const verified=execFileSync(python,['-c',"import sys;from pathlib import Path;from profiles.bundle import verify;m=verify(Path(sys.argv[1]).read_bytes());print(m['version'],len(m['packages']))",join(work,'console.olo')],{cwd:root,encoding:'utf8'});
+    const verified=execFileSync(python,['-c',"import sys;from pathlib import Path;from bot.bundle import verify;m=verify(Path(sys.argv[1]).read_bytes());print(m['version'],len(m['packages']))",join(work,'console.olo')],{cwd:root,encoding:'utf8'});
     expect(verified.trim()).toBe('2 1');
   }finally{
     if(!resolve(work).startsWith(resolve(tmpdir())+sep))throw Error('Unexpected test output directory');

@@ -29,7 +29,7 @@ describe('Management shell states', () => {
     }));
     render(<App/>);await connect();
     await waitFor(()=>expect(document.querySelectorAll('.stat').length).toBe(18));
-    await screen.findByText('No workflow profiles have been published.');
+    await screen.findByText('No bots have been published.');
     expect(count).toBeGreaterThanOrEqual(18);
     expect(peak).toBeGreaterThan(0);
     // The shell also loads its current-user directory record independently.
@@ -44,7 +44,7 @@ describe('Management shell states', () => {
     expect(document.querySelector('nav a[href="#workflows"]')).toBeNull();
     window.location.hash='#overview';fireEvent(window,new HashChangeEvent('hashchange'));
     await screen.findByRole('heading',{name:'Your organization, at a glance'});
-    expect(screen.queryByRole('heading',{name:'Published workflows and agents'})).toBeNull();
+    expect(screen.queryByRole('heading',{name:'Published bots and agents'})).toBeNull();
     expect(transport.mock.calls.flat().some(input=>String(input).includes('/workflow-profiles/published'))).toBe(false);
   });
 
@@ -124,7 +124,7 @@ describe('Management shell states', () => {
     vi.stubGlobal('fetch',vi.fn().mockImplementation(async()=>response()));
     render(<App/>); await connect();
     const groups=[...document.querySelectorAll<HTMLDetailsElement>('nav details')];
-    expect(groups.map(group=>group.querySelector('summary')?.textContent)).toEqual(['Audit','Tools','Devices','Users','Agents','Workflows','Administration']);
+    expect(groups.map(group=>group.querySelector('summary')?.textContent)).toEqual(['Bots','Agents','Audit','Tools','Devices','Users','Administration']);
     expect(groups.every(group=>!group.open)).toBe(true);
     const resize = screen.getByRole('separator',{name:'Resize navigation'});
     expect(screen.getByRole('region',{name:'Navigation controls'}).contains(resize)).toBe(true);

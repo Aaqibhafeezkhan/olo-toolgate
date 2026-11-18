@@ -60,7 +60,7 @@ class JsonGraphTests(unittest.TestCase):
 
     def test_supplied_summary_profile_reads_with_one_agent_then_summarizes_with_another(self):
         root=Path(__file__).resolve().parents[3]
-        config=json.loads((root/'profiles/configurations/text-summary/workflow-profile.json').read_text(encoding='utf-8'))['workflows']
+        config=json.loads((root/'bot/configurations/text-summary/bot.json').read_text(encoding='utf-8'))['workflows']
         workflow=config['workflows'][0]
         agents=tuple(Agent(item['agentId'],item['modelGroupId'],item['systemPrompt'],
             tuple(ContextSource(source['toolId'],source['arguments'],source.get('argumentBindings',{})) for source in item['contextSources']))

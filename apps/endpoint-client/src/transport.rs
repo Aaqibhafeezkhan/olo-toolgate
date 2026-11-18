@@ -12,6 +12,27 @@ pub(crate) fn tls_client_builder() -> reqwest::ClientBuilder {
     reqwest::Client::builder()
 }
 pub trait ControlPort: Send + Sync {
+    fn native_file_begin(
+        &self,
+        _identity: DeviceIdentity,
+        _value: olo_toolgate_contracts::v2::NativeFileEffectBegin,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileEffectGrant> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn native_file_receipt(
+        &self,
+        _identity: DeviceIdentity,
+        _value: olo_toolgate_contracts::v2::NativeFileEffectReceipt,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn native_file_close(
+        &self,
+        _identity: DeviceIdentity,
+        _value: olo_toolgate_contracts::v2::NativeFileScopeClosed,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileAck> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     /// Assertion only: it cannot change the configured destination or authenticate a request.
     fn bind_tenant(&self, _tenant: &str) -> Result<()> {
         Ok(())
@@ -658,6 +679,63 @@ impl ControlPort for HttpsControl {
                 )
                 .await;
             Ok(response)
+        })
+    }
+    fn native_file_begin(
+        &self,
+        identity: DeviceIdentity,
+        value: olo_toolgate_contracts::v2::NativeFileEffectBegin,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileEffectGrant> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(
+                &client,
+                "/api/control/v1/mcp/native-files/begin",
+                Some(self.contracts.encode("NativeFileEffectBegin", &value)?),
+                "NativeFileEffectGrant",
+            )
+            .await
+        })
+    }
+    fn native_file_receipt(
+        &self,
+        identity: DeviceIdentity,
+        value: olo_toolgate_contracts::v2::NativeFileEffectReceipt,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(
+                &client,
+                "/api/control/v1/mcp/native-files/receipts",
+                Some(self.contracts.encode("NativeFileEffectReceipt", &value)?),
+                "NativeFileAck",
+            )
+            .await
+        })
+    }
+    fn native_file_close(
+        &self,
+        identity: DeviceIdentity,
+        value: olo_toolgate_contracts::v2::NativeFileScopeClosed,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileAck> {
+        Box::pin(async move {
+            let client = Self::builder(&self.config)?
+                .identity(self.key.tls_identity(&identity)?)
+                .build()
+                .map_err(|_| Failure::Unavailable)?;
+            self.request(
+                &client,
+                "/api/control/v1/mcp/native-files/close",
+                Some(self.contracts.encode("NativeFileScopeClosed", &value)?),
+                "NativeFileAck",
+            )
+            .await
         })
     }
     fn remote_result(

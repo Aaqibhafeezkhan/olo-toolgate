@@ -174,6 +174,7 @@ public class PostgresStore implements Store {
         public io.ololabs.toolgate.control.application.EffectStore effects(){return new JdbcEffectStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.EffectConsentStore effectConsents(){return new JdbcEffectConsentStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec,insights);}
+        public io.ololabs.toolgate.control.application.NativeFileStore nativeFiles(){return new JdbcNativeFiles(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.InsightsStore insights() {return new JdbcInsightsStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.TriggerStore triggers() { return new PostgresTriggerStore(connection, tenant); }

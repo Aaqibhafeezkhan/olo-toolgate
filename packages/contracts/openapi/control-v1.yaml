@@ -9,6 +9,136 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /api/control/v1/mcp/native-files/begin:
+    post:
+      operationId: beginNativeFileEffect
+      summary: ADR 075 protected filesystem begin
+      security:
+      - deviceCertificate: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileEffectBegin
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileEffectGrant
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/receipts:
+    post:
+      operationId: recordNativeFileReceipt
+      summary: ADR 075 protected filesystem receipts
+      security:
+      - deviceCertificate: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileEffectReceipt
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/close:
+    post:
+      operationId: closeNativeFileScope
+      summary: ADR 075 protected filesystem close
+      security:
+      - deviceCertificate: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileScopeClosed
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/qualifications:
+    post:
+      operationId: qualifyNativeFileOwner
+      summary: ADR 075 protected filesystem qualifications
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileQualification
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/candidates/{id}:
+    get:
+      operationId: nativeFileCandidates
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Installed metadata, never execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileCandidatePage
+  /api/control/v1/mcp/native-files/qualifications/{id}:
+    delete:
+      operationId: revokeNativeFileQualification
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Qualification revoked for further effects
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
   /internal/v1/runtime/workers:heartbeat:
     post:
       operationId: reportWorkflowWorkerPresence

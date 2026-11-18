@@ -19,6 +19,12 @@ class Refused(ValueError):
     pass
 
 
+class HttpRefused(Refused):
+    def __init__(self,status):
+        self.status=status
+        super().__init__('Control refused the request (HTTP ' + str(status) + '); no automatic retry')
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         fp.close()
@@ -66,7 +72,7 @@ class Control:
 
     def request(self, method, path, data=None, content_type='application/json', key=None, revision=None):
         path = api_path(path)
-        if method not in ('GET', 'POST', 'PUT', 'DELETE') or method == 'GET' and data is not None:
+        if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE') or method == 'GET' and data is not None:
             raise Refused('Invalid request method or GET body')
         headers = {'Authorization': 'Bearer ' + self.token, 'Accept': 'application/json'}
         if data is not None:
@@ -76,9 +82,12 @@ class Control:
                 raise Refused('Invalid idempotency key')
             headers['Idempotency-Key'] = key
         if revision is not None:
-            if not 0 <= revision <= 9007199254740991:
+            if isinstance(revision,str) and re.fullmatch(r'W/"[1-9][0-9]{0,15}"',revision):
+                headers['If-Match'] = revision
+            elif isinstance(revision,int) and not isinstance(revision,bool) and 0 <= revision <= 9007199254740991:
+                headers['If-Match'] = '"' + str(revision) + '"'
+            else:
                 raise Refused('Invalid expected revision')
-            headers['If-Match'] = '"' + str(revision) + '"'
         request = urllib.request.Request(self.origin + path, data, headers, method=method)
         try:
             with self.opener.open(request, timeout=120) as response:
@@ -88,7 +97,7 @@ class Control:
             # Do not echo bodies, URLs or headers: a server can reflect secrets.
             status = error.code
             error.close()
-            raise Refused('Control refused the request (HTTP ' + str(status) + '); no automatic retry') from None
+            raise HttpRefused(status) from None
         except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
             raise Refused('Control transport failed; outcome may be unknown; no automatic retry') from None
         if len(raw) > MAX_JSON or status not in (200, 201, 202, 204):
@@ -111,7 +120,7 @@ def main(argv=None):
     parser.add_argument('--origin', required=True, help='Control HTTPS origin')
     parser.add_argument('--token-file', required=True, type=Path, help='Private administrator bearer token file')
     parser.add_argument('--ca-file', type=Path, help='Trusted CA PEM; system trust is used if omitted')
-    parser.add_argument('--method', choices=('GET', 'POST', 'PUT', 'DELETE'), default='GET')
+    parser.add_argument('--method', choices=('GET', 'POST', 'PUT', 'PATCH', 'DELETE'), default='GET')
     parser.add_argument('--path', required=True, help='Canonical /api/control/v1/ endpoint, including query if needed')
     inputs = parser.add_mutually_exclusive_group()
     inputs.add_argument('--json-file', type=Path)
@@ -124,6 +133,7 @@ def main(argv=None):
         api_path(args.path)
         data = None
         content_type = 'application/json'
+        if args.method=='PATCH':content_type='application/merge-patch+json'
         if args.json_file:
             data = read_file(args.json_file, MAX_JSON)
             if not isinstance(json.loads(data), (dict, list)):

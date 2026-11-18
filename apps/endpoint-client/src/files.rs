@@ -12,6 +12,14 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+pub(crate) fn content_sha256(bytes: impl AsRef<[u8]>) -> String {
+    use sha2::{Digest, Sha256};
+    let hex: String = Sha256::digest(bytes.as_ref())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("sha256:{hex}")
+}
 
 #[derive(Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -82,6 +90,16 @@ pub struct Area {
     settings: Settings,
 }
 impl Area {
+    /// Exact content witness, distinguishing absence from permission or I/O failure.
+    pub fn content_digest(&self, path: &str) -> Result<Option<String>> {
+        let (dir, name) = self.parent(path, true)?;
+        match dir.symlink_metadata(&name) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(Failure::Unavailable),
+            Ok(_) => {}
+        }
+        Ok(Some(content_sha256(self.read(path)?)))
+    }
     pub fn open(settings: Settings) -> Result<Self> {
         settings.validate()?;
         // Administrator-owned ancestors and owner-only root exclude untrusted writers.
@@ -261,9 +279,40 @@ impl Area {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             _ => return Err(Failure::Conflict),
         }
-        origin
-            .rename(origin_name, &target, target_name)
-            .map_err(|_| Failure::Unavailable)
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::fd::AsRawFd;
+            let from = std::ffi::CString::new(origin_name).map_err(|_| Failure::Validation)?;
+            let to = std::ffi::CString::new(target_name).map_err(|_| Failure::Validation)?;
+            let result = unsafe {
+                libc::syscall(
+                    libc::SYS_renameat2,
+                    origin.as_raw_fd(),
+                    from.as_ptr(),
+                    target.as_raw_fd(),
+                    to.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            if result != 0 {
+                return Err(Failure::Conflict);
+            }
+            origin
+                .open(".")
+                .and_then(|d| d.sync_all())
+                .map_err(|_| Failure::Unavailable)?;
+            target
+                .open(".")
+                .and_then(|d| d.sync_all())
+                .map_err(|_| Failure::Unavailable)?;
+            Ok(())
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            origin
+                .rename(origin_name, &target, target_name)
+                .map_err(|_| Failure::Unavailable)
+        }
     }
     fn capacity(&self) -> Result<()> {
         if self.list()?.len() >= self.settings.max_entries {

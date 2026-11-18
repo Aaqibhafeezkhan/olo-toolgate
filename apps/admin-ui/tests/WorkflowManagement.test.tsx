@@ -26,44 +26,44 @@ function rig(initial:WorkflowPage='workflows',publishCode=200){
   return {transport,client,navigate:(value:WorkflowPage)=>view.rerender(page(value))};
 }
 async function open(){fireEvent.click(await screen.findByRole('button',{name:'Open support aaaaaaaaaaaa'}));await screen.findByText(/REVIEWED; generation 3/);}
-it('applies workflow graph JSON, repins its version and updates dispatch in the same draft',async()=>{
+it('applies bot graph JSON, repins its version and updates dispatch in the same draft',async()=>{
   const {transport}=rig();await open();
   const workflow=profile.workflows!.workflows[0];
   fireEvent.click(screen.getByRole('button',{name:`Edit ${workflow.id} JSON`}));
-  fireEvent.change(screen.getByLabelText('Workflows JSON'),{target:{value:JSON.stringify({...workflow,graph:{...workflow.graph,config:{resultKey:'configured'}}})}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply Workflows JSON to draft'}));
-  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
-  await screen.findByText(/Staged exact profile revision/);
+  fireEvent.change(screen.getByLabelText('Bots JSON'),{target:{value:JSON.stringify({...workflow,graph:{...workflow.graph,config:{resultKey:'configured'}}})}});
+  fireEvent.click(screen.getByRole('button',{name:'Apply Bots JSON to draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage bot revision'}));
+  await screen.findByText(/Staged exact bot revision/);
   const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
   expect(sent.workflows!.workflows[0].graph.config).toEqual({resultKey:'configured'});
   expect(sent.workflows!.workflows[0].versionId).not.toBe(workflow.versionId);
   expect(sent.workflows!.dispatchBindings[0].workflowVersionId).toBe(sent.workflows!.workflows[0].versionId);
 });
-it('edits the agent sub JSON through the shared profile draft',async()=>{
+it('edits the agent sub JSON through the shared bot draft',async()=>{
   const {transport}=rig('agent-configuration');await open();
   const agent=profile.workflows!.agentDefinitions[0];
   fireEvent.click(screen.getByRole('button',{name:`Edit ${agent.agentId} JSON`}));
   fireEvent.change(screen.getByLabelText('Agent prompts and context JSON'),{target:{value:JSON.stringify({...agent,systemPrompt:'Prompt edited as JSON'})}});
   fireEvent.click(screen.getByRole('button',{name:'Apply Agent prompts and context JSON to draft'}));
-  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
-  await screen.findByText(/Staged exact profile revision/);
+  fireEvent.click(screen.getByRole('button',{name:'Stage bot revision'}));
+  await screen.findByText(/Staged exact bot revision/);
   const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
   expect(sent.workflows!.agentDefinitions[0].systemPrompt).toBe('Prompt edited as JSON');
 });
-it('keeps workflow and agent edits in one profile draft across dedicated pages and stages exact content',async()=>{
+it('keeps bot and agent edits in one bot draft across dedicated pages and stages exact content',async()=>{
   const {transport,navigate}=rig();await open();
   fireEvent.click(screen.getByRole('button',{name:`Edit ${profile.workflows!.workflows[0].id}`}));
   fireEvent.change(screen.getByLabelText('systemPrompt'),{target:{value:'Updated supervisor prompt'}});
   fireEvent.change(screen.getByLabelText('versionId'),{target:{value:'new-version'}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply to bot draft'}));
   expect(screen.queryByRole('button',{name:'Review exact revision'})).toBeNull();
   navigate('agent-configuration');
   fireEvent.click(screen.getByRole('button',{name:`Edit ${profile.workflows!.agentDefinitions[0].agentId}`}));
   fireEvent.change(screen.getByLabelText('systemPrompt'),{target:{value:'Updated agent prompt'}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply to bot draft'}));
   expect(transport.mock.calls.filter(([,options])=>options?.method==='POST')).toHaveLength(0);
-  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
-  await screen.findByText(/Staged exact profile revision/);
+  fireEvent.click(screen.getByRole('button',{name:'Stage bot revision'}));
+  await screen.findByText(/Staged exact bot revision/);
   const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
   expect(sent.workflows!.workflows[0].systemPrompt).toBe('Updated supervisor prompt');
   expect(sent.workflows!.workflows[0].versionId).toBe('new-version');
@@ -72,24 +72,24 @@ it('keeps workflow and agent edits in one profile draft across dedicated pages a
   expect(sent.workflows!.workflows[0].limits).toEqual(profile.workflows!.workflows[0].limits);
   expect(sent.workflows!.dispatchBindings[0].workflowVersionId).toBe('new-version');
 });
-it('edits workflow groups and discards the complete unsaved working copy',async()=>{
+it('edits bot groups and discards the complete unsaved working copy',async()=>{
   const {transport}=rig('workflowGroups');await open();
   fireEvent.click(screen.getByRole('button',{name:`Edit ${profile.workflows!.workflowGroups[0].id}`}));
   fireEvent.change(screen.getByLabelText('displayName'),{target:{value:'Changed group'}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));await screen.findByText('Changed group');
-  fireEvent.click(screen.getByRole('button',{name:'Discard profile edits'}));
+  fireEvent.click(screen.getByRole('button',{name:'Apply to bot draft'}));await screen.findByText('Changed group');
+  fireEvent.click(screen.getByRole('button',{name:'Discard bot edits'}));
   expect(screen.queryByText('Changed group')).toBeNull();
   expect(screen.getByRole('button',{name:'Review exact revision'})).toBeTruthy();
   expect(transport.mock.calls.filter(([,options])=>options?.method==='POST')).toHaveLength(0);
 });
-it('manages agent entry/delegation/group mappings without changing unrelated workflow properties',async()=>{
+it('manages agent entry/delegation/group mappings without changing unrelated bot properties',async()=>{
   const {transport}=rig('agent-workflow-mappings');await open();
   const binding=profile.workflows!.workflows[0].agents[0];
   fireEvent.click(screen.getAllByRole('button',{name:`Edit ${binding.agentId}`})[0]);
   fireEvent.click(screen.getByLabelText('entryEligible'));
   fireEvent.change(screen.getByLabelText('agentGroupId'),{target:{value:'new-agent-group'}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
-  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));await screen.findByText(/Staged exact profile revision/);
+  fireEvent.click(screen.getByRole('button',{name:'Apply to bot draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage bot revision'}));await screen.findByText(/Staged exact bot revision/);
   const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
   expect(sent.workflows!.workflows[0].agents[0]).toEqual({...binding,entryEligible:!binding.entryEligible,agentGroupId:'new-agent-group'});
   expect(sent.workflows!.workflows[0].systemPrompt).toBe(profile.workflows!.workflows[0].systemPrompt);
@@ -107,18 +107,18 @@ it('uses paired catalog cursors and stops pagination after a final page',async()
   const entries=Array.from({length:50},(_,i)=>({...status,profileDigest:'sha256:'+i.toString(16).padStart(64,'0')}));
   const transport=vi.fn<typeof fetch>().mockImplementation(async url=>json(String(url).includes('afterProfileId=')?[]:entries));
   render(<WorkflowWorkspaceProvider><WorkflowManagement client={new ControlClient('token',vi.fn(),transport)} page="workflows"/></WorkflowWorkspaceProvider>);
-  fireEvent.click(await screen.findByRole('button',{name:'More profile revisions'}));
-  await waitFor(()=>expect(screen.queryByRole('button',{name:'More profile revisions'})).toBeNull());
+  fireEvent.click(await screen.findByRole('button',{name:'More bot revisions'}));
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'More bot revisions'})).toBeNull());
   const query=new URL(String(transport.mock.calls[1][0]),'https://control.invalid').searchParams;
   expect(query.get('afterProfileId')).toBe('support');expect(query.get('afterDigest')).toBe(entries[49].profileDigest);
 });
-it('does not display private profile data when exact document loading is denied',async()=>{
+it('does not display private bot data when exact document loading is denied',async()=>{
   const {transport}=rig();await screen.findByRole('button',{name:'Open support aaaaaaaaaaaa'});
   transport.mockResolvedValue(json({},403));fireEvent.click(screen.getByRole('button',{name:'Open support aaaaaaaaaaaa'}));
-  await screen.findByRole('alert');expect(screen.queryByRole('heading',{name:'Profile lifecycle'})).toBeNull();
+  await screen.findByRole('alert');expect(screen.queryByRole('heading',{name:'Bot lifecycle'})).toBeNull();
 });
 
-it('pins the selected workflow version in a trigger mapping draft',async()=>{
+it('pins the selected bot version in a trigger mapping draft',async()=>{
   const {transport}=rig('workflow-dispatch');await open();
   const workflow=profile.workflows!.workflows[0];
   fireEvent.click(screen.getByRole('button',{name:'Add trigger mappings'}));
@@ -130,16 +130,16 @@ it('pins the selected workflow version in a trigger mapping draft',async()=>{
   fireEvent.change(screen.getByLabelText('serviceAgentGroupId'),{target:{value:'listener-group'}});
   fireEvent.change(screen.getByLabelText('messagePointer'),{target:{value:'/message'}});
   fireEvent.change(screen.getByLabelText('id'),{target:{value:'hotfolder-route'}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
-  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
-  await screen.findByText(/Staged exact profile revision/);
+  fireEvent.click(screen.getByRole('button',{name:'Apply to bot draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage bot revision'}));
+  await screen.findByText(/Staged exact bot revision/);
   const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
   expect(sent.workflows!.dispatchBindings.at(-1)).toMatchObject({
     id:'hotfolder-route',workflowId:workflow.id,workflowVersionId:workflow.versionId,messagePointer:'/message',
   });
 });
 
-it('edits a profile trigger against the installed export schema',async()=>{
+it('edits a bot trigger against the installed export schema',async()=>{
   const {transport}=rig('workflow-trigger-packages');await open();
   const definition=fixture.TriggerDefinitionRecord;
   await screen.findByText(`${definition.triggerId} (${definition.packageVersion})`);
@@ -152,9 +152,9 @@ it('edits a profile trigger against the installed export schema',async()=>{
   fireEvent.change(screen.getByLabelText('triggerId'),{target:{value:definition.triggerId}});
   expect(screen.getByText('Signed configuration schema')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('config'),{target:{value:'{"folder":"inbox"}'}});
-  fireEvent.click(screen.getByRole('button',{name:'Apply to profile draft'}));
-  fireEvent.click(screen.getByRole('button',{name:'Stage profile revision'}));
-  await screen.findByText(/Staged exact profile revision/);
+  fireEvent.click(screen.getByRole('button',{name:'Apply to bot draft'}));
+  fireEvent.click(screen.getByRole('button',{name:'Stage bot revision'}));
+  await screen.findByText(/Staged exact bot revision/);
   const sent=JSON.parse(transport.mock.calls.find(([,options])=>options?.method==='POST')![1]!.body as string) as DeploymentProfile;
   expect(sent.packages[0].triggers).toEqual([{assignment:'inbox',triggerId:definition.triggerId,config:{folder:'inbox'}}]);
 });

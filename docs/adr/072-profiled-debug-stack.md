@@ -12,9 +12,9 @@ current-schema retries, recovery and reconnect remain required.
 The proposed `debug/profiled` stack replaces the standard and hot-folder launchers. A
 stable Compose project owns one installation, device identity and credential
 directory. Local images are inspected and reused; missing source images are
-built in dependency order, and missing third-party images are pulled. A source
-configuration seeds a fresh installation once. Subsequent profile changes go
-through the existing Control console, review and publication APIs.
+built in dependency order, and missing third-party images are pulled. Fresh installations create only one password-protected administrator and
+infrastructure custody. Workflow configurations and packages are never seeded
+automatically; all imports and subsequent changes go through Control APIs.
 
 One persistent device receives tool/trigger packages and configuration through
 the administrator console, Control and Gateway. Check-ins carry bounded lists
@@ -29,7 +29,8 @@ are revised together where needed; no separate management channel, legacy reader
 or additional execution authority is introduced.
 
 The existing privileged local fixture identity issuer remains an evaluation
-facility with Docker access. Its custody and all generated credentials live in
+facility with read-only Control custody and no Docker socket. Its generated
+credentials live in
 an ignored private subfolder; tool containers never receive that folder.
 Monitoring is configured manually in installation-owned files and private
 exporter settings, outside workflow profiles.

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "demo-dispatch-b",
+    "subscription": "demo-b",
+    "assignment": "demo-b",
+    "assignmentSpec": {
+      "triggerId": "examples.hotfolder-watch/new-file",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "ReadAndWriteDeviceGroup"
+        ]
+      },
+      "config": {
+        "folder": "inbox-b",
+        "extension": ".txt"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "demo-b"
+        ]
+      },
+      "filter": "event.type == 'examples.files.observed.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

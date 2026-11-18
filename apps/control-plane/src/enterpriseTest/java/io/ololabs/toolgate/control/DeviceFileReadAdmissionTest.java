@@ -20,7 +20,7 @@ final class DeviceFileReadAdmissionTest {
     @TempDir Path temp;
     @BeforeAll static void key() throws Exception { EnterpriseOperationTest.signingKey(); }
 
-    private EnterpriseOperationTest rig(boolean postgres) throws Exception {
+    EnterpriseOperationTest rig(boolean postgres,boolean writer) throws Exception {
         var rig = new EnterpriseOperationTest();
         rig.temp = Files.createDirectory(temp.resolve("rig-" + UUID.randomUUID()));
         rig.setup();
@@ -41,13 +41,13 @@ final class DeviceFileReadAdmissionTest {
         }
         var request = rig.request("template", "data/report.txt");
         var tool = rig.graph.codec.model(rig.graph.entries.get(io.ololabs.toolgate.control.domain.Ids.Kind.TOOL.id("tool")).document(), ControlTool.class);
-        String key = Canonical.digest(JSON.valueToTree(List.of("device-file-read-qualification/v1", "tool", tool.packageDigest())));
-        var proof = JSON.createObjectNode().put("format", "device-file-read-qualification/v1").put("toolId", "tool")
+        String key = Canonical.digest(JSON.valueToTree(List.of("native-file-qualification/v1", "tool", tool.packageDigest())));
+        var proof = JSON.createObjectNode().put("format", "native-file-qualification/v1").put("writeAccess",writer).put("toolId", "tool")
             .put("managedDigest", tool.packageDigest()).put("imageDigest", IMAGE)
             .put("runtimeDigest", "sha256:" + "1".repeat(64)).put("descriptorDigest", "sha256:" + "2".repeat(64));
         rig.store.transaction(rig.gateway.tenant(), true, tx -> {
             tx.packages().saveDocument(key, proof.toString());
-            var local = new LocalToolInfo("tool", "read", "Read", true, tool.definition().inputSchema(), request.toolDigest(), tool.packageDigest(), null);
+            var local = new LocalToolInfo("tool", writer?"write":"read", "Read", true, tool.definition().inputSchema(), request.toolDigest(), tool.packageDigest(), null);
             tx.saveEndpointConfiguration(new Store.EndpointConfiguration("device", 1, "{}", null, rig.graph.codec.json(new LocalToolCatalog(List.of(local)))));
             return null;
         });
@@ -57,14 +57,23 @@ final class DeviceFileReadAdmissionTest {
     private void scenario(boolean postgres) throws Exception {
         for (String pin : List.of("", "device@devices-a@" + IMAGE, "other@devices-a@" + IMAGE,
                                  "device@other@" + IMAGE, "device@devices-a@sha256:" + "0".repeat(64))) {
-            var rig = rig(postgres);
-            rig.operations.deviceFileReaders(pin.isEmpty() ? Set.of() : Set.of(pin));
+            var rig = rig(postgres,false);
+            if(!pin.isEmpty()){
+                var fields=pin.split("@");
+                rig.store.transaction(rig.gateway.tenant(),true,tx->{
+                    var policy=new io.ololabs.toolgate.contracts.v2.NativeFileQualification(fields[0],fields[1],fields[2],rig.clock.millis()+86400000,"UNFENCED_FILESYSTEM");
+                    tx.nativeFiles().qualify(DirectoryService.digest(pin),policy);return null;
+                });
+            }
             var reservation = rig.reserve(rig.submit("read-" + UUID.randomUUID()));
             boolean qualified = pin.equals("device@devices-a@" + IMAGE);
             assertEquals(qualified, rig.store.transaction(rig.gateway.tenant(), false,
                 tx -> tx.enterprise().recoveryScope(reservation.invocation().reservedNonce()) != null));
             var running = rig.consume(reservation);
             String nonce = running.reservedNonce();
+            if(qualified)rig.store.transaction(rig.gateway.tenant(),true,tx->{
+                NativeFiles.close(tx,rig.graph.codec,running,new io.ololabs.toolgate.contracts.v2.NativeFileScopeClosed(running.id(),"fixture-lease",nonce),rig.clock.millis());return null;
+            });
             var report = new EnterpriseEffectReport(running.id(), running.revision(), EnterpriseInvocationState.SUCCEEDED,
                 running.evaluation().resources(), "3".repeat(64));
             rig.operations.report(rig.gateway.tenant(), "device", rig.graph.codec.json(report));

@@ -133,7 +133,7 @@ Everything is found by the digest the permit pins, never by name or version.
 | File | Digest |
 |---|---|
 | `packages/<hex>.olotool` | `packageDigest`: `sha256` of the package's `CHECKSUMS.sha256`. The package passes the CLI's archive rules and packager checks before first use. |
-| `profiles/<hex>.json` | `serviceProfileDigest`: the canonical digest (NFC, then RFC 8785) of the `ServiceProfile`. Its `revision` must equal `serviceProfileRevision` and its `packageId` the package's id. |
+| `bot/<hex>.json` | `serviceProfileDigest`: the canonical digest (NFC, then RFC 8785) of the `ServiceProfile`. Its `revision` must equal `serviceProfileRevision` and its `packageId` the package's id. |
 | `globals/<hex>.json` | `globalsDigest`: the canonical digest of the tool's resolved globals, one JSON object of name to value. |
 
 The permit's other pins are checked against the package: `toolDescriptorDigest` against the tool's definition, `runtimeDigest` against the canonical digest of the tool's `RuntimeDeclaration`, and `artifactDigest` against the tool's first artifact. `argumentsDigest` is `sha256` over the RFC 8785 form of the arguments, as Control's `Jcs.digest` computes it.

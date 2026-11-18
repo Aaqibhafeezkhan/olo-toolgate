@@ -13,6 +13,7 @@ public interface Store {
     <T> T transaction(TenantId tenant, boolean write, Function<Session, T> work);
     record ConsoleDeviceRecord(String sessionId,String userId,String deviceId,String nonceDigest,String codeDigest,String csr,String fingerprint,long expiresAt,long verifiedAt){}
     interface Session {
+        default NativeFileStore nativeFiles(){throw Failure.unavailable();}
         default java.util.List<IdentityKey> identityKeys(){throw Failure.unavailable();}
         /** Platform provisioning only; the runtime database role has SELECT access. */
         default void initializeIdentityKey(IdentityKey key){throw Failure.unavailable();}

@@ -1,8 +1,8 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Workflow profile hot swap — implementation plan
+# Workflow profile hot swap â€” implementation plan
 
-Status: accepted; implementation started locally. No hot-swap acceptance is
-claimed. This plan follows the current #295 application and reuses #274 triggers
+Status: accepted; bounded fresh-stack two-bot hot-swap acceptance passes locally.
+The full plan remains incomplete; see the authoritative workflow status. This plan follows the current #295 application and reuses #274 triggers
 and #230 execution controls. Their baselines and exit criteria are unchanged.
 Revised 2026-11-17 to require one persistent device, dynamic per-trigger heartbeat
 reports, an explicit graph rebuild API, external LLM services and stateless core
@@ -23,6 +23,15 @@ and the installation's infrastructure/trust metadata. Do not discover, select or
 seed a workflow from repository configuration folders, and do not preinstall a
 scenario's packages. An administrator imports a `.olo` after sign-in. Restarting
 an initialized installation preserves its data; blank startup is not a reset.
+
+The administrator may configure automatic approval of new device enrollments
+through the existing device settings API. Script-selected device IDs may also
+have an already pending enrollment approved after a fresh exact-key review,
+then be enabled and assigned explicit groups through existing APIs. Profile
+content itself cannot make those installation authority decisions. Super Admin
+may change settings/review thresholds directly; deletion of the signed-in
+administrator remains prohibited. Execution evidence and outcome qualification
+remain independent of management privileges.
 
 The Admin UI and authenticated operator scripts use the same backend API
 operations for bundle upload, preparation, review, activation and device
@@ -68,7 +77,7 @@ weights, provider containers, server binaries and provider networking are entire
 the user's/cloud operations' responsibility. Remove model-hosting services and
 model startup/custody generation from the core launcher.
 
-### Fresh provisioning only — no backward compatibility
+### Fresh provisioning only â€” no backward compatibility
 
 Implement a **new provisioning flow** for this architecture, from profile import
 through device placement, package/configuration reconciliation, graph preparation
@@ -830,3 +839,20 @@ restart recovery, delayed invalidation and rejoining replicas, and all three LLM
 routing strategies with denied and transient failures. Assert the same event does
 not start a second logical run for the same consumer. Retain the existing no-core/
 device-restart, tenant-negative and effect-ledger checks.
+
+
+## Current execution dependency observed during implementation
+
+The local A/B graph uses real native file tools. Successful SDK return is not
+confirmed business finality. Unqualified native file reads currently produce
+`OUTCOME_UNKNOWN`, and native file writes/moves still need protected broker
+receipts and complete-scope finalization. This blocks successful end-to-end
+acceptance. Do not change the runtime to accept reported tool success, synthesize
+receipts, retry ambiguous mutations or use a fixture to perform the graph's
+writes. Deliver the missing execution evidence path with its own ADR, contract
+and SQLite/PostgreSQL/device boundary verification before claiming this demo.
+
+Candidate provisioning must also be keyed by immutable revision so preparing B
+does not overwrite A's readiness, and old assignments/subscriptions must drain
+and retire after activation. The current import CLI is not the planned durable
+server-side operation or a proof of these handover/recovery criteria.

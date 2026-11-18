@@ -18,7 +18,7 @@ const assignments=[{...fixture.TriggerAssignment,metadata:{...fixture.TriggerAss
 const subscriptions=[{...fixture.TriggerSubscription,metadata:{...fixture.TriggerSubscription.metadata,uid:binding.subscriptionUid,name:'events'}}] as TriggerSubscription[];
 const snapshot={formatVersion:2,tenantId:'tenant-a',revision:1,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
 
-it('replaces and rereads the staged workflow, then refreshes publication without any stack or credential operation',async()=>{
+it('replaces and rereads the staged bot, then refreshes publication without any stack or credential operation',async()=>{
   let current=profile;
   let status={profileId:'support',profileDigest:'sha256:'+'a'.repeat(64),state:'PUBLISHED',generation:3,dependenciesReady:true};
   const requests: string[]=[];
@@ -38,7 +38,7 @@ it('replaces and rereads the staged workflow, then refreshes publication without
   const client=new ControlClient('existing-token',vi.fn(),transport);
   const embedded=await Promise.all((await mockWorkflowPackages(profile,assignments)).map(inspectPackage));
   const upload=vi.spyOn(client,'uploadServerPackage').mockImplementation(async file=>{
-    if(!(file instanceof File))throw Error('Workflow imports must upload a named tool archive');
+    if(!(file instanceof File))throw Error('Bot imports must upload a named tool archive');
     const item=embedded.find(item=>file.name===item.metadata.packageId+'.olotool')!;
     expect(current).toBe(profile);
     return {packageId:item.metadata.packageId,version:item.metadata.version,packageDigest:item.metadata.packageDigest,state:'VERIFIED',descriptorSetDigest:item.manifest.descriptorSetDigest,revision:1,uploadedAtUnixMs:0};
@@ -51,26 +51,26 @@ it('replaces and rereads the staged workflow, then refreshes publication without
   const bytes=await exportWorkflow(modified,workflow.id,assignments,subscriptions,snapshot,await mockWorkflowPackages(modified,assignments));
   const file=new File([new Uint8Array(bytes)],'workflow.olo');
   Object.defineProperty(file,'arrayBuffer',{value:async()=>new Uint8Array(bytes).buffer});
-  fireEvent.change(screen.getByLabelText('Workflow .olo file'),{target:{files:[file]}});
-  fireEvent.click(screen.getByRole('button',{name:'Import workflow .olo'}));
-  await screen.findByText(/Imported workflow and refreshed/);
+  fireEvent.change(screen.getByLabelText('Bot .olo file'),{target:{files:[file]}});
+  fireEvent.click(screen.getByRole('button',{name:'Import bot .olo'}));
+  await screen.findByText(/Imported bot and refreshed/);
   expect(upload).toHaveBeenCalledTimes(embedded.length);
   expect(current.workflows!.workflows[0].systemPrompt).toBe('Imported replacement prompt');
   expect(current.workflows!.workflows[0].versionId).not.toBe(workflow.versionId);
   fireEvent.click(screen.getByRole('button',{name:'Edit '+workflow.id+' JSON'}));
-  expect((screen.getByLabelText('Workflows JSON') as HTMLTextAreaElement).value).toContain('Imported replacement prompt');
+  expect((screen.getByLabelText('Bots JSON') as HTMLTextAreaElement).value).toContain('Imported replacement prompt');
   fireEvent.click(screen.getByRole('button',{name:'Close editor'}));
   fireEvent.click(screen.getByRole('button',{name:'Review exact revision'}));
   await screen.findByText(/REVIEWED; generation 3/);
   fireEvent.click(screen.getByRole('button',{name:'Publish reviewed revision'}));
-  await screen.findByText(/Published workflow configuration. The editor has refreshed/);
+  await screen.findByText(/Published bot configuration. The editor has refreshed/);
   expect(requests.filter(path=>path.endsWith('/document')).length).toBeGreaterThanOrEqual(3);
   expect(requests.every(path=>path.startsWith('/api/control/v1/'))).toBe(true);
   expect(transport.mock.calls.filter(([,options])=>options?.method==='POST').map(([url])=>String(url))).toEqual([
     '/api/control/v1/workflow-profiles', '/api/control/v1/workflow-profiles/support/review', '/api/control/v1/workflow-profiles/support/publish']);
 });
 
-it('does not stage or replace a workflow when an embedded package upload fails verification',async()=>{
+it('does not stage or replace a bot when an embedded package upload fails verification',async()=>{
   const client=new ControlClient('existing-token',vi.fn());
   vi.spyOn(client,'triggerAssignments').mockResolvedValue({items:assignments});
   vi.spyOn(client,'triggerSubscriptions').mockResolvedValue({items:subscriptions});
@@ -80,14 +80,14 @@ it('does not stage or replace a workflow when an embedded package upload fails v
   const bytes=await exportWorkflow(profile,profile.workflows!.workflows[0].id,assignments,subscriptions,snapshot,await mockWorkflowPackages(profile,assignments));
   const file=new File([new Uint8Array(bytes)],'workflow.olo');
   Object.defineProperty(file,'arrayBuffer',{value:async()=>new Uint8Array(bytes).buffer});
-  fireEvent.change(screen.getByLabelText('Workflow .olo file'),{target:{files:[file]}});
-  fireEvent.click(screen.getByRole('button',{name:'Import workflow .olo'}));
+  fireEvent.change(screen.getByLabelText('Bot .olo file'),{target:{files:[file]}});
+  fireEvent.click(screen.getByRole('button',{name:'Import bot .olo'}));
   await waitFor(()=>expect(error).toBeInstanceOf(Error));
   expect(replace).not.toHaveBeenCalled();
-  expect(screen.queryByLabelText('Imported workflow dependencies')).toBeNull();
+  expect(screen.queryByLabelText('Imported bot dependencies')).toBeNull();
 });
 
-it('does not broadcast an imported profile watch before Control selects the destination device',async()=>{
+it('does not broadcast an imported bot watch before Control selects the destination device',async()=>{
   const managed=structuredClone(profile) as {packages:DeploymentProfile['packages'];workflows:NonNullable<DeploymentProfile['workflows']>};
   const local={...profile,...managed,packages:[{packageId:'examples.hotfolder-watch',version:assignments[0].spec.packageVersion!,source:'PREBUILT_CORE' as const,required:true,deviceGroupIds:['finance-desktops'],triggers:[{assignment:assignments[0].metadata.name,triggerId:assignments[0].spec.trigger,config:assignments[0].spec.config}]}],
     workflows:{...managed.workflows,workflows:managed.workflows.workflows.map((item,index)=>index===0?{...item,contextSources:[{toolId:'examples.hotfolder-watch/read',arguments:{}}]}:item)}};
@@ -107,8 +107,8 @@ it('does not broadcast an imported profile watch before Control selects the dest
   const bytes=await exportWorkflow(local,local.workflows.workflows[0].id,assignments,subscriptions,snapshot,archives);
   const file=new File([new Uint8Array(bytes)],'workflow.olo');
   Object.defineProperty(file,'arrayBuffer',{value:async()=>new Uint8Array(bytes).buffer});
-  fireEvent.change(screen.getByLabelText('Workflow .olo file'),{target:{files:[file]}});
-  fireEvent.click(screen.getByRole('button',{name:'Import workflow .olo'}));
+  fireEvent.change(screen.getByLabelText('Bot .olo file'),{target:{files:[file]}});
+  fireEvent.click(screen.getByRole('button',{name:'Import bot .olo'}));
   await waitFor(()=>expect(replace).toHaveBeenCalledOnce());
   fireEvent.click(screen.getByRole('button',{name:'Restore trigger connections and stage mappings'}));
   await waitFor(()=>expect(String(error)).toContain('select the destination device'));

@@ -18,9 +18,6 @@ import urllib.request
 CLIENT = '/usr/local/lib/olo-toolgate/olo-toolgate-client'
 UNIT = Path('/etc/systemd/system/olo-toolgate-client.service')
 JOURNAL = Path('/var/lib/olo-toolgate/journal.json')
-# Gateway-scoped enrollment state. The device key and HotFolder files are kept.
-GATEWAY_STATE = ('journal.json', 'permissions.json', 'remote-journal.json', 'effect-journal.json',
-                 'adoption.json', 'fleet-intent.json', 'fleet-active.json')
 STATUS = Path('/run/olo-toolgate/device-status.json')
 STOP = threading.Event()
 
@@ -114,15 +111,6 @@ def gateway_recreated(settings, http_port):
     if not installed or not Path(installed).is_file():
         return True
     return certificate_body(Path(installed).read_text()) != certificate_body(trust['caCertificatePem'])
-
-
-def reset_gateway(config, settings):
-    """A recreated gateway issues new identities; the old enrollment can never check in again."""
-    state = Path(settings['stateDirectory'])
-    for name in GATEWAY_STATE:
-        (state / name).unlink(missing_ok=True)
-    for path in (config, Path(CLIENT), UNIT):
-        path.unlink(missing_ok=True)
 
 
 def supervise():
@@ -229,9 +217,7 @@ def main(configure=None):
             if settings['serverUrl'] != server_url:
                 raise RuntimeError('Existing device belongs to a different gateway.')
             if gateway_recreated(settings, http_port):
-                print('Gateway certificate changed (recreated Quickstart); re-enrolling this device.',
-                      flush=True)
-                reset_gateway(config, settings)
+                raise RuntimeError('Gateway trust changed; device credentials and journals preserved. Explicitly provision a fresh installation.')
         if not config.exists():
             print('Installing client and verifying gateway certificate trust.', flush=True)
             # Resolve loopback console metadata and verify the advertised HTTPS CA.

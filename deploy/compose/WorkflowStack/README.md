@@ -106,8 +106,8 @@ empty installation), then use **Workflow import / export (.olo)**.
   workflow-owned garbage.
 
 There is one application-level transfer implementation at both console URLs.
-Repository authoring/build sources are in [profiles](../../../profiles/README.md),
-with versioned outputs under `profiles/bin/`. Tool archives use `.olotool`; workflow/profile archives use
+Repository authoring/build sources are in [profiles](../../../bot/README.md),
+with versioned outputs under `bot/bin/`. Tool archives use `.olotool`; workflow/profile archives use
 `.olo`. Only profile bundle format 2 is accepted.
 The earlier configuration-only and whole-deployment formats are unsupported; neither is converted
 nor loaded into Docker. Existing old archive files remain untouched.

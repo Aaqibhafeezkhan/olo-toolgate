@@ -6,7 +6,7 @@ import {Failure} from './Failure';
 import {type WorkflowPage,workflowPages} from './WorkflowManagement';
 
 const sections = {
-  workflows:'Workflows',workflowGroups:'Workflow groups',agentDefinitions:'Agent configuration',
+  workflows:'Bots',workflowGroups:'Bot groups',agentDefinitions:'Agent configuration',
   modelGroups:'Model groups',modelDeployments:'Model deployments',dispatchBindings:'Trigger mappings',
 } as const;
 const pages:Partial<Record<WorkflowPage,readonly (keyof typeof sections)[]>> = {
@@ -50,12 +50,12 @@ export function PublishedWorkflows({client,page}:{client:ControlClient;page?:Wor
   },[client,selected]);
   const Heading=page?'h1':'h2';
   const visible=page?pages[page]??Object.keys(sections) as (keyof typeof sections)[]:Object.keys(sections) as (keyof typeof sections)[];
-  return <section className="guidance"><Heading>{page?workflowPages[page]:'Published workflows and agents'}</Heading>
-    <p>View only. Private profile fields are available to Super Admins.</p>
+  return <section className="guidance"><Heading>{page?workflowPages[page]:'Published bots and agents'}</Heading>
+    <p>View only. Private bot fields are available to Super Admins.</p>
     {error!==undefined&&<Failure error={error}/>}
-    {!catalog&&!error&&<p role="status">Loading published profiles…</p>}
-    {catalog?.length===0&&<p>No workflow profiles have been published.</p>}
-    {catalog&&catalog.length>0&&<label>Published profile <select value={selected?.profileId??''} onChange={event=>{
+    {!catalog&&!error&&<p role="status">Loading published bots…</p>}
+    {catalog?.length===0&&<p>No bots have been published.</p>}
+    {catalog&&catalog.length>0&&<label>Published bot <select value={selected?.profileId??''} onChange={event=>{
       setError(undefined);setDocument(undefined);setSelected(catalog.find(item=>item.profileId===event.target.value));
     }}>{catalog.map(item=><option key={item.profileId} value={item.profileId}>{item.profileId}</option>)}</select></label>}
     {hasMore&&catalog&&<button disabled={loading} onClick={()=>{
@@ -63,9 +63,9 @@ export function PublishedWorkflows({client,page}:{client:ControlClient;page?:Wor
       void client.publishedWorkflows(catalog.at(-1)?.profileId).then(items=>{
         setCatalog([...catalog,...items]);setHasMore(items.length===50);
       }).catch(setError).finally(()=>setLoading(false));
-    }}>More published profiles</button>}
+    }}>More published bots</button>}
     {selected&&<p>Generation {selected.generation} · <code>{selected.digest}</code></p>}
-    {selected&&!document&&!error&&<p role="status">Loading workflow configuration…</p>}
+    {selected&&!document&&!error&&<p role="status">Loading bot configuration…</p>}
     {document&&visible.map(key=><details className="guidance" key={key} open={Boolean(page)}>
       <summary>{sections[key]}</summary><Properties value={document[key]??[]}/>
     </details>)}

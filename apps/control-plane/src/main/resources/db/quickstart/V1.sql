@@ -521,7 +521,7 @@ CREATE UNIQUE INDEX control_tenant_vault_keys_current ON control_tenant_vault_ke
 CREATE INDEX control_tool_host_dispatches_queue ON control_tool_host_dispatches(tenant_id,host_id,state,created_at);
 -- statement
 CREATE TRIGGER attempt_effect_guard BEFORE INSERT ON control_attempt_effects
- WHEN NOT(COALESCE(EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=NEW.tenant_id AND g.operation_id=NEW.operation_id AND g.attempt_id=NEW.attempt_id AND g.effect_id=NEW.effect_id)
+ WHEN NOT(COALESCE((EXISTS(SELECT 1 FROM control_effect_generations g WHERE g.tenant_id=NEW.tenant_id AND g.operation_id=NEW.operation_id AND g.attempt_id=NEW.attempt_id AND g.effect_id=NEW.effect_id) OR EXISTS(SELECT 1 FROM control_native_file_intents f WHERE f.tenant_id=NEW.tenant_id AND f.operation_id=NEW.operation_id AND f.attempt_id=NEW.attempt_id AND f.effect_id=NEW.effect_id))
  AND NOT EXISTS(SELECT 1 FROM control_attempt_manifest_seals m WHERE m.tenant_id=NEW.tenant_id AND m.operation_id=NEW.operation_id AND m.attempt_id=NEW.attempt_id) AND NOT EXISTS(SELECT 1 FROM control_operation_outcomes v WHERE v.tenant_id=NEW.tenant_id AND v.operation_id=NEW.operation_id
  AND v.revision=(SELECT max(x.revision) FROM control_operation_outcomes x WHERE x.tenant_id=v.tenant_id AND x.operation_id=v.operation_id) AND v.state='RECONCILIATION_REQUIRED'),0)) BEGIN SELECT RAISE(ABORT,'manifest membership requires open admitted generation'); END;
 -- statement
@@ -1647,8 +1647,125 @@ CREATE TRIGGER control_workflow_runs_tenant_immutable BEFORE UPDATE OF tenant_id
 CREATE TRIGGER control_workflow_admissions_tenant_immutable BEFORE UPDATE OF tenant_id ON control_workflow_admissions WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
 
 -- statement
+CREATE TABLE control_native_file_qualifications(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id), qualification_id TEXT NOT NULL, device_id TEXT NOT NULL, group_id TEXT NOT NULL, image_digest TEXT NOT NULL, expires_at BIGINT NOT NULL CHECK(expires_at>0), enabled BOOLEAN NOT NULL DEFAULT true, document TEXT NOT NULL, PRIMARY KEY(tenant_id,qualification_id));
+-- statement
+CREATE TRIGGER control_native_file_qualifications_immutable_delete BEFORE DELETE ON control_native_file_qualifications BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TABLE control_native_file_scopes(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id), operation_id TEXT NOT NULL, attempt_id TEXT NOT NULL, qualification_id TEXT NOT NULL, write_access BOOLEAN NOT NULL, document TEXT NOT NULL, PRIMARY KEY(tenant_id,attempt_id), FOREIGN KEY(tenant_id,operation_id,attempt_id) REFERENCES control_operation_attempts(tenant_id,operation_id,attempt_id), FOREIGN KEY(tenant_id,qualification_id) REFERENCES control_native_file_qualifications(tenant_id,qualification_id));
+-- statement
+CREATE TRIGGER control_native_file_scopes_immutable_delete BEFORE DELETE ON control_native_file_scopes BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TRIGGER control_native_file_scopes_immutable_update BEFORE UPDATE ON control_native_file_scopes BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TABLE control_native_file_intents(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id), operation_id TEXT NOT NULL, attempt_id TEXT NOT NULL, effect_id TEXT NOT NULL, ordinal BIGINT NOT NULL CHECK(ordinal BETWEEN 1 AND 64), intent_digest TEXT NOT NULL, recorded_at BIGINT NOT NULL, document TEXT NOT NULL, UNIQUE(tenant_id,attempt_id,ordinal), PRIMARY KEY(tenant_id,effect_id), FOREIGN KEY(tenant_id,attempt_id) REFERENCES control_native_file_scopes(tenant_id,attempt_id), FOREIGN KEY(tenant_id,operation_id,effect_id) REFERENCES control_effects(tenant_id,operation_id,effect_id));
+-- statement
+CREATE TRIGGER control_native_file_intents_immutable_delete BEFORE DELETE ON control_native_file_intents BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TRIGGER control_native_file_intents_immutable_update BEFORE UPDATE ON control_native_file_intents BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TABLE control_native_file_receipts(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id), effect_id TEXT NOT NULL, receipt_digest TEXT NOT NULL, recorded_at BIGINT NOT NULL, document TEXT NOT NULL, PRIMARY KEY(tenant_id,effect_id,receipt_digest), FOREIGN KEY(tenant_id,effect_id) REFERENCES control_native_file_intents(tenant_id,effect_id));
+-- statement
+CREATE TRIGGER control_native_file_receipts_immutable_delete BEFORE DELETE ON control_native_file_receipts BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TRIGGER control_native_file_receipts_immutable_update BEFORE UPDATE ON control_native_file_receipts BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TABLE control_native_file_closures(tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id), attempt_id TEXT NOT NULL, recorded_at BIGINT NOT NULL, document TEXT NOT NULL, PRIMARY KEY(tenant_id,attempt_id), FOREIGN KEY(tenant_id,attempt_id) REFERENCES control_native_file_scopes(tenant_id,attempt_id));
+-- statement
+CREATE TRIGGER control_native_file_closures_immutable_delete BEFORE DELETE ON control_native_file_closures BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TRIGGER control_native_file_closures_immutable_update BEFORE UPDATE ON control_native_file_closures BEGIN SELECT RAISE(ABORT,'native file evidence is immutable'); END;
+-- statement
+CREATE TRIGGER native_qualification_guard BEFORE UPDATE ON control_native_file_qualifications WHEN NOT(NEW.tenant_id=OLD.tenant_id AND NEW.qualification_id=OLD.qualification_id AND NEW.device_id=OLD.device_id AND NEW.group_id=OLD.group_id AND NEW.image_digest=OLD.image_digest AND NEW.expires_at=OLD.expires_at AND NEW.document=OLD.document AND OLD.enabled=true AND NEW.enabled=false) BEGIN SELECT RAISE(ABORT,'qualification can only be revoked'); END;
+-- statement
+CREATE TRIGGER native_scope_guard BEFORE INSERT ON control_native_file_scopes WHEN NOT(EXISTS(SELECT 1 FROM control_attempt_recovery_scopes r JOIN control_native_file_qualifications q ON q.tenant_id=r.tenant_id AND q.qualification_id=NEW.qualification_id WHERE r.tenant_id=NEW.tenant_id AND r.operation_id=NEW.operation_id AND r.attempt_id=NEW.attempt_id AND q.enabled=true AND q.device_id=r.device_id AND q.group_id=r.pool_id AND q.image_digest=r.image_digest)) BEGIN SELECT RAISE(ABORT,'invalid native file evidence'); END;
+-- statement
+CREATE TRIGGER native_intent_guard BEFORE INSERT ON control_native_file_intents WHEN NOT(EXISTS(SELECT 1 FROM control_native_file_scopes s JOIN control_enterprise_nonces n ON n.tenant_id=s.tenant_id AND n.nonce=s.attempt_id JOIN control_execution_leases l ON l.tenant_id=s.tenant_id AND l.invocation_id=s.operation_id JOIN control_native_file_qualifications q ON q.tenant_id=s.tenant_id AND q.qualification_id=s.qualification_id JOIN control_effects e ON e.tenant_id=s.tenant_id AND e.effect_id=NEW.effect_id WHERE s.tenant_id=NEW.tenant_id AND s.operation_id=NEW.operation_id AND s.attempt_id=NEW.attempt_id AND s.write_access=true AND n.consumed_at IS NOT NULL AND l.fencing_token=s.attempt_id AND l.expires_at>NEW.recorded_at AND q.enabled=true AND q.expires_at>NEW.recorded_at AND e.operation_id=s.operation_id AND e.request_digest=NEW.intent_digest) AND NOT EXISTS(SELECT 1 FROM control_native_file_closures c WHERE c.tenant_id=NEW.tenant_id AND c.attempt_id=NEW.attempt_id) AND NOT EXISTS(SELECT 1 FROM control_attempt_manifest_seals m WHERE m.tenant_id=NEW.tenant_id AND m.attempt_id=NEW.attempt_id)) BEGIN SELECT RAISE(ABORT,'invalid native file evidence'); END;
+-- statement
+CREATE TRIGGER native_receipt_guard BEFORE INSERT ON control_native_file_receipts WHEN NOT((SELECT count(*) FROM control_native_file_receipts r WHERE r.tenant_id=NEW.tenant_id AND r.effect_id=NEW.effect_id)<2) BEGIN SELECT RAISE(ABORT,'invalid native file evidence'); END;
+-- statement
+CREATE TRIGGER native_closure_guard BEFORE INSERT ON control_native_file_closures WHEN NOT(EXISTS(SELECT 1 FROM control_native_file_scopes s JOIN control_native_file_qualifications q ON q.tenant_id=s.tenant_id AND q.qualification_id=s.qualification_id WHERE s.tenant_id=NEW.tenant_id AND s.attempt_id=NEW.attempt_id AND q.enabled=true AND q.expires_at>NEW.recorded_at AND (s.write_access=false OR EXISTS(SELECT 1 FROM control_native_file_intents i WHERE i.tenant_id=s.tenant_id AND i.attempt_id=s.attempt_id))) AND NOT EXISTS(SELECT 1 FROM control_native_file_intents i WHERE i.tenant_id=NEW.tenant_id AND i.attempt_id=NEW.attempt_id AND (SELECT count(*) FROM control_native_file_receipts r WHERE r.tenant_id=i.tenant_id AND r.effect_id=i.effect_id)<>1)) BEGIN SELECT RAISE(ABORT,'invalid native file evidence'); END;
+-- statement
+CREATE TRIGGER native_logical_capacity AFTER INSERT ON control_native_file_intents BEGIN UPDATE control_tenant_capacity SET stored_rows=stored_rows+1,stored_bytes=stored_bytes+length(NEW.effect_id)+length(NEW.intent_digest) WHERE tenant_id=NEW.tenant_id; SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END; END;
+-- statement
+CREATE INDEX native_file_intents_operation ON control_native_file_intents(tenant_id,operation_id,effect_id);
+-- statement
 -- BEGIN TENANT CAPACITY
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants BEGIN INSERT INTO control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id); END;
+-- statement
+CREATE TRIGGER control_native_file_qualifications_capacity_insert AFTER INSERT ON control_native_file_qualifications BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_qualifications_capacity_delete AFTER DELETE ON control_native_file_qualifications BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_qualifications_capacity_update AFTER UPDATE ON control_native_file_qualifications BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_scopes_capacity_insert AFTER INSERT ON control_native_file_scopes BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_scopes_capacity_delete AFTER DELETE ON control_native_file_scopes BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_scopes_capacity_update AFTER UPDATE ON control_native_file_scopes BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_intents_capacity_insert AFTER INSERT ON control_native_file_intents BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_intents_capacity_delete AFTER DELETE ON control_native_file_intents BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_intents_capacity_update AFTER UPDATE ON control_native_file_intents BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_receipts_capacity_insert AFTER INSERT ON control_native_file_receipts BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_receipts_capacity_delete AFTER DELETE ON control_native_file_receipts BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_receipts_capacity_update AFTER UPDATE ON control_native_file_receipts BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_closures_capacity_insert AFTER INSERT ON control_native_file_closures BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_closures_capacity_delete AFTER DELETE ON control_native_file_closures BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_native_file_closures_capacity_update AFTER UPDATE ON control_native_file_closures BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
 -- statement
 CREATE TRIGGER control_workflow_workers_capacity_insert AFTER INSERT ON control_workflow_workers BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.instance_id AS BLOB)),0)+COALESCE(length(CAST(NEW.owner_id AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_inventory AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;

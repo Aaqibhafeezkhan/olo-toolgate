@@ -16,7 +16,7 @@ import io.ololabs.toolgate.contracts.v2.GatewaySettings;
 
 /** Tenant control-plane settings (formatVersion 2, platform-requirements.md §18), controlled by feature permissions. Auto-approval is off until an administrator,
  *  an imported snapshot or the startup environment enables it. Client check-in is env-owned: always the running policy, never stored or imported.
- *  A change of configuration.requiredReviews needs the reviews of the threshold in force, with no Super Admin bypass. */
+ *  Scoped administrators change configuration.requiredReviews under the current threshold; live Super Admins may change it directly. */
 public final class ServerSettingsService {
     public static final long DAY_MS=86400000L,DEFAULT_AUTO_APPROVE_MS=30*DAY_MS,MAX_AUTO_APPROVE_MS=3650*DAY_MS;
     private static final java.util.regex.Pattern GATEWAY_NAME=java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9 ._()-]{0,63}");
@@ -91,9 +91,9 @@ public final class ServerSettingsService {
         var digest=DirectoryService.digest(request);
         var write=store.transaction(actor.tenant(),true,tx->{if(groups==null)settingsPermission(tx,actor,true);else requirePatch(tx,codec,actor,groups);var replay=tx.replay(actor.id(),key,digest);if(replay!=null)return new Write(replay,null);
             var current=current(tx);if(current.revision()!=expected)throw Failure.conflict();var next=change.apply(current);
-            // The threshold itself changes only under the current threshold's reviews, never through the Super Admin path.
-            if(current.configuration().requiredReviews()>0&&!next.configuration().requiredReviews().equals(current.configuration().requiredReviews()))return new Write(null,next);
-            var saved=save(tx,next,current,tx.load());tx.audit(actor.id(),"SERVER_SETTINGS_UPDATE",ENTITY,saved.revision(),requestId,digest);
+            boolean superAdmin=new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId());
+            if(!superAdmin&&current.configuration().requiredReviews()>0&&!next.configuration().requiredReviews().equals(current.configuration().requiredReviews()))return new Write(null,next);
+            var saved=save(tx,next,current,tx.load());tx.audit(actor.id(),"SERVER_SETTINGS_UPDATE"+(superAdmin?"_SUPER_ADMIN":""),ENTITY,saved.revision(),requestId,digest);
             var result=reply(tx,actor,saved);tx.remember(actor.id(),key,digest,result);return new Write(result,null);});
         if(write.reply()!=null)return write.reply();
         if(reviews==null)throw Failure.unavailable();var next=write.next();

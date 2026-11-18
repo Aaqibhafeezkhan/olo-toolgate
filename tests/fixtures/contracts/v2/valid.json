@@ -5740,5 +5740,66 @@
       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     ],
     "instanceId": "worker-1"
+  },
+  "NativeFileOperation": "WRITE",
+  "NativeFileIntent": {
+    "operation": "WRITE",
+    "path": "summary.txt",
+    "contentSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "NativeFileEffectBegin": {
+    "requestId": "inv-file",
+    "leaseId": "lease-file",
+    "fencingToken": "fence-file",
+    "ordinal": 1,
+    "intent": {
+      "operation": "WRITE",
+      "path": "summary.txt",
+      "contentSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "NativeFileEffectGrant": {
+    "effectId": "nf-effect",
+    "intentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "NativeFileEffectReceipt": {
+    "requestId": "inv-file",
+    "leaseId": "lease-file",
+    "fencingToken": "fence-file",
+    "effectId": "nf-effect",
+    "afterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "NativeFileScopeClosed": {
+    "requestId": "inv-file",
+    "leaseId": "lease-file",
+    "fencingToken": "fence-file"
+  },
+  "NativeFileAck": {
+    "accepted": true
+  },
+  "NativeFileQualification": {
+    "deviceId": "device",
+    "deviceGroupId": "files",
+    "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "expiresAtUnixMs": 1795000000000,
+    "acknowledgedRisk": "UNFENCED_FILESYSTEM"
+  },
+  "NativeFileCandidate": {
+    "deviceId": "device",
+    "toolId": "files/read",
+    "managedDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "writeAccess": false
+  },
+  "NativeFileCandidatePage": {
+    "items": [
+      {
+        "deviceId": "device",
+        "toolId": "files/read",
+        "managedDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "writeAccess": false
+      }
+    ]
   }
 }

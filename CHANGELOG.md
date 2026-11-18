@@ -6,6 +6,16 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add the blank persistent community debug stack, private standalone Python and
+  restart credential reconciliation, explicit device/bot deployment scripts, and
+  a real two-bot file/agent/model hot-swap acceptance driver. Qualify protected
+  Linux file-only execution with native intents, durable receipts and closed
+  scopes; mutations remain unfenced and uncertain effects are not retried.
+- Rename repository bot authoring to `bot/` with explicit configuration filenames;
+  place Bots below Overview and Agents below Bots. Bot switching leaves device
+  file content to the operator. Document exact input/output, OpenRouter bridging
+  and installation-owned monitoring configuration.
+
 - Prepare reviewed JSON graphs from the admin console through a private mTLS
   runtime connection and persist complete generation-bound compilation receipts.
   Pin compiler identity and configuration for admitted runs across publication.
@@ -17,9 +27,9 @@ The project follows semantic versioning once stable versioning begins.
   API and dynamic authorized subscription reconciliation. Move debug helpers into
   `debug/profiled`. Automatic profile hot-swap deployment remains in progress.
 
-- Build versioned workflow profiles from `profiles/configurations/` using
-  `profiles/build.sh` or `profiles/build.bat`, with output and package inventories
-  in `profiles/bin/` and verified publication as release assets. Workflow bundles
+- Build versioned workflow profiles from `bot/configurations/` using
+  `bot/build.sh` or `bot/build.bat`, with output and package inventories
+  in `bot/bin/` and verified publication as release assets. Workflow bundles
   include the exact required tool and trigger archives. Tool packaging now uses
   `.olotool` exclusively; workflow/profile bundles use `.olo`. Prior tool filenames and configuration-only profile bundles
   have no compatibility reader. Console transfer preserves credentials and uses

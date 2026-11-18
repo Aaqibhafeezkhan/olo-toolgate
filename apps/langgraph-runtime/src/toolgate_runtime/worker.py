@@ -78,8 +78,14 @@ class ExecutionEvidence:
         self.tools.append(observation)
         try:
             outcome = self.adapter.call_tool(lease, grant, tool_id, arguments, **kwargs)
+        except RunTransportError as failure:
+            if failure.stage is not None:observation['failureStage']=failure.stage
+            raise
         except Denied:
             observation["state"] = "DENIED"
+            raise
+        except Exception as failure:
+            observation['failureType']=type(failure).__name__ if type(failure).__name__ in ('AttributeError','KeyError','TypeError','ValueError') else 'Unexpected'
             raise
         observation["state"] = outcome.state
         return outcome

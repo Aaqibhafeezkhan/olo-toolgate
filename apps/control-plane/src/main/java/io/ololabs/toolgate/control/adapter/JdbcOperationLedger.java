@@ -48,7 +48,7 @@ final class JdbcOperationLedger {
             }
             if(permits.size()>64)complete=false;
             if(invocation.reservedNonce()!=null&&!permits.containsKey(invocation.reservedNonce()))complete=false;
-            try(var s=query("SELECT attempt_id,device_id FROM control_attempt_recovery_scopes WHERE tenant_id=? AND operation_id=? LIMIT 65",invocation.id());var rows=s.executeQuery()){
+            try(var s=query("SELECT r.attempt_id,r.device_id FROM control_attempt_recovery_scopes r WHERE r.tenant_id=? AND r.operation_id=? AND NOT EXISTS(SELECT 1 FROM control_native_file_scopes f WHERE f.tenant_id=r.tenant_id AND f.attempt_id=r.attempt_id) LIMIT 65",invocation.id());var rows=s.executeQuery()){
                 while(rows.next()){
                     if(!permits.containsKey(rows.getString(1)))complete=false;
                     if(invocation.evaluation().context().deviceId().equals(rows.getString(2)))qualified.add(rows.getString(1));

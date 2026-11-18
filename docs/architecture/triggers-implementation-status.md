@@ -1,6 +1,35 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Bots hot-swap integration — 2026-11-18
+
+The source authoring root is now `bot`; exact embedded `.olotool` trigger/tool
+packages still use current #274 interfaces. Dynamic assignment/subscription
+reconciliation runs on one persistent device. Import/switch does not change
+file content or create folders; explicit operator setup is documented. Native
+business-finality evidence is added by ADR 075, not by changing trigger transport.
+Source digest `2a51170e42f64e3c7568d36de865a120befa3341813d4bd78afe3cffe4442d8b` and checks are in
+[the workflow checkpoint](workflow-v1-status.md#qualified-native-file-execution-and-bots-authoring--2026-11-18).
+Final fresh-stack A/B acceptance passes: two real events, six finalized tool calls, unchanged core/device processes and post-drain retirement of A. This is bounded local integration evidence. No module Done-when, scope,
+baseline denominator or earned weight changes: **27% remains earned**. Durable
+reference-aware retirement/reconciliation and the full M12 matrix remain.
+
+## Persistent-device local integration — 2026-11-18
+
+The #295 local stack now starts one persistent device and follows dynamic
+subscriptions. Administrative scripts explicitly configure the existing device
+approval policy, review a named pending key, enable and allocate its groups.
+Profiles cannot supply device authority. The builder preserves trigger-package
+closure from dispatch connections, and exact embedded packages were installed
+through the existing Control/Gateway path. A real file event admitted a workflow;
+its native read business outcome remained UNKNOWN, so no A/B trigger handover
+or successful end-to-end run is accepted. Actual checks, source fingerprint and
+limits are in the [workflow checkpoint](workflow-v1-status.md#persistent-local-stack-device-scripts-and-launcher-recovery--2026-11-18).
+No trigger wire channel, module scope/Done-when or baseline weight changes;
+**27% remains earned**. Revision-isolated preparation and old assignment retirement
+remain outstanding.
+
+
 ## Runtime worker presence integration — 2026-11-18
 
 #295 publication/admission now checks recent compatible LangGraph worker

@@ -25,12 +25,6 @@ public final class EnterpriseOperations {
     /** The running check-in policy decides which devices are online for placement. */
     public EnterpriseOperations checkInPolicy(ClientCheckInPolicy value){checkIn=java.util.Objects.requireNonNull(value);return this;}
     private volatile String userCredentialIssuer;
-    private volatile Set<String> deviceFileReaders = Set.of();
-    /** Explicit operator qualification of an exact device, administered device group and managed image. */
-    public EnterpriseOperations deviceFileReaders(Set<String> pins) {
-        deviceFileReaders = RecoveryAdmissionPolicy.parseQualifiedExecutors(String.join(",", pins));
-        return this;
-    }
     /** Accept Gateway {@code HUMAN} contexts verified from user credentials of this issuer (M3.4); null refuses all. */
     public EnterpriseOperations userCredentialIssuer(String issuer){userCredentialIssuer=issuer==null||issuer.isBlank()?null:Ids.valid(issuer);return this;}
     public EnterpriseOperations(Store store,Codec codec,EffectSigner signer,Clock clock,String issuer,String audience,long lifetime,int capacity){
@@ -316,7 +310,7 @@ public final class EnterpriseOperations {
             String nonce=String.format(java.util.Locale.ROOT,"attempt-%03d-%s",previousAttempts+1,UUID.randomUUID());long expires=Math.min(i.expiresAtUnixMs(),Math.min(now+10000,decision.validUntilUnixMs()));
             String evalDigest=DirectoryService.digest(codec.json(i.evaluation()));var e=i.evaluation();var approval=tx.enterprise().approval(approvalId(i.id()));var ids=approval==null?List.<String>of():List.of(approval.id());
             var next=changed(i,EnterpriseInvocationState.RESERVED,nonce,i.completedResources(),null);tx.enterprise().reserveExecutionNonce(new EnterpriseStore.Nonce(nonce,i.id(),evalDigest,i.authorizationEpoch(),now,expires,null));tx.enterprise().saveInvocation(next,now,i.revision());tx.audit(actorId,"PERMIT_RESERVE","invocation:"+next.id(),next.revision(),e.context().requestId(),next.requestDigest(),evidence(next));
-            DeviceFileReadQualification.admit(tx, codec, next, nonce, deviceFileReaders);
+            DeviceFileQualification.admit(tx, codec, next, nonce, now);
             return new Lease(next,nonce,evalDigest,now,expires,ids);
     }
     String issuer(){return issuer;}

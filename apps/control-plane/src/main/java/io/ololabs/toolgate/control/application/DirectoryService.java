@@ -99,6 +99,8 @@ public final class DirectoryService {
     /** Shared field/action authorization for direct changes and configuration imports. */
     private void authorizeMutation(Actor actor,Store.Session tx,Directory before,Directory.Entry old,Directory.Entry input,String operation){
         var kind=(input==null?old:input).id().kind();var action=mutationAction(kind,old,input,operation);
+        if(kind==Kind.USER&&input==null&&old.id().value().equals(actor.userId()))throw new Failure(ErrorCode.CONFLICT,409,
+            old.id().value().equals(tx.bootstrapAdminUserId())?"The login created during setup cannot be deleted":"You cannot delete your own user");
         require(actor,tx,before,action,input==null?old:input);if(old!=null)require(actor,tx,before,action,old);
             if(GroupGraph.group(kind)&&input!=null) {
                 // Membership and role changes require authority over every affected source/destination group.
