@@ -282,10 +282,17 @@ Private state/credentials are ignored by Git. The separate fixture container
 
 The CLI is not a durable deployment reconciler. Failed preparation can leave
 inactive candidates/packages/references; candidate readiness is still
-profile-keyed. Equivalent one-click UI orchestration, revision-isolated readiness,
-durable recovery, cross-host/distributed qualification and release publication
-remain separate work. Admin UI bundle transfer does not replace the explicit
-installation/preparation steps above. This demo does not complete the
+profile-keyed. The Bots page now prepares a complete `.olo` through the existing Admin APIs:
+embedded packages, referenced configuration, service bindings, trigger connections
+and graph preparation. Choose **Bot .olo file**, then **Import bot .olo**. Review
+the resulting revision and select **Publish reviewed revision** when ready.
+An installation without an enabled device in the declared groups stays staged
+and pending; configure the device, then select **Resume bot preparation**. After
+a page reload, select the same bundle again to resume preparation. Destination
+secrets, approved device access, native qualification and operator-created folders
+remain explicit installation setup. Import never populates device files.
+Revision-isolated readiness, durable server-side recovery, cross-host/distributed
+qualification and release publication remain separate work. This demo does not complete the
 #230/#274/#295 roadmaps. See `docs/architecture/workflow-v1-status.md` for actual
 acceptance and checks.
 

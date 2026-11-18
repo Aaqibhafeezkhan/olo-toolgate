@@ -33,6 +33,11 @@ it('does not replace existing shared definitions or user accounts when preparing
   expect(()=>mergeReferences({...data,roles:[{...data.roles[0],name:'conflicting'}]},snapshot)).toThrow('differs');
   expect(()=>validateReferences({...data,users:[]})).toThrow('credentials');
 });
+
+it('refuses device membership carried in a bot before preparing any configuration writes',()=>{
+  const incoming={...referencedData(profile,snapshot),deviceGroups:[{id:'devices',name:'Devices',enabled:true,revision:1,deviceIds:['foreign-device']}]};
+  expect(()=>mergeReferences(incoming as ConfigurationFile,snapshot)).toThrow('device group membership');
+});
 it('merges referenced tool memberships into an empty installation group without dropping existing members',()=>{
   const incoming={...referencedData(profile,snapshot),toolGroups:[{id:'tools',name:'Tools',enabled:true,revision:4,toolIds:['imported-tool']}]};
   const current={...snapshot,toolGroups:[{id:'tools',name:'Tools',enabled:true,revision:1,toolIds:['existing-tool']}]};

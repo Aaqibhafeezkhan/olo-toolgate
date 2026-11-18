@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Console bot trigger closure repair — 2026-11-18
+
+Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`. UI bot bundles now retain trigger packages
+referenced only by graph dispatch connections. Portable assignment specifications
+use current `trigger` contracts; obsolete `triggerId` is rejected by builders and
+readers. Console import relies on Control-managed assignment placement and
+restores declared subscriptions, without device allocation or broadcast fallback.
+All seven actual built bot bundles pass the UI importer; the full UI suite has
+314 passes and one optional skip. New live console acceptance was interrupted
+by the operator removing the stack and remains unverified. Existing #274 transport
+is reused. No module scope, Done-when or baseline changes: **27% remains earned**.
+Next: full module/M12 matrices and durable reference-aware reconciliation.
+
 ## Bots hot-swap integration — 2026-11-18
 
 The source authoring root is now `bot`; exact embedded `.olotool` trigger/tool

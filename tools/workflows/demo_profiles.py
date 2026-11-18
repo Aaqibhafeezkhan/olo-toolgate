@@ -51,7 +51,7 @@ def configurations():
         binding=config['dispatchBindings'][0]
         binding.update(id='demo-dispatch-'+revision,workflowId=workflow['id'],workflowVersionId=workflow['versionId'],remediationMode='APPLY')
         connections=[dict(id=binding['id'],subscription='demo-'+revision,assignment='demo-'+revision,
-            assignmentSpec=dict(triggerId='examples.hotfolder-watch/new-file',packageVersion='0.1.0',
+            assignmentSpec=dict(trigger='examples.hotfolder-watch/new-file',packageVersion='0.1.0',
                 target=dict(executor='CLIENT',deviceGroups=['ReadAndWriteDeviceGroup']),
                 config=dict(folder='inbox-'+revision,extension='.txt'),globals={},desiredState='Running'),
             subscriptionSpec=dict(sources=dict(assignments=['demo-'+revision]),

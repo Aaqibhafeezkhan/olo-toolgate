@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from license_expression import ExpressionError
@@ -14,6 +15,27 @@ from tools import dependency_licenses as licenses
 
 
 class MavenLicenseTests(unittest.TestCase):
+    def test_rate_limited_metadata_is_retried_without_waiving_license_evidence(self):
+        failure=urllib.error.HTTPError('https://repo.maven.apache.org/metadata',429,'limited',{'Retry-After':'2'},io.BytesIO(b'private provider body'))
+        with patch.object(licenses.urllib.request,'urlopen',side_effect=[failure,io.BytesIO(b'<project/>')]) as fetch,patch.object(licenses.time,'sleep') as sleep:
+            self.assertEqual(b'<project/>',licenses.metadata_bytes('https://repo.maven.apache.org/metadata'))
+            self.assertEqual(2,fetch.call_count);sleep.assert_called_once_with(2)
+
+    def test_persistent_rate_limit_and_missing_metadata_still_fail(self):
+        for code,count in ((429,5),(404,1)):
+            failures=[urllib.error.HTTPError('https://repo.maven.apache.org/metadata',code,'refused',{},io.BytesIO()) for _ in range(count)]
+            with self.subTest(code=code),patch.object(licenses.urllib.request,'urlopen',side_effect=failures) as fetch,patch.object(licenses.time,'sleep'),self.assertRaises(urllib.error.HTTPError):
+                licenses.metadata_bytes('https://repo.maven.apache.org/metadata')
+            self.assertEqual(count,fetch.call_count)
+
+    def test_metadata_beyond_size_budget_or_server_retry_window_is_not_accepted(self):
+        with patch.object(licenses.urllib.request,'urlopen',return_value=io.BytesIO(b'x'*(2*1024*1024+1))),self.assertRaises(ValueError):
+            licenses.metadata_bytes('https://repo.maven.apache.org/metadata')
+        failure=urllib.error.HTTPError('https://repo.maven.apache.org/metadata',429,'limited',{'Retry-After':'300'},io.BytesIO())
+        with patch.object(licenses.urllib.request,'urlopen',side_effect=failure),patch.object(licenses.time,'sleep') as sleep,self.assertRaises(urllib.error.HTTPError):
+            licenses.metadata_bytes('https://repo.maven.apache.org/metadata')
+        sleep.assert_not_called()
+
     def declared_license(self, name, group='aopalliance', artifact='aopalliance', version='1.0', url=''):
         pom = f'<project><licenses><license><name>{name}</name><url>{url}</url></license></licenses></project>'
         with patch.object(licenses.urllib.request, 'urlopen', return_value=io.BytesIO(pom.encode())):

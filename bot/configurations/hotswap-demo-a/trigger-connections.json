@@ -4,7 +4,6 @@
     "subscription": "demo-a",
     "assignment": "demo-a",
     "assignmentSpec": {
-      "triggerId": "examples.hotfolder-watch/new-file",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
@@ -17,7 +16,8 @@
         "extension": ".txt"
       },
       "globals": {},
-      "desiredState": "Running"
+      "desiredState": "Running",
+      "trigger": "examples.hotfolder-watch/new-file"
     },
     "subscriptionSpec": {
       "sources": {

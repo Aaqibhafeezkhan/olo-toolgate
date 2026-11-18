@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import {createContext,useContext,useEffect,useState,type ReactNode,type Dispatch,type SetStateAction} from 'react';
 import type {DeploymentProfile,WorkflowConfiguration,WorkflowDefinition,WorkflowProfileStatus,TriggerDefinitionRecord,TriggerAssignment,TriggerSubscription} from '@olo-labs/toolgate-contracts/v2';
-import {ApiError,ControlClient} from './api';
+import {ControlClient} from './api';
 import {Failure} from './Failure';
 import {EditorDialog} from './EditorDialog';
 import {ProfileFields,initialField,profileSchema,type FieldOptions} from './ProfileFields';
@@ -45,7 +45,7 @@ function Collection({title,definition,items,change,idField='id',disabled=false,d
 export function WorkflowManagement({client,page}:{client:ControlClient;page:WorkflowPage}){
   const {workspace:w,setWorkspace,busy,setBusy}=useWorkspace();
   const [catalog,setCatalog]=useState<readonly WorkflowProfileStatus[]>(),[hasMore,setHasMore]=useState(false),[attempt,setAttempt]=useState(0),[error,setError]=useState<unknown>(),[notice,setNotice]=useState('');
-  useEffect(()=>{const abort=new AbortController();setError(undefined);client.workflowProfiles(undefined,abort.signal).then(items=>{if(!abort.signal.aborted){setCatalog(items);setHasMore(items.length===50);}}).catch(e=>{if(!abort.signal.aborted)setError(e);});return()=>abort.abort();},[client,attempt]);
+  useEffect(()=>{const abort=new AbortController();client.workflowProfiles(undefined,abort.signal).then(items=>{if(!abort.signal.aborted){setCatalog(items);setHasMore(items.length===50);}}).catch(e=>{if(!abort.signal.aborted)setError(e);});return()=>abort.abort();},[client,attempt]);
   async function run(action:()=>Promise<void>){if(busy)return;setBusy(true);setError(undefined);setNotice('');try{await action();}catch(e){setError(e);setWorkspace(current=>({...current,status:undefined}));}finally{setBusy(false);}}
   const edit=(profile:DeploymentProfile)=>setWorkspace({...w,profile,status:undefined,dirty:true});
   const config=w.profile?.workflows;
@@ -111,7 +111,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
   const agentItems=config?.agentDefinitions??[];
   const visibleAgents=selectedAgent?agentItems.filter(agent=>agent.agentId===selectedAgent):agentItems;
   return <><div className="page-heading"><div><p className="eyebrow">Bot configuration</p><h1>{workflowPages[page]}</h1></div><button disabled={busy} onClick={()=>setAttempt(a=>a+1)}>Refresh bots</button></div>
-    <p>Configure the selected bot across these pages, then stage, review and publish its exact revision. Current Super Admin authority is required. Runtime grants remain separate.</p>
+    <p>Import a self-contained .olo bot to prepare its graph, agents, models, referenced configuration, tools and triggers together. Use the editors for optional changes, then publish when ready. Installation credentials and device access remain local.</p>
     {error!==undefined&&<Failure error={error}/>}<p role="status">{notice}</p>
     <section className="guidance"><h2>Working bot</h2>
       <button disabled={busy||w.dirty} onClick={create}>New bot</button>
@@ -134,7 +134,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
     </section>}
     {w.profile&&page==='workflow-profiles'&&<section className="guidance"><h2>Bot properties</h2><JsonTextEditor key={`json-${w.epoch}`} label="Bot JSON" value={w.profile} disabled={busy} apply={value=>edit(reviseProfile(value as unknown as DeploymentProfile))}/><form id="workflow-profile-fields" className="workflow-profile-editor" onSubmit={e=>{e.preventDefault();void run(stage);}}><fieldset disabled={busy}><ProfileFields key={w.epoch} value={w.profile} change={value=>edit(value as DeploymentProfile)}/></fieldset></form></section>}
     {w.profile&&page==='workflow-trigger-packages'&&<TriggerPackages client={client} busy={busy} packages={w.profile.packages} change={value=>edit({...w.profile!,packages:value as unknown as DeploymentProfile['packages']})}/>}
-    {page==='workflows'&&<WorkflowTransfer client={client} profile={w.profile} allowNew={catalog?.length===0} busy={busy||w.dirty} run={run} replace={async profile=>{const expected=w.baseStatus?.generation??0;const status=await client.stageWorkflowProfile(profile);if(status.generation!==expected)throw new ApiError(409,'STALE_PROFILE');await load(status);setAttempt(a=>a+1);setNotice('Imported bot and refreshed the staged bot. Review and publish to activate it. Containers and credentials are unchanged.');}}/>}
+    {page==='workflows'&&<WorkflowTransfer client={client} profile={w.profile} allowNew={catalog!==undefined} busy={busy||w.dirty} run={run} stored={async (_profile,status)=>{await load(status);setAttempt(a=>a+1);setNotice('Imported bot revision and refreshed the editor. Review readiness and publish to activate it. Containers and credentials are unchanged.');}}/>}
     {w.profile&&config&&<>
 
       {page==='workflowGroups'&&<><Collection title="Bot groups" definition="WorkflowGroupDefinition" items={config.workflowGroups} change={value=>editConfig('workflowGroups',value)} disabled={busy}/><p>Assign bots to groups using each bot’s workflowGroupId on the Bots page.</p></>}

@@ -289,20 +289,16 @@ async fn tool_protocol_v2_brokers_only_the_signed_file_access_for_authorized_pat
     assert_eq!(input["protocolVersion"], 2);
     assert_eq!(input["invocationId"], "inv-device-1");
     assert_eq!(input["arguments"], json!({"path": "notes.txt"}));
-    // WRITE: only paths the invocation was authorized with.
+    // A WRITE declaration alone cannot grant an unqualified mutation. The
+    // qualified native tier also refuses APPEND until it has target receipts.
     let out = run(Some(LocalFileAccess::Write), write_other, write_same).await;
-    assert!(
-        out["first"]["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("not one this invocation was authorized with"),
-        "{out}"
-    );
-    assert!(out["second"].get("result").is_some(), "{out}");
+    assert_eq!(out["first"]["error"]["code"], "BROKER_REFUSED", "{out}");
+    assert_eq!(out["second"]["error"]["code"], "BROKER_REFUSED", "{out}");
+    assert!(out["second"].get("result").is_none(), "{out}");
     assert!(!files.join("other.txt").exists());
     assert_eq!(
         std::fs::read_to_string(files.join("notes.txt")).unwrap(),
-        "hello world"
+        "hello"
     );
     // No grant: no files at all. Route calls belong to Tool Hosts.
     let out = run(None, read, route).await;

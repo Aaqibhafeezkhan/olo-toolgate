@@ -81,6 +81,10 @@ def verify(data):
     files=inventory(data,MAX_BUNDLE,256*1024*1024)
     manifest=json.loads(files['manifest.json'])
     if manifest['format']!='olo-workflow' or manifest['version']!=2:raise ValueError('Unsupported profile format')
+    for connection in manifest['connections']:
+        spec=connection['assignmentSpec']
+        if not isinstance(spec.get('trigger'),str) or 'triggerId' in spec:
+            raise ValueError('Bot trigger connections must use the current trigger contract')
     if digest(files['workflow.json'])!=manifest['sha256'] or digest(files['referenced-data.json'])!=manifest['referencesSha256']:raise ValueError('Profile checksum mismatch')
     allowed={'manifest.json','workflow.json','referenced-data.json'}
     for item in manifest['packages']:

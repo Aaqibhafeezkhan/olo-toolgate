@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Prepare self-contained bot imports in the console, retaining graph-only trigger
+  packages and reporting staged device readiness. Repair generated operation
+  metadata and native refusal fixtures; retry transient license metadata failures
+  within bounds without bypassing scans.
+
 - Add the blank persistent community debug stack, private standalone Python and
   restart credential reconciliation, explicit device/bot deployment scripts, and
   a real two-bot file/agent/model hot-swap acceptance driver. Qualify protected

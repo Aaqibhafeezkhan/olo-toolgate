@@ -1,6 +1,40 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Self-contained console import and CI repair — 2026-11-18
+
+Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`; changes remain a bounded #295 integration slice.
+The console now verifies embedded packages, merges referenced configuration,
+prepares destination service bindings, stages/reviews, provisions packages,
+restores declared trigger connections and prepares graphs through existing APIs.
+Publication remains explicit. Missing device readiness leaves a staged pending
+bot with a resume action. Import preserves device membership, credentials and
+file content; installation secrets and device/native authority remain external.
+The bundle closure includes graph-only trigger packages. Current connection
+specifications require `trigger`; obsolete `triggerId` is rejected, not converted.
+
+Run 44294902059's seven failed jobs share four repaired roots: generated UI
+operation metadata drift; the native broker fixture expecting unauthorized
+APPEND success (now verifies refusal and unchanged content); graph-only trigger
+package omission in UI bundle scope; and transient Maven license metadata 429.
+License metadata uses bounded retries and still fails on exhausted/unavailable
+or oversized metadata; no security/license scan bypass was introduced. The
+schema inventory includes the native-file contract; scorecard matching normalizes
+Windows line endings while retaining exact passing-test requirements.
+
+Executed: UI typecheck and full UI suite (314 passed, one optional skip); real
+builder output for all seven bots accepted by the UI reader; 35 focused Python
+schema/scorecard/license/profile tests; full Linux client package (90 passed,
+two existing prerequisite ignores); generated operation check; actual Maven
+license retrieval. The broad Python gate failed on Windows symlink privileges
+plus two assertions subsequently fixed and covered by the focused tests; it is
+not recorded as passing. Hosted macOS/ARM, full scan and full repository reruns
+remain outstanding. A production-image build succeeded. The operator removed
+the local stack during browser acceptance; new live UI import is unverified.
+The earlier A/B acceptance below is historical evidence for its recorded sources.
+Durable server-side import recovery and full phase matrices remain outstanding.
+**Weighted baseline remains 0/100; no phase completion or baseline change.**
+
 ## Qualified native file execution and Bots authoring — 2026-11-18
 
 Known tested base `11565e5a75a04d6daada9d3544a7931a1a46d211`; working non-document source inventory SHA-256

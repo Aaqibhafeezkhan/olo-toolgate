@@ -1,6 +1,22 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## CI refusal-fixture and scorecard repair — 2026-11-18
+
+Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`. The native broker integration fixture now
+expects unqualified APPEND and out-of-argument writes to be refused, with the
+original file unchanged and no unauthorized target file. The full Linux client
+package passes 90 cases with two existing prerequisite ignores; hosted native
+platform reruns remain outstanding. Scorecard input normalizes CRLF only before
+its existing exact passed-test match; focused schema/scorecard/license/profile
+checks pass (35 cases). License metadata retries remain bounded and fail closed;
+no scan waiver or native APPEND permission was added. Console bundle preparation
+uses existing authority APIs and does not allocate devices or publish implicitly.
+Overall phase table, first vertical-slice acceptance and C3b/C8 remain partial;
+no S01–S33 weight/denominator changes or new security guarantees. Next work remains
+the full stage/phase matrices and hosted scan/native validation. See the workflow
+status for the seven-job repair and live acceptance limitation.
+
 ## Qualified protected filesystem integration — 2026-11-18
 
 Known base `11565e5a75a04d6daada9d3544a7931a1a46d211`; source digest `2a51170e42f64e3c7568d36de865a120befa3341813d4bd78afe3cffe4442d8b` and exact checks are recorded in

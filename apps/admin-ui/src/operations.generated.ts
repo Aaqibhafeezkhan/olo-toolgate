@@ -3,6 +3,12 @@
 // GENERATED FILE — DO NOT EDIT; python tools/ui/generate.py
 import type { ControlAccessGrant, ControlAccessGrantPage, ControlAgent, ControlAgentDelegation, ControlAgentDelegationPage, ControlAgentGroup, ControlAgentGroupPage, ControlAgentPage, ControlDelegation, ControlDelegationPage, ControlDevice, ControlDeviceEvidence, ControlDeviceEvidencePage, ControlDeviceGroup, ControlDeviceGroupPage, ControlDevicePage, ControlExecutionBinding, ControlExecutionBindingPage, ControlIdentityBinding, ControlIdentityBindingPage, ControlPolicy, ControlPolicyPage, ControlResourceExtractor, ControlResourceExtractorPage, ControlRole, ControlRolePage, ControlTeam, ControlTeamPage, ControlTool, ControlToolGroup, ControlToolGroupPage, ControlToolPage, ControlUser, ControlUserPage, ControlWorkloadBinding, ControlWorkloadBindingPage } from '@olo-labs/toolgate-contracts';
 export const operations = {
+  beginNativeFileEffect: { method: 'POST', path: '/api/control/v1/mcp/native-files/begin' },
+  recordNativeFileReceipt: { method: 'POST', path: '/api/control/v1/mcp/native-files/receipts' },
+  closeNativeFileScope: { method: 'POST', path: '/api/control/v1/mcp/native-files/close' },
+  qualifyNativeFileOwner: { method: 'POST', path: '/api/control/v1/mcp/native-files/qualifications' },
+  nativeFileCandidates: { method: 'GET', path: '/api/control/v1/mcp/native-files/candidates/{id}' },
+  revokeNativeFileQualification: { method: 'DELETE', path: '/api/control/v1/mcp/native-files/qualifications/{id}' },
   reportWorkflowWorkerPresence: { method: 'POST', path: '/internal/v1/runtime/workers:heartbeat' },
   claimCompatibleWorkflowRun: { method: 'POST', path: '/internal/v1/runtime/claim' },
   getRuntimeGraphCandidate: { method: 'GET', path: '/internal/v1/runtime/graph-candidates/{profileId}/{digest}/{workflowId}' },

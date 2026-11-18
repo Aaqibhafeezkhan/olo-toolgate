@@ -23,7 +23,7 @@ function configuration(profile:DeploymentProfile):WorkflowConfiguration{
   return profile.workflows;
 }
 /** Select one workflow and its local dependency closure. Deployment hints remain inert configuration. */
-export function workflowScope(profile:DeploymentProfile,id:string):DeploymentProfile{
+export function workflowScope(profile:DeploymentProfile,id:string,connections:readonly Pick<Connection,'id'|'assignment'>[]=[]):DeploymentProfile{
   const source=configuration(profile),workflow=source.workflows.find(item=>item.id===id);
   if(!workflow)fail('Select an existing workflow.');
   const agents=new Set(workflow.agents.map(item=>item.agentId));
@@ -39,6 +39,9 @@ export function workflowScope(profile:DeploymentProfile,id:string):DeploymentPro
   if(workflowGroups.length!==1)fail('Workflow group is unavailable.');
   const packageIds=new Set([...(workflow.contextSources??[]),...agentDefinitions.flatMap(item=>item.contextSources)].map(item=>item.toolId.split('/')[0]));
   for(const toolId of graphToolIds(workflow))packageIds.add(toolId.split('/')[0]);
+  const bindingIds=new Set(source.dispatchBindings.filter(item=>item.workflowId===id).map(item=>item.id));
+  const assignmentNames=new Set(connections.filter(item=>bindingIds.has(item.id)).map(item=>item.assignment));
+  for(const item of profile.packages)if(item.triggers?.some(trigger=>assignmentNames.has(trigger.assignment)))packageIds.add(item.packageId);
   if(workflow.deployment)packageIds.add(workflow.deployment.source.packageId);
   const definition=copy(workflow);
   return copy({profileVersion:2,profileId:profile.profileId,packages:profile.packages.filter(item=>packageIds.has(item.packageId)),
@@ -46,9 +49,9 @@ export function workflowScope(profile:DeploymentProfile,id:string):DeploymentPro
 }
 
 /** Prune only the removed workflow's dependency closure, keeping shared and unrelated draft data. */
-export function removeWorkflow(profile:DeploymentProfile,id:string):DeploymentProfile{
-  const config=configuration(profile),removed=workflowScope(profile,id),others=config.workflows.filter(item=>item.id!==id);
-  const scopes=others.map(item=>workflowScope(profile,item.id));
+export function removeWorkflow(profile:DeploymentProfile,id:string,connections:readonly Pick<Connection,'id'|'assignment'>[]=[]):DeploymentProfile{
+  const config=configuration(profile),removed=workflowScope(profile,id,connections),others=config.workflows.filter(item=>item.id!==id);
+  const scopes=others.map(item=>workflowScope(profile,item.id,connections));
   const next=copy(profile),result=next.workflows!;
   for(const key of ['agentDefinitions','workflowGroups','modelGroups','modelDeployments'] as const){
     const field=(item:unknown)=>key==='agentDefinitions'?(item as {agentId:string}).agentId:(item as {id:string}).id;
@@ -76,6 +79,13 @@ export function portableAssignmentSpec(profile:DeploymentProfile,assignment:Trig
   return spec;
 }
 export function workflowAssignmentMatches(profile:DeploymentProfile,assignment:TriggerAssignment,spec:Connection['assignmentSpec']){
+  const owner=profile.packages.find(item=>item.triggers?.some(trigger=>trigger.assignment===assignment.metadata.name));
+  if(owner?.deviceGroupIds?.length){
+    if(spec.target.executor!=='CLIENT'||!same([...(spec.target.deviceGroups??[])].sort(),[...owner.deviceGroupIds].sort())||spec.target.devices?.length||spec.target.excludeDevices?.length)return false;
+    const portable=portableAssignmentSpec(profile,assignment);
+    if(spec.target.requiredDeviceGroupSets&&!same(spec.target.requiredDeviceGroupSets,portable.target.requiredDeviceGroupSets))return false;
+    return same(portable,portableAssignmentSpec(profile,{...assignment,spec}));
+  }
   return same(portableAssignmentSpec(profile,assignment),spec);
 }
 export function workflowConnections(selected:DeploymentProfile,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[]):Connection[]{
@@ -89,8 +99,15 @@ export function workflowConnections(selected:DeploymentProfile,assignments:reado
   });
 }
 
+export function connectionNames(profile:DeploymentProfile,assignments:readonly TriggerAssignment[]):Pick<Connection,'id'|'assignment'>[]{
+  return (profile.workflows?.dispatchBindings??[]).flatMap(binding=>{
+    const assignment=assignments.find(item=>item.metadata.uid===binding.sourceAssignmentUid);
+    return assignment?[{id:binding.id,assignment:assignment.metadata.name}]:[];
+  });
+}
+
 export async function exportWorkflow(profile:DeploymentProfile,id:string,assignments:readonly TriggerAssignment[],subscriptions:readonly TriggerSubscription[],snapshot:ConfigurationFile,archives:readonly Uint8Array[]=[]):Promise<Uint8Array>{
-  const selected=copy(workflowScope(profile,id));
+  const selected=copy(workflowScope(profile,id,connectionNames(profile,assignments)));
   const connections=workflowConnections(selected,assignments,subscriptions);
   const assignmentNames=new Set(connections.map(item=>item.assignment));
   for(const entry of selected.packages)if(entry.triggers)entry.triggers=entry.triggers.filter(item=>assignmentNames.has(item.assignment));
@@ -127,10 +144,11 @@ export async function importWorkflow(name:string,bytes:Uint8Array):Promise<Workf
   const profile=decode(files['workflow.json']) as DeploymentProfile;
   const config=configuration(profile);
   if(Object.keys(profile).some(key=>!['profileVersion','profileId','packages','workflows'].includes(key))||config.workflows.length!==1||config.workflows[0].id!==manifest.workflowId)fail();
-  const expected=workflowScope(profile,manifest.workflowId);
-  if(!same(expected,profile))fail('Workflow bundle contains unrelated configuration.');
   const connections=manifest.connections as Connection[];
   if(connections.length!==config.dispatchBindings.length||new Set(connections.map(item=>item.id)).size!==connections.length||connections.some(item=>!object(item)||Object.keys(item).sort().join(',')!=='assignment,assignmentSpec,id,subscription,subscriptionSpec'||!identity(item.id)||!identity(item.assignment)||!identity(item.subscription)||!object(item.assignmentSpec)||!object(item.subscriptionSpec)||!config.dispatchBindings.some(binding=>binding.id===item.id)))fail();
+  if(connections.some(item=>typeof item.assignmentSpec.trigger!=='string'||'triggerId' in item.assignmentSpec))fail('Bot trigger connections must use the current trigger contract. Rebuild the .olo bundle.');
+  const expected=workflowScope(profile,manifest.workflowId,connections);
+  if(!same(expected,profile))fail('Workflow bundle contains unrelated configuration.');
   const packages:EmbeddedPackage[]=[];
   for(const item of manifest.packages){
     if(!object(item)||typeof item.path!=='string'||!/^packages\/[a-f0-9]{64}\.olotool$/.test(item.path)||!files[item.path])fail('Missing package archive.');
@@ -148,7 +166,7 @@ export function applyWorkflow(target:DeploymentProfile,bundle:WorkflowBundle,tar
   const id=targetId||source.id,previous=current.workflows.find(item=>item.id===id);
   if(targetId&&!previous)fail('The replacement workflow is no longer present.');
   const others=current.workflows.filter(item=>item.id!==id);
-  const next=copy(previous?removeWorkflow(target,id):target),config=next.workflows!;
+  const next=copy(previous?removeWorkflow(target,id,connectionNames(target,assignments)):target),config=next.workflows!;
   for(const key of ['workflowGroups','modelGroups','modelDeployments','agentDefinitions'] as const){
     const field=key==='agentDefinitions'?'agentId':'id';
     const existing=config[key] as unknown as Record<string,unknown>[];
