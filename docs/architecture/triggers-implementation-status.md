@@ -1,6 +1,16 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Publication diagnostics integration — 2026-11-19
+
+Known base `aaf5824f`; source inventory/checks are in the workflow blocker checkpoint.
+Publication diagnostics report existing trigger preparation, current source/owner
+clearance and package/device readiness without changing #274 transport or
+provisioning. Focused SQLite/PostgreSQL workflow/delivery tests pass (36); the
+live console retains trigger/device blockers as red bullets. Full Java retains
+one Windows fixture failure; full module/M12 qualification is still outstanding.
+**27% remains earned**; no module scope/weight/Done-when or denominator changes.
+
 ## Optional collector startup integration — 2026-11-19
 
 Known tested base `b141506e`; source digest and executed checks are in the current

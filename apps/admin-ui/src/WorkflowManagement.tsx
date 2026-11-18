@@ -10,6 +10,7 @@ import {Table} from './Table';
 import {JsonTextEditor} from './JsonTextEditor';
 import {WorkflowTransfer} from './WorkflowTransfer';
 import {BotRunDialog} from './BotRunDialog';
+import {BotIssues} from './BotIssues';
 import {removeWorkflow} from './workflowBundle';
 
 export const workflowPages={'workflow-trigger-packages':'Trigger packages',workflows:'Bots',workflowGroups:'Bot groups','workflow-models':'Models','workflow-dispatch':'Trigger mappings','workflow-profiles':'Bot bundles','agent-configuration':'Models & prompts','agent-workflow-mappings':'Bot mappings'} as const;
@@ -114,7 +115,7 @@ export function WorkflowManagement({client,page}:{client:ControlClient;page:Work
   const visibleAgents=selectedAgent?agentItems.filter(agent=>agent.agentId===selectedAgent):agentItems;
   return <><div className="page-heading"><div><p className="eyebrow">Bot configuration</p><h1>{workflowPages[page]}</h1></div><button disabled={busy} onClick={()=>setAttempt(a=>a+1)}>Refresh bots</button></div>
     <p>Import a self-contained .olo bot to prepare its graph, agents, models, referenced configuration, tools and triggers together. Use the editors for optional changes, then publish when ready. Installation credentials and device access remain local.</p>
-    {error!==undefined&&<Failure error={error}/>}<p role="status">{notice}</p>
+    <BotIssues client={client} profileId={w.profile?.profileId} status={w.status??w.baseStatus} dirty={w.dirty} busy={busy} refreshKey={attempt+w.epoch} actionError={error} onStatus={status=>setWorkspace(current=>!current.dirty&&current.profile?.profileId===status.profileId&&(current.status??current.baseStatus)?.profileDigest===status.profileDigest?{...current,status}:current)}/><p role="status">{notice}</p>
     <section className="guidance"><h2>Working bot</h2>
       <button disabled={busy||w.dirty} onClick={create}>New bot</button>
       {page==='workflow-profiles'&&<><label>Import and stage deployment bot JSON<input type="file" accept=".json,application/json" disabled={busy||w.dirty} onChange={event=>{const file=event.currentTarget.files?.[0];event.currentTarget.value='';if(file)void run(()=>openFile(file));}}/></label>{w.profile&&<button disabled={busy} onClick={saveFile}>Download working bot JSON</button>}</>}

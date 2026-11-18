@@ -278,6 +278,20 @@ The dialog shows recorded queue, agent/model/tool/node progress and the final
 result. Runtime observations are labelled; tool business finality remains in
 Control's operation evidence. Closing the dialog leaves accepted execution running.
 
+A persistent **Bot issues** panel shows publication blockers as red bullets for
+the selected imported revision. It checks every five seconds and refreshes the
+lifecycle status when prerequisites change. It lists missing/scoped model
+secrets, unavailable references, package/device installation, trigger readiness,
+and missing/stale graph preparation or compatible workers. Draft review/staging
+and import/action failures remain visible as bullets too. A failed refresh keeps
+the last known issues and shows that current readiness cannot be checked.
+
+These are backend-owned dependency checks, not a model connectivity test or a
+remote filesystem probe. The list never exposes secret values or trigger event
+contents. Device file permissions, folder creation and provider connectivity
+remain explicit installation tasks. A healthy diagnostics response never grants
+publication or execution; those operations recheck their own current authority.
+
 A reviewed draft is not executable. Open its revision, finish destination model,
 package/device and graph readiness, refresh its lifecycle status, then **Publish
 reviewed revision**. Super Admin access permits admission; agents still need the

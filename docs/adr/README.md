@@ -140,3 +140,5 @@ Use `000-template.md`.
 - [ADR 076: Three-container workflow stack](076-three-container-workflow-stack.md)
 
 - [ADR 077: Manual bot runs and progress](077-manual-bot-runs-and-progress.md)
+
+- [ADR 078: OLO bot publication diagnostics](078-bot-publication-diagnostics.md)

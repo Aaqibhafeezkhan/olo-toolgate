@@ -78,7 +78,8 @@ class DebugManagementTests(unittest.TestCase):
             (folder/'stack.py').write_text('import json,sys; print(json.dumps(sys.argv[1:])); sys.exit(7 if sys.argv[1]=="stop" else 0)',encoding='utf-8')
             for operation,extra,expected in [('start',[],'start'),('stop',[],'stop'),('restart',[],'restart'),('start',['-ValidateOnly'],'validate')]:
                 with self.subTest(operation=operation,extra=extra):
-                    result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(folder/'manage.ps1'),operation,*extra],cwd=root,env=dict(os.environ,TEST_DEBUG_PYTHON=sys.executable),capture_output=True,text=True,timeout=30)
+                    unattended=['-WithoutOllama','-WithoutMonitoring'] if operation=='start' and not extra else []
+                    result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(folder/'manage.ps1'),operation,*extra,*unattended],cwd=root,env=dict(os.environ,TEST_DEBUG_PYTHON=sys.executable),capture_output=True,text=True,timeout=30)
                     self.assertEqual(7 if expected=='stop' else 0,result.returncode,result.stderr)
                     self.assertEqual([expected],json.loads(result.stdout))
 

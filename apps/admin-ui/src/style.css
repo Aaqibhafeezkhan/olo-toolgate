@@ -744,3 +744,9 @@ button.link { background:none; border:0; padding:0; color:var(--accent); text-de
 .bot-run-progress { display:grid; gap:10px; padding-inline-start:24px; overflow-wrap:anywhere; }
 .bot-run-progress time,.bot-run-progress small { color:var(--muted); }
 .bot-run-result { white-space:pre-wrap; overflow-wrap:anywhere; max-height:50vh; overflow:auto; }
+
+.bot-issues {position:sticky;top:12px;z-index:3;max-height:260px;overflow:auto;border-color:var(--danger)}
+.bot-issues h2,.bot-issues li,.bot-issues li::marker {color:var(--danger)}
+.bot-issues ul {margin:0;padding-left:24px}
+.bot-issues li+li {margin-top:8px}
+.bot-issues .notice {margin:0;padding:0;border:0}

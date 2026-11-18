@@ -96,7 +96,12 @@ export class ControlClient {
   workflowRunProgress(runId:string,after:number,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowRunProgressPage>{return this.send(operations.getWorkflowRunProgress,{params:{runId},query:new URLSearchParams({after:String(after)}),signal});}
   stageWorkflowProfile(body:import('@olo-labs/toolgate-contracts/v2').DeploymentProfile):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.stageWorkflowProfile,{body});}
   workflowProfileDocument(profileId:string,digest:string):Promise<import('@olo-labs/toolgate-contracts/v2').DeploymentProfile>{return this.send(operations.getWorkflowProfileDocument,{params:{profileId,digest}});}
-  workflowProfileStatus(profileId:string,digest:string):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.getWorkflowProfileRevision,{params:{profileId,digest}});}
+  workflowProfileStatus(profileId:string,digest:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.getWorkflowProfileRevision,{params:{profileId,digest},signal});}
+  async workflowProfileDiagnostics(profileId:string,digest:string,signal?:AbortSignal):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileDiagnostics>{
+    const result=await this.send<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileDiagnostics>(operations.getWorkflowProfileDiagnostics,{params:{profileId,digest},signal});
+    if(!result||!Array.isArray(result.blockers)||result.blockers.length>128||result.blockers.some(item=>typeof item!=='string'||!item.length||item.length>512))throw new ApiError(502,'INVALID_RESPONSE');
+    return result;
+  }
   reviewWorkflowProfile(profileId:string,profileDigest:string):Promise<import('@olo-labs/toolgate-contracts/v2').WorkflowProfileStatus>{return this.send(operations.reviewWorkflowProfile,{params:{profileId},body:{profileDigest}});}
   provisionWorkflowProfile(profileId:string,profileDigest:string):Promise<import('@olo-labs/toolgate-contracts/v2').ProvisioningStatus>{return this.send(operations.provisionWorkflowProfile,{params:{profileId},body:{profileDigest}});}
   prepareWorkflowGraphs(profileId:string,profileDigest:string,expectedGeneration:number):Promise<readonly import('@olo-labs/toolgate-contracts/v2').WorkflowGraphBuildResult[]>{return this.send(operations.prepareWorkflowGraphs,{params:{profileId},body:{profileDigest,expectedGeneration}});}

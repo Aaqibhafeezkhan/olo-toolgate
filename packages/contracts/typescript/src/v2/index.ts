@@ -2921,6 +2921,12 @@ export interface WorkflowModelGroupDefinition {
   readonly id: string;
   readonly deploymentIds: ReadonlyArray<string>;
 }
+/** Current tenant-scoped publication blockers, without credentials or remote payloads. Observational only; publication rechecks readiness. */
+export interface WorkflowProfileDiagnostics {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly blockers: ReadonlyArray<string>;
+}
 /** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
 export interface WorkflowProfilePublishRequest {
   readonly profileDigest: string;

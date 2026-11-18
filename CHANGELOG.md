@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Show persistent red bullet diagnostics for imported OLO bot revisions, using
+  current backend publication checks. Refresh readiness automatically, retain
+  previous issues on connection failures and expose no credentials/event payloads.
+
 - Ask at debug startup whether to create/reuse the observability collector or
   keep existing settings. Support local-only collection without cloud keys,
   create a private template on first use and preserve saved credentials.

@@ -474,6 +474,7 @@ fn v2_fixture_round_trips() {
         WorkflowModelDeployment,
         WorkflowModelGeneration,
         WorkflowModelGroupDefinition,
+        WorkflowProfileDiagnostics,
         WorkflowProfilePublishRequest,
         WorkflowProfileReviewRequest,
         WorkflowProfileState,

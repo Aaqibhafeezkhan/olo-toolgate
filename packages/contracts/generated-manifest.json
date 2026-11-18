@@ -41,7 +41,7 @@
     "packages/contracts/schemas/v2/trigger.schema.json": "88202cc401b7544781501c360c12e5bf27192784fb27a556bebe89325e935226",
     "packages/contracts/schemas/v2/workflow-bundle.schema.json": "3fcaa2254b3284c64269e5fef362dd8b7d4e8dbd9d547ea44b3c89d0613cf391",
     "packages/contracts/schemas/v2/workflow-decision.schema.json": "f89d999aa3958a2b325fca073550fe77da3897d3e34d82f601c1f3689d9cf753",
-    "packages/contracts/schemas/v2/workflow.schema.json": "8711640b39498106b01bcbb26a978865da690cd413835b6dd29b5cf919e472b5"
+    "packages/contracts/schemas/v2/workflow.schema.json": "1dc542fe067b211ece8bce334d588296ffbf181035219415b53c65e27e6c1281"
   },
   "generatorSha256": "8b3bd483eb054fd38ad14efeae95a0d6d61f787a47004b9a8290164cb20deaff",
   "outputs": [
@@ -807,6 +807,7 @@
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowModelDeployment.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowModelGeneration.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowModelGroupDefinition.java",
+    "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowProfileDiagnostics.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowProfilePublishRequest.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowProfileReviewRequest.java",
     "packages/contracts/java/src/main/java/io/ololabs/toolgate/contracts/v2/WorkflowProfileState.java",
@@ -1591,6 +1592,7 @@
     "packages/contracts/php/src/V2/WorkflowModelDeployment.php",
     "packages/contracts/php/src/V2/WorkflowModelGeneration.php",
     "packages/contracts/php/src/V2/WorkflowModelGroupDefinition.php",
+    "packages/contracts/php/src/V2/WorkflowProfileDiagnostics.php",
     "packages/contracts/php/src/V2/WorkflowProfilePublishRequest.php",
     "packages/contracts/php/src/V2/WorkflowProfileReviewRequest.php",
     "packages/contracts/php/src/V2/WorkflowProfileState.php",

@@ -1,6 +1,47 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Persistent bot publication blockers — 2026-11-19
+
+Known tested base `aaf5824f`; staged non-document source inventory SHA-256
+`c95f7224c5ebfa712beea0fdbf115b55e2707fb613f1e6fd64d55b30dff3517d` (25 paths; `build/bot-issues-source-inventory.json`). ADR 078
+records the tenant-scoped observation boundary.
+
+Delivered: exact-revision, current Super Admin diagnostics collect graph/worker,
+package/device, trigger, model-secret scope and reference/owner-clearance blockers.
+Production readiness derives from the same collected checks; reports grant no
+publication or execution authority. Messages contain safe identifiers, never
+secret values, remote errors or event payloads. The canonical no-store endpoint
+is bounded to 128 messages, 512 characters each. The console keeps a sticky red
+bullet list, refreshes every five seconds, updates lifecycle readiness, discards
+late responses for other revisions and retains previous issues on failed checks.
+Draft/import/action errors remain visible. It never probes a model, reads device
+files or changes device membership/folders to manufacture readiness.
+
+Executed: UI **322 pass, one optional skip**, plus current four-panel tests and
+typecheck; fresh SQLite/PostgreSQL profile/delivery **36 pass** plus Java contracts.
+Full provisioned Java gate: **388 ordinary tests, zero failures, eight skips**;
+**462 enterprise tests, one Windows POSIX KillSwitch fixture failure, zero skips**.
+Full Java is therefore not accepted. Rust contract verification, PHP **477** v2
+roundtrips, TypeScript two tests, 1,622-binding preflight, quality and whitespace
+checks pass. Broad Python contracts ran **186** cases: two Windows symlink
+privilege errors/two skips; both failing link cases pass in Linux. Repository
+check's 552-case CI suite found Windows symlink privilege plus a prompt fixture
+and an operator-file-dependent assertion; the latter two are corrected, with
+nine launcher/composition tests passing. Broad repository gate is not waived.
+
+Actual browser import shows eight red dependency bullets, preserves them on a
+failed diagnostic poll, recovers and still blocks publication;
+`build/bot-issues-browser-evidence.json`. Local containers/storage were removed
+externally during verification; the setup resumed as a fresh blank installation,
+with credential history retained and a new explicit test import. Existing cloud
+credential files were preserved. Do not describe that as preservation of the
+removed backend data.
+
+Next: the user's seven-use-case/two-local-model/fallback/branding/help work,
+plus the existing complete roadmap/production matrices and broad gate limits.
+**Baseline remains 0/100; no phase/scope/denominator credit.**
+
 ## Collector startup choice and three-cloud acceptance — 2026-11-19
 
 Known tested base `b141506e`; changed non-document source inventory SHA-256

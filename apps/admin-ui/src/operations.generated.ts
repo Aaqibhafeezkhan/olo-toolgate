@@ -21,6 +21,7 @@ export const operations = {
   listWorkflowProfiles: { method: 'GET', path: '/api/control/v1/workflow-profiles' },
   stageWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles' },
   getWorkflowProfileRevision: { method: 'GET', path: '/api/control/v1/workflow-profiles/{profileId}/revisions/{digest}' },
+  getWorkflowProfileDiagnostics: { method: 'GET', path: '/api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/diagnostics' },
   getWorkflowProfileDocument: { method: 'GET', path: '/api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/document' },
   reviewWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/review' },
   provisionWorkflowProfile: { method: 'POST', path: '/api/control/v1/workflow-profiles/{profileId}/provision' },

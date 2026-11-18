@@ -5372,6 +5372,14 @@ pub struct WorkflowModelGroupDefinition {
     pub id: String,
     pub deployment_ids: Vec<String>,
 }
+/// Current tenant-scoped publication blockers, without credentials or remote payloads. Observational only; publication rechecks readiness.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowProfileDiagnostics {
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub blockers: Vec<String>,
+}
 /// Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

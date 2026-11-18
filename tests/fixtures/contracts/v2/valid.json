@@ -5834,5 +5834,12 @@
   "WorkflowRunProgressPage": {
     "items": [],
     "nextCursor": 0
+  },
+  "WorkflowProfileDiagnostics": {
+    "profileId": "support",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockers": [
+      "Model intake requires vault secret model-key."
+    ]
   }
 }

@@ -413,6 +413,31 @@ paths:
           description: Current Super Admin required
         '404':
           description: Revision unavailable in this tenant
+  /api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/diagnostics:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: digest
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      operationId: getWorkflowProfileDiagnostics
+      responses:
+        '200':
+          description: Current publication blockers for this exact revision; no-store, Super Admin only
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileDiagnostics
+        '403':
+          description: Current Super Admin required
+        '404':
+          description: Revision unavailable in this tenant
   /api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/document:
     parameters:
     - name: profileId

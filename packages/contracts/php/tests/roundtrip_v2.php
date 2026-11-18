@@ -468,6 +468,7 @@ $models = [
     'WorkflowModelDeployment',
     'WorkflowModelGeneration',
     'WorkflowModelGroupDefinition',
+    'WorkflowProfileDiagnostics',
     'WorkflowProfilePublishRequest',
     'WorkflowProfileReviewRequest',
     'WorkflowProfileState',
