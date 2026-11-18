@@ -40,6 +40,19 @@ class TriggerPackageMatrixTests(unittest.TestCase):
                         package_tests.gradle(['gradle'],{},Path(temporary),sleep=lambda _:None)
                 self.assertEqual(attempts,len(count))
 
+    def test_shared_sdk_preparation_uses_the_bounded_retry_path(self):
+        with patch.object(sys,'argv',['package_tests.py','--prepare-sdk']),patch.object(package_tests,'gradle') as build:
+            package_tests.main()
+        command,environment,output=build.call_args.args
+        self.assertEqual(':publishJavaSdkLocally',command[-1])
+        self.assertIn('tools/ci/sdk-isolation.init.gradle',command)
+        self.assertEqual(ROOT/'build/trigger-package-sdk/logs',output)
+        workflow=yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
+        steps=workflow['jobs']['trigger-package-sdk']['steps']
+        prepare=next(step for step in steps if step.get('name')=='Prepare the shared test SDK and offline package CLI once')
+        self.assertIn('python tools/triggers/package_tests.py --prepare-sdk',prepare['run'])
+        self.assertNotIn('./gradlew ',prepare['run'])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

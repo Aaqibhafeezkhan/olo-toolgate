@@ -274,7 +274,7 @@ jobs:
         printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"
         printf '%s/bin\n' "$CARGO_HOME" >> "$GITHUB_PATH"
         export PATH="$CARGO_HOME/bin:$PATH"
-        ./gradlew --no-daemon --configure-on-demand -I tools/ci/sdk-isolation.init.gradle -PprebuiltAdminUi=true :publishJavaSdkLocally
+        python tools/triggers/package_tests.py --prepare-sdk
         cargo build --locked -p toolgate-cli
         mkdir -p build/trigger-package-sdk
         cp target/debug/toolgate build/trigger-package-sdk/toolgate

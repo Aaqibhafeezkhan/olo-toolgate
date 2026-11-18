@@ -148,6 +148,7 @@ def run(entry, sdk_repo, cli, sdk_version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--prepare-sdk', action='store_true', help='Publish the shared SDK with bounded dependency-throttling retries')
     parser.add_argument('--matrix', action='store_true')
     parser.add_argument('--github-output', action='store_true')
     parser.add_argument('--package', default=os.environ.get('TOOLGATE_TEST_PACKAGE'))
@@ -155,6 +156,14 @@ def main():
     parser.add_argument('--cli', type=Path, default=os.environ.get('TOOLGATE_CLI'))
     parser.add_argument('--sdk-version-file', type=Path, default=ROOT/'VERSION')
     args = parser.parse_args()
+    if args.prepare_sdk:
+        if args.matrix or args.package:
+            parser.error('SDK preparation cannot be combined with package discovery or execution')
+        wrapper=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
+        gradle([str(wrapper),'--no-daemon','--console=plain','--configure-on-demand',
+            '-I','tools/ci/sdk-isolation.init.gradle','-PprebuiltAdminUi=true',':publishJavaSdkLocally'],
+            dict(os.environ),ROOT/'build/trigger-package-sdk/logs')
+        return
     if args.matrix:
         entries = discover()
         matrix = json.dumps({'include': [dict(package=entry['directory'], key=entry['packageId']) for entry in entries]}, separators=(',', ':'))

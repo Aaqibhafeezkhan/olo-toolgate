@@ -1,6 +1,23 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Shared SDK preparation CI repair — 2026-11-18
+
+Known tested base `350d012dfe23f3d6fba58e1361a20ddb1f5b1271`.
+
+Run 44305297405/job 134805954074 failed before SDK compilation because Maven
+Central returned HTTP 429 for locked Jackson dependencies. Shared SDK publication
+now uses the existing bounded dependency-throttling retry helper: at most three
+attempts with 5/15-second delays and separate attempt logs. Tests and compilation
+failures are not retried; persistent dependency failure still fails the job.
+Executed: nine trigger package matrix/retry tests, actual shared SDK publication
+through the new command (BUILD SUCCESSFUL; 62 tasks), 1,606-binding preflight,
+source quality/secret checks and whitespace checks. Hosted CI rerun and full
+repository gates remain outstanding. No runtime, deployment consolidation or
+stateless-service redesign is implemented by this CI fix. Weighted baseline
+remains 0/100; no scope/denominator or phase completion changes. Next work remains
+full workflow acceptance and the outstanding phase matrices.
+
 ## Self-contained console import and CI repair — 2026-11-18
 
 Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`; changes remain a bounded #295 integration slice.

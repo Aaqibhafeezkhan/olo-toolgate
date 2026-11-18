@@ -1,6 +1,18 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Shared trigger SDK CI throttling repair — 2026-11-18
+
+Known tested base `350d012dfe23f3d6fba58e1361a20ddb1f5b1271`.
+
+The shared SDK preparation job now uses the same bounded Maven HTTP 429 retry
+helper as the parallel package jobs. Compilation/test failures and persistent
+resolution failures still stop the pipeline. Nine matrix/retry tests and actual
+shared SDK publication pass; preflight and source quality checks pass. Hosted
+rerun remains outstanding. No trigger module implementation, contract, baseline
+scope or Done-when changes; 27% remains earned. Full M12/module matrices and
+reference-aware reconciliation remain outstanding.
+
 ## Console bot trigger closure repair — 2026-11-18
 
 Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`. UI bot bundles now retain trigger packages
