@@ -2940,7 +2940,50 @@ export interface WorkflowProfileStatus {
   readonly dependenciesReady: boolean;
   readonly reviewedBy?: string;
 }
+export type WorkflowProgressKind = "NODE_COMPLETED" | "AGENT_STARTED" | "AGENT_COMPLETED" | "MODEL_STARTED" | "MODEL_COMPLETED" | "TOOL_STARTED" | "TOOL_COMPLETED" | "TOOL_FAILED";
+export type WorkflowProgressSource = "CONTROL" | "RUNTIME";
 export type WorkflowRemediationMode = "PREPARE" | "APPLY";
+/** Backend-recorded structural progress. Runtime reports do not attest tool effects or finality. */
+export interface WorkflowRunProgressEvent {
+  readonly sequence: number;
+  readonly occurredAt: string;
+  readonly source: WorkflowProgressSource;
+  readonly kind: string;
+  readonly nodeId?: string;
+  readonly subjectId?: string;
+  readonly toolRef?: string;
+}
+/** Ordered durable progress for one tenant/run; cursor advances only through returned events. */
+export interface WorkflowRunProgressPage {
+  readonly items: ReadonlyArray<WorkflowRunProgressEvent>;
+  readonly nextCursor: number;
+}
+/** Lease-authenticated structural runtime observation. No input, output, provider text or credential is retained in progress evidence. */
+export interface WorkflowRunProgressRequest {
+  readonly leaseId: string;
+  readonly leaseToken: string;
+  readonly eventId: string;
+  readonly kind: WorkflowProgressKind;
+  readonly nodeId?: string;
+  readonly subjectId?: string;
+  readonly toolRef?: string;
+}
+/** Durable acceptance receipt; it is not evidence of execution success. */
+export interface WorkflowRunStartReceipt {
+  readonly runId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly state: "QUEUED";
+}
+/** Explicit text input for one published bot. Backend derives service group and configured mode; current authority and idempotency remain required. */
+export interface WorkflowRunStartRequest {
+  readonly profileDigest: string;
+  readonly expectedGeneration: number;
+  readonly entryAgentId: string;
+  readonly message: string;
+  readonly dispatchBindingId?: string;
+}
 /** Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority. */
 export interface WorkflowStackDeployment {
   readonly enabled: boolean;

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 import re
 import uuid
 from urllib.error import HTTPError
@@ -145,6 +144,11 @@ class ControlRuns(ControlTriggers):
                              grant["modelGroupId"], grant["token"])
         except ValueError:
             raise RunTransportError("Invalid Control step grant") from None
+
+    def progress(self,lease,kind,**details):
+        self._runtime_request(self._run_path(lease,"progress"),
+            {"leaseId":lease.lease_id,"leaseToken":lease.lease_token,"eventId":"progress-"+uuid.uuid4().hex,"kind":kind,**details},
+            timeout_seconds=5,allow_empty=True)
 
     def finish(self, lease, outcome, *, timeout_seconds):
         value = self._runtime_request(self._run_path(lease, "finish"),

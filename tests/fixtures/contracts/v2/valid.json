@@ -5801,5 +5801,38 @@
         "writeAccess": false
       }
     ]
+  },
+  "WorkflowRunStartRequest": {
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expectedGeneration": 1,
+    "entryAgentId": "agent",
+    "message": "Summarize this text."
+  },
+  "WorkflowRunStartReceipt": {
+    "runId": "run-example",
+    "profileId": "support",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflowId": "summary",
+    "state": "QUEUED"
+  },
+  "WorkflowProgressKind": "NODE_COMPLETED",
+  "WorkflowProgressSource": "RUNTIME",
+  "WorkflowRunProgressRequest": {
+    "leaseId": "lease-example",
+    "leaseToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "eventId": "event-example",
+    "kind": "NODE_COMPLETED",
+    "nodeId": "summarize"
+  },
+  "WorkflowRunProgressEvent": {
+    "sequence": 1,
+    "occurredAt": "2026-11-18T00:00:00Z",
+    "source": "RUNTIME",
+    "kind": "NODE_COMPLETED",
+    "nodeId": "summarize"
+  },
+  "WorkflowRunProgressPage": {
+    "items": [],
+    "nextCursor": 0
   }
 }

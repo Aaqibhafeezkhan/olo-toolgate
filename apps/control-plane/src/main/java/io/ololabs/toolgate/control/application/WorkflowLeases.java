@@ -102,6 +102,7 @@ public final class WorkflowLeases {
                 token, message, workflow.systemPrompt(), workflow.modelGroupId(), workflow.limits(), agents, workflow.contextSources(),
                 run.remediationMode(), expires, workflow.agentStages() == null ? List.of() : workflow.agentStages(), workflow.graph(), run.compilerDigest());
             runs.claim(lease);
+            WorkflowProgress.control(tx,codec,worker.id(),run.id(),"RUNNING",requestId,run.serviceAgentId());
             tx.audit(worker.id(), "WORKFLOW_RUN_CLAIM", "workflow-run:" + run.id(), 1, requestId, run.profileDigest().substring(7));
             return new Store.Reply(200, codec.json(snapshot), 0);
         });
@@ -133,6 +134,7 @@ public final class WorkflowLeases {
             }
             results.save(tx, worker.tenant(), run, state, result, code);
             runs.finish(lease, state, now);
+            WorkflowProgress.control(tx,codec,worker.id(),runId,state,requestId,null);
             tx.audit(worker.id(), "WORKFLOW_RUN_FINISH", "workflow-run:" + runId, 2, requestId, DirectoryService.digest(state));
             return new Store.Reply(200, codec.json(Map.of("runId", runId, "leaseId", leaseId, "state", state)), 0);
         });
@@ -189,6 +191,7 @@ public final class WorkflowLeases {
             String stepToken = token();
             runs.authorizeStep(lease, new WorkflowRunStore.Step(runId, kind, subjectId, modelGroupId,
                 DirectoryService.digest(stepToken)), now);
+            WorkflowProgress.control(tx,codec,worker.id(),runId,"STEP_AUTHORIZED","step-"+UUID.randomUUID(),subjectId);
             return new Store.Reply(200, codec.json(Map.of("runId", runId, "leaseId", leaseId, "subjectKind", kind,
                 "subjectId", subjectId, "modelGroupId", modelGroupId, "token", stepToken)), 0);
         });

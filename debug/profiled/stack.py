@@ -50,7 +50,7 @@ def image_tag(module):
            'package.json','package-lock.json','.dockerignore'}
     if module=='device':fixed|={'debug/profiled/linux-device.Dockerfile','debug/profiled/device.py',
         'debug/profiled/device-entrypoint.py','debug/profiled/device-systemctl.sh'}
-    if module=='quickstart':fixed|={'deploy/profiles/fresh.json','debug/profiled/configure-debug-agent.py',
+    if module=='quickstart':fixed|={'tools/ci/gradle_build.py','deploy/profiles/fresh.json','debug/profiled/configure-debug-agent.py',
         'debug/profiled/agent-mimic.py','examples/langchain/manage.py','examples/langchain/packages.py',
         'docs/getting-started/one-minute-quickstart.md','docs/deployment/quickstart.md'}
     # Use the same source inventory with or without Git, including source ZIPs.
@@ -182,6 +182,8 @@ def definition(selected,base=None):
             restart='unless-stopped',stop_grace_period='35s',**secure)}
     settings=HERE/'installation.env'
     if settings.exists():services['quickstart']['env_file']=[str(settings)]
+    runtime_observability=HERE/'credentials/runtime-observability.env'
+    if runtime_observability.exists():services['langgraph']['env_file']=[str(runtime_observability)]
     for service in services.values():service['labels']=owner
     return dict(services=services,volumes={name:dict(labels=owner,name=storage_prefix()+'_'+name) for name in
                 ('registry','data','custody','device-config','device-state','files')},networks={'default':dict(labels=owner)})

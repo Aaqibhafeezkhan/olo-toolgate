@@ -6,6 +6,22 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Export optional content-free workflow/agent/model/tool OTLP spans to a private
+  collector with Langfuse, LangSmith and Phoenix cloud fan-out. Keep cloud keys
+  in ignored installation credentials and retain execution when telemetry fails.
+
+- Add optional local Ollama/TLS demo companions, a Qwen3 0.6B thinking-model bot,
+  persistent model downloads and all-NVIDIA-GPU scheduling. Keep provider trust,
+  credentials and container configuration outside portable bot bundles.
+
+- Add per-bot console Run dialogs for Super Admin text submission, retained
+  execution progress and final results from the configured published graph.
+  Include a portable text-only example. Keep agent service grants, immutable
+  revision checks and idempotent submission recovery at the backend boundary.
+- Recover bounded, independently verified false-negative Quarkus BOM lookups
+  during container build configuration; retain pinned dependencies and fail on
+  compilation/tests, genuinely unavailable artifacts or exhausted recovery.
+
 - Consolidate the persistent debug deployment into Quickstart, LangGraph and
   Device. Embed the demo registry in Quickstart, dispatch triggers in the backend,
   and supervise the graph API and worker in one stateless runtime. Keep bounded

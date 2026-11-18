@@ -67,6 +67,11 @@ public class WorkflowRuntimeResource {
             profileId, digest, workflowId, expectedGeneration));
     }
 
+    @POST @Path("runs/{runId}/progress") @Consumes("application/json") @RolesAllowed(ROLE)
+    public Response progress(@PathParam("runId") String run,String document) {
+        if(document==null||document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>4096)throw Failure.validation();
+        return reply(new WorkflowProgress(store,codec,Clock.systemUTC()).report(worker(),run,document,correlation.id()));
+    }
     @POST @Path("runs/{runId}/finish") @Consumes("application/json") @RolesAllowed(ROLE)
     public Response finish(@PathParam("runId") String runId, String document) {
         var worker = worker();

@@ -1,6 +1,33 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Console/model/observability integration checkpoint — 2026-11-19
+
+Known base `d98fb169`; final source inventory/checks are recorded in the current
+workflow status checkpoint. Manual bot runs reuse existing Control execution
+without fabricating trigger events. Structural observations use existing
+progress and separate installation-only OTLP fan-out, not new trigger transport
+or effect authority. Actual Admin/Ollama execution and four-GPU model offload
+pass; full Linux runtime 121 and focused SQLite/PostgreSQL delivery/workflow 35
+pass. Cloud/production and full module matrices are not accepted by these local
+checks. **27% remains earned**; no module scope, Done-when or denominator changes.
+Next: complete module/M12 matrices and reference-aware reconciliation.
+
+## Manual bot admission and image-build repair — 2026-11-18
+
+Known tested base `d98fb169`; source inventory and executed checks are in the
+workflow status's Admin bot runs checkpoint. Manual runs reuse Control queue/
+lease execution without fabricating a trigger event or changing #274 transport.
+Control records queue/claim/finish progress for both manual and trigger-admitted
+runs; runtime observations remain lease-bound and distinct from effect receipts.
+The new text-only demo uses no trigger/device. Focused delivery/workflow tests
+pass on SQLite/PostgreSQL (35); real Admin console admission/progress/result
+acceptance passes. Image build recovery is limited to independently verified
+pinned Quarkus BOM configuration lookup failures; four focused tests and an
+actual Quickstart build pass. Hosted/full module matrices remain outstanding.
+**27% remains earned**; no module scope, Done-when, weight or denominator changes.
+Next work remains full M12/module acceptance and reference-aware reconciliation.
+
 ## Backend-owned three-container demo dispatch — 2026-11-18
 
 Known base `2a0dd960`; source inventory and checks are in the workflow status's

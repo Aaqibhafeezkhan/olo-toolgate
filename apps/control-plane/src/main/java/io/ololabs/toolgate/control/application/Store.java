@@ -52,6 +52,7 @@ public interface Store {
         /** {@code evidence}: canonical operation-specific audit evidence JSON, or null. */
         void audit(String actor, String operation, String target, long revision, String requestId, String digest, String evidence);
         String auditPage(long after, int limit);
+        default java.util.List<io.ololabs.toolgate.contracts.v2.WorkflowRunProgressEvent> workflowProgress(String runId,long after,int limit){throw Failure.unavailable();}
         /** ADR 061: the tenant's committed chain head; {@link AuditChain.Head#EMPTY} before the first row. */
         default AuditChain.Head auditHead() { throw Failure.unavailable(); }
         /** ADR 061: stored chain rows after {@code afterIndex}, in chain order, bounded by {@code limit}. */

@@ -1370,6 +1370,193 @@
         "graphDigests",
         "instanceId"
       ]
+    },
+    "WorkflowRunStartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740990
+        },
+        "entryAgentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "dispatchBindingId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "profileDigest",
+        "expectedGeneration",
+        "entryAgentId",
+        "message"
+      ],
+      "description": "Explicit text input for one published bot. Backend derives service group and configured mode; current authority and idempotency remain required."
+    },
+    "WorkflowRunStartReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "profileId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "profileDigest": {
+          "$ref": "identifiers.schema.json#/$defs/Digest"
+        },
+        "workflowId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "state": {
+          "type": "string",
+          "const": "QUEUED"
+        }
+      },
+      "required": [
+        "runId",
+        "profileId",
+        "profileDigest",
+        "workflowId",
+        "state"
+      ],
+      "description": "Durable acceptance receipt; it is not evidence of execution success."
+    },
+    "WorkflowProgressKind": {
+      "type": "string",
+      "enum": [
+        "NODE_COMPLETED",
+        "AGENT_STARTED",
+        "AGENT_COMPLETED",
+        "MODEL_STARTED",
+        "MODEL_COMPLETED",
+        "TOOL_STARTED",
+        "TOOL_COMPLETED",
+        "TOOL_FAILED"
+      ]
+    },
+    "WorkflowRunProgressRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "leaseId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "leaseToken": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$",
+          "minLength": 43,
+          "maxLength": 43
+        },
+        "eventId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "kind": {
+          "$ref": "#/$defs/WorkflowProgressKind"
+        },
+        "nodeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_.:/-]{0,127}$"
+        },
+        "subjectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolRef": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        }
+      },
+      "required": [
+        "leaseId",
+        "leaseToken",
+        "eventId",
+        "kind"
+      ],
+      "description": "Lease-authenticated structural runtime observation. No input, output, provider text or credential is retained in progress evidence."
+    },
+    "WorkflowProgressSource": {
+      "type": "string",
+      "enum": [
+        "CONTROL",
+        "RUNTIME"
+      ]
+    },
+    "WorkflowRunProgressEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "$ref": "#/$defs/WorkflowProgressSource"
+        },
+        "kind": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z_]{0,63}$",
+          "maxLength": 64
+        },
+        "nodeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_.:/-]{0,127}$"
+        },
+        "subjectId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "toolRef": {
+          "$ref": "identifiers.schema.json#/$defs/ToolId"
+        }
+      },
+      "required": [
+        "sequence",
+        "occurredAt",
+        "source",
+        "kind"
+      ],
+      "description": "Backend-recorded structural progress. Runtime reports do not attest tool effects or finality."
+    },
+    "WorkflowRunProgressPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/WorkflowRunProgressEvent"
+          }
+        },
+        "nextCursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "description": "Ordered durable progress for one tenant/run; cursor advances only through returned events."
     }
   }
 }

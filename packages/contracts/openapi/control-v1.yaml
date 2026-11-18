@@ -200,6 +200,59 @@ paths:
         '403': {description: Incorrect service role}
         '404': {description: Candidate or workflow unavailable in this tenant}
         '409': {description: Candidate is unreviewed or publication generation changed}
+  /api/control/v1/workflow-profiles/{profileId}/workflows/{workflowId}/runs:
+    parameters:
+    - {name: profileId, in: path, required: true, schema: {type: string}}
+    - {name: workflowId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: startWorkflowRun
+      description: Current tenant Super Admin explicitly runs a published bot with text. Requires exact publication, configured entry agent, live service grants and Idempotency-Key. Does not create a trigger event or write device input files.
+      parameters:
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunStartRequest'}
+      responses:
+        '201':
+          description: Durable run accepted, or exact idempotent receipt replayed
+          content:
+            application/json:
+              schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunStartReceipt'}
+        '403': {description: Current management or service authority unavailable}
+        '409': {description: Publication changed, ambiguous mode or idempotency conflict}
+  /api/control/v1/workflow-runs/{runId}/progress:
+    parameters:
+    - {name: runId, in: path, required: true, schema: {type: string}}
+    - {name: after, in: query, schema: {type: integer, minimum: 0, default: 0}}
+    get:
+      operationId: getWorkflowRunProgress
+      description: Current tenant Super Admin reads ordered durable progress for this run only. Runtime observations are distinguished from Control decisions and do not prove effect finality.
+      responses:
+        '200':
+          description: Bounded ordered progress page
+          content:
+            application/json:
+              schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunProgressPage'}
+        '403': {description: Current Super Admin authority required}
+        '404': {description: Run unavailable in this tenant}
+  /internal/v1/runtime/runs/{runId}/progress:
+    parameters:
+    - {name: runId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: reportWorkflowRunProgress
+      security:
+      - runtimeServiceToken: []
+      description: Direct TLS runtime service reports bounded structural progress under its current run lease. Bodies and tokens are never copied into audit evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunProgressRequest'}
+      responses:
+        '204': {description: Structural observation recorded}
+        '403': {description: Run lease expired or belongs to another worker}
   /api/control/v1/workflow-runs/{runId}:
     parameters:
     - {name: runId, in: path, required: true, schema: {type: string}}

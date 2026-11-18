@@ -34,6 +34,13 @@ public class WorkflowProfileResource {
         if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 262144) throw Failure.validation();
         return document;
     }
+    @POST @Path("{profileId}/workflows/{workflowId}/runs") @Consumes("application/json")
+    public Response startRun(@PathParam("profileId") String profile,@PathParam("workflowId") String workflow,
+            @HeaderParam("Idempotency-Key") String key,String document) {
+        var actor=actors.management();
+        return reply(new WorkflowManualRuns(store,codec,Clock.systemUTC(),service(actor),keys.required())
+            .start(actor,profile,workflow,body(document),key,correlation.id()));
+    }
     @POST @Consumes("application/json")
     public Response upload(String document) {
         var actor = actors.management(); return reply(service(actor).upload(actor, body(document), correlation.id()));

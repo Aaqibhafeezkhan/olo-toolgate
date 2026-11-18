@@ -1,6 +1,115 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Current console/Ollama/cloud integration checkpoint — 2026-11-19
+
+Known tested base `d98fb169424b9c541a305e352a5af7f6192bf1a2`; final changed non-document
+source inventory SHA-256 `33f9d422cd623740a7fd501e22af55087e7bc76470173f754112fd6f5d9c3b00` (77 paths,
+`build/manual-bot-source-inventory-final.json`). Earlier checkpoints below record
+their own tested sources; they do not claim full roadmap completion.
+
+Delivered: Admin Run admission/progress UI; optional Ollama/TLS model companions;
+interactive startup choice for local Ollama or an unchanged alternative provider,
+with noninteractive switches. Standalone embedded-Python import resolution is
+covered by actual startup. Model-only TLS keys/downloads are reused, separate
+from core storage and portable bots. All four local Quadro P4000 8-GB GPUs are
+visible to Docker; actual Ollama 0.40.16 selects CUDA 12 and offloads **29/29 layers**
+across CUDA0–CUDA3. `ollama ps` reports **100% GPU**. Resolved requested latest image:
+`ollama/ollama@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592`.
+
+Real console text execution/progress/result passed with unchanged three core
+processes, Admin password and device file hashes. Current configured Qwen3 0.6B
+acceptance run: `run-0a4ede3c-c240-404c-9e1d-793a28953c73`;
+`build/ollama-bot-browser-evidence.json`. An earlier temperature-0.6 output failed
+the configured JSON output schema; the bot now uses explicit result structure,
+its declared output schema and temperature 0. A failed run was not replayed;
+independent manual acceptance after configuration publication passed. A tiny
+model is not a production quality/reliability guarantee.
+
+Optional bounded structural OTLP workflow/agent/model/tool spans feed a private
+collector with Langfuse/LangSmith/Phoenix mappings. Vendor keys are collector-only
+ignored installation files, never runtime credentials or exported bot content.
+No prompts/completions/arguments, private thinking, invented model IDs, usage or
+cost are exported. Telemetry failure drops spans without changing execution or
+retrying effects. Node completion is a zero-duration event. Full distributed
+correlation and parallel-node occurrence qualification remain outside this slice.
+Langfuse v2 read API returned five observations for a tested run; LangSmith read
+API returned its matching five run records/OTEL trace metadata. Phoenix collector
+routing is configured and validated; account ingestion is still being verified.
+The collector is an optional companion today; the user's new startup-choice
+request is next, after this commit/push.
+
+Executed: UI **318 pass, one optional skip**, separate real builder output for
+**nine** bundles accepted by UI importer, typecheck; full Linux runtime **121 pass**;
+focused SQLite/PostgreSQL delivery/workflow **35 pass** plus Java contract checks;
+PHP **476** roundtrips, Rust contract image gate, TypeScript two/Python contract
+nine tests; eight focused model-custody/monitoring-config/build-recovery tests.
+Both actual startup provider choices pass, preserving settings/Admin password.
+Actual source-qualified Quickstart build through the guarded Gradle helper passes.
+Preflight **1,620 bindings**, source/secret/whitespace and link checks pass at the
+recorded checkpoints; final commit gates are run separately before commit.
+
+Broad gates are failures, not waived: repository CI suite **546 cases, one Windows
+symlink privilege error, 11 skips**; full Java **383 ordinary cases, 43 failures,
+nine skips** and **462 enterprise cases, one Windows POSIX fixture failure,
+20 skips**, with local PostgreSQL fixture failures. Fresh focused SQL tests pass,
+but full hosted/Linux acceptance remains outstanding. Durable import recovery,
+checkpoint/resume, production/HA and complete roadmap matrices remain future work.
+**Baseline 0/100 unchanged; no phase/scope/denominator credit.**
+
+## Admin bot runs, retained progress and image-build recovery — 2026-11-18
+
+Known tested base `d98fb169424b9c541a305e352a5af7f6192bf1a2`; changed non-document
+source inventory SHA-256 `4a55296a1f2ff4a4cb6678dcbcad3897217c8fcb4c71aed7b77e08a8ca457ec3` (57 paths;
+`build/manual-bot-source-inventory.json`). ADR 077 records the admission/progress boundary.
+
+Delivered bounded scope: per-bot Run dialog, text input, configured entry-agent
+and existing-route selection, exact published revision/generation admission and
+backend-encrypted run input. Initial Admin/current tenant Super Admin may run
+all published bots without a separate human execution grant; configured agent
+service grants remain required. Draft Run panels explain publication readiness.
+Progress is ordered retained Control audit evidence: Control queue/claim/finish
+plus lease-authenticated structural runtime agent/model/tool/node observations.
+No prompts, arguments, provider bodies, tokens or chain of thought are retained
+in progress. Runtime observations do not replace independent effect finality.
+Unknown submissions reuse their key/body; polling recovery only reads. No
+trigger delivery is fabricated, container restarted or device file changed by
+manual admission. Add an eighth, model-only `interactive-summary` bundle with
+no packages, triggers or device prerequisite.
+
+Executed: full UI **318 passed, one optional bundle skip**, plus actual builder
+output for **all eight bundles** accepted by the UI reader; typecheck passes.
+Linux runtime **117 passed**; Java contract checks and focused backend delivery/
+workflow tests **35 passed on SQLite/PostgreSQL**, including live Super Admin,
+foreign tenant, generation/input/replay and lease/progress refusal coverage.
+PHP **476** roundtrips, TypeScript two tests, Python contract nine/profile nine,
+Rust contract verification image, preflight **1,620 bindings** and source quality
+checks pass. Real browser acceptance passed run
+`run-a791ccac-2499-4811-9a63-79da6b383d59`: import/publish, Admin text admission,
+visible in-flight model progress, retained timeline and exact configured mock
+result; three core processes, Admin password and device files unchanged.
+Evidence: `build/manual-bot-browser-evidence.json`; screenshots are local only.
+The mock proves routing, not semantic summarization or production provider acceptance.
+
+CI run 44352250983/job 135001499422 failed resolving pinned Quarkus BOM 3.40.1
+before compilation. Its canonical Maven POM independently returned HTTP 200
+(418,006 bytes, SHA-256
+`7197134291f663ce0a751e4b9bcaa03512a0fff093df0fe8c0bb35459d01770f`).
+The image build now retries this precise configuration-only false negative at
+most three times, refreshing negative dependency metadata only after validating
+the published pinned POM. Any executed task, compilation/test failure, genuinely
+missing POM or exhausted recovery fails. Four retry/probe regression tests and
+an actual Quickstart image build through the wrapper pass. The helper is part
+of the local image source fingerprint. No dependency downgrade or scan waiver.
+
+Broad checks are not passes: the 546-case repository CI suite fails on Windows
+symlink privilege (11 explicit skips); full Java verification encounters local
+PostgreSQL fixture failures and the Windows POSIX KillSwitch fixture. Focused
+fresh SQLite/PostgreSQL acceptance above does not waive those gates. Hosted
+CI, complete phase matrices, durable import recovery, resume/recovery and
+production/HA provider qualification remain outstanding.
+**Weighted baseline remains 0/100; no phase, scope or denominator change.**
+
 ## Three-container Quickstart integration — 2026-11-18
 
 Known tested base `2a0dd960`; changed non-document source inventory SHA-256

@@ -1,0 +1,120 @@
+{
+  "formatVersion": 2,
+  "tenantId": "destination",
+  "revision": 0,
+  "agents": [
+    {
+      "id": "interactive-summarizer",
+      "name": "Interactive summarizer",
+      "enabled": true,
+      "revision": 1,
+      "ownerUserId": "admin"
+    }
+  ],
+  "agentGroups": [
+    {
+      "id": "interactive-summary-agents",
+      "name": "Interactive summary agents",
+      "enabled": true,
+      "revision": 1,
+      "agentIds": [
+        "interactive-summarizer"
+      ],
+      "roleIds": [
+        "interactive-summary-service"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "enabled": true,
+      "id": "interactive-summary-service",
+      "managementRules": [],
+      "name": "Interactive summary service",
+      "portalRole": "BASIC",
+      "revision": 1,
+      "roleType": "ACTOR_SERVICE"
+    }
+  ],
+  "grants": [
+    {
+      "enabled": true,
+      "id": "interactive-summary-service",
+      "name": "Interactive summary authority",
+      "purpose": "SERVICE",
+      "revision": 1,
+      "scope": {
+        "actions": [
+          "workflow.execute",
+          "model.infer"
+        ],
+        "allActions": false,
+        "conditions": {
+          "devicePosture": [],
+          "expiresAtUnixMs": 0,
+          "highRisk": false,
+          "hoursUtc": [],
+          "networkCidrs": [],
+          "notBeforeUnixMs": 0,
+          "regions": [],
+          "requireOnline": false
+        },
+        "deviceGroups": {
+          "all": true,
+          "ids": []
+        },
+        "resources": [
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "workflow-group:interactive-summary"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "model-group:interactive-summary-models"
+          }
+        ],
+        "toolGroups": {
+          "all": true,
+          "ids": []
+        }
+      },
+      "sourceId": "interactive-summary-service",
+      "sourceType": "ROLE"
+    }
+  ],
+  "tools": [],
+  "toolGroups": [
+    {
+      "enabled": true,
+      "id": "default-tools",
+      "name": "Default tool group",
+      "revision": 15,
+      "toolIds": []
+    }
+  ],
+  "deviceGroups": [
+    {
+      "deviceIds": [],
+      "enabled": true,
+      "id": "default-devices",
+      "name": "Default device group",
+      "revision": 2
+    }
+  ],
+  "bindings": [],
+  "policies": [],
+  "extractors": [],
+  "teams": [],
+  "devices": [],
+  "delegations": [],
+  "agentDelegations": [],
+  "workloadBindings": [],
+  "requiredIdentities": [
+    {
+      "id": "admin",
+      "teamIds": []
+    }
+  ]
+}

@@ -639,6 +639,28 @@ final class TriggerDeliveryTest {
             assertEquals(admitted.path("admissionId"), duplicate.path("admissionId"));
             assertEquals(admitted.path("runId"), duplicate.path("runId"));
 
+            var manual=new WorkflowManualRuns(w.store(),codec,w.clock(),profiles,keys);
+            var manualBody=codec.json(Map.of("profileDigest",digest,"expectedGeneration",1,"entryAgentId","investigator","message","Private manual input"));
+            var manualReceipt=JSON.readTree(manual.start(w.admin(),"support","investigate",manualBody,"manual-key","manual-start").body());
+            String manualId=manualReceipt.path("runId").asText();
+            assertEquals(manualId,JSON.readTree(manual.start(w.admin(),"support","investigate",manualBody,"manual-key","manual-replay").body()).path("runId").asText());
+            assertEquals(409,status(()->manual.start(w.admin(),"support","investigate",manualBody.replace("Private manual input","changed"),"manual-key","manual-conflict")));
+            assertEquals(409,status(()->manual.start(w.admin(),"support","investigate",manualBody.replace("\"expectedGeneration\":1","\"expectedGeneration\":2"),"stale-key","manual-stale")));
+            assertEquals(403,status(()->manual.start(new DirectoryService.Actor(w.tenant(),DirectoryService.digest("not-admin"),false),"support","investigate",manualBody,"forbidden-key","manual-denied")));
+            assertEquals(403,status(()->manual.start(w.admin(),"support","investigate",manualBody.replace("investigator","summarizer"),"ineligible-key","manual-ineligible")));
+            var foreignWorld=world(w.store(),"tenant-b",null,List.of());
+            assertEquals(409,status(()->manual.start(foreignWorld.admin(),"support","investigate",manualBody,"foreign-key","manual-foreign")));
+            var progress=new WorkflowProgress(w.store(),codec,w.clock());
+            var queued=JSON.readTree(progress.read(w.admin(),manualId,0).body());
+            assertEquals("QUEUED",queued.path("items").get(0).path("kind").asText());
+            assertEquals("CONTROL",queued.path("items").get(0).path("source").asText());
+            assertFalse(queued.toString().contains("Private manual input"));
+            assertEquals(404,status(()->progress.read(foreignWorld.admin(),manualId,0)));
+            w.store().transaction(w.tenant(),true,tx->{
+                assertFalse(tx.workflowRuns().get(manualId).document().contains("Private manual input"));
+                assertEquals("Private manual input",new WorkflowRunInputs(codec,keys).open(tx,w.tenant(),tx.workflowRuns().get(manualId)));
+                tx.workflowRuns().cancelQueued(manualId);return null;
+            });
             var worker = new DirectoryService.Actor(w.tenant(), DirectoryService.digest("runtime-worker"), false);
             var leases = new WorkflowLeases(w.store(), codec, w.clock(), profiles, keys);
             var compiler = "sha256:" + "c".repeat(64);
@@ -664,6 +686,15 @@ final class TriggerDeliveryTest {
             assertEquals(204, leases.claim(worker, "worker-a", compiler, graphs, "claim-again").status());
             var leaseId = snapshot.path("leaseId").asText();
             var token = snapshot.path("leaseToken").asText();
+            String progressBody=codec.json(Map.of("leaseId",leaseId,"leaseToken",token,"eventId","node-1","kind","NODE_COMPLETED","nodeId","read"));
+            assertEquals(204,progress.report(worker,runId,progressBody,"progress-first").status());
+            int progressCount=JSON.readTree(progress.read(w.admin(),runId,0).body()).path("items").size();
+            assertEquals(204,progress.report(worker,runId,progressBody,"progress-replay").status());
+            assertEquals(progressCount,JSON.readTree(progress.read(w.admin(),runId,0).body()).path("items").size());
+            assertEquals(403,status(()->progress.report(worker,runId,progressBody.replace(token,"x".repeat(43)),"progress-forged")));
+            assertEquals(403,status(()->progress.read(worker,runId,0)));
+            assertEquals(400,status(()->progress.report(worker,runId,progressBody.replace("}",",\"message\":\"private\"}"),"progress-private")));
+            assertFalse(progress.read(w.admin(),runId,0).body().contains(token));
             // Publishing B changes new admissions, while the leased A run keeps its exact configuration.
             var replacement = profile.deepCopy();
             ((ObjectNode)replacement.path("workflows").path("workflows").get(0))
@@ -724,6 +755,7 @@ final class TriggerDeliveryTest {
             assertEquals(403, status(() -> leases.finish(worker, runId, leaseId, "x".repeat(43), "SUCCEEDED", result, null, "forged-finish")));
             assertEquals(400, status(() -> leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, "DENIED", "bad-result")));
             assertEquals(200, leases.finish(worker, runId, leaseId, token, "SUCCEEDED", result, null, "finish").status());
+            assertEquals(403,status(()->progress.report(worker,runId,progressBody,"progress-after-finish")));
             var saved = JSON.readTree(leases.result(w.admin(), runId).body());
             assertEquals(result, saved.path("outcome").path("result"));
             assertEquals("alpha", saved.path("message").asText());

@@ -17,6 +17,8 @@ it.runIf(Boolean(directory))('imports every retained repository profile and exac
     const bundle=await importWorkflow(entry.filename,new Uint8Array(readFileSync(join(folder,entry.filename))));
     expect(bundle.profile.workflows!.workflows[0].id).toBe(entry.workflowId);
     expect(bundle.packages.map(item=>item.metadata)).toEqual(entry.packages);
-    expect(bundle.packages.length).toBeGreaterThan(0);
+    const needsPackages=bundle.profile.packages.length>0||bundle.references.tools.length>0||bundle.connections.length>0;
+    if(needsPackages)expect(bundle.packages.length).toBeGreaterThan(0);
+    else expect(bundle.packages).toHaveLength(0);
   }
 },120000);

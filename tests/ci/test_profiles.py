@@ -118,7 +118,10 @@ class ProfileTests(unittest.TestCase):
             for name in ('bot.json','referenced-config.json','trigger-connections.json','package-build.json','README.md'):self.assertTrue((folder/name).is_file(),str(folder/name))
             refs=json.loads((folder/'referenced-config.json').read_text(encoding='utf-8'))
             self.assertNotIn('users',refs);self.assertNotIn('identityBindings',refs)
-            self.assertTrue(json.loads((folder/'package-build.json').read_text())['packages'])
+            recipes=json.loads((folder/'package-build.json').read_text(encoding='utf-8'))['packages']
+            pins=json.loads((folder/'bot.json').read_text(encoding='utf-8'))['packages']
+            self.assertIsInstance(recipes,list)
+            self.assertTrue({item['packageId'] for item in pins}<={item['packageId'] for item in recipes})
         workflow=(ROOT/'.github/workflows/foundation.yml').read_text()
         self.assertIn('python bot/build.py',workflow)
         self.assertIn('foundation-stage-profiles',workflow)

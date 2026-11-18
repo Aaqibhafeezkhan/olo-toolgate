@@ -5407,6 +5407,34 @@ pub struct WorkflowProfileStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviewed_by: Option<String>,
 }
+/// Canonical WorkflowProgressKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkflowProgressKind {
+    #[serde(rename = "NODE_COMPLETED")]
+    NodeCompleted,
+    #[serde(rename = "AGENT_STARTED")]
+    AgentStarted,
+    #[serde(rename = "AGENT_COMPLETED")]
+    AgentCompleted,
+    #[serde(rename = "MODEL_STARTED")]
+    ModelStarted,
+    #[serde(rename = "MODEL_COMPLETED")]
+    ModelCompleted,
+    #[serde(rename = "TOOL_STARTED")]
+    ToolStarted,
+    #[serde(rename = "TOOL_COMPLETED")]
+    ToolCompleted,
+    #[serde(rename = "TOOL_FAILED")]
+    ToolFailed,
+}
+/// Canonical WorkflowProgressSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkflowProgressSource {
+    #[serde(rename = "CONTROL")]
+    Control,
+    #[serde(rename = "RUNTIME")]
+    Runtime,
+}
 /// Canonical WorkflowRemediationMode wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WorkflowRemediationMode {
@@ -5414,6 +5442,65 @@ pub enum WorkflowRemediationMode {
     Prepare,
     #[serde(rename = "APPLY")]
     Apply,
+}
+/// Backend-recorded structural progress. Runtime reports do not attest tool effects or finality.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowRunProgressEvent {
+    pub sequence: u64,
+    pub occurred_at: String,
+    pub source: WorkflowProgressSource,
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_ref: Option<String>,
+}
+/// Ordered durable progress for one tenant/run; cursor advances only through returned events.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowRunProgressPage {
+    pub items: Vec<WorkflowRunProgressEvent>,
+    pub next_cursor: u64,
+}
+/// Lease-authenticated structural runtime observation. No input, output, provider text or credential is retained in progress evidence.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowRunProgressRequest {
+    pub lease_id: String,
+    pub lease_token: String,
+    pub event_id: String,
+    pub kind: WorkflowProgressKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_ref: Option<String>,
+}
+/// Durable acceptance receipt; it is not evidence of execution success.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowRunStartReceipt {
+    pub run_id: String,
+    pub profile_id: String,
+    pub profile_digest: String,
+    pub workflow_id: String,
+    #[serde(deserialize_with = "const_workflow_run_start_receipt_state")]
+    pub state: String,
+}
+/// Explicit text input for one published bot. Backend derives service group and configured mode; current authority and idempotency remain required.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowRunStartRequest {
+    pub profile_digest: String,
+    pub expected_generation: u64,
+    pub entry_agent_id: String,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatch_binding_id: Option<String>,
 }
 /// Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -5640,6 +5727,7 @@ const_field!(const_workflow_finish_decision_kind, String, "finish");
 const_field!(const_workflow_graph_build_result_state, String, "READY");
 const_field!(const_workflow_graph_capabilities_capacity, u64, 128);
 const_field!(const_workflow_json_graph_schema_version, u64, 1);
+const_field!(const_workflow_run_start_receipt_state, String, "QUEUED");
 const_field!(
     const_workflow_stack_model_engine_engine,
     String,

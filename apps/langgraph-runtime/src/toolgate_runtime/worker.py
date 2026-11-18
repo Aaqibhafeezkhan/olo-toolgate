@@ -11,6 +11,7 @@ import threading
 
 from .run_transport import ControlRuns, GatewayRuntime, RunTransportError, WorkflowGateway
 from .runner import CompletionUnconfirmed, Denied, OwnershipLost, Runner
+from .observability import Observability
 
 
 class WorkerPresence:
@@ -110,8 +111,9 @@ def main(argv=None):
         with args.token_file.open(encoding="ascii") as stream:
             return stream.read(8193).strip()
 
-    presence=None
+    presence=None;observability=None
     try:
+        observability=Observability.from_environment()
         control = ControlRuns(args.control_origin, credential, ca_file=args.control_ca_file,graph_directory=args.graph_directory)
         gateway = GatewayRuntime(args.gateway_origin, ca_file=args.gateway_ca_file)
         presence=WorkerPresence(control);presence.start()
@@ -120,8 +122,13 @@ def main(argv=None):
             lease = control.claim()
             if lease is not None:
                 evidence = ExecutionEvidence(WorkflowGateway(control, gateway))
-                runner = Runner(evidence, graph_directory=args.graph_directory)
-                outcome = runner.execute(lease)
+                with observability.run(lease) as observation:
+                    def progress(kind,run=lease,observer=observation,**details):
+                        control.progress(run,kind,**details)
+                        observer.event(kind,**details)
+                    runner = Runner(evidence, graph_directory=args.graph_directory,progress=progress)
+                    outcome = runner.execute(lease)
+                    observation.finish(outcome.state)
                 if args.result_directory is not None:
                     log_result(args.result_directory, lease, outcome)
                 print(json.dumps({"runId": lease.run_id, "workflowId": lease.workflow_id,
@@ -139,6 +146,7 @@ def main(argv=None):
         return 2
     finally:
         if presence is not None:presence.close()
+        if observability is not None:observability.close()
 
 
 if __name__ == "__main__":
