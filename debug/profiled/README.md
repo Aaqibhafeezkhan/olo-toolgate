@@ -765,6 +765,24 @@ Docker network and enables the runtime exporter. It generates:
 - `credentials/runtime-observability.env`: private collector endpoint/environment,
   without any vendor key. Only this file is passed to LangGraph.
 
+`start.bat` also asks whether to create/reuse the observability collector.
+Choose **1** to validate/create/start it; choose **2** (or Enter) to leave the
+current observability setup untouched. With no cloud keys, choice 1 creates the
+private template and a local-only collector, so a blank installation needs no
+cloud account. Fill the template and choose 1 again to enable cloud destinations;
+existing credentials are never replaced. For unattended startup:
+
+```powershell
+.\debug\profiled\start.bat -WithoutOllama -WithMonitoring
+# Or leave both existing provider and observability settings untouched:
+.\debug\profiled\start.bat -WithoutOllama -WithoutMonitoring
+```
+
+The collector is an installation companion managed from this startup flow and
+attached to the existing stack network. It remains separate from the three
+core ToolGate services. Selecting “keep” does not stop an already running
+collector; use the monitoring stop command below when you intend to stop it.
+
 The collector fans the same spans to every enabled destination. No new host port
 or firewall opening is needed. Applying installation instrumentation can recreate
 LangGraph once; bot import/switch does not restart it. Admin credentials and

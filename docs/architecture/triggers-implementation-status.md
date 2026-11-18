@@ -1,6 +1,15 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Optional collector startup integration — 2026-11-19
+
+Known tested base `b141506e`; source digest and executed checks are in the current
+workflow checkpoint. Startup can create/reuse an optional collector with no
+cloud account or retain current settings. Four focused settings tests, actual
+interactive standalone startup choices and all three cloud readbacks pass.
+No trigger transport, subscription or module scope changes. **27% remains earned**;
+full M12/module matrices and reference-aware reconciliation remain outstanding.
+
 ## Console/model/observability integration checkpoint — 2026-11-19
 
 Known base `d98fb169`; final source inventory/checks are recorded in the current

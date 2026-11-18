@@ -21,7 +21,7 @@ def endpoint(value,suffix):
     return value.rstrip('/')+suffix
 
 
-def configuration(settings):
+def configuration(settings,*,allow_local=False):
     exporters={};environment={};enabled=[]
     def credential(name,value):
         if not isinstance(value,str) or not value or len(value)>8192 or any(c in value for c in '\r\n\0'):
@@ -45,8 +45,12 @@ def configuration(settings):
     if phoenix.get('apiKey') and phoenix.get('baseUrl'):
         credential('PHOENIX_API_KEY',phoenix['apiKey'])
         exporters['otlp_http/phoenix']={'endpoint':endpoint(phoenix['baseUrl'],''),'headers':{'Authorization':'Bearer ${env:PHOENIX_API_KEY}'}};enabled.append('phoenix')
-    if not enabled:raise ValueError('Configure at least one cloud destination in credentials/observability.json')
-    for value in exporters.values():value.update({'timeout':'10s','retry_on_failure':{'enabled':True,'max_elapsed_time':'30s'},'sending_queue':{'enabled':True,'queue_size':64}})
+    if not enabled:
+        if not allow_local:raise ValueError('Configure at least one cloud destination in credentials/observability.json')
+        exporters['debug/local']={'verbosity':'basic'};enabled.append('local (no cloud keys configured)')
+    for name,value in exporters.items():
+        if name.startswith('otlp_http/'):
+            value.update({'timeout':'10s','retry_on_failure':{'enabled':True,'max_elapsed_time':'30s'},'sending_queue':{'enabled':True,'queue_size':64}})
     document={'receivers':{'otlp':{'protocols':{'http':{'endpoint':'0.0.0.0:4318'}}}},
         'processors':{'memory_limiter':{'check_interval':'1s','limit_mib':128},'batch':{'timeout':'1s','send_batch_size':128},
             'resource/project':{'attributes':[{'key':'openinference.project.name','value':phoenix.get('project','toolgate-community-debug'),'action':'upsert'}]}},
@@ -60,11 +64,15 @@ def main():
     compose=['docker','compose','-p','toolgate-profiled-observability','-f',str(HERE/'compose.yaml')]
     def run(command,**options):return subprocess.run(command,cwd=root,check=True,**options)
     if args.operation=='stop':run(compose+['stop']);return
-    settings=json.loads((private/'observability.json').read_text(encoding='utf-8-sig'))
-    document,environment,enabled=configuration(settings)
     private.mkdir(mode=0o700,exist_ok=True)
     def write(name,raw):
         with open(private/name,'w',encoding='utf-8',opener=lambda p,f:os.open(p,f,0o600)) as stream:stream.write(raw)
+    settings_path=private/'observability.json'
+    if not settings_path.exists():
+        write('observability.json',(HERE/'credentials.example.json').read_text(encoding='utf-8'))
+        print('Created private credentials template; edit it to enable cloud destinations. Existing files are never replaced.',flush=True)
+    settings=json.loads(settings_path.read_text(encoding='utf-8-sig'))
+    document,environment,enabled=configuration(settings,allow_local=True)
     write('collector.json',json.dumps(document,indent=2)+'\n')
     write('monitoring.env',''.join(key+'='+value+'\n' for key,value in environment.items()))
     write('runtime-observability.env','TOOLGATE_WORKFLOW_OTLP_TRACES_ENDPOINT=http://insights-collector:4318/v1/traces\nTOOLGATE_WORKFLOW_OBSERVABILITY_ENVIRONMENT=community-debug\n')

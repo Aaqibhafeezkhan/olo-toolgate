@@ -6,6 +6,10 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Ask at debug startup whether to create/reuse the observability collector or
+  keep existing settings. Support local-only collection without cloud keys,
+  create a private template on first use and preserve saved credentials.
+
 - Export optional content-free workflow/agent/model/tool OTLP spans to a private
   collector with Langfuse, LangSmith and Phoenix cloud fan-out. Keep cloud keys
   in ignored installation credentials and retain execution when telemetry fails.

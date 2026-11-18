@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Collector opt-in and credential preservation — 2026-11-19
+
+Known tested base `b141506e`; source inventory/checks are in the workflow status's
+collector startup checkpoint. Explicit operator opt-in creates installation-only
+collector routing; without cloud keys it collects locally. Current credential
+files are preserved, cloud keys remain collector-only and profile imports do
+not configure exporters. Four focused configuration/custody tests and both real
+standalone startup choices pass with unchanged Admin password and cloud keys.
+Three cloud readbacks confirm structural observations, not independent security
+attestation or target finality. Overall phase/first-slice/C3b/C8 entries remain
+partial; no S01–S33 scope, weight or denominator change. Full original security
+matrices and the recorded broad-gate failures remain outstanding.
+
 ## Optional model and structural cloud observation checkpoint — 2026-11-19
 
 Known base `d98fb169`; final source digest/executed checks are in the current

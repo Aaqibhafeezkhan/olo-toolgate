@@ -1,6 +1,31 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Collector startup choice and three-cloud acceptance — 2026-11-19
+
+Known tested base `b141506e`; changed non-document source inventory SHA-256
+`ed62321b6d7e3d5b148af607d1d1cb01a045391274a265d604fb1c202328ca60` (5 paths; `build/collector-startup-source-inventory.json`).
+
+`start.bat` now asks separately about Ollama and the observability collector.
+Collector opt-in creates/reuses its companion and private settings; blank
+installations create a template and local debug pipeline without cloud keys.
+Configured cloud destinations replace local-only routing on subsequent setup.
+Keep/no-install preserves existing settings; explicit noninteractive switches
+cover both choices. No bot import invokes installation reconfiguration.
+
+Executed: four configuration/custody tests pass, PowerShell parses, real local
+collector config validates, and both actual interactive startup choices complete
+through standalone embedded Python while preserving cloud keys and Admin password.
+Previously pending cloud acceptance now passes: Langfuse v2, LangSmith and Phoenix
+read APIs each return **five matching spans** for the same successful Ollama run,
+`run-0a4ede3c-c240-404c-9e1d-793a28953c73`; common OTEL trace ID is retained even
+where a vendor assigns its own native trace ID. Evidence is local/ignored:
+`build/observability-cloud-read-evidence.json`. Credentials are not committed.
+Full runtime 121 and earlier focused SQL/UI gates remain the recorded component
+checks; no Java/runtime implementation changes are made in this follow-up.
+Broad Windows/PostgreSQL gate failures and full roadmap limitations below remain.
+**Baseline 0/100 unchanged; no scope, denominator or phase credit.**
+
 ## Current console/Ollama/cloud integration checkpoint — 2026-11-19
 
 Known tested base `d98fb169424b9c541a305e352a5af7f6192bf1a2`; final changed non-document
