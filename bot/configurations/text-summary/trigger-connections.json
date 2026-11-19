@@ -1,0 +1,32 @@
+[
+  {
+    "id": "text-summary-dispatch",
+    "assignment": "text-summary-watch",
+    "subscription": "text-summary-watch-events",
+    "assignmentSpec": {
+      "trigger": "examples.hotfolder-watch/new-file",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "text-summary-ReadAndWriteDeviceGroup"
+        ]
+      },
+      "config": {
+        "folder": "text-summary/inbox",
+        "extension": ".txt"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "text-summary-watch"
+        ]
+      },
+      "filter": "event.type == 'examples.files.observed.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

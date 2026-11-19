@@ -1,0 +1,20 @@
+{
+  "integrityPassed": true,
+  "blankImageCheckPassed": true,
+  "coverageComplete": false,
+  "freshCaptureEntries": 49,
+  "requiredRoutes": 38,
+  "missingRoutes": [
+    "/console/#test"
+  ],
+  "missingStates": [
+    "screenshots/operator-invocation-detail.jpg",
+    "screenshots/operator-overview.jpg"
+  ],
+  "blockedReason": "Capture session ended before the remaining views; reload the tour to collect them",
+  "renderPauseSeconds": 2,
+  "deferredIssues": [
+    "https://github.com/olo-labs/olo-mono/issues/25",
+    "https://github.com/olo-labs/olo-mono/issues/26"
+  ]
+}

@@ -136,6 +136,7 @@ def java_ident(key):
 
 
 def const_literal(value, language):
+    if isinstance(value,bool):return 'true' if value else 'false'
     if isinstance(value, str):
         return {'java': json.dumps(value), 'rust': json.dumps(value), 'php': "'" + value + "'", 'ts': json.dumps(value)}[language]
     return {'java': f'{value}L', 'rust': str(value), 'php': str(value), 'ts': str(value)}[language]

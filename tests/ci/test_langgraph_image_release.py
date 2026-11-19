@@ -26,7 +26,7 @@ class LangGraphImageReleaseTests(unittest.TestCase):
             '$PWD/apps/langgraph-runtime/tests:/workspace/apps/langgraph-runtime/tests:ro',
             '$PWD/tools/workflows:/workspace/tools/workflows:ro',
             '$PWD/examples/native-graphs:/workspace/examples/native-graphs:ro',
-            '$PWD/profiles/configurations/text-summary:/workspace/profiles/configurations/text-summary:ro',
+            '$PWD/bot/configurations/text-summary:/workspace/bot/configurations/text-summary:ro',
         ])
         self.assertEqual('/workspace/apps/langgraph-runtime/tests', command[command.index('-s') + 1])
         for mount in mounts:

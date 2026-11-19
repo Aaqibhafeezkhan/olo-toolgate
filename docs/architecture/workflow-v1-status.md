@@ -1,6 +1,698 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## LangChain failed-device outcome repair — 2026-11-19
+
+Known tested base `aea889e5c379be24e27c87763a2e2f992914f5b5`.
+The published LangChain job `135626378539` failed after the device executed its
+read and Control rejected unqualified native scope closure. Failed/expired
+device results now retain `isError: true` and the fixed error code, then read
+the authenticated Control operation projection through the existing identity
+checks. Unknown effects remain non-retryable. Failure to read that projection
+still withholds the device result. This covers the normal MCP tools/call path.
+
+Source SHA-256 for `apps/gateway/src/mcp.rs` is
+`065450908542041be8c81f7bc66fff224757b10bd85f1124c1bb6565cd42d834`.
+Regression source `apps/gateway/tests/core.rs` is
+`862c87e922b6a2ad32832def2cd9fe61ca14abbb137d8b572580b7df9e8d219b`.
+Validation includes 36 LangChain management tests, five package tests and Rust
+format checking. The full repository check passed metadata/binding preflight
+and release-note validation, then stopped in the 564-case CI suite with nine
+errors and 11 skips on Windows, including symlink privilege and default-text
+encoding errors. A prior sandboxed attempt also had local HTTP transport
+failures. A full repository pass is not claimed. The pinned Rust container ran
+`cargo test -p olo-toolgate-gateway --locked` successfully, all 82 tests passed.
+The focused 42-case integration suite also passed independently, including the
+failed-device unknown outcome and unavailable-projection regression. Markdown
+links (391 files), staged PR policy and whitespace checks passed. Gitleaks
+reported no leaks in 4489 working source files.
+
+Native scope qualification/closure, business finality and hosted image acceptance
+remain outstanding. No workflow phase weight, baseline scope or denominator
+changes. Keep umbrella #297 draft. Next, rerun the published LangChain gate and
+complete the original native qualification and workflow acceptance matrices.
+
+## Two-agent community demo and refreshed media — 2026-11-19
+
+Known tested base `41891b9e8528016fd1d2b4f4a4fee1b3b9a351e2`; eight-path
+bot/test/media-tool source inventory SHA-256
+`754ba357f91fa2f72f375e1ac7c9e82ab109de2c4682f88fe69f120def280668`.
+Inventory, run identity and executed checks are recorded in
+[`docs/media/olo-2026-11/evidence.json`](../media/olo-2026-11/evidence.json).
+
+Delivered: a text-only `multiagent-incident` bot uses existing JSON agent nodes
+to invoke triage then handover, passing the original incident and prior result.
+Both use real local Qwen3; premium routing remains unattached. The second agent
+explicitly permits delegated invocation. Its exact bundle rebuild matches the
+bytes used for acceptance. No runtime, authority, trigger transport or schema
+implementation changes. Fifty-eight new browser originals refresh current OLO
+console/cloud views; 49 existing route-equivalent aliases are byte-identical
+copies. The original four slideshows and overview video references are restored
+with current content; two additional tours show execution and monitoring.
+Historical approval/native-client/Operator/other monitoring views are labelled.
+
+Executed: actual run `run-f7672b57-3229-4afa-8c59-2d715a498fc2` succeeds with two
+agents/two local model calls and a retained triage/summary result. Langfuse,
+LangSmith and Phoenix API readbacks each match eight spans for trace
+`386029e4f45057cfd8c07c24c5a2d628`; owner-signed-in UI views corroborate them.
+Twelve profile packaging/configuration tests and 13 real JSON-graph runtime
+tests pass. All six GIFs rebuild with checksums, nonblank/frame/coverage checks;
+nine malformed/blank media-plan cases are refused. Originals/aliases were
+visually inspected, and the captioned MP4/GIF/poster were regenerated.
+Markdown links pass. `python tools/check.py` reaches 564 CI cases: one existing
+Windows `WinError 1314` symlink-privilege error and 11 skips stop the full gate;
+later full component gates were not reached. No full-green claim.
+
+Limits: two initial configuration trials failed `AGENT_NOT_AVAILABLE` before
+the second agent's delegation flag was corrected. No tools/effects occurred.
+After capture the runtime credential expired; external provisioning and an
+operator LangGraph restart restore dependencies-ready without changing Admin
+credentials or bot data. This is not unattended credential-renewal acceptance.
+Cloud content, chosen-model/token/cost attributes remain omitted; screenshots
+are structural telemetry, not model-quality, tool-finality or security proof.
+Published dev images, original V1.4 distributed/recovery/security qualification
+and the Windows gate remain outstanding. **0/100 remains earned**; no phase,
+scope, weight or denominator changes.
+
+## LangChain SDK package-build isolation repair — 2026-11-19
+
+Known tested base `e6d93675afbb9246d8798609c9567f956e1b6078`; changed
+`examples/langchain/package.Dockerfile` SHA-256 `389cb964d692d522f5e5ef09a5c4995c12e6588aed28b83db34f3ef07fb9da0c`
+(`build/langchain-sdk-ci-fix-source.json`). Hosted run 44469199487/job
+135424233596 failed before demo startup because unqualified SDK task selection
+configured Control Plane and attempted unrelated Quarkus 3.40.1 resolution.
+The package builder now explicitly requests root `:publishJavaSdkLocally` and
+reuses `tools/ci/sdk-isolation.init.gradle` to reject application/analysis plugin
+loading in this SDK-only stage. The native-outcome refusal gate is unchanged.
+
+Executed: the old command reproducibly fails on Control Plane configuration
+under the isolation guard; the corrected actual Docker package build succeeds,
+including 62 SDK publication tasks and eight example packaging tasks. Both
+`examples.hotfolder` and `examples.hotfolder-watch` 0.1.0 archives validate their
+complete content checksums/current manifest format. Thirteen focused Gradle/
+trigger-package checks pass. Evidence: `build/langchain-sdk-unqualified-reproduction.log`,
+`build/langchain-sdk-ci-fixed-build.log`,
+`build/langchain-sdk-ci-fixed-package-evidence.json`. This is build-path repair,
+not new native business finality or full published-stack acceptance. Hosted
+LangChain/aggregate checks must rerun after push. No authority implementation,
+wire/schema, module scope, roadmap denominator or compatibility support changes.
+**Baseline remains 0/100; no phase credit.**
+
+## Published-image community launcher and current OLO captures — 2026-11-19
+
+Known tested base `ed13f0f7087c4377e3cd0c0b039ee65719b93823`; non-document
+implementation inventory SHA-256 `c06981d421eb8932cbb720f35e83fbf1846761c8e4e0547d3a9621b9c251ad39`
+(20 paths; `build/image-deployment-source-inventory.json`).
+
+Delivered: `deploy/docker/quickstart/dev` reuses the current three-service
+provisioning logic in pull-only application-image mode, with separate ownership,
+volumes, private Admin/collector credentials and configurable loopback ports.
+Windows reuses the pinned private Python bootstrap; shell entrypoints use
+Python 3.11+. Optional Ollama/collector choices use this installation's network
+and custody. The Device image includes the installation-owned file/engine setup
+entrypoint; runtime provisioning derives Control/Gateway origins from configured
+endpoints. Imports do not own files, device membership or container settings.
+The root README now describes OLO's two sections and current bot/model/monitoring
+features, using seven actual debug-stack browser captures with checksums and a
+real successful Ollama run. Historical tours remain linked separately.
+
+Executed: six new deployment tests and 16 shared stack/credential/device/model/
+collector tests pass; Python compilation, capture-tool JavaScript syntax and
+Markdown links (2,955 files) pass. Full repository CI suite executes 563 cases
+and stops on the existing Windows symlink privilege error (11 skips); it is not
+a green broad gate. Local image overrides start a blank installation on ports
+28090/28450/28552 with one Admin and no bots. Repeated start preserves core
+processes and credentials. Admin imports/prepares/publishes/runs an injected
+JSON value-graph fixture successfully, without model inference; stop/start
+retains the account and run. Screenshots come exclusively from the existing
+port-18090 debug installation and include real Qwen3 run
+`run-c97498c2-e711-4fbc-91ea-74ac3ca8fdca`.
+
+Limits: matching public dev images are not yet published; pull-only startup
+fails on missing/incompatible images instead of building or substituting them.
+Local verification uses locally built Quickstart and debug Device overrides;
+it does not qualify the published native-client release asset pipeline. The
+standalone production Device build attempt stopped because that local Quickstart
+had no release client-download manifest. The optional collector validates and starts in local-only mode after fixing a
+process-environment shadowing error; its network and credential folder are
+installation-specific. No cloud keys were copied to the new installation. Current-source full production/security/release matrices remain
+outstanding. No Java/Rust authority implementation is changed in this slice.
+**Baseline remains 0/100; no phase/scope/weight/denominator credit.**
+
+## Real local-model bots, portable routing and image scan repair — 2026-11-19
+
+Known tested base `90b3dffa8bd015035610c57ed69f372b08213b95`; staged non-document
+source inventory SHA-256 `c1f0aebf4b4fdde03729fab4e20df359d9dfbeda82d29cb721591dc656174d9a`
+(83 paths; `build/local-model-final-source-inventory.json`). ADR 079 records the
+ordered inference-only fallback and current-authority boundary.
+
+Delivered: all seven device/file bots and two text examples build as self-contained
+`.olo` bundles. File agents select the real pinned OLO PEFT adapter merged with
+its pinned Qwen base, converted to F16 GGUF and served in Ollama as
+`olo-qlora-hotfolder:e376fb40`, then `qwen3:0.6b` on inference failure. Other
+agents select Qwen3; premium OpenRouter is explicit unattached standby. Both
+models are loaded with GPU offload; local weights and credentials remain
+installation data. Generation can configure provider-supported reasoning effort;
+the examples disable reasoning for short closed JSON results. Gateway reserves
+an inference budget inside its outer request deadline, reauthorizes each model
+candidate and validates the pinned finish-result schema before downstream file
+writes. Authority/configuration failures stop; model fallback never replays tools.
+
+Portable bundle closure retains standby declarations; independent bots own unique
+model/agent references while shared ToolGate tool IDs retain one primary group.
+Configuration-specific immutable workflow version IDs distinguish A/B artifacts.
+CLI import checks references before package uploads, then observes the new directory
+revision before its reviewed write; unknown/rejected writes are not retried.
+Mock fixtures build separately from public real-model bots. The console is branded
+OLO, with OLO Orchestration and OLO ToolGate sections. Central `docs/help/` and all
+nine bot guides describe device/model updates, exact inputs/outputs, explicit
+permissions, lifecycle, authoring and installation-only cloud observability.
+
+CI run 44417621775/job 135220518724 failed on 55 HIGH/CRITICAL findings in the
+embedded old Distribution binary. Quickstart now rebuilds pinned Distribution
+v3.1.2 source with patched modules and Go 1.27.4, retaining licenses/source
+checksums. The refreshed database also exposed Docker CLI's older Go stdlib;
+Quickstart and device builds now pin Docker 29.10.0/Go 1.27.4. Scan gates stay enabled.
+
+Executed component checks: UI **324 pass**, including all nine built-bundle imports;
+fresh SQLite/PostgreSQL workflow/delivery/configuration **49 pass**, plus four
+Java contract tests; complete Rust contracts/Gateway checks include actual HTTPS
+provider failures, malformed/invalid typed results, current-authority revocation,
+unapproved origins and reasoning-setting forwarding. Linux runtime **122 pass**;
+focused Python **38 pass**; PHP **479** v2 roundtrips; TypeScript build/typecheck
+and two tests; 1,626 generated bindings/fixtures/OpenAPI checks; Markdown **2,953**
+files, source quality and PR policy pass.
+
+Actual acceptance uses release `1.0.0-demo.reasoning` and the final image
+`olo-toolgate-quickstart:profiled-b69131b1474f17c819d2`, device
+`olo-toolgate-device:profiled-ca67508f403a3733f1c8` and unchanged runtime
+`olo-toolgate-runtime:profiled-a41fe6d60baee3bfe6c2`. All seven device cases
+verify exact output/source archive content, progress, unchanged core process
+IDs/start times/restart counts, device identity and Admin credentials. Across
+those cases, **14 successful model selections** are QLoRA then Qwen3, with
+**19 successful tool outcomes** and no OpenRouter attempt. The two additional
+text bots also run successfully through the current Super Admin API.
+
+| Configuration | Confirmed run | Result |
+|---|---|---|
+| hotswap-demo-a | `run-c1129694-2794-4a16-8c1f-75608054f9e4` | SUCCEEDED |
+| hotswap-demo-b | `run-5e605dc3-84a0-4da5-bced-53648bae004b` | SUCCEEDED |
+| issue-triage | `run-51ef7a03-d650-48fa-9668-cc1ca86c0c13` | SUCCEEDED |
+| log-triage | `run-936e14a1-5d21-4041-9e71-257725b83fb7` | SUCCEEDED |
+| native-hotfolder | `run-8524b8bb-4381-4ee1-b1ea-6fd3aa0c6e24` | SUCCEEDED |
+| native-log | `run-0ba50e1d-e3a8-4c1e-bcc8-cbcc67c1a1fd` | SUCCEEDED |
+| text-summary | `run-4301c83f-3606-4b5e-a774-c6487c030c26` | SUCCEEDED |
+| interactive-summary | `run-1c34ea2c-12d7-4e63-b41b-ad57d6e51815` | SUCCEEDED |
+| ollama-summary | `run-2dec53e5-6d75-47a4-9b98-f988ebe4e495` | SUCCEEDED |
+
+Both loaded models report **100% GPU**; all four Quadro P4000 devices are
+exposed and have allocated GPU memory. Langfuse, LangSmith and Phoenix read APIs
+each return **14 matching spans** for the final device run
+`run-4301c83f-3606-4b5e-a774-c6487c030c26`, trace
+`fedfe1cec9f073657fe226873ea3f4fe`. Evidence is local/ignored:
+`build/local-model-reasoning-evidence.json`, `build/local-model-text-evidence.json`,
+`build/local-model-routing-evidence.json`, `build/local-model-cloud-evidence.json`.
+The final image passes Trivy 0.61.1 HIGH/CRITICAL and secret scanning with
+**zero findings**; fresh composed enterprise runtime checks, including restart
+and signed backup/restore, pass (`build/quickstart-reasoning-final-scan.json`,
+`build/quickstart-reasoning-final-smoke.log`). Hosted CI must rerun after push.
+
+Acceptance follows an explicit operator image upgrade and preservation of
+previous trial artifacts, including a failed read-only native-hotfolder run.
+That run exceeded the request deadline before any write; explicit reasoning
+configuration and the bounded inference budget repair it. Earlier malformed
+triage output was also preserved, driving the pinned pre-write result-schema
+check. These are fresh test events, not automatic retries of unknown effects.
+Imports do not clean or convert existing data. Full `tools/check.py` executes
+557 CI cases and stops on one Windows symlink privilege error (11 skips); that
+specific case passes in Linux. The broad repository gate is not accepted.
+
+Full frozen-source Java gate: **389 ordinary tests, zero failures, eight skips**;
+**462 enterprise tests, two failures, zero skips**. Failures are the Windows
+POSIX permission fixture and a PostgreSQL `BindException: Address already in
+use: getsockopt`; the latter passes as an isolated fresh-database rerun (one
+case). The full gate remains failed, not waived. Evidence:
+`build/local-model-frozen-java-evidence.json`,
+`build/local-model-postgres-fixture-recheck.log`.
+
+The optional Debian-12 **debug Device image** retains **113 OS findings**
+(111 HIGH/two CRITICAL, no vendor fixed versions reported), unchanged from the
+prior debug image under the same database. Its patched Docker CLI has zero
+findings. This debug image is distinct from the published Ubuntu Device build;
+no production image/security qualification is inferred. Reports:
+`build/device-reasoning-final-scan.json`, `build/device-prior-scan.json`.
+Next work includes the debug base-image findings and full hosted/Linux gates.
+
+
+
+Limitations: small-model factual accuracy is not guaranteed. Result schemas use
+the current bounded local-reference subset; remote resource IDs/references are
+refused. Native file operations remain explicitly UNFENCED, with operator-created
+folders and no automatic effect replay. Core service identity, Admin credentials,
+model/cloud installation data and existing device files are not owned by imports.
+Full production, distributed failure/security and roadmap matrices remain next work.
+**Baseline remains 0/100; no phase, scope, weight or denominator credit.**
+
+## Persistent bot publication blockers — 2026-11-19
+
+Known tested base `aaf5824f`; staged non-document source inventory SHA-256
+`c95f7224c5ebfa712beea0fdbf115b55e2707fb613f1e6fd64d55b30dff3517d` (25 paths; `build/bot-issues-source-inventory.json`). ADR 078
+records the tenant-scoped observation boundary.
+
+Delivered: exact-revision, current Super Admin diagnostics collect graph/worker,
+package/device, trigger, model-secret scope and reference/owner-clearance blockers.
+Production readiness derives from the same collected checks; reports grant no
+publication or execution authority. Messages contain safe identifiers, never
+secret values, remote errors or event payloads. The canonical no-store endpoint
+is bounded to 128 messages, 512 characters each. The console keeps a sticky red
+bullet list, refreshes every five seconds, updates lifecycle readiness, discards
+late responses for other revisions and retains previous issues on failed checks.
+Draft/import/action errors remain visible. It never probes a model, reads device
+files or changes device membership/folders to manufacture readiness.
+
+Executed: UI **322 pass, one optional skip**, plus current four-panel tests and
+typecheck; fresh SQLite/PostgreSQL profile/delivery **36 pass** plus Java contracts.
+Full provisioned Java gate: **388 ordinary tests, zero failures, eight skips**;
+**462 enterprise tests, one Windows POSIX KillSwitch fixture failure, zero skips**.
+Full Java is therefore not accepted. Rust contract verification, PHP **477** v2
+roundtrips, TypeScript two tests, 1,622-binding preflight, quality and whitespace
+checks pass. Broad Python contracts ran **186** cases: two Windows symlink
+privilege errors/two skips; both failing link cases pass in Linux. Repository
+check's 552-case CI suite found Windows symlink privilege plus a prompt fixture
+and an operator-file-dependent assertion; the latter two are corrected, with
+nine launcher/composition tests passing. Broad repository gate is not waived.
+
+Actual browser import shows eight red dependency bullets, preserves them on a
+failed diagnostic poll, recovers and still blocks publication;
+`build/bot-issues-browser-evidence.json`. Local containers/storage were removed
+externally during verification; the setup resumed as a fresh blank installation,
+with credential history retained and a new explicit test import. Existing cloud
+credential files were preserved. Do not describe that as preservation of the
+removed backend data.
+
+Next: the user's seven-use-case/two-local-model/fallback/branding/help work,
+plus the existing complete roadmap/production matrices and broad gate limits.
+**Baseline remains 0/100; no phase/scope/denominator credit.**
+
+## Collector startup choice and three-cloud acceptance — 2026-11-19
+
+Known tested base `b141506e`; changed non-document source inventory SHA-256
+`ed62321b6d7e3d5b148af607d1d1cb01a045391274a265d604fb1c202328ca60` (5 paths; `build/collector-startup-source-inventory.json`).
+
+`start.bat` now asks separately about Ollama and the observability collector.
+Collector opt-in creates/reuses its companion and private settings; blank
+installations create a template and local debug pipeline without cloud keys.
+Configured cloud destinations replace local-only routing on subsequent setup.
+Keep/no-install preserves existing settings; explicit noninteractive switches
+cover both choices. No bot import invokes installation reconfiguration.
+
+Executed: four configuration/custody tests pass, PowerShell parses, real local
+collector config validates, and both actual interactive startup choices complete
+through standalone embedded Python while preserving cloud keys and Admin password.
+Previously pending cloud acceptance now passes: Langfuse v2, LangSmith and Phoenix
+read APIs each return **five matching spans** for the same successful Ollama run,
+`run-0a4ede3c-c240-404c-9e1d-793a28953c73`; common OTEL trace ID is retained even
+where a vendor assigns its own native trace ID. Evidence is local/ignored:
+`build/observability-cloud-read-evidence.json`. Credentials are not committed.
+Full runtime 121 and earlier focused SQL/UI gates remain the recorded component
+checks; no Java/runtime implementation changes are made in this follow-up.
+Broad Windows/PostgreSQL gate failures and full roadmap limitations below remain.
+**Baseline 0/100 unchanged; no scope, denominator or phase credit.**
+
+## Current console/Ollama/cloud integration checkpoint — 2026-11-19
+
+Known tested base `d98fb169424b9c541a305e352a5af7f6192bf1a2`; final changed non-document
+source inventory SHA-256 `33f9d422cd623740a7fd501e22af55087e7bc76470173f754112fd6f5d9c3b00` (77 paths,
+`build/manual-bot-source-inventory-final.json`). Earlier checkpoints below record
+their own tested sources; they do not claim full roadmap completion.
+
+Delivered: Admin Run admission/progress UI; optional Ollama/TLS model companions;
+interactive startup choice for local Ollama or an unchanged alternative provider,
+with noninteractive switches. Standalone embedded-Python import resolution is
+covered by actual startup. Model-only TLS keys/downloads are reused, separate
+from core storage and portable bots. All four local Quadro P4000 8-GB GPUs are
+visible to Docker; actual Ollama 0.40.16 selects CUDA 12 and offloads **29/29 layers**
+across CUDA0–CUDA3. `ollama ps` reports **100% GPU**. Resolved requested latest image:
+`ollama/ollama@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592`.
+
+Real console text execution/progress/result passed with unchanged three core
+processes, Admin password and device file hashes. Current configured Qwen3 0.6B
+acceptance run: `run-0a4ede3c-c240-404c-9e1d-793a28953c73`;
+`build/ollama-bot-browser-evidence.json`. An earlier temperature-0.6 output failed
+the configured JSON output schema; the bot now uses explicit result structure,
+its declared output schema and temperature 0. A failed run was not replayed;
+independent manual acceptance after configuration publication passed. A tiny
+model is not a production quality/reliability guarantee.
+
+Optional bounded structural OTLP workflow/agent/model/tool spans feed a private
+collector with Langfuse/LangSmith/Phoenix mappings. Vendor keys are collector-only
+ignored installation files, never runtime credentials or exported bot content.
+No prompts/completions/arguments, private thinking, invented model IDs, usage or
+cost are exported. Telemetry failure drops spans without changing execution or
+retrying effects. Node completion is a zero-duration event. Full distributed
+correlation and parallel-node occurrence qualification remain outside this slice.
+Langfuse v2 read API returned five observations for a tested run; LangSmith read
+API returned its matching five run records/OTEL trace metadata. Phoenix collector
+routing is configured and validated; account ingestion is still being verified.
+The collector is an optional companion today; the user's new startup-choice
+request is next, after this commit/push.
+
+Executed: UI **318 pass, one optional skip**, separate real builder output for
+**nine** bundles accepted by UI importer, typecheck; full Linux runtime **121 pass**;
+focused SQLite/PostgreSQL delivery/workflow **35 pass** plus Java contract checks;
+PHP **476** roundtrips, Rust contract image gate, TypeScript two/Python contract
+nine tests; eight focused model-custody/monitoring-config/build-recovery tests.
+Both actual startup provider choices pass, preserving settings/Admin password.
+Actual source-qualified Quickstart build through the guarded Gradle helper passes.
+Preflight **1,620 bindings**, source/secret/whitespace and link checks pass at the
+recorded checkpoints; final commit gates are run separately before commit.
+
+Broad gates are failures, not waived: repository CI suite **546 cases, one Windows
+symlink privilege error, 11 skips**; full Java **383 ordinary cases, 43 failures,
+nine skips** and **462 enterprise cases, one Windows POSIX fixture failure,
+20 skips**, with local PostgreSQL fixture failures. Fresh focused SQL tests pass,
+but full hosted/Linux acceptance remains outstanding. Durable import recovery,
+checkpoint/resume, production/HA and complete roadmap matrices remain future work.
+**Baseline 0/100 unchanged; no phase/scope/denominator credit.**
+
+## Admin bot runs, retained progress and image-build recovery — 2026-11-18
+
+Known tested base `d98fb169424b9c541a305e352a5af7f6192bf1a2`; changed non-document
+source inventory SHA-256 `4a55296a1f2ff4a4cb6678dcbcad3897217c8fcb4c71aed7b77e08a8ca457ec3` (57 paths;
+`build/manual-bot-source-inventory.json`). ADR 077 records the admission/progress boundary.
+
+Delivered bounded scope: per-bot Run dialog, text input, configured entry-agent
+and existing-route selection, exact published revision/generation admission and
+backend-encrypted run input. Initial Admin/current tenant Super Admin may run
+all published bots without a separate human execution grant; configured agent
+service grants remain required. Draft Run panels explain publication readiness.
+Progress is ordered retained Control audit evidence: Control queue/claim/finish
+plus lease-authenticated structural runtime agent/model/tool/node observations.
+No prompts, arguments, provider bodies, tokens or chain of thought are retained
+in progress. Runtime observations do not replace independent effect finality.
+Unknown submissions reuse their key/body; polling recovery only reads. No
+trigger delivery is fabricated, container restarted or device file changed by
+manual admission. Add an eighth, model-only `interactive-summary` bundle with
+no packages, triggers or device prerequisite.
+
+Executed: full UI **318 passed, one optional bundle skip**, plus actual builder
+output for **all eight bundles** accepted by the UI reader; typecheck passes.
+Linux runtime **117 passed**; Java contract checks and focused backend delivery/
+workflow tests **35 passed on SQLite/PostgreSQL**, including live Super Admin,
+foreign tenant, generation/input/replay and lease/progress refusal coverage.
+PHP **476** roundtrips, TypeScript two tests, Python contract nine/profile nine,
+Rust contract verification image, preflight **1,620 bindings** and source quality
+checks pass. Real browser acceptance passed run
+`run-a791ccac-2499-4811-9a63-79da6b383d59`: import/publish, Admin text admission,
+visible in-flight model progress, retained timeline and exact configured mock
+result; three core processes, Admin password and device files unchanged.
+Evidence: `build/manual-bot-browser-evidence.json`; screenshots are local only.
+The mock proves routing, not semantic summarization or production provider acceptance.
+
+CI run 44352250983/job 135001499422 failed resolving pinned Quarkus BOM 3.40.1
+before compilation. Its canonical Maven POM independently returned HTTP 200
+(418,006 bytes, SHA-256
+`7197134291f663ce0a751e4b9bcaa03512a0fff093df0fe8c0bb35459d01770f`).
+The image build now retries this precise configuration-only false negative at
+most three times, refreshing negative dependency metadata only after validating
+the published pinned POM. Any executed task, compilation/test failure, genuinely
+missing POM or exhausted recovery fails. Four retry/probe regression tests and
+an actual Quickstart image build through the wrapper pass. The helper is part
+of the local image source fingerprint. No dependency downgrade or scan waiver.
+
+Broad checks are not passes: the 546-case repository CI suite fails on Windows
+symlink privilege (11 explicit skips); full Java verification encounters local
+PostgreSQL fixture failures and the Windows POSIX KillSwitch fixture. Focused
+fresh SQLite/PostgreSQL acceptance above does not waive those gates. Hosted
+CI, complete phase matrices, durable import recovery, resume/recovery and
+production/HA provider qualification remain outstanding.
+**Weighted baseline remains 0/100; no phase, scope or denominator change.**
+
+## Three-container Quickstart integration — 2026-11-18
+
+Known tested base `2a0dd960`; changed non-document source inventory SHA-256
+`6ee0ed5e18b8db0def775a027de5a940e27e26e27ec5e29841eeb14eb2cf91b7` (17 paths, including deletion;
+`build/three-container-source-inventory.json`). This is an actual inventory,
+not a guessed commit SHA. ADR 076 records the ownership and custody decision.
+
+Delivered bounded scope:
+
+- Persistent `quickstart`, `langgraph`, `device` services only. Quickstart owns
+  the embedded demo OCI registry/bootstrap; graph API and worker share one
+  supervised LangGraph container. Backend automatic dispatch reuses current
+  subscription owner/source checks, durable admission and acknowledged cursors.
+  It derives work from published bots, without runtime Admin credentials or a
+  separate subscription listener. Short-lived tool execution containers and an
+  external model fixture remain distinct from the three core services.
+- External operator API script provisions the dedicated 15-minute runtime
+  credential and supports explicit replacement. No credential-renewal sidecar
+  or Admin password rotation. LangGraph mounts only its own read-only credential
+  subtree, never backend storage, Admin credentials or issuer signing keys.
+- Bounded internal compiled-topology caches remain enabled (128 entries per
+  process). They are disposable; backend configuration/run records are durable.
+  Fresh storage/custody only; unsupported old installations are refused intact.
+  Explicit `--fresh` selects new storage and preserves old manifests/stores.
+  The operator explicitly authorized removing the previous local containers and
+  volumes for this acceptance. No bot import/switch populates device files.
+
+Executed checks: Linux runtime suite **115 passed**; Linux Quickstart suite
+**56 passed**, including scoped runtime issuance, denied non-Super Admin issuance
+and unchanged password verifier; focused SQLite/PostgreSQL trigger delivery and
+workflow catalog suite **35 passed**; 16 focused launcher/credential/device tests
+and 17 CI/matrix/composition tests passed. The Windows symlink case passes when
+run in Linux. Preflight (1,606 bindings), source quality/secret checks, Compose
+validation, 10 documentation checker tests and repository link checks pass.
+
+Live fresh-stack A/B acceptance **PASSED**: both watched files completed the
+configured agent/model/read/write/move flow, B activated while A was in flight,
+three core container IDs/start times/restarts/PIDs and Admin credentials stayed
+unchanged, and A retired after draining. Exact Control details show six finalized
+SUCCEEDED calls, four TARGET_CONFIRMED UNFENCED mutations and no unresolved/fenced
+effects. Runs: `run-999eb384-65e1-411f-87b0-4b4d111b90f9` and
+`run-13dd5aaa-3a3e-4e6d-949e-db4c1c3a2983`;
+`build/hotswap-demo/evidence.json`. Cold runtime restart changed graph API cache
+entries **2 → 0**; backend graph preparation returned READY and rebuilt **1**
+entry. Repeated startup/external token provisioning preserved all three core
+processes, Admin identity/password and device content hashes.
+
+Broad checks are not passes: `tools/check.py` stopped in its 542-case CI suite
+on an obsolete eight-service assertion (fixed and rerun) and Windows symlink
+privilege. Full `javaCheck` finished with 27 ordinary-test PostgreSQL connection
+failures and three enterprise failures (one Windows POSIX permission fixture,
+two PostgreSQL failures). Component acceptance above does not waive these gates.
+Hosted/full Linux gates and production four-component/proxy acceptance remain
+outstanding. External persistent cache configuration, checkpoint/resume,
+distributed recovery and full roadmap matrices remain future work.
+**Weighted baseline remains 0/100; no phase, scope or denominator change.**
+
+## Shared SDK preparation CI repair — 2026-11-18
+
+Known tested base `350d012dfe23f3d6fba58e1361a20ddb1f5b1271`.
+
+Run 44305297405/job 134805954074 failed before SDK compilation because Maven
+Central returned HTTP 429 for locked Jackson dependencies. Shared SDK publication
+now uses the existing bounded dependency-throttling retry helper: at most three
+attempts with 5/15-second delays and separate attempt logs. Tests and compilation
+failures are not retried; persistent dependency failure still fails the job.
+Executed: nine trigger package matrix/retry tests, actual shared SDK publication
+through the new command (BUILD SUCCESSFUL; 62 tasks), 1,606-binding preflight,
+source quality/secret checks and whitespace checks. Hosted CI rerun and full
+repository gates remain outstanding. No runtime, deployment consolidation or
+stateless-service redesign is implemented by this CI fix. Weighted baseline
+remains 0/100; no scope/denominator or phase completion changes. Next work remains
+full workflow acceptance and the outstanding phase matrices.
+
+## Self-contained console import and CI repair — 2026-11-18
+
+Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`; changes remain a bounded #295 integration slice.
+The console now verifies embedded packages, merges referenced configuration,
+prepares destination service bindings, stages/reviews, provisions packages,
+restores declared trigger connections and prepares graphs through existing APIs.
+Publication remains explicit. Missing device readiness leaves a staged pending
+bot with a resume action. Import preserves device membership, credentials and
+file content; installation secrets and device/native authority remain external.
+The bundle closure includes graph-only trigger packages. Current connection
+specifications require `trigger`; obsolete `triggerId` is rejected, not converted.
+
+Run 44294902059's seven failed jobs share four repaired roots: generated UI
+operation metadata drift; the native broker fixture expecting unauthorized
+APPEND success (now verifies refusal and unchanged content); graph-only trigger
+package omission in UI bundle scope; and transient Maven license metadata 429.
+License metadata uses bounded retries and still fails on exhausted/unavailable
+or oversized metadata; no security/license scan bypass was introduced. The
+schema inventory includes the native-file contract; scorecard matching normalizes
+Windows line endings while retaining exact passing-test requirements.
+
+Executed: UI typecheck and full UI suite (314 passed, one optional skip); real
+builder output for all seven bots accepted by the UI reader; 35 focused Python
+schema/scorecard/license/profile tests; full Linux client package (90 passed,
+two existing prerequisite ignores); generated operation check; actual Maven
+license retrieval. The broad Python gate failed on Windows symlink privileges
+plus two assertions subsequently fixed and covered by the focused tests; it is
+not recorded as passing. Hosted macOS/ARM, full scan and full repository reruns
+remain outstanding. A production-image build succeeded. The operator removed
+the local stack during browser acceptance; new live UI import is unverified.
+The earlier A/B acceptance below is historical evidence for its recorded sources.
+Durable server-side import recovery and full phase matrices remain outstanding.
+**Weighted baseline remains 0/100; no phase completion or baseline change.**
+
+## Qualified native file execution and Bots authoring — 2026-11-18
+
+Known tested base `11565e5a75a04d6daada9d3544a7931a1a46d211`; working non-document source inventory SHA-256
+`2a51170e42f64e3c7568d36de865a120befa3341813d4bd78afe3cffe4442d8b` (154 files; `build/hotswap-source-snapshot.json`). This records an
+actual tested source inventory, not the SHA of the commit being created.
+
+Delivered bounded scope:
+
+- Blank persistent debug installation, source-qualified production image reuse,
+  private standalone Python bootstrap and credential reconciliation; explicit
+  device approval/enabling/group allocation through current Admin APIs.
+- ADR 075 operator-qualified Linux file-only Java execution: live Super Admin
+  qualifies exact installed device/group/image with expiry. Protected-owner
+  WRITE/RENAME intents precede mutations; durable content witnesses and post-
+  shutdown scope closure feed logical effects, immutable manifests, finalization,
+  history and UNFENCED counts. No fabricated HTTP generations or automatic native
+  replay. Missing/conflicting evidence remains UNKNOWN/reconciliation-required.
+  Fresh schemas only, forced tenant RLS, immutable facts and capacity accounting.
+- Root authoring directory is `bot`, with `bot.json`, `package-build.json`,
+  `referenced-config.json` and `trigger-connections.json`; build/publication,
+  bundle consumers and CI use that path. UI navigation is Overview, Bots, Agents.
+  Existing execution API/schema identifiers remain workflow/profile contracts;
+  no old filesystem import path or conversion reader is added.
+- Bot import/switch never creates/seeds/moves/deletes device content. The operator
+  explicitly prepares folders and permissions. The runbook provides automatic
+  acceptance and prepare-only/manual input/switch/output commands, exact contents,
+  credentials, OpenRouter external bridge, and installation-owned monitoring.
+  Live Super Admin management includes transfer/configuration; self-deletion is
+  refused. Management authority does not manufacture runtime effect evidence.
+
+Executed checks: 53 focused Python cases; 22 authoring-path/older composition
+regressions; UI typecheck and full UI suite (312 pass, one optional built-bundle
+skip); 9 native effect cases, 2 read-admission cases, 2 qualification cases,
+5 PostgreSQL RLS cases, 2 capacity cases, and Java contract tests with an owned
+real PostgreSQL instance. Linux device library: 61 pass, zero failures/ignores;
+5 actual filesystem broker tests also pass. Rust formatting, 1,606-binding
+preflight, source quality and whitespace pass. Nginx bridge configuration and
+local collector configuration validate against actual images; vendor account
+inference/ingestion is not claimed.
+
+Broad checks remain limited: full `tools/check.py` stopped on Windows symlink
+privilege; the post-rename CI run also found one authoring-path regression, fixed
+and rerun in the 22-case suite. Full `javaCheck` failed the Windows POSIX-permission
+fixture plus four PostgreSQL cases with connection-refused/EOF infrastructure
+errors. These are failed broad gates, not passes or waived assertions.
+
+Live acceptance: **PASSED** on a fresh Admin-only installation. Both real
+`hotfolder-watch` events completed configured file-agent read, summarizer-agent
+model invocation, summary write and source archive. B published while A's model
+call was in flight; both exact summaries and unchanged archived originals match.
+Seven core/device containers retain their IDs/start times/restart counts/host PIDs;
+device ID, Admin identity/session authority and password remain unchanged. A's
+old trigger reached Stopped after both pinned runs drained. The exact Control
+detail API confirms six finalized SUCCEEDED tool operations: two zero-effect
+qualified reads and four TARGET_CONFIRMED mutations, four UNFENCED effects,
+zero fenced/unresolved effects, and no retry permission. Evidence is retained in
+`build/hotswap-demo/evidence.json`; run IDs are `run-02e97a2c-c7a9-4150-9ff4-7518210b9562` and `run-0ddc829d-903e-4a7a-b103-28323bd26b23`.
+No executor success or file observation is substituted for Control finality.
+
+The final harness waits for run completion before reading archived files,
+excludes only identity audit counters (not authority/session epochs), and obtains
+projected business outcomes from each exact invocation detail route. The external
+model fixture's provider-only custody mount was tightened after acceptance and
+separately verified, then restarted healthy without touching core/device state.
+Earlier failed harness attempts remain diagnostic history, not acceptance passes.
+
+Remaining: durable server deployment reconciliation, equivalent one-click UI
+orchestration, immutable-revision candidate readiness isolation, generic old-
+assignment reference-aware retirement, recovery/cleanup, distributed/cross-host
+qualification, real-provider acceptance and release publication. Native scope is
+an explicitly trusted Linux filesystem owner, not OS attestation, physical
+fencing or exactly-once execution. #295 stays **0/100**, #274 stays **27%**;
+no full #230 stage/phase/claim or baseline denominator changes.
+
+## Persistent local stack, device scripts and launcher recovery — 2026-11-18
+
+Known base `ea1643608cb2b84f60808d42bad5aa97640612fa`; uncommitted source
+snapshot SHA-256 `72ccae4d9a0b736126c6d15472589b8955391042f57ce7b297373d2813fa68f4`
+(41 changed source/configuration files, inventory retained in
+`build/hotswap-source-snapshot.json`). This is a working checkpoint, not a new
+commit or complete roadmap phase.
+
+Delivered locally:
+
+- `debug/profiled/start.bat` delegates to one persistent composition, source-qualified
+  image caching and `--no-recreate`. Missing images build with production Dockerfiles;
+  Node/npm, Java, Rust and build-time Python dependencies run inside Docker.
+  Missing host Python bootstraps a SHA-256-pinned official 3.14.10 embeddable runtime
+  under `.dev/profiled`, without administrator installation or PATH changes. The
+  source inventory also works without Git. Docker Desktop/Linux remains required.
+- Start **and restart** privately verify saved credentials against current Quickstart
+  custody. Reuse a matching password; refresh a stale/missing local copy only from
+  a still-valid initial password. Write protected local files atomically and keep
+  changed predecessors in private history. No server password reset or recovery
+  from a verifier. A manually changed password unknown to the local file must be
+  supplied by the operator. Trust mismatch without valid initial custody refuses
+  reuse. ADR 074 records this local Docker custody boundary.
+- A persistent native device, signed package engine, following trigger listener,
+  graph mTLS API and runtime are wired without an in-core model server. Privileged
+  fixture identity issuance is read-only against Control custody and has no Docker
+  socket. Installation environment/trust/monitoring stays outside profiles.
+  Device restart no longer erases the persisted applied runtime/tool inventory.
+- `tools/admin/provision_devices.py` uses the Admin `#config-device` settings API
+  for explicit auto approval, finishes an existing **named** enrollment after a
+  fresh exact-key review, then enables and unions requested groups through revision-
+  guarded APIs. It does not allocate arbitrary discovered devices. Profile data
+  cannot approve, enable or allocate devices implicitly.
+- `tools/admin/import_workflow.py` verifies embedded packages, refuses transferred
+  identities/credentials/device membership and shared-definition conflicts, merges
+  references, establishes destination-local service bindings, stages/reviews,
+  provisions and prepares graphs, then readiness-gates publication. Pending responses
+  are not completion. The profile builder now retains trigger packages declared by
+  dispatch connections without deployment fields and converts SDK descriptors into
+  valid Control tool definitions. Two JSON A/B source configurations include READMEs.
+- Live Super Admin can change review thresholds directly, with a distinct audit;
+  cached actor flags confer no exception. Shared CRUD/import mutation authorization
+  rejects deleting the signed-in user's own record. Bootstrap/last-admin protections
+  remain. ADR 073 does not grant independent execution evidence or finality.
+
+Executed evidence: recreated only the explicitly authorized `toolgate-profiled`
+project/storage, leaving Marketplace alone; observed one Admin, zero published
+profiles and zero packages before import (`build/hotswap-demo/blank-setup.json`).
+The device connected after API approval, was allocated through APIs, and both exact
+embedded packages became VERIFIED/applied. Workflow A published and a real watched
+file admitted `run-893f9729-eebe-48e9-aed3-a247f837f4e3`. It FAILED conservatively
+with `TOOL_OUTCOME_UNKNOWN` on `examples.hotfolder/read_text`; no successful summary,
+move, B activation or unchanged-process A/B acceptance is claimed.
+
+A real download/hash/extraction/private-runtime probe passed, including the .NET-only
+PowerShell bootstrap. A real stop/start with host Python, Node **and Git removed
+from PATH** passed; subsequent `restart.bat` and actual Admin login passed with the
+same device ID and installed publication. Credentials were verified without logging
+values. Seven launcher/cache/corrupt-download tests, six credential-reconciliation
+cases, ten Admin transport tests, ten device provisioning cases, eight import cases,
+nine profile build cases, fourteen device image cases, ten runtime transport and
+eight worker evidence cases passed. Final focused Java verification passed 18 configuration cases, seven setup-admin
+protection cases and three independent-target-review cases on SQLite, plus one
+real PostgreSQL bootstrap-protection case (29 total, no failures/skips). Preflight regenerated-check verification (1,585 files),
+source quality and whitespace passed. Full `python tools/check.py` failed on Windows
+locale-sensitive release fixtures; a UTF-8 CI-suite rerun reached 535 cases with
+one remaining Windows symlink-privilege error and 11 explicit skips. It is not a
+full repository pass. Full `javaCheck` exposed the new self-deletion guard
+returning a generic message instead of the setup-admin reason; that message was
+corrected. The already-failed broad run was stopped during unrelated long-running
+Control cases; the final affected suites above passed. No full Java pass is claimed.
+
+Remaining: qualified native broker receipts and complete file-read/write/move
+business finality; immutable-revision candidate readiness isolation (preparing B
+currently replaces profile-level provisioning facts); old trigger drain/retirement;
+durable server-owned deployment reconciliation and equivalent UI orchestration;
+provider readiness/routing, cleanup, recovery and complete phase acceptance. Runtime
+transport diagnostics record only bounded stages/types, never response bodies or
+credentials. Neither SDK return, package readiness, administrator authority nor
+structural validation substitutes for independent effect evidence. #295 remains
+**0/100**, #274 remains **27%**, and no #230 stage/security guarantee is completed.
+
+
 ## Trivy identity for the existing temporary exception — 2026-11-18
 
 Known base `f997222d`. CI run `44157956377`, scan job `134321768231`, failed
@@ -496,10 +1188,10 @@ supersedes the earlier configuration-only bundle format. The #295 baseline
 remains **0/100**; #274 stays **27%**. No #230 stage or full-phase exit criterion
 is credited by this packaging work.
 
-Delivered: `profiles/configurations/` owns five supplied editable profile build
-inputs and per-configuration READMEs. `profiles/build.bat` and `build.sh` produce
+Delivered: `bot/configurations/` owns five supplied editable profile build
+inputs and per-configuration READMEs. `bot/build.bat` and `build.sh` produce
 versioned workflow `.olo` files, a product/source/package version inventory and
-checksums in ignored `profiles/bin/`. Local native tooling or an isolated Docker
+checksums in ignored `bot/bin/`. Local native tooling or an isolated Docker
 toolchain builds the declared tool recipes; prebuilt `.olotool` inputs are supported.
 The container build uses an export of non-ignored source inputs, not private
 stack state, host credentials or a Docker socket. File-only recipes do not need
@@ -1818,7 +2510,7 @@ not elapsed time, deadlines, test coverage or measured productivity.
 | V1.1 — Profile to effective configuration | 25% | 35% | In progress; dedicated workflow/group/agent pages and profile revision discovery extend durable staging/review/publication and package provisioning; one-device placement and current applied-device readiness added, complete directory/grant provisioning pending. Workflow-level .olo transfer, shared-definition cleanup and referenced-data preparation are delivered; complete provisioning/readiness acceptance remains pending. | 0% |
 | V1.2 — Message to governed result | 35% | 70% | In progress; local one- and two-agent configured execution succeeds; full message/runtime qualification pending | 0% |
 | V1.3 — Trigger to the same run path | 20% | 90% | In progress; real trigger admission and confirmed configured-agent results exercised; full revocation/forgery scenarios pending. External client POLL package and managed-log dispatch are exercised; server/PUSH/provider sources remain pending. | 0% |
-| V1.4 — End-to-end qualification | 10% | 100% | In progress; selectable deployment, workflow replacement without restart, multi-workflow/shared-definition handling and admin-preserving blank reset locally exercised; complete fresh-install/cross-host qualification and release publication pending | 0% |
+| V1.4 — End-to-end qualification | 10% | 100% | In progress; blank persistent-stack initialization and standalone launcher/credential restart locally verified; bounded fresh-stack two-bot hot swap and qualified Linux file effects pass; full phase matrix, cross-host qualification and release publication remain pending | 0% |
 | **Total** | **100%** | **100%** | **Planning baseline published; v1 not delivered** | **0%** |
 
 V1.2 carries the largest share because admission, runtime identity, model proxy,
@@ -1844,7 +2536,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
 | V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete property editor, dedicated workflow/group/agent screens, tenant-scoped revision discovery and workflow-level .olo transfer with referenced-data preparation implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
-| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | One-agent admission/lease/step/model/MCP transport; live supervisor inference and agent context attempt stop at unknown outcome; per-run metadata regression coverage | Confirmed tool finality and agent completion, message admission, two-agent execution and complete runtime authorization qualification |
+| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | One-agent admission/lease/step/model/MCP transport; live supervisor inference and agent context attempt stop at unknown outcome; per-run metadata regression coverage | Confirmed tool finality and agent completion, message admission, two-agent execution and complete runtime authorization qualification The two-agent incident/cloud media checkpoint is bounded integration, not complete V1.2 acceptance. |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Listener plus Control binding/admission/queue path; real trigger and duplicate receipt retain admission/run IDs; worker records FAILED on unknown tool outcome | Qualify successful trigger-to-result, live disable/revocation/forgery denials and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | 16-scenario controller, one-agent live fixture, and standalone runtime image/release evidence gate; local image tests/scan pass, live context attempt fails conservatively | Resolve native finality, complete fresh provisioning and two-profile live scenario coverage with independent server evidence and applicable full gates; execute registry publication through an authorized release |
 

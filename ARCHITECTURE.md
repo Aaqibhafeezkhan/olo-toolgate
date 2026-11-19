@@ -1,5 +1,8 @@
 # Architecture
 
+OLO Orchestration authors and executes bots. OLO ToolGate governs device, tool
+and access boundaries. Technical component/package identifiers remain unchanged.
+
 ToolGate separates current authorization, administration and execution. Control
 owns tenant state and policy decisions; Gateway authenticates and routes requests;
 registered executors perform protected effects under Control-issued permits.

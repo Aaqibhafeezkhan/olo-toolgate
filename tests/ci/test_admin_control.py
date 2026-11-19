@@ -57,6 +57,7 @@ class AdminControlTests(unittest.TestCase):
 
             do_POST = do_GET
             do_PUT = do_GET
+            do_PATCH = do_GET
 
             def log_message(self, *args):
                 pass
@@ -168,17 +169,23 @@ class AdminControlTests(unittest.TestCase):
         self.assertEqual(1, len(self.calls))
 
     def test_invalid_key_revision_or_get_body_is_refused_before_effect(self):
-        for options in ({'key': 'invalid\r\nkey'}, {'revision': -1}, {'revision': 9007199254740992}):
+        for options in ({'key': 'invalid\r\nkey'}, {'revision': -1}, {'revision': 9007199254740992}, {'revision':True}, {'revision':'W/"1"\r\nInjected: value'}):
             with self.subTest(options=options), self.assertRaises(control.Refused):
                 self.client().request('POST', '/api/control/v1/workflow-profiles', b'{}', **options)
         with self.assertRaises(control.Refused):
             self.client().request('GET', '/api/control/v1/devices', b'{}')
         self.assertEqual([], self.calls)
 
+    def test_trigger_resource_version_is_preserved_exactly(self):
+        self.client().request('POST','/api/control/v1/triggers/assignments/demo-a:action',b'{}',revision='W/"25"')
+        self.assertEqual('W/"25"',self.calls[0][2]['If-Match'])
+
     def test_profiled_compose_initialization_is_blank_and_password_protected(self):
-        import yaml
+        import importlib.util
         root = Path(__file__).resolve().parents[2]
-        document = yaml.safe_load((root / 'debug/profiled/compose.yaml').read_text(encoding='utf-8'))
+        spec=importlib.util.spec_from_file_location('profiled_stack',root/'debug/profiled/stack.py')
+        stack=importlib.util.module_from_spec(spec);spec.loader.exec_module(stack)
+        document = stack.definition({key:'test-'+key for key in ('quickstart','device','runtime')})
         env = document['services']['quickstart']['environment']
         self.assertEqual('true', env['TOOLGATE_QUICKSTART_ADMIN_ONLY'])
         self.assertEqual('false', env['TOOLGATE_DISABLE_ADMIN_PASSWORD'])

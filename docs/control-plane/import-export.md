@@ -124,11 +124,12 @@ is read and written with `GET`, `PATCH` (merge patch per group) and `PUT` on
 A configuration change keeps the `requiredReviews` in force when it was created; later
 threshold changes do not alter pending changes. With `0`, changes apply immediately and
 are audited `CONFIGURATION_DIRECT_NO_REVIEW`; the Super Admin direct path is unchanged
-(`CONFIGURATION_DIRECT_SUPER_ADMIN`). Changing the threshold itself needs the current
-threshold's reviews with no Super Admin bypass: while it is above `0`, a settings write
-that changes it returns `202` with a configuration change of kind `SETTINGS`. Its
-reviewers need `approve-configuration` on every group, the requester cannot review it,
-and a Super Admin review counts once like any other. Every signed-in console user can
+(`CONFIGURATION_DIRECT_SUPER_ADMIN`). A live Super Admin changes the threshold
+directly, audited as `SERVER_SETTINGS_UPDATE_SUPER_ADMIN`. Scoped administrators
+need the current threshold's reviews: while it is above `0`, their settings write
+returns `202` with a configuration change of kind `SETTINGS`. Its reviewers need
+`approve-configuration` on every group and the requester cannot review it.
+Every signed-in console user can
 read the threshold at `GET /api/control/v1/review-policy` (`{"requiredReviews": 0}`).
 
 > **Security:** with auto-approval on, any device that can reach the enrollment

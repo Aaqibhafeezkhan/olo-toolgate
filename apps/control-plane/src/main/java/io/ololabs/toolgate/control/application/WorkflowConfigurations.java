@@ -40,21 +40,27 @@ public final class WorkflowConfigurations {
                 int port = java.net.URI.create(deployment.origin()).getPort();
                 if (port == 0 || port > 65535) throw new IllegalArgumentException();
             } catch (IllegalArgumentException invalid) { throw invalid("A model requires a fixed HTTPS origin"); }
-            external.add(new Reference(ResourceKind.MODEL_DEPLOYMENT, deployment.id()));
         }
         for (var model : config.modelGroups()) {
             unique(model.deploymentIds(), "model deployment");
             model.deploymentIds().forEach(id -> require(deployments, id, "model deployment"));
-            model.deploymentIds().forEach(id -> external.add(new Reference(ResourceKind.MODEL_DEPLOYMENT, id)));
         }
         for (var agent : config.agentDefinitions()) {
             require(models, agent.modelGroupId(), "agent model group");
+            if (Boolean.TRUE.equals(models.get(agent.modelGroupId()).standby()))
+                throw invalid("Activate the standby model group before assigning an agent");
             external.add(new Reference(ResourceKind.AGENT, agent.agentId()));
             agent.contextSources().forEach(c -> { context(c); external.add(new Reference(ResourceKind.TOOL, c.toolId())); });
         }
         for (var workflow : config.workflows()) {
             require(groups, workflow.workflowGroupId(), "workflow group");
             require(models, workflow.modelGroupId(), "workflow model group");
+            if (Boolean.TRUE.equals(models.get(workflow.modelGroupId()).standby()))
+                throw invalid("Activate the standby model group before assigning a workflow");
+            // Only reachable deployments require live credentials. Unattached standby
+            // providers are still structurally validated, but cannot be selected.
+            models.get(workflow.modelGroupId()).deploymentIds().forEach(id ->
+                external.add(new Reference(ResourceKind.MODEL_DEPLOYMENT, id)));
             index(workflow.agents(), a -> a.agentId(), "workflow agent");
             boolean entry = false;
             for (var binding : workflow.agents()) {

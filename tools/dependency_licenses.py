@@ -4,7 +4,10 @@
 import importlib.metadata
 import json
 import re
+import time
+import urllib.error
 import urllib.request
+from email.utils import parsedate_to_datetime
 import xml.etree.ElementTree as ET
 
 from license_expression import get_spdx_licensing
@@ -15,6 +18,30 @@ ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = {'Apache-2.0','MIT','MIT-0','BlueOak-1.0.0','Zlib','BSD-2-Clause','BSD-3-Clause','ISC','0BSD','Unicode-3.0','UPL-1.0','MPL-2.0','EPL-1.0','EPL-2.0','Python-2.0','PSF-2.0','Unlicense','CC0-1.0'}
 TOOL_ONLY = {'MPL-2.0','EPL-1.0','EPL-2.0','Python-2.0','PSF-2.0'}
 LICENSING = get_spdx_licensing()
+
+
+def metadata_bytes(url):
+    """Retry only read-only, transient metadata failures; missing evidence still fails."""
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as response:
+                value=response.read(2*1024*1024+1)
+            if len(value)>2*1024*1024:raise ValueError('Dependency metadata exceeds its size limit')
+            return value
+        except urllib.error.HTTPError as failure:
+            retry_after=failure.headers.get('Retry-After') if failure.headers else None
+            code=failure.code
+            failure.close()
+            if code not in (429,500,502,503,504) or attempt==4:raise
+            delay=2**attempt
+            if retry_after:
+                try:delay=max(delay,float(retry_after))
+                except ValueError:
+                    try:delay=max(delay,parsedate_to_datetime(retry_after).timestamp()-time.time())
+                    except (ValueError,TypeError,OverflowError):pass
+            if delay>30:raise  # Do not retry sooner than a longer server-requested delay.
+            print(f'Dependency metadata HTTP {code}; retry {attempt+1}/4 in {delay:g}s',flush=True)
+            time.sleep(delay)
 
 
 def cargo_license(expression):
@@ -57,7 +84,7 @@ def maven_license(group, artifact, version, cache):
     coordinate = f'{group}:{artifact}:{version}'
     if coordinate in cache: return cache[coordinate]
     url = f'https://repo.maven.apache.org/maven2/{group.replace(".","/")}/{artifact}/{version}/{artifact}-{version}.pom'
-    with urllib.request.urlopen(url, timeout=30) as response: pom = ET.fromstring(response.read())
+    pom = ET.fromstring(metadata_bytes(url))
     ns = {'m':'http://maven.apache.org/POM/4.0.0' if pom.tag.startswith('{') else ''}
     names = [node.text or '' for node in pom.findall('m:licenses/m:license/m:name', ns)]
     result = []
@@ -134,8 +161,7 @@ def audit(rust_metadata, output=None):
     for line in (ROOT/'apps/quickstart/requirements.txt').read_text().splitlines():
         if not line or line.startswith('#'): continue
         name, version = line.split('==')
-        with urllib.request.urlopen(f'https://pypi.org/pypi/{name}/{version}/json',timeout=30) as response:
-            info = json.load(response)['info']
+        info = json.loads(metadata_bytes(f'https://pypi.org/pypi/{name}/{version}/json'))['info']
         expression = info.get('license_expression')
         if not expression: raise ValueError('Runtime Python license requires review: '+name)
         inventory.append({'ecosystem':'python-runtime','name':info['name'],'version':version,

@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.ololabs.io/toolgate/v2/native-files.schema.json",
+  "$comment": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "title": "Qualified native filesystem effects",
+  "$ref": "#/$defs/NativeFileEffectBegin",
+  "$defs": {
+    "NativeFileOperation": {
+      "type": "string",
+      "enum": [
+        "WRITE",
+        "RENAME"
+      ],
+      "description": "ADR 075 NativeFileOperation; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "path"
+      ],
+      "properties": {
+        "operation": {
+          "$ref": "#/$defs/NativeFileOperation"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "contentSha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "description": "ADR 075 NativeFileIntent; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileEffectBegin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "leaseId",
+        "fencingToken",
+        "ordinal",
+        "intent"
+      ],
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "leaseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "intent": {
+          "$ref": "#/$defs/NativeFileIntent"
+        }
+      },
+      "description": "ADR 075 NativeFileEffectBegin; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileEffectGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "effectId",
+        "intentDigest"
+      ],
+      "properties": {
+        "effectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "intentDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "description": "ADR 075 NativeFileEffectGrant; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileEffectReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "leaseId",
+        "fencingToken",
+        "effectId",
+        "afterSha256"
+      ],
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "leaseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "effectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "beforeSha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "afterSha256": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "description": "ADR 075 NativeFileEffectReceipt; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileScopeClosed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "leaseId",
+        "fencingToken"
+      ],
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "leaseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "fencingToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        }
+      },
+      "description": "ADR 075 NativeFileScopeClosed; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accepted"
+      ],
+      "properties": {
+        "accepted": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "description": "ADR 075 NativeFileAck; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileQualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deviceId",
+        "deviceGroupId",
+        "imageDigest",
+        "expiresAtUnixMs",
+        "acknowledgedRisk"
+      ],
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "deviceGroupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "imageDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "acknowledgedRisk": {
+          "type": "string",
+          "const": "UNFENCED_FILESYSTEM"
+        }
+      },
+      "description": "ADR 075 NativeFileQualification; only protected qualified filesystem broker evidence."
+    },
+    "NativeFileCandidate": {
+      "type": "object",
+      "description": "Current installed file-only candidate; metadata is not execution authority.",
+      "additionalProperties": false,
+      "required": [
+        "deviceId",
+        "toolId",
+        "managedDigest",
+        "imageDigest",
+        "writeAccess"
+      ],
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "toolId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "managedDigest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "imageDigest": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "writeAccess": {
+          "type": "boolean"
+        }
+      }
+    },
+    "NativeFileCandidatePage": {
+      "type": "object",
+      "description": "Bounded metadata for explicit operator qualification.",
+      "additionalProperties": false,
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/NativeFileCandidate"
+          }
+        }
+      }
+    }
+  }
+}

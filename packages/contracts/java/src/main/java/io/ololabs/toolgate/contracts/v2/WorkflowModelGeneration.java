@@ -5,16 +5,19 @@ package io.ololabs.toolgate.contracts.v2;
 
 /** Explicit bounded inference parameters selected from the pinned model deployment, never from a runner request.
  *
+ * @param reasoningEffort canonical reasoningEffort value
  * @param maxOutputTokens canonical maxOutputTokens value
  * @param temperature canonical temperature value
  */
 @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
 public record WorkflowModelGeneration(
+    @com.fasterxml.jackson.annotation.JsonProperty(value = "reasoningEffort", required = false) String reasoningEffort,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "maxOutputTokens", required = true) Long maxOutputTokens,
     @com.fasterxml.jackson.annotation.JsonProperty(value = "temperature", required = true) Double temperature
 ) {
     /** Reject absent required references and copy collections to retain value semantics.
      *
+     * @param reasoningEffort canonical reasoningEffort value
      * @param maxOutputTokens canonical maxOutputTokens value
      * @param temperature canonical temperature value
      */

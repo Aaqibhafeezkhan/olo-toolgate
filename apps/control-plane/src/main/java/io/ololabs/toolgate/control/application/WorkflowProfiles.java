@@ -13,7 +13,12 @@ import java.util.Objects;
 
 /** Immutable staged profile revisions. Publication is separate from package provisioning and live authority. */
 public final class WorkflowProfiles {
-    @FunctionalInterface public interface Readiness { boolean ready(Store.Session tx, DeploymentProfile profile, String profileDigest); }
+    @FunctionalInterface public interface Readiness {
+        boolean ready(Store.Session tx, DeploymentProfile profile, String profileDigest);
+        default java.util.List<String> blockers(Store.Session tx, DeploymentProfile profile, String profileDigest) {
+            return ready(tx, profile, profileDigest) ? java.util.List.of() : java.util.List.of("Bot dependencies are not ready. Check its installation configuration.");
+        }
+    }
     private final Store store;
     private final Codec codec;
     private final Readiness readiness;
@@ -106,6 +111,19 @@ public final class WorkflowProfiles {
     private Store.Reply reply(Store.Session tx, Ids.TenantId tenant, WorkflowProfileStore.Revision revision, int code) {
         var status = status(tx, tenant, revision);
         return new Store.Reply(code, codec.json(status), status.generation());
+    }
+    public Store.Reply diagnostics(DirectoryService.Actor actor, String id, String digest) {
+        return store.transaction(actor.tenant(), false, tx -> {
+            require(tx, actor);
+            var revision = revision(tx, actor.tenant(), id, digest);
+            var issues = new java.util.LinkedHashSet<String>();
+            if (revision.state().equals("DRAFT")) issues.add("Review this exact bot revision before publication.");
+            issues.addAll(readiness.blockers(tx, profile(documents.open(tx, actor.tenant(), revision)), digest));
+            var bounded = issues.stream().limit(127).map(message -> message.length() > 512 ? message.substring(0, 509) + "..." : message)
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+            if (issues.size() > 127) bounded.add("Additional dependencies are blocked. Resolve the listed issues and refresh.");
+            return new Store.Reply(200, codec.json(new WorkflowProfileDiagnostics(id, digest, bounded)), 0);
+        });
     }
     public Store.Reply upload(DirectoryService.Actor actor, String document, String requestId) {
         Ids.valid(requestId);

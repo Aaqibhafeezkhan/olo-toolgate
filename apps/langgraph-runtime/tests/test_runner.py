@@ -90,6 +90,24 @@ class Gate:
 
 
 class RunnerTests(unittest.TestCase):
+    def test_progress_records_structural_work_without_inputs_outputs_or_tokens(self):
+        run=lease();gate=Gate(run);events=[]
+        result=Runner(gate,progress=lambda kind,**details:events.append({'kind':kind,**details})).execute(run)
+        self.assertEqual('SUCCEEDED',result.state)
+        kinds={event['kind'] for event in events}
+        self.assertTrue({'MODEL_STARTED','MODEL_COMPLETED','TOOL_STARTED','TOOL_COMPLETED','NODE_COMPLETED'}<=kinds)
+        rendered=str(events)
+        for secret in ('secret-lease-token','secret-step-token','Please investigate.','untrusted tool content','proposed'):
+            self.assertNotIn(secret,rendered)
+
+    def test_progress_failure_before_a_tool_does_not_dispatch_or_retry_it(self):
+        run=lease();gate=Gate(run);attempts=[]
+        def report(kind,**details):
+            if kind=='TOOL_STARTED':attempts.append(kind);raise RuntimeError('private progress response')
+        result=Runner(gate,progress=report).execute(run)
+        self.assertEqual('FAILED',result.state);self.assertEqual([],gate.calls);self.assertEqual(['TOOL_STARTED'],attempts)
+        self.assertNotIn('private progress',str(result))
+
     def test_native_factory_also_requires_the_admitted_compiler_identity(self):
         run=replace(lease(),compiler_digest='sha256:'+'0'*64)
         gate=Gate(run)

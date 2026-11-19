@@ -6,6 +6,83 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add a local two-agent incident bot with triage-to-handover configuration and
+  exact demo input. Refresh OLO console screenshots and the four existing tours;
+  add multi-agent and same-run Langfuse/LangSmith/Phoenix views, restore overview
+  video links and retain explicit provenance for historical captures.
+
+- Fix the LangChain package image to publish only the root Java SDK task and
+  enforce SDK isolation from unrelated Quarkus/analysis plugins during packaging.
+
+- Add the community pull-only three-service deployment at `deploy/docker/quickstart/dev`,
+  sharing blank startup, private credentials and optional model/collector setup
+  with the debug launcher. Keep separate installation ownership and configurable
+  ports. Refresh the root OLO README with actual current debug-stack captures;
+  matching public development images remain awaiting publication.
+
+- Rebuild Quickstart's embedded Distribution registry from pinned v3.1.2 source
+  with patched Go and affected modules; retain licenses/checksums and the image
+  vulnerability gate. Pin Docker CLI 29.10.0 with its patched Go runtime in
+  Quickstart and device images.
+
+- Route file agents through the real OLO QLoRA model served by Ollama, with
+  ordered lightweight-model inference fallback and current authorization before
+  each attempt. Keep premium OpenRouter explicitly unattached standby; never
+  replay tool effects as model fallback. Prepare/reuse both local models in
+  Docker with all NVIDIA GPUs available.
+  Configure provider reasoning effort in bot JSON and validate typed finish
+  results before file writes, within Gateway's request deadline.
+- Refresh all seven file bots and two text examples with portable local-model
+  settings, explicit graphs and bundled tools/triggers. Add central community
+  device/model help and exact per-bot input/output commands. Brand the console
+  OLO, with OLO Orchestration and OLO ToolGate navigation sections.
+
+- Show persistent red bullet diagnostics for imported OLO bot revisions, using
+  current backend publication checks. Refresh readiness automatically, retain
+  previous issues on connection failures and expose no credentials/event payloads.
+
+- Ask at debug startup whether to create/reuse the observability collector or
+  keep existing settings. Support local-only collection without cloud keys,
+  create a private template on first use and preserve saved credentials.
+
+- Export optional content-free workflow/agent/model/tool OTLP spans to a private
+  collector with Langfuse, LangSmith and Phoenix cloud fan-out. Keep cloud keys
+  in ignored installation credentials and retain execution when telemetry fails.
+
+- Add optional local Ollama/TLS demo companions, a Qwen3 0.6B thinking-model bot,
+  persistent model downloads and all-NVIDIA-GPU scheduling. Keep provider trust,
+  credentials and container configuration outside portable bot bundles.
+
+- Add per-bot console Run dialogs for Super Admin text submission, retained
+  execution progress and final results from the configured published graph.
+  Include a portable text-only example. Keep agent service grants, immutable
+  revision checks and idempotent submission recovery at the backend boundary.
+- Recover bounded, independently verified false-negative Quarkus BOM lookups
+  during container build configuration; retain pinned dependencies and fail on
+  compilation/tests, genuinely unavailable artifacts or exhausted recovery.
+
+- Consolidate the persistent debug deployment into Quickstart, LangGraph and
+  Device. Embed the demo registry in Quickstart, dispatch triggers in the backend,
+  and supervise the graph API and worker in one stateless runtime. Keep bounded
+  internal graph caches; provision service credentials through external operator
+  scripts without changing Admin credentials. Fresh installation selection
+  preserves unsupported old stores rather than converting them.
+
+- Prepare self-contained bot imports in the console, retaining graph-only trigger
+  packages and reporting staged device readiness. Repair generated operation
+  metadata and native refusal fixtures; retry transient license metadata failures
+  within bounds without bypassing scans.
+
+- Add the blank persistent community debug stack, private standalone Python and
+  restart credential reconciliation, explicit device/bot deployment scripts, and
+  a real two-bot file/agent/model hot-swap acceptance driver. Qualify protected
+  Linux file-only execution with native intents, durable receipts and closed
+  scopes; mutations remain unfenced and uncertain effects are not retried.
+- Rename repository bot authoring to `bot/` with explicit configuration filenames;
+  place Bots below Overview and Agents below Bots. Bot switching leaves device
+  file content to the operator. Document exact input/output, OpenRouter bridging
+  and installation-owned monitoring configuration.
+
 - Prepare reviewed JSON graphs from the admin console through a private mTLS
   runtime connection and persist complete generation-bound compilation receipts.
   Pin compiler identity and configuration for admitted runs across publication.
@@ -17,9 +94,9 @@ The project follows semantic versioning once stable versioning begins.
   API and dynamic authorized subscription reconciliation. Move debug helpers into
   `debug/profiled`. Automatic profile hot-swap deployment remains in progress.
 
-- Build versioned workflow profiles from `profiles/configurations/` using
-  `profiles/build.sh` or `profiles/build.bat`, with output and package inventories
-  in `profiles/bin/` and verified publication as release assets. Workflow bundles
+- Build versioned workflow profiles from `bot/configurations/` using
+  `bot/build.sh` or `bot/build.bat`, with output and package inventories
+  in `bot/bin/` and verified publication as release assets. Workflow bundles
   include the exact required tool and trigger archives. Tool packaging now uses
   `.olotool` exclusively; workflow/profile bundles use `.olo`. Prior tool filenames and configuration-only profile bundles
   have no compatibility reader. Console transfer preserves credentials and uses

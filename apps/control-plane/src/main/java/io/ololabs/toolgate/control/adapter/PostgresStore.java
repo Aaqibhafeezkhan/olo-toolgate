@@ -174,6 +174,7 @@ public class PostgresStore implements Store {
         public io.ololabs.toolgate.control.application.EffectStore effects(){return new JdbcEffectStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.EffectConsentStore effectConsents(){return new JdbcEffectConsentStore(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.EnterpriseStore enterprise() {return new PostgresEnterpriseStore(connection,tenant,codec,insights);}
+        public io.ololabs.toolgate.control.application.NativeFileStore nativeFiles(){return new JdbcNativeFiles(connection,tenant,codec);}
         public io.ololabs.toolgate.control.application.InsightsStore insights() {return new JdbcInsightsStore(connection,tenant);}
         public io.ololabs.toolgate.control.application.FleetStore fleet() { return new PostgresFleetStore(connection, tenant); }
         public io.ololabs.toolgate.control.application.TriggerStore triggers() { return new PostgresTriggerStore(connection, tenant); }
@@ -557,6 +558,20 @@ public class PostgresStore implements Store {
                 }
                 return java.util.List.copyOf(entries);
             } catch (SQLException e) { throw Failure.unavailable(); }
+        }
+        public java.util.List<io.ololabs.toolgate.contracts.v2.WorkflowRunProgressEvent> workflowProgress(String runId,long after,int limit) {
+            try(var query=statement("SELECT sequence,occurred_at,operation,evidence FROM control_audit WHERE tenant_id=? AND target=? AND sequence>? AND operation IN ('WORKFLOW_PROGRESS_CONTROL','WORKFLOW_PROGRESS_RUNTIME') ORDER BY sequence LIMIT ?",
+                    "workflow-run:"+runId,after,limit);var rows=query.executeQuery()) {
+                var result=new java.util.ArrayList<io.ololabs.toolgate.contracts.v2.WorkflowRunProgressEvent>();
+                while(rows.next()) {
+                    var evidence=(com.fasterxml.jackson.databind.JsonNode)codec.value(rows.getString(4));
+                    String timestamp=SqliteState.local(connection)?rows.getString(2):rows.getObject(2,java.time.OffsetDateTime.class).toInstant().toString();
+                    result.add(new io.ololabs.toolgate.contracts.v2.WorkflowRunProgressEvent(rows.getLong(1),timestamp,
+                        io.ololabs.toolgate.contracts.v2.WorkflowProgressSource.valueOf(rows.getString(3).endsWith("CONTROL")?"CONTROL":"RUNTIME"),
+                        evidence.path("kind").asText(),evidence.path("nodeId").asText(null),evidence.path("subjectId").asText(null),evidence.path("toolRef").asText(null)));
+                }
+                return java.util.List.copyOf(result);
+            }catch(SQLException unavailable){throw Failure.unavailable();}
         }
         public String auditPage(long after, int limit) {
             try (var statement = statement("SELECT sequence,actor_id,operation,target,revision,request_id,request_digest,occurred_at,evidence FROM control_audit WHERE tenant_id=? AND sequence>? ORDER BY sequence LIMIT ?", after, limit + 1);

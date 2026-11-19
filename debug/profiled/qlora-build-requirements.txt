@@ -1,0 +1,11 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+# Model preparation only, never installed on the community host or in core services.
+torch==2.15.0+cpu
+transformers==5.23.0
+peft==0.21.3
+accelerate==1.16.0
+safetensors==0.8.0
+huggingface-hub==2.4.0
+sentencepiece==0.2.3
+protobuf==7.36.2
+gguf==0.19.0

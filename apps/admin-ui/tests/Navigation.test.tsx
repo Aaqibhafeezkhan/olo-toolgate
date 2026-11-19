@@ -52,5 +52,5 @@ it('keeps About available to approval-only users without Administration in eithe
   fireEvent.click(screen.getByRole('button',{name:'Collapse navigation'}));
   expect(screen.queryByRole('button',{name:'Administration'})).toBeNull();
   fireEvent.click(screen.getByRole('link',{name:'About'}));fireEvent(window,new HashChangeEvent('hashchange'));
-  expect(await screen.findByRole('heading',{name:'About ToolGate'})).toBeTruthy();
+  expect(await screen.findByRole('heading',{name:'About OLO'})).toBeTruthy();
 });

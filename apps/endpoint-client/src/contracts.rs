@@ -34,6 +34,7 @@ impl Contracts {
                 "/enterprise.schema.json",
                 "/v2/discovery.schema.json",
                 "/v2/kill.schema.json",
+                "/v2/native-files.schema.json",
             ]
             .iter()
             .any(|suffix| uri.ends_with(suffix))

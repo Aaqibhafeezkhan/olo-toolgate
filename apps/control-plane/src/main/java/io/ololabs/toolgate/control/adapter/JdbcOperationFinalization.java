@@ -58,7 +58,7 @@ final class JdbcOperationFinalization {
     }
     private List<Write> writes(String operation){
         var values=new ArrayList<Write>();var lookups=lookups(operation);
-        try(var s=query("SELECT e.effect_id,g.attempt_id,g.state,g.consumer,g.claim_token,CASE WHEN EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END,g.auth_nonce FROM control_effects e LEFT JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id WHERE e.tenant_id=? AND e.operation_id=? ORDER BY e.effect_id,g.generation LIMIT 4097",operation);var rows=s.executeQuery()){
+        try(var s=query("SELECT e.effect_id,g.attempt_id,g.state,g.consumer,g.claim_token,CASE WHEN EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND w.source='TARGET:'||g.consumer AND w.outcome=g.state) THEN 1 ELSE 0 END,g.auth_nonce FROM control_effects e LEFT JOIN control_effect_generations g ON g.tenant_id=e.tenant_id AND g.effect_id=e.effect_id WHERE e.tenant_id=? AND e.operation_id=? AND NOT EXISTS(SELECT 1 FROM control_native_file_intents f WHERE f.tenant_id=e.tenant_id AND f.effect_id=e.effect_id) ORDER BY e.effect_id,g.generation LIMIT 4097",operation);var rows=s.executeQuery()){
             while(rows.next()){
                 String state=rows.getString(3),consumer=rows.getString(4),claim=rows.getString(5);
                 boolean witnessed=consumer!=null&&claim!=null&&rows.getInt(6)==1;
@@ -72,11 +72,20 @@ final class JdbcOperationFinalization {
                 }
                 values.add(new Write(rows.getString(1),rows.getString(2),state==null?"MISSING":state,witnessed,receipt));
             }
+            var nativeFiles=new JdbcNativeFiles(connection,tenant,codec);
+            for(var intent:nativeFiles.intents(operation)){
+                var receipts=nativeFiles.receipts(intent.effect());boolean witnessed=receipts.size()==1;
+                values.add(new Write(intent.effect(),intent.attempt(),receipts.isEmpty()?"AMBIGUOUS":witnessed?"COMPLETED":"CONFLICT",witnessed,
+                    witnessed?nativeReceipt(tenant,codec,receipts.getFirst()):null));
+            }
             return List.copyOf(values);
         }catch(SQLException failure){throw Failure.unavailable();}
     }
     static String receipt(String tenant,String effect,String consumer,String claim){
         return DirectoryService.digest("toolgate-target-claim-receipt-v1\n"+tenant+"\n"+effect+"\n"+consumer+"\n"+claim);
+    }
+    static String nativeReceipt(String tenant,ContractCodec codec,io.ololabs.toolgate.contracts.v2.NativeFileEffectReceipt receipt){
+        return DirectoryService.digest("toolgate-native-filesystem-target/v1\n"+tenant+"\n"+codec.json(receipt));
     }
     private record LateReports(Set<String> successful,boolean complete) {}
     private LateReports lateReports(String operation){
@@ -114,7 +123,9 @@ final class JdbcOperationFinalization {
     }
     private boolean scoped(EnterpriseInvocation i,String attempt){
         var scope=enterprise.recoveryScope(attempt);
-        return scope!=null&&scope.deviceId().equals(i.evaluation().context().deviceId());
+        var nativeFiles=new JdbcNativeFiles(connection,tenant,codec);
+        return scope!=null&&scope.deviceId().equals(i.evaluation().context().deviceId())
+            &&(nativeFiles.scope(attempt)==null||nativeFiles.closed(attempt));
     }
     private static boolean active(EnterpriseInvocation i,String attempt){
         return ACTIVE.contains(i.state().name())&&Objects.equals(i.reservedNonce(),attempt);

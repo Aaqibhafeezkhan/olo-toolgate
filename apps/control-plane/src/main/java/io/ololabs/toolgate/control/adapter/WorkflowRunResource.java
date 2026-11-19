@@ -18,6 +18,11 @@ public class WorkflowRunResource {
     @Inject TriggerBootstrap triggers;
     @Inject VaultKeyBootstrap keys;
 
+    @GET @Path("{runId}/progress")
+    public Response progress(@PathParam("runId") String run,@QueryParam("after") @DefaultValue("0") long after) {
+        var value=new WorkflowProgress(store,codec,Clock.systemUTC()).read(actors.management(),run,after);
+        return Response.status(value.status()).header("Cache-Control","no-store").entity(value.body()).build();
+    }
     @GET @Path("{runId}")
     public Response get(@PathParam("runId") String runId) {
         var actor = actors.management();

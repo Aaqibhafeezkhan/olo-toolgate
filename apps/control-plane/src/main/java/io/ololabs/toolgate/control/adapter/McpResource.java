@@ -27,6 +27,12 @@ public class McpResource {
     @POST @Path("responses") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway") public Response get(String value){return response(endpoints.relay().response(actors.service("toolgate-relay-gateway"),true,body(value),correlation.id()));}
     @POST @Path("authorize") @Consumes("application/json") public Response authorize(String value){return response(endpoints.relay().authorize(peer(),body(value)));}
     @POST @Path("results") @Consumes("application/json") public Response result(String value){return response(endpoints.relay().result(peer(),body(value),correlation.id()));}
+    @GET @Path("native-files/candidates/{id}") @io.quarkus.security.Authenticated public Response nativeCandidates(@PathParam("id")String id){return response(endpoints.relay().nativeCandidates(actors.human(),id));}
+    @POST @Path("native-files/qualifications") @Consumes("application/json") @io.quarkus.security.Authenticated public Response nativeQualify(String value){return response(endpoints.relay().nativeQualify(actors.human(),body(value),correlation.id()));}
+    @DELETE @Path("native-files/qualifications/{id}") @io.quarkus.security.Authenticated public Response nativeRevoke(@PathParam("id")String id){return response(endpoints.relay().nativeRevoke(actors.human(),id,correlation.id()));}
+    @POST @Path("native-files/begin") @Consumes("application/json") public Response nativeBegin(String value){return response(endpoints.relay().nativeBegin(peer(),body(value)));}
+    @POST @Path("native-files/receipts") @Consumes("application/json") public Response nativeReceipt(String value){return response(endpoints.relay().nativeReceipt(peer(),body(value)));}
+    @POST @Path("native-files/close") @Consumes("application/json") public Response nativeClose(String value){return response(endpoints.relay().nativeClose(peer(),body(value)));}
     @GET @Path("requests") @io.quarkus.security.Authenticated public Response page(){return response(endpoints.relay().page(actor(),correlation.id()));}
     @GET @Path("requests/{id}") @io.quarkus.security.Authenticated public Response inspect(@PathParam("id") String requestId){return response(endpoints.relay().inspect(actor(),requestId));}
 }

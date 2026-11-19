@@ -18,11 +18,40 @@ const subscriptions=[{...fixture.TriggerSubscription,metadata:{...fixture.Trigge
 const snapshot={formatVersion:2,tenantId:'tenant-a',revision:1,agents:[],agentGroups:[],roles:[],grants:[],tools:[],toolGroups:[],deviceGroups:[],bindings:[],policies:[],extractors:[],teams:[],devices:[],delegations:[],agentDelegations:[],workloadBindings:[]} as ConfigurationFile;
 const exportWorkflow=async(profile:DeploymentProfile,id:string,a:TriggerAssignment[],s:TriggerSubscription[])=>packWorkflow(profile,id,a,s,snapshot,await mockWorkflowPackages(profile,a));
 
+it('keeps explicitly declared standby providers portable without exporting unrelated active groups',async()=>{
+  const profile=mutable(original),config=profile.workflows!;
+  config.modelDeployments.push({...mutable(config.modelDeployments[0]),id:'premium',secretName:'not-configured'});
+  config.modelGroups.push({id:'premium-standby',deploymentIds:['premium'],standby:true},
+    {id:'unrelated-active',deploymentIds:[config.modelDeployments[0].id]});
+  const bundle=await importWorkflow('standby.olo',await exportWorkflow(profile,first.id,assignments,subscriptions));
+  expect(bundle.profile.workflows!.modelGroups.some(group=>group.id==='premium-standby'&&group.standby)).toBe(true);
+  expect(bundle.profile.workflows!.modelGroups.some(group=>group.id==='unrelated-active')).toBe(false);
+  expect(bundle.profile.workflows!.modelDeployments.some(model=>model.id==='premium')).toBe(true);
+  expect(bundle.profile.workflows!.workflows[0].modelGroupId).toBe(first.modelGroupId);
+});
+
+it('retains a graph-only bot trigger package through export and current-contract import',async()=>{
+  const profile=mutable(original);delete profile.workflows!.workflows[0].deployment;
+  profile.packages.push({packageId:assignments[0].spec.trigger.split('/')[0],version:assignments[0].spec.packageVersion,source:'BUNDLE',required:true,
+    deviceGroupIds:['finance-desktops'],triggers:[{assignment:'source',triggerId:assignments[0].spec.trigger,config:assignments[0].spec.config}]});
+  const bytes=await exportWorkflow(profile,first.id,assignments,subscriptions);
+  const bundle=await importWorkflow('self-contained.olo',bytes);
+  expect(bundle.profile.packages.some(item=>item.triggers?.some(trigger=>trigger.assignment==='source'))).toBe(true);
+  const files=unzipSync(bytes),manifest=JSON.parse(new TextDecoder().decode(files['manifest.json']));
+  manifest.connections[0].assignmentSpec.triggerId=manifest.connections[0].assignmentSpec.trigger;
+  delete manifest.connections[0].assignmentSpec.trigger;
+  files['manifest.json']=strToU8(JSON.stringify(manifest));
+  await expect(importWorkflow('invalid.olo',zipSync(files,{level:6}))).rejects.toThrow('current trigger contract');
+});
+
 it('exports profile group placement without copying the source device and matches a different destination device',()=>{
   const profile=mutable(original);
   profile.packages.push({packageId:'examples.hotfolder-watch',version:'1.0.0',source:'PREBUILT_CORE',required:true,deviceGroupIds:['finance-desktops'],triggers:[{assignment:'source',triggerId:assignments[0].spec.trigger,config:{folder:'inbox'}}]});
   const connection=workflowConnections(profile,assignments,subscriptions)[0];
   expect(connection.assignmentSpec.target).toEqual({executor:'CLIENT',deviceGroups:['finance-desktops'],requiredDeviceGroupSets:[['finance-desktops']]});
+  const withoutDerivedSets=mutable(connection.assignmentSpec);delete withoutDerivedSets.target.requiredDeviceGroupSets;
+  expect(workflowAssignmentMatches(profile,assignments[0],withoutDerivedSets)).toBe(true);
+  expect(workflowAssignmentMatches(profile,assignments[0],{...withoutDerivedSets,target:{executor:'CLIENT',deviceGroups:['other-group']}})).toBe(false);
   expect(JSON.stringify(connection.assignmentSpec)).not.toContain('device-42');
   const destination=mutable(assignments[0]);destination.spec.target={executor:'CLIENT',devices:['new-device'],requiredDeviceGroupSets:[['finance-desktops']]};
   expect(workflowAssignmentMatches(profile,destination,connection.assignmentSpec)).toBe(true);

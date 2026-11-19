@@ -1,0 +1,22 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+services:
+  collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: [--config=/etc/otelcol/config.json]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file: ["${OLO_STACK_CREDENTIALS:-../credentials}/monitoring.env"]
+    volumes:
+      - type: bind
+        source: ${OLO_STACK_CREDENTIALS:-../credentials}/collector.json
+        target: /etc/otelcol/config.json
+        read_only: true
+    networks:
+      installation:
+        aliases: [insights-collector]
+    restart: unless-stopped
+networks:
+  installation:
+    external: true
+    name: ${OLO_STACK_PROJECT:-toolgate-profiled}_default

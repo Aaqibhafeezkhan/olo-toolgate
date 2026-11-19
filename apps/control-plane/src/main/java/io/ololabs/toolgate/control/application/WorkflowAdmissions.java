@@ -67,6 +67,7 @@ public final class WorkflowAdmissions {
             runs.enqueue(new WorkflowRunStore.QueuedRun(runId, target.profileId(), target.profileDigest(), binding.workflowId(),
                 binding.workflowVersionId(), binding.serviceAgentId(), binding.serviceAgentGroupId(), binding.remediationMode().name(),
                 now, sealed.keyVersion(), sealed.ciphertext(), compiler, target.workflow().graph().digest()));
+            WorkflowProgress.control(tx,codec,actor.id(),runId,"QUEUED",requestId,binding.serviceAgentId());
             return record(tx, actor, requestId, request, admissionId, runId, WorkflowDispatchDisposition.ADMITTED);
         });
     }

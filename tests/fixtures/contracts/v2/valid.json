@@ -5315,6 +5315,7 @@
     "resultMode": "MODEL"
   },
   "WorkflowModelGeneration": {
+    "reasoningEffort": "none",
     "maxOutputTokens": 512,
     "temperature": 0.25
   },
@@ -5740,5 +5741,124 @@
       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     ],
     "instanceId": "worker-1"
+  },
+  "NativeFileOperation": "WRITE",
+  "NativeFileIntent": {
+    "operation": "WRITE",
+    "path": "summary.txt",
+    "contentSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "NativeFileEffectBegin": {
+    "requestId": "inv-file",
+    "leaseId": "lease-file",
+    "fencingToken": "fence-file",
+    "ordinal": 1,
+    "intent": {
+      "operation": "WRITE",
+      "path": "summary.txt",
+      "contentSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "NativeFileEffectGrant": {
+    "effectId": "nf-effect",
+    "intentDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "NativeFileEffectReceipt": {
+    "requestId": "inv-file",
+    "leaseId": "lease-file",
+    "fencingToken": "fence-file",
+    "effectId": "nf-effect",
+    "afterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "NativeFileScopeClosed": {
+    "requestId": "inv-file",
+    "leaseId": "lease-file",
+    "fencingToken": "fence-file"
+  },
+  "NativeFileAck": {
+    "accepted": true
+  },
+  "NativeFileQualification": {
+    "deviceId": "device",
+    "deviceGroupId": "files",
+    "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "expiresAtUnixMs": 1795000000000,
+    "acknowledgedRisk": "UNFENCED_FILESYSTEM"
+  },
+  "NativeFileCandidate": {
+    "deviceId": "device",
+    "toolId": "files/read",
+    "managedDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "writeAccess": false
+  },
+  "NativeFileCandidatePage": {
+    "items": [
+      {
+        "deviceId": "device",
+        "toolId": "files/read",
+        "managedDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "imageDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "writeAccess": false
+      }
+    ]
+  },
+  "WorkflowRunStartRequest": {
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expectedGeneration": 1,
+    "entryAgentId": "agent",
+    "message": "Summarize this text."
+  },
+  "WorkflowRunStartReceipt": {
+    "runId": "run-example",
+    "profileId": "support",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflowId": "summary",
+    "state": "QUEUED"
+  },
+  "WorkflowProgressKind": "NODE_COMPLETED",
+  "WorkflowProgressSource": "RUNTIME",
+  "WorkflowRunProgressRequest": {
+    "leaseId": "lease-example",
+    "leaseToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "eventId": "event-example",
+    "kind": "NODE_COMPLETED",
+    "nodeId": "summarize"
+  },
+  "WorkflowRunProgressEvent": {
+    "sequence": 1,
+    "occurredAt": "2026-11-18T00:00:00Z",
+    "source": "RUNTIME",
+    "kind": "NODE_COMPLETED",
+    "nodeId": "summarize"
+  },
+  "WorkflowRunProgressPage": {
+    "items": [],
+    "nextCursor": 0
+  },
+  "WorkflowProfileDiagnostics": {
+    "profileId": "support",
+    "profileDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "blockers": [
+      "Model intake requires vault secret model-key."
+    ]
+  },
+  "WorkflowModelResolveRequest": {
+    "runId": "run-10000000-0000-4000-8000-000000000001",
+    "stepToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "candidateIndex": 0
+  },
+  "WorkflowModelResolveResponse": {
+    "origin": "https://model.example",
+    "modelId": "fixture-model",
+    "credential": "structural-fixture-not-a-credential",
+    "generation": {
+      "maxOutputTokens": 512,
+      "temperature": 0.0
+    },
+    "deploymentId": "local",
+    "candidateIndex": 0,
+    "candidateCount": 2,
+    "resultSchema": {}
   }
 }

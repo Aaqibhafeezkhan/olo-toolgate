@@ -4,6 +4,7 @@
 //! tool protocol v2, the one protocol every executor speaks (ADR 026, ADR 027).
 pub mod adapters;
 pub mod engine;
+mod native_files;
 use crate::{contracts::Contracts, transport::Call, Failure, Result};
 use olo_toolgate_contracts::*;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,21 @@ impl AuthorizationPort for RelayOnly {
 }
 
 pub trait AuthorizationPort: Send + Sync {
+    fn file_effect_begin(
+        &self,
+        _intent: olo_toolgate_contracts::v2::NativeFileIntent,
+        _ordinal: u64,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileEffectGrant> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
+    fn file_effect_receipt(
+        &self,
+        _grant: olo_toolgate_contracts::v2::NativeFileEffectGrant,
+        _before: Option<String>,
+        _after: String,
+    ) -> Call<'_, ()> {
+        Box::pin(async { Err(Failure::Unsupported) })
+    }
     /// Completes only when current execution authority ends; unsupported supervision must fail closed.
     fn revoked(&self) -> Call<'_, ()>;
     fn authorize(&self, request: AuthorizationRequest) -> Call<'_, ()>;
@@ -126,6 +142,7 @@ fn device_broker(
     access: Option<&LocalFileAccess>,
     arguments: &BTreeMap<String, Value>,
     calls: &AtomicUsize,
+    session: Option<&native_files::BrokerSession>,
     line: &[u8],
 ) -> Option<Vec<u8>> {
     let frame: Value = serde_json::from_slice(line).ok()?;
@@ -139,7 +156,8 @@ fn device_broker(
         .and_then(Value::as_str)
         .unwrap_or_default();
     let answer = (|| -> std::result::Result<Value, &'static str> {
-        if calls.fetch_add(1, Ordering::SeqCst) >= MAX_FILE_CALLS {
+        let ordinal = calls.fetch_add(1, Ordering::SeqCst) + 1;
+        if ordinal > MAX_FILE_CALLS {
             return Err("too many file operations for one invocation");
         }
         if !operation.starts_with("FILES_") {
@@ -164,6 +182,13 @@ fn device_broker(
         };
         let refused = |_: Failure| "the device refused the file operation";
         let area = area.lock().map_err(|_| "the files area is unavailable")?;
+        if write {
+            if let Some(session) = session {
+                return session
+                    .apply(&area, operation, &request, arguments, ordinal)
+                    .map_err(refused);
+            }
+        }
         Ok(match operation {
             "FILES_LIST" => json!({"paths": area.list().map_err(refused)?}),
             "FILES_READ" => {
@@ -223,7 +248,14 @@ pub(crate) fn trigger_broker(
         .enumerate()
         .map(|(i, path)| (i.to_string(), Value::String(path)))
         .collect();
-    device_broker(area, access.as_ref(), &listed, &AtomicUsize::new(0), line)
+    device_broker(
+        area,
+        access.as_ref(),
+        &listed,
+        &AtomicUsize::new(0),
+        None,
+        line,
+    )
 }
 
 /// What the trigger runner needs from the current execution manager: the sandbox, runtimes, signed trigger
@@ -711,7 +743,14 @@ impl Manager {
         let arguments = invocation.arguments.clone();
         let access = tool.file_access.clone();
         let broker = move |line: &[u8]| {
-            device_broker(files.as_deref(), access.as_ref(), &arguments, &calls, line)
+            device_broker(
+                files.as_deref(),
+                access.as_ref(),
+                &arguments,
+                &calls,
+                None,
+                line,
+            )
         };
         let output = self
             .engine
@@ -803,8 +842,19 @@ impl Manager {
         let calls = AtomicUsize::new(0);
         let arguments = invocation.arguments.clone();
         let access = tool.file_access.clone();
+        let session = native_files::BrokerSession {
+            owner: self.authorization.clone(),
+            uncertain: std::sync::atomic::AtomicBool::new(false),
+        };
         let broker = move |line: &[u8]| {
-            device_broker(files.as_deref(), access.as_ref(), &arguments, &calls, line)
+            device_broker(
+                files.as_deref(),
+                access.as_ref(),
+                &arguments,
+                &calls,
+                Some(&session),
+                line,
+            )
         };
         let execution = tokio::time::timeout(
             std::time::Duration::from_millis(deadline.saturating_sub(crate::now())),

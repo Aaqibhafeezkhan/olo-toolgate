@@ -67,9 +67,10 @@ COPY examples/java-tools/ examples/java-tools/
 COPY deploy/compose/WorkflowStack/scripts/seal_assets.py /workspace/seal-workflow-assets.py
 COPY deploy/compose/WorkflowStack/scripts/package_assets.py /workspace/package_assets.py
 COPY --from=package-cli /usr/local/bin/toolgate /usr/local/bin/toolgate
+COPY tools/ci/gradle_build.py /workspace/tools/ci/gradle_build.py
 ARG QUARKUS_PROFILE=prod
 RUN --mount=type=cache,target=/root/.gradle chmod +x gradlew && \
-    ./gradlew --no-daemon -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild :sdk-json:installDist && \
+    python3 tools/ci/gradle_build.py --log-directory build/image-gradle/control -- ./gradlew --no-daemon --console=plain -PprebuiltAdminUi=true -Dquarkus.profile=${QUARKUS_PROFILE} :control-plane:quarkusBuild :sdk-json:installDist && \
     python3 core-mcp/build.py --cli /usr/local/bin/toolgate && \
     chmod +x examples/java-tools/gradlew && \
     cd examples/java-tools && ./gradlew --no-daemon -PtoolgateSdkRepo=/workspace/build/sdk-repo :hotfolder:toolgatePackage :hotfolder-watch:toolgatePackage && \

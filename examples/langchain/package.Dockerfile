@@ -22,9 +22,10 @@ COPY apps/control-plane/build.gradle.kts apps/control-plane/build.gradle.kts
 COPY tool-sdk/java-sdk/ tool-sdk/java-sdk/
 COPY tool-sdk/json-sdk/ tool-sdk/json-sdk/
 COPY examples/java-tools/ examples/java-tools/
+COPY tools/ci/sdk-isolation.init.gradle tools/ci/sdk-isolation.init.gradle
 RUN --mount=type=cache,id=toolgate-langchain-gradle,target=/root/.gradle \
     chmod +x gradlew examples/java-tools/gradlew && \
-    ./gradlew --no-daemon --configure-on-demand publishJavaSdkLocally && \
+    ./gradlew --no-daemon --configure-on-demand --init-script tools/ci/sdk-isolation.init.gradle :publishJavaSdkLocally && \
     cd examples/java-tools && ./gradlew --no-daemon -PtoolgateSdkRepo=/src/build/sdk-repo :hotfolder:toolgatePackage :hotfolder-watch:toolgatePackage
 FROM scratch
 COPY --from=build /src/examples/java-tools/hotfolder/build/toolgate/hotfolder-0.1.0.olotool /hotfolder.olotool

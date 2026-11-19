@@ -20,6 +20,26 @@ final class WorkflowConfigurationsTest {
         var path = Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
         return (ObjectNode) JSON.readTree(Files.readString(path)).get("WorkflowConfiguration");
     }
+    @Test void unattachedStandbyIsValidatedButDoesNotRequireLiveCredentials() throws Exception {
+        var node = config();
+        var standby = node.path("modelDeployments").get(0).deepCopy();
+        ((ObjectNode) standby).put("id", "premium-standby").put("secretName", "not-configured");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) node.path("modelDeployments")).add(standby);
+        var group = ((com.fasterxml.jackson.databind.node.ArrayNode) node.path("modelGroups")).addObject().put("id", "standby").put("standby", true);
+        group.putArray("deploymentIds").add("premium-standby");
+        var references = new HashSet<WorkflowConfigurations.Reference>();
+        VALIDATOR.validate(node.toString(), r -> { references.add(r); return !r.id().equals("premium-standby"); });
+        assertFalse(references.stream().anyMatch(r -> r.id().equals("premium-standby")));
+        var workflow=(ObjectNode) node.path("workflows").get(0);
+        String currentGroup=workflow.path("modelGroupId").asText();
+        workflow.put("modelGroupId", "standby");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+        workflow.put("modelGroupId", currentGroup);
+        ((com.fasterxml.jackson.databind.node.ArrayNode) node.path("modelGroups").get(0).path("deploymentIds")).add("premium-standby");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> !r.id().equals("premium-standby")));
+        ((ObjectNode) standby).put("origin", "http://unsafe.example");
+        assertThrows(Failure.class, () -> VALIDATOR.validate(node.toString(), r -> true));
+    }
     @Test void modelGenerationIsExplicitAndBounded() throws Exception {
         var node = config();
         var deployment = (ObjectNode) node.path("modelDeployments").get(0);

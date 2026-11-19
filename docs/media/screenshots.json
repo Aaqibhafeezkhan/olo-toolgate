@@ -1,477 +1,470 @@
 {
-  "capturedDate": "2026-10-27",
-  "scope": "Disposable test sign-in gateway and scripted IdP; real ToolGate, services and Temporal. Fictional data. Interactive responses use Ollama; acceptance uses a separately labelled deterministic model.",
+  "capturedDate": "2026-11-19",
+  "scope": "Existing debug/profiled installation at port 18090, with real local Ollama inference and demonstration configuration. UI image source ed13f0f7; repository base 41891b9e. Published dev images are not the capture source. Cloud consoles show the same successful two-agent trace. No independent approval, desktop-client, cost or production qualification is claimed.",
   "screens": [
     {
-      "file": "screenshots/console-sign-in.jpg",
-      "title": "ToolGate tenant console sign-in",
+      "file": "olo-2026-11/console/about.jpg",
+      "title": "About OLO",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/",
-      "sha256": "d44376b12c7d188c9574ea4f928ad1a4727d1d2d097351ccf1eed973c466a670",
-      "capturedAt": "2026-10-27T14:38:39.977Z"
+      "url": "http://127.0.0.1:18090/console/#about",
+      "capturedAt": "2026-11-19T09:28:52.316602Z",
+      "sha256": "b6be95beab1168001210a0c9e69827eb1659e51ead5f4ee56107817a0a955e87"
     },
     {
-      "file": "screenshots/console-overview.jpg",
-      "title": "Loaded tenant overview and scoped demo directories",
+      "file": "olo-2026-11/console/agent-configuration.jpg",
+      "title": "Models & prompts",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#overview",
-      "sha256": "f89840de728d9e51232e15f003ee5c89dcd2d3441f6d05eb4280dd8fde292a4d",
-      "capturedAt": "2026-10-27T14:39:25.326Z"
+      "url": "http://127.0.0.1:18090/console/#agent-configuration",
+      "capturedAt": "2026-11-19T09:40:54.075234Z",
+      "sha256": "db4758cb2c68f83c614cac44cfede91dc66ea42aff89579d3a9ce3f31abb7a99"
     },
     {
-      "file": "screenshots/console-approvals-pending.jpg",
-      "title": "Live Ollama remediation waiting for independent approval",
+      "file": "olo-2026-11/console/agent-workflow-mappings.jpg",
+      "title": "Bot mappings",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#approvals",
-      "sha256": "878851c07080d9b09d04ad2da275148f8f6b63af170f87317e687ece0a51c606",
-      "capturedAt": "2026-10-27T14:57:15.751Z"
+      "url": "http://127.0.0.1:18090/console/#agent-workflow-mappings",
+      "capturedAt": "2026-11-19T09:40:55.015074Z",
+      "sha256": "7a0f1a8aa2bf205c7de66fb4b723d85aad75c83f4b38bfb790aa0488ec47d9d7"
     },
     {
-      "file": "screenshots/console-approval-review.jpg",
-      "title": "Independent reviewer checks the exact delegated remediation invocation",
+      "file": "olo-2026-11/console/agentDelegations.jpg",
+      "title": "Agent delegations",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#approvals",
-      "sha256": "f16cfad03e2049bf1599c62bc1c98491ef7a6532cb70044c3972b57599c0901b",
-      "capturedAt": "2026-10-27T14:57:36.770Z"
+      "url": "http://127.0.0.1:18090/console/#agentDelegations",
+      "capturedAt": "2026-11-19T09:28:33.801896Z",
+      "sha256": "0dc9b55bf1bd4a87f52fdb65f87c43354b06fa916b2e085de7511fe554726fb6"
     },
     {
-      "file": "screenshots/console-approval-approved.jpg",
-      "title": "Independent approval recorded; original invocation resumes through ToolGate",
+      "file": "olo-2026-11/console/agentGroups.jpg",
+      "title": "Agent groups",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#approvals",
-      "sha256": "bc443b9547024c675c3ee4cb82e3b6614feae95f01dd6458ac9d26af1906fda6",
-      "capturedAt": "2026-10-27T14:58:09.492Z"
+      "url": "http://127.0.0.1:18090/console/#agentGroups",
+      "capturedAt": "2026-11-19T09:28:32.755071Z",
+      "sha256": "64063265c56f1f5ea65ffe72cc3f8c02a543309b83053757daedfc92c472fefa"
     },
     {
-      "file": "screenshots/console-tools.jpg",
-      "title": "Tools \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/agents.jpg",
+      "title": "Agents",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#tools",
-      "sha256": "00f3e825f867118f58e843a0583596fee226f394549bd805ab2c7fa745ca47e3",
-      "capturedAt": "2026-10-27T14:49:05.629Z"
+      "url": "http://127.0.0.1:18090/console/#agents",
+      "capturedAt": "2026-11-19T09:28:32.232424Z",
+      "sha256": "077f54c29e1f45ef059116dc56702c92738d003dc6abe502fcc8372e321f2762"
     },
     {
-      "file": "screenshots/console-toolGroups.jpg",
-      "title": "Tool groups \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/analytics-full.jpg",
+      "title": "Full-page tool analytics and outcome evidence",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#toolGroups",
-      "sha256": "2c9e1189ef85307a66d694291c51a9408aef927b44e3dd0d12b8eb5bb285d1d9",
-      "capturedAt": "2026-10-27T14:49:08.233Z"
+      "url": "http://127.0.0.1:18090/console/#analytics-full",
+      "capturedAt": "2026-11-19T09:29:20.849839Z",
+      "sha256": "abdda4546bbcf816756e38c907439a59685572169efdf60f0212fdde2087f0a5"
     },
     {
-      "file": "screenshots/console-grants.jpg",
-      "title": "Access grants \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/analytics.jpg",
+      "title": "Tool usage and performance",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#grants",
-      "sha256": "289041375f2f1224ab1f3736f38f810bb8ef577c99f4de3b727305e366d890a0",
-      "capturedAt": "2026-10-27T14:49:11.024Z"
+      "url": "http://127.0.0.1:18090/console/#analytics",
+      "capturedAt": "2026-11-19T09:28:58.415668Z",
+      "sha256": "b82e1ab134043498da1232cbbfa6761a741d93812168a780b5c14b1b3e049292"
     },
     {
-      "file": "screenshots/console-bindings.jpg",
-      "title": "Execution bindings \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/approvals.jpg",
+      "title": "Approvals",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#bindings",
-      "sha256": "d58bd564be23775f88ba14733b5ce8779f548a3ea15d15b084210653906e6ed4",
-      "capturedAt": "2026-10-27T14:49:13.935Z"
+      "url": "http://127.0.0.1:18090/console/#approvals",
+      "capturedAt": "2026-11-19T09:28:59.470321Z",
+      "sha256": "24e773380eff387fa98316eb79fc24f648165309dbeede3a81d1e7eb1ae292e2"
     },
     {
-      "file": "screenshots/console-policies.jpg",
-      "title": "Policies \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/audit.jpg",
+      "title": "Audit log",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#policies",
-      "sha256": "8f1485f797046f0bb6bcf3ff1d95209547fccf82944d2a039cf29732d3c82745",
-      "capturedAt": "2026-10-27T14:49:16.540Z"
+      "url": "http://127.0.0.1:18090/console/#audit",
+      "capturedAt": "2026-11-19T09:28:58.961458Z",
+      "sha256": "fc91a37ba3ba0460ade00be80a32f2f7f21ba76011f21dc4688929264f17319c"
     },
     {
-      "file": "screenshots/console-extractors.jpg",
-      "title": "Resource extractors \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/bindings.jpg",
+      "title": "Execution bindings",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#extractors",
-      "sha256": "7776f13ec3e2bdbfeafce4e360e494f9200983771a94cd6c7b092b900661baf5",
-      "capturedAt": "2026-10-27T14:49:19.686Z"
+      "url": "http://127.0.0.1:18090/console/#bindings",
+      "capturedAt": "2026-11-19T09:28:37.897345Z",
+      "sha256": "f608ddd471a4c43398689758b199b968332ea23544fac3479afbce0fbf5a65f4"
     },
     {
-      "file": "screenshots/console-users.jpg",
-      "title": "Users \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/bots.jpg",
+      "title": "Published Bots and Run actions",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#users",
-      "sha256": "5775eafc79ad4b776eaf90bd9395156d091d76e8c62f9b785e67220f8dcc9938",
-      "capturedAt": "2026-10-27T14:50:17.232Z"
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:41:06.757383Z",
+      "sha256": "890e59a6a1b4f91f60cb3027ed1b72231ce15df3724e8ee5c0e577fcc87815ec"
     },
     {
-      "file": "screenshots/console-teams.jpg",
-      "title": "Teams \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/builder.jpg",
+      "title": "Tool Builder",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#teams",
-      "sha256": "290c380ca2469cfbacee69119bc09645fb1cff7b33b0397b350c96405c284251",
-      "capturedAt": "2026-10-27T14:50:19.745Z"
+      "url": "http://127.0.0.1:18090/console/#builder",
+      "capturedAt": "2026-11-19T09:28:55.582018Z",
+      "sha256": "77d39de8cb78402ef12bde4936791fd19bf14da85753ee1fb808ca1d4eb8b910"
     },
     {
-      "file": "screenshots/console-roles.jpg",
-      "title": "Typed roles \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/config-backup.jpg",
+      "title": "Backup/Restore",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#roles",
-      "sha256": "8796dd53a7a3631e9a4377d7a09c44dea4cb97164220265c70346a0a77e66ecb",
-      "capturedAt": "2026-10-27T14:50:22.507Z"
+      "url": "http://127.0.0.1:18090/console/#config-backup",
+      "capturedAt": "2026-11-19T09:28:51.598312Z",
+      "sha256": "69b30f0e25b549f5b9c625cc1fa3950ba70609952a2e18bcfd974cac03900f6e"
     },
     {
-      "file": "screenshots/console-identityBindings.jpg",
-      "title": "Human identities \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/config-device.jpg",
+      "title": "Device",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#identityBindings",
-      "sha256": "0fb98a0b22b3bd6b127cc170f0f6fbdf30bd9420afce78f6ffa48b0cb41ead9a",
-      "capturedAt": "2026-10-27T14:50:24.986Z"
+      "url": "http://127.0.0.1:18090/console/#config-device",
+      "capturedAt": "2026-11-19T09:28:51.414859Z",
+      "sha256": "daf09bdda33e898bd4b308b40a46da5f0e7a14641a93d926d6d0f86f586d85ad"
     },
     {
-      "file": "screenshots/console-delegations.jpg",
-      "title": "Human delegations \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/config-reviews.jpg",
+      "title": "Configuration reviews",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#delegations",
-      "sha256": "682d1bd9428892a15c4917a8439c3e41054a3f09e1cda48f326426cce5212cea",
-      "capturedAt": "2026-10-27T14:50:27.576Z"
+      "url": "http://127.0.0.1:18090/console/#config-reviews",
+      "capturedAt": "2026-11-19T09:28:52.887445Z",
+      "sha256": "060074857641ad1489f55cfb6ce59d5d77bda9c6c33210982c3de92a96193be3"
     },
     {
-      "file": "screenshots/console-agents.jpg",
-      "title": "Agents \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/config-server.jpg",
+      "title": "Server",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#agents",
-      "sha256": "6df319ae7d3f01f3ce6a3578c336e80104168e144fb3d595a2ab830c0f5135f0",
-      "capturedAt": "2026-10-27T14:50:30.810Z"
+      "url": "http://127.0.0.1:18090/console/#config-server",
+      "capturedAt": "2026-11-19T09:28:50.892861Z",
+      "sha256": "0e39bae72679e59d3bcabd1b5ee4575a0023147fe35dfe06ad9e006ce3d38fbc"
     },
     {
-      "file": "screenshots/console-agentGroups.jpg",
-      "title": "Agent groups \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/delegations.jpg",
+      "title": "Human delegations",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#agentGroups",
-      "sha256": "48cd9002534576209a72f0730884b60486bbc7c3cbb7b40863369b517b151bfd",
-      "capturedAt": "2026-10-27T14:50:33.431Z"
+      "url": "http://127.0.0.1:18090/console/#delegations",
+      "capturedAt": "2026-11-19T09:28:49.471068Z",
+      "sha256": "c9a3ad6edc9254b0cf82b9556cfa8e72fd8b0a0a2eb175bb6d5dfe6e53f3f6f7"
     },
     {
-      "file": "screenshots/console-workloadBindings.jpg",
-      "title": "Workload identities \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/deviceEvidence.jpg",
+      "title": "Device evidence",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#workloadBindings",
-      "sha256": "8dfd595b818e73ac15f37d5bfde69156a71dbae0838a1fea5c94afd0c48706d3",
-      "capturedAt": "2026-10-27T14:50:35.919Z"
+      "url": "http://127.0.0.1:18090/console/#deviceEvidence",
+      "capturedAt": "2026-11-19T09:28:35.816139Z",
+      "sha256": "3f9943791d4e6c17b1c1f4101d039b578a8441751f5a569b354f83fd1a118009"
     },
     {
-      "file": "screenshots/console-agentDelegations.jpg",
-      "title": "Agent delegations \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/deviceGroups.jpg",
+      "title": "Device groups",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#agentDelegations",
-      "sha256": "ef45049a4bfbf158bd58dc4225da0f8fbbc769460aaa088cbb0c8140abcadf42",
-      "capturedAt": "2026-10-27T14:50:38.525Z"
+      "url": "http://127.0.0.1:18090/console/#deviceGroups",
+      "capturedAt": "2026-11-19T09:28:35.356234Z",
+      "sha256": "411433013cd3896db6cf7c78863213b2f508d91ff1af634867662181950fd74c"
     },
     {
-      "file": "screenshots/console-devices.jpg",
-      "title": "Devices \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/devices.jpg",
+      "title": "Clients",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#devices",
-      "sha256": "bb7be1d3d6500c83963b1bed57be615e9c281554d7a2e2a23f73fe37640bcf67",
-      "capturedAt": "2026-10-27T14:51:29.692Z"
+      "url": "http://127.0.0.1:18090/console/#devices",
+      "capturedAt": "2026-11-19T09:28:34.643855Z",
+      "sha256": "8b36c62af923da81d99d81acac92c2a96e7be60bcfb1f4601af2adb74ed8e34b"
     },
     {
-      "file": "screenshots/console-deviceGroups.jpg",
-      "title": "Device groups \u00b7 current incident environment",
+      "file": "olo-2026-11/console/enroll.jpg",
+      "title": "Enroll this device",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#deviceGroups",
-      "sha256": "d5308376ea3c8b1de4f1562db5917bdb3ff2033e525ed13fb53d32935d546d2b",
-      "capturedAt": "2026-10-27T14:52:30.858Z"
+      "url": "http://127.0.0.1:18090/console/#enroll",
+      "capturedAt": "2026-11-19T09:28:57.120243Z",
+      "sha256": "d823ad5f53d46d856a0a08a730bfa8b6eee99c07a27dd511317634687d426422"
     },
     {
-      "file": "screenshots/console-deviceEvidence.jpg",
-      "title": "Device evidence \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/extractors.jpg",
+      "title": "Resource extractors",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#deviceEvidence",
-      "sha256": "c04c478701c740c0cae55f2cb615c7d01c35c8e9edd7d2295d6125f17d58039b",
-      "capturedAt": "2026-10-27T14:52:33.397Z"
+      "url": "http://127.0.0.1:18090/console/#extractors",
+      "capturedAt": "2026-11-19T09:28:38.877285Z",
+      "sha256": "d6927b5de0e11fcec7b432243434d5744200c358bead52ed2957c04146c55a2a"
     },
     {
-      "file": "screenshots/console-mapping.jpg",
-      "title": "Agent Group tool mapping \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/fleet.jpg",
+      "title": "Package deployments",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#mapping",
-      "sha256": "80f6639d2328d15239f1fdace509532f65138b203219cf4107c9499fe3fa9fab",
-      "capturedAt": "2026-10-27T14:58:43.536Z"
+      "url": "http://127.0.0.1:18090/console/#fleet",
+      "capturedAt": "2026-11-19T09:28:57.983661Z",
+      "sha256": "98bad233c016f489f5df582ff3b158e1b496db91270580e59cbad2950590dc30"
     },
     {
-      "file": "screenshots/console-config-server.jpg",
-      "title": "Server \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/grants.jpg",
+      "title": "Access grants",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#config-server",
-      "sha256": "495b21f05c7928fc4e4c22c3532629f40c911d1e170cf88ea13b6b6c00f07cac",
-      "capturedAt": "2026-10-27T14:52:42.438Z"
+      "url": "http://127.0.0.1:18090/console/#grants",
+      "capturedAt": "2026-11-19T09:28:37.420655Z",
+      "sha256": "d40cf5382960f108718befef789de4d128b019a40a55035d7abdf35d5431f5ec"
     },
     {
-      "file": "screenshots/console-config-device.jpg",
-      "title": "Device \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/identityBindings.jpg",
+      "title": "Human identities",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#config-device",
-      "sha256": "f40a18a5244e490d5d59955162e74c24e05481fa452123857c974463a4f6eda3",
-      "capturedAt": "2026-10-27T14:52:45.237Z"
+      "url": "http://127.0.0.1:18090/console/#identityBindings",
+      "capturedAt": "2026-11-19T09:28:48.933344Z",
+      "sha256": "50557912246eede13ff725be1860e3287612646d7823bb42b6de3f435e965459"
     },
     {
-      "file": "screenshots/console-config-backup.jpg",
-      "title": "Backup/Restore \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/local.jpg",
+      "title": "Local vault",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#config-backup",
-      "sha256": "632aa1ca07f297f8def11fe4498445b8ea29c211e984e75628b379ffb9b6fcf4",
-      "capturedAt": "2026-10-27T14:52:47.543Z"
+      "url": "http://127.0.0.1:18090/console/#local",
+      "capturedAt": "2026-11-19T09:28:55.792770Z",
+      "sha256": "52a17ec05b0b6907cfb529d3fac833c4e82244d532cae11fd9712d0ab28a07db"
     },
     {
-      "file": "screenshots/console-mcp-servers.jpg",
-      "title": "MCP servers \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/mapping.jpg",
+      "title": "Agent Group tool mapping",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#mcp-servers",
-      "sha256": "50e22f3b3f41dd4389258e3b425e58437eb2140682de9e7a0ba6c06aecfd4ceb",
-      "capturedAt": "2026-10-27T14:52:50.118Z"
+      "url": "http://127.0.0.1:18090/console/#mapping",
+      "capturedAt": "2026-11-19T09:28:50.374840Z",
+      "sha256": "ccbf3ba6a56308267c6f5c709892d4c54bd5e171251902b9ed3febb94b656944"
     },
     {
-      "file": "screenshots/console-about.jpg",
-      "title": "About \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/mcp-servers.jpg",
+      "title": "MCP servers",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#about",
-      "sha256": "1176fff7a278f0534f8518200177c33456a75a632afd04e9f785698b96e1a143",
-      "capturedAt": "2026-10-27T14:52:52.666Z"
+      "url": "http://127.0.0.1:18090/console/#mcp-servers",
+      "capturedAt": "2026-11-19T09:28:52.074815Z",
+      "sha256": "3cbef53ee8c3aace9bb84fae4cbfffb43de507cd3689805aadadebed34ef1e2f"
     },
     {
-      "file": "screenshots/console-config-reviews.jpg",
-      "title": "Configuration reviews \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/multiagent-input.jpg",
+      "title": "Incident input for two agents",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#config-reviews",
-      "sha256": "00be6a0d784a2c4ac6dc2ebe2638278664fe7b2603050d9977f12acb16a46c36",
-      "capturedAt": "2026-10-27T14:53:15.952Z"
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:38.492882Z",
+      "sha256": "5cbfd36e8bfe015d6098bc5d0f03f49897644768502448424a45ab644c6c4cb4"
     },
     {
-      "file": "screenshots/console-outcomes.jpg",
-      "title": "Effect outcomes \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/multiagent-output.jpg",
+      "title": "Triage and handover result",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#outcomes",
-      "sha256": "c97659a12d494c678e7caa86d78e0640ae8f4d1e9b390fe1e332941ec627590c",
-      "capturedAt": "2026-10-27T14:53:18.717Z"
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:27:08.819278Z",
+      "sha256": "688c818aff4d1410547e29ca1198187402952b791df1c78408684bf89bea5910"
     },
     {
-      "file": "screenshots/console-simulation.jpg",
-      "title": "Access simulation \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/multiagent-queued.jpg",
+      "title": "Accepted multi-agent run",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#simulation",
-      "sha256": "0bb9b63ca655b93afe4a6c832cc3e73153615a3108f555cbb34ef6e3aa8e6d95",
-      "capturedAt": "2026-10-27T14:53:21.016Z"
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:38.914365Z",
+      "sha256": "f5b3354cb9e4aaedbf9f428192679ace4b70d8539e6b71f3be2313d08f9e0c55"
     },
     {
-      "file": "screenshots/console-server-packages.jpg",
-      "title": "Server packages \u00b7 deployed official incident package",
+      "file": "olo-2026-11/console/multiagent-result.jpg",
+      "title": "Successful multi-agent run status",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#server-packages",
-      "sha256": "76a104c0998347fea3a677bc1a6a3da9b2d8937d7f91f13629c4dd62ab3e0508",
-      "capturedAt": "2026-10-27T14:53:37.710Z"
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:52.636274Z",
+      "sha256": "1d90e9e47d362ae6e0079c4164c7aaae91fda149e05852350bb252ecedfb9a7a"
     },
     {
-      "file": "screenshots/console-builder.jpg",
-      "title": "Tool builder \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/multiagent-running.jpg",
+      "title": "Live multi-agent execution progress",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#builder",
-      "sha256": "bddaf6e3dee744a52070acaf3d704cbd94625c0fed31176ae481717215f20f29",
-      "capturedAt": "2026-10-27T14:53:40.514Z"
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:45.857446Z",
+      "sha256": "7c03e0d64a9cfb2d9f25f8e5f972b9b978dd3d22b19e97c0b63fea964b7adaf6"
     },
     {
-      "file": "screenshots/console-local.jpg",
-      "title": "Local vault \u00b7 current incident environment",
+      "file": "olo-2026-11/console/outcomes.jpg",
+      "title": "Effect outcomes",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#local",
-      "sha256": "e2d727ac93d57e9b7446301fc9f042d9d0efb7e23bc67482902089817fdd1268",
-      "capturedAt": "2026-10-27T14:55:17.836Z"
+      "url": "http://127.0.0.1:18090/console/#outcomes",
+      "capturedAt": "2026-11-19T09:28:53.553306Z",
+      "sha256": "62c3e8f92be4036d7d5c5871032a6e1f722711ac50b5f9af25ee1cb569226e0d"
     },
     {
-      "file": "screenshots/console-requests.jpg",
-      "title": "Client tool requests \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/overview-light.jpg",
+      "title": "OLO overview in light theme",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#requests",
-      "sha256": "2b9f79660cb0b8ff1783920b37d7daf30d8100b0d35da3b577f4d590608ddfc0",
-      "capturedAt": "2026-10-27T14:55:21.030Z"
+      "url": "http://127.0.0.1:18090/console/#overview-light",
+      "capturedAt": "2026-11-19T09:38:51.336315Z",
+      "sha256": "e8ac884959c12612fd16a57ea7ed71f8e53863a889ac850cb5fc72fee8626543"
     },
     {
-      "file": "screenshots/console-enroll.jpg",
-      "title": "Enroll device \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/overview.jpg",
+      "title": "Your organization, at a glance",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#enroll",
-      "sha256": "a2ce058382a11cbbe604e38b54f8d6f367306fb7d86d4fd335c8d34fd4b9e05f",
-      "capturedAt": "2026-10-27T14:52:36.266Z"
+      "url": "http://127.0.0.1:18090/console/#overview",
+      "capturedAt": "2026-11-19T09:28:31.727227Z",
+      "sha256": "b34574d2a459c35ab7f2e480d5cafc6c6e113e80b38b11d7411a7d30a34c80ec"
     },
     {
-      "file": "screenshots/console-fleet.jpg",
-      "title": "Packages \u00b7 current incident walkthrough",
+      "file": "olo-2026-11/console/policies.jpg",
+      "title": "Policies",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#fleet",
-      "sha256": "0060acef6de3a34db6b4d21a43eabe7cdc004bb80383df19439592ddc7b9e0ad",
-      "capturedAt": "2026-10-27T14:52:39.303Z"
+      "url": "http://127.0.0.1:18090/console/#policies",
+      "capturedAt": "2026-11-19T09:28:38.371059Z",
+      "sha256": "c3948f627c516254463d1b33737365b89e32d11d8c6b73adc91304daefb6dbfc"
     },
     {
-      "file": "screenshots/console-analytics.jpg",
-      "title": "Tenant Analytics \u00b7 actual memory, RAG and incident tool calls",
+      "file": "olo-2026-11/console/requests.jpg",
+      "title": "Client tool requests",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#analytics",
-      "sha256": "2bcfc49c16a122bbaa0be0e8d4727d7b5a46de2663c51a1962bc2cf918c2a983",
-      "capturedAt": "2026-10-27T14:56:59.589Z"
+      "url": "http://127.0.0.1:18090/console/#requests",
+      "capturedAt": "2026-11-19T09:28:56.496097Z",
+      "sha256": "5237bd41268a86ad2923cac89aa6c80923b115f77446d8647f09d9064e079195"
     },
     {
-      "file": "screenshots/console-analytics-full.jpg",
-      "title": "Full tenant Analytics page with per-tool call counts",
+      "file": "olo-2026-11/console/roles.jpg",
+      "title": "Typed roles",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#analytics",
-      "sha256": "f10ba3e3facffad1068655c051c47aa3ed10bcf1e84326172230d08a92e82ff6",
-      "capturedAt": "2026-10-27T14:57:01.727Z"
+      "url": "http://127.0.0.1:18090/console/#roles",
+      "capturedAt": "2026-11-19T09:28:48.415563Z",
+      "sha256": "f0e0df0c951ae7c024479180120bb85b6962991384ef95c5096a8bf3e7f0e667"
     },
     {
-      "file": "screenshots/console-analytics-tool.jpg",
-      "title": "Remediation tool drilldown \u00b7 actual calls and outcomes",
+      "file": "olo-2026-11/console/server-packages.jpg",
+      "title": "Server packages",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#analytics?tool=examples.incidents%2Fremediate",
-      "sha256": "6756e03c85847bd3a8aac271f3e4b69a70c66957d78e3aed5a9fe49ac47275e1",
-      "capturedAt": "2026-10-27T14:57:07.185Z"
+      "url": "http://127.0.0.1:18090/console/#server-packages",
+      "capturedAt": "2026-11-19T09:28:54.795238Z",
+      "sha256": "100aee0ebbe41d6ad9372be92f1168e377633939c2a40e133dccfd9537e5fd87"
     },
     {
-      "file": "screenshots/operator-sign-in.jpg",
-      "title": "Labelled operator test gateway with separate mTLS certificate",
-      "group": "operator",
-      "url": "http://localhost:58002/tour/login",
-      "sha256": "d97f5156cdeb2b0088884393d9d3e716d4a657c6d01a23cdb3385f8865e18528",
-      "capturedAt": "2026-10-27T14:40:04.766Z"
-    },
-    {
-      "file": "screenshots/console-audit.jpg",
-      "title": "ToolGate audit trail with actor and request correlation",
+      "file": "olo-2026-11/console/sign-in.jpg",
+      "title": "OLO Admin sign-in",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#audit",
-      "sha256": "9a11ab3da094915127fbc24d5c53fdfe9e004918195a6fb5824a8068fd2d8fd6",
-      "capturedAt": "2026-10-27T14:41:39.458Z"
+      "url": "http://127.0.0.1:18090/console/",
+      "capturedAt": "2026-11-19T09:18:00.007078Z",
+      "sha256": "b344af6fdd708d1f77eb6a46fc8f6af5488a2ff76746cd367af7f2f493a4e834"
     },
     {
-      "file": "screenshots/operator-usage-charts.jpg",
-      "title": "Operator usage charts and busiest tools \u00b7 scrolled dashboard",
-      "group": "operator",
-      "url": "http://localhost:58002/",
-      "sha256": "79ca3afbf20493188eb86d6b5cf88fd5364e4d5937f5ddb0d547ffaa6d64c4a3",
-      "capturedAt": "2026-10-27T14:48:09.067Z"
-    },
-    {
-      "file": "screenshots/console-approvals.jpg",
-      "title": "Approval requests in the current incident environment",
+      "file": "olo-2026-11/console/simulation.jpg",
+      "title": "Access simulation",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#approvals",
-      "sha256": "2fe37810c04ec43f1c1a304fa3da4a0f339f020177cc6cf0b77b845fbf919001",
-      "capturedAt": "2026-10-27T14:53:13.097Z"
+      "url": "http://127.0.0.1:18090/console/#simulation",
+      "capturedAt": "2026-11-19T09:28:53.812985Z",
+      "sha256": "b7a1bb37ab36f5d7126bad7d52f05341bc27f7c7131498cec37b8eb361a1f19f"
     },
     {
-      "file": "screenshots/console-analytics-tools.jpg",
-      "title": "Actual tool-call counts for memory, RAG and the incident agents",
+      "file": "olo-2026-11/console/teams.jpg",
+      "title": "Teams",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#analytics",
-      "sha256": "941f00f64773ffb9a0ba4c97114dbee1cc712c29f4539c3866901b475bf6175d",
-      "capturedAt": "2026-10-27T14:57:04.260Z"
+      "url": "http://127.0.0.1:18090/console/#teams",
+      "capturedAt": "2026-11-19T09:28:47.885137Z",
+      "sha256": "ec2b411b5cc11886655d57a2f599c818b7994fe6cd0db62ecd63f47c1baca452"
     },
     {
-      "file": "screenshots/console-overview-light.jpg",
-      "title": "Current tenant console in light theme",
+      "file": "olo-2026-11/console/toolGroups.jpg",
+      "title": "Tool groups",
       "group": "console",
-      "url": "http://127.0.0.1:56289/console/#overview",
-      "sha256": "6ab886049065f500ac2114664ca37cfd9aa923ec8b123a3e05da4a8955da4d0b",
-      "capturedAt": "2026-10-27T14:58:40.343Z"
+      "url": "http://127.0.0.1:18090/console/#toolGroups",
+      "capturedAt": "2026-11-19T09:28:36.833544Z",
+      "sha256": "7f12757304910794e76b99aabfba8a67a1b6dec45d041ab201f91412b84493b3"
     },
     {
-      "file": "screenshots/operator-session-timeline.jpg",
-      "title": "Caller-declared fixture session \u00b7 denial, cancellation and expiry checks",
-      "group": "operator",
-      "url": "http://localhost:58002/",
-      "sha256": "51aae2a73a1dce0e5ecf27b7cd7b8a57915c89279b3ed4e219d499d2f1baae6b",
-      "capturedAt": "2026-10-27T14:59:14.106Z"
+      "file": "olo-2026-11/console/tools.jpg",
+      "title": "Tools",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#tools",
+      "capturedAt": "2026-11-19T09:28:36.308522Z",
+      "sha256": "4051e04e21fe86cb5f5ca79bc5c7ae32f45a1cbf37b96c6889e945726a737e94"
     },
     {
-      "file": "screenshots/operator-denied-detail.jpg",
-      "title": "Denied test operation \u00b7 identity, spans and ledger transitions",
-      "group": "operator",
-      "url": "http://localhost:58002/",
-      "sha256": "f84f2714d9f7a86c805ad42887a3a415204730ece9355adcca7d48147fe1a80e",
-      "capturedAt": "2026-10-27T14:59:26.613Z"
+      "file": "olo-2026-11/console/users.jpg",
+      "title": "Users",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#users",
+      "capturedAt": "2026-11-19T09:28:47.335181Z",
+      "sha256": "ef8a9ff2cc3b64efd5f8e7ce28108b3b0847f5153a6b6a9f84c5278f3f64b935"
+    },
+    {
+      "file": "olo-2026-11/console/workflow-dispatch.jpg",
+      "title": "Trigger mappings",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-dispatch",
+      "capturedAt": "2026-11-19T09:29:12.910716Z",
+      "sha256": "56a4a5e20dc74ddc42b7b232e32a7c2de3e0b16656abbe61c4a6b10d39031e01"
+    },
+    {
+      "file": "olo-2026-11/console/workflow-models.jpg",
+      "title": "Models",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-models",
+      "capturedAt": "2026-11-19T09:40:43.576769Z",
+      "sha256": "6599ce14f41a25a9c1757c391e118c9054ea0255ff14f0dbdae3886b35f51394"
+    },
+    {
+      "file": "olo-2026-11/console/workflow-profiles.jpg",
+      "title": "Bot bundles",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-profiles",
+      "capturedAt": "2026-11-19T09:29:13.152063Z",
+      "sha256": "c45f77585e2389d78c3bc672c617864eddf04647e725a6dee77c60454e164e0c"
+    },
+    {
+      "file": "olo-2026-11/console/workflow-trigger-packages.jpg",
+      "title": "Trigger packages",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-trigger-packages",
+      "capturedAt": "2026-11-19T09:29:12.627245Z",
+      "sha256": "a5775d2bb9f870b8da26e444c9707dcd94a3efe6ce351cd016af5d7340a85e13"
+    },
+    {
+      "file": "olo-2026-11/console/workloadBindings.jpg",
+      "title": "Workload identities",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workloadBindings",
+      "capturedAt": "2026-11-19T09:28:33.337397Z",
+      "sha256": "7cbaae125fee655634cbac9266457c3932a528c029d4248899835057fbbb20f5"
+    },
+    {
+      "file": "olo-2026-11/monitoring/langfuse-timeline.jpg",
+      "title": "Langfuse: sequential agent/model timeline",
+      "group": "monitoring",
+      "url": "https://cloud.langfuse.com/project/cmwmgb1u601e9ad0d45b47ob9/traces",
+      "capturedAt": "2026-11-19T09:29:45.507511Z",
+      "sha256": "e55ba8f016bcc58a77f2d9635e0f7a3c689bc260660dcbd379488e0ef536b10f"
+    },
+    {
+      "file": "olo-2026-11/monitoring/langfuse-tree.jpg",
+      "title": "Langfuse: two agents and two model calls",
+      "group": "monitoring",
+      "url": "https://cloud.langfuse.com/project/cmwmgb1u601e9ad0d45b47ob9/traces",
+      "capturedAt": "2026-11-19T09:26:36.731675Z",
+      "sha256": "c4a5d5bb707f34e791809162fcc84bac47425a5beae22af358aea839aed36e7a"
+    },
+    {
+      "file": "olo-2026-11/monitoring/langsmith-expanded.jpg",
+      "title": "LangSmith: expanded two-agent execution",
+      "group": "monitoring",
+      "url": "https://smith.langchain.com/o/a5b7dc49-c48e-4bcc-84e8-ffbb1ac95203/a/toolgate-community-debug/projects/p/86a9358b-3044-483d-bf9f-9e78bcd39256",
+      "capturedAt": "2026-11-19T09:27:18.815738Z",
+      "sha256": "1843d414c260774e4fe3b86d65851db02c0d878015ecabeedf7f2de8c08d66ee"
+    },
+    {
+      "file": "olo-2026-11/monitoring/langsmith-tree.jpg",
+      "title": "LangSmith: matching multi-agent trace",
+      "group": "monitoring",
+      "url": "https://smith.langchain.com/o/a5b7dc49-c48e-4bcc-84e8-ffbb1ac95203/a/toolgate-community-debug/projects/p/86a9358b-3044-483d-bf9f-9e78bcd39256",
+      "capturedAt": "2026-11-19T09:26:57.730946Z",
+      "sha256": "375e278647573a9b6f699dc033cb57cabc7e2907f9485382da645824f86ecfa5"
+    },
+    {
+      "file": "olo-2026-11/monitoring/phoenix-agent.jpg",
+      "title": "Phoenix: handover agent details",
+      "group": "monitoring",
+      "url": "https://app.phoenix.arize.com/s/rahulnigamfzd/projects/UHJvamVjdDoz/spans/386029e4f45057cfd8c07c24c5a2d628",
+      "capturedAt": "2026-11-19T09:30:06.272628Z",
+      "sha256": "74ff1c9faecbefe429255d8040fcc4a6c5999d2d042312d58f5ed60776ac0188"
+    },
+    {
+      "file": "olo-2026-11/monitoring/phoenix-trace.jpg",
+      "title": "Phoenix: matching successful trace and run metadata",
+      "group": "monitoring",
+      "url": "https://app.phoenix.arize.com/s/rahulnigamfzd/projects/UHJvamVjdDoz/spans/386029e4f45057cfd8c07c24c5a2d628",
+      "capturedAt": "2026-11-19T09:26:57.860563Z",
+      "sha256": "830a4fa32f0286d8f46c70df53838b39072abe6ec6e7b83ab6f79bbbe3f1c056"
     }
-  ],
-  "expectedRoutes": [
-    "/console/#overview",
-    "/console/#analytics",
-    "/console/#audit",
-    "/console/#approvals",
-    "/console/#users",
-    "/console/#teams",
-    "/console/#roles",
-    "/console/#tools",
-    "/console/#policies",
-    "/console/#devices",
-    "/console/#agents",
-    "/console/#agentGroups",
-    "/console/#toolGroups",
-    "/console/#deviceGroups",
-    "/console/#grants",
-    "/console/#delegations",
-    "/console/#agentDelegations",
-    "/console/#bindings",
-    "/console/#extractors",
-    "/console/#workloadBindings",
-    "/console/#identityBindings",
-    "/console/#deviceEvidence",
-    "/console/#config-reviews",
-    "/console/#config-server",
-    "/console/#config-device",
-    "/console/#config-backup",
-    "/console/#outcomes",
-    "/console/#simulation",
-    "/console/#fleet",
-    "/console/#server-packages",
-    "/console/#mcp-servers",
-    "/console/#builder",
-    "/console/#test",
-    "/console/#enroll",
-    "/console/#local",
-    "/console/#requests",
-    "/console/#mapping",
-    "/console/#about"
-  ],
-  "requiredScreens": [
-    "screenshots/operator-overview.jpg",
-    "screenshots/operator-invocation-detail.jpg",
-    "screenshots/operator-session-timeline.jpg"
-  ],
-  "pendingRetakes": [
-    {
-      "file": "screenshots/console-downloads-full.jpg",
-      "reason": "Retake in the current GPU-backed walkthrough; previous capture excluded"
-    },
-    {
-      "file": "screenshots/console-tool-picker.jpg",
-      "reason": "Retake in the current GPU-backed walkthrough; previous capture excluded"
-    },
-    {
-      "file": "screenshots/console-triage-tool-scope.jpg",
-      "reason": "Retake in the current GPU-backed walkthrough; previous capture excluded"
-    },
-    {
-      "file": "screenshots/console-test.jpg",
-      "reason": "Session expired before capture; sign-in page excluded"
-    },
-    {
-      "file": "screenshots/operator-overview.jpg",
-      "reason": "Capture the dashboard heading and overview cards; the saved view contains charts and busiest tools"
-    }
-  ],
-  "captureStatus": "Partial current-run captures; remaining views explicitly listed for a later capture session",
-  "renderPauseSeconds": 2,
-  "model": {
-    "provider": "Ollama",
-    "model": "qwen2.5:7b",
-    "gpus": "4 x NVIDIA Quadro P4000",
-    "ragInput": "One short fictional runbook, one retrieved passage"
-  },
-  "deferredIssues": [
-    "https://github.com/olo-labs/olo-mono/issues/25",
-    "https://github.com/olo-labs/olo-mono/issues/26"
   ]
 }

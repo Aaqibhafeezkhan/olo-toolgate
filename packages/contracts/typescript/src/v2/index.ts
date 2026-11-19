@@ -1187,6 +1187,66 @@ export interface McpVerification {
 export type McpVerificationStatus = "CURRENT" | "UNVERIFIED";
 export type MissingKeyPolicy = "REJECT" | "ASK" | "ALLOW_WITH_DEDUPE";
 export type NamespacePrefix = string;
+/** ADR 075 NativeFileAck; only protected qualified filesystem broker evidence. */
+export interface NativeFileAck {
+  readonly accepted: true;
+}
+/** Current installed file-only candidate; metadata is not execution authority. */
+export interface NativeFileCandidate {
+  readonly deviceId: string;
+  readonly toolId: string;
+  readonly managedDigest: string;
+  readonly imageDigest: string;
+  readonly writeAccess: boolean;
+}
+/** Bounded metadata for explicit operator qualification. */
+export interface NativeFileCandidatePage {
+  readonly items: ReadonlyArray<NativeFileCandidate>;
+}
+/** ADR 075 NativeFileEffectBegin; only protected qualified filesystem broker evidence. */
+export interface NativeFileEffectBegin {
+  readonly requestId: string;
+  readonly leaseId: string;
+  readonly fencingToken: string;
+  readonly ordinal: number;
+  readonly intent: NativeFileIntent;
+}
+/** ADR 075 NativeFileEffectGrant; only protected qualified filesystem broker evidence. */
+export interface NativeFileEffectGrant {
+  readonly effectId: string;
+  readonly intentDigest: string;
+}
+/** ADR 075 NativeFileEffectReceipt; only protected qualified filesystem broker evidence. */
+export interface NativeFileEffectReceipt {
+  readonly requestId: string;
+  readonly leaseId: string;
+  readonly fencingToken: string;
+  readonly effectId: string;
+  readonly beforeSha256?: string;
+  readonly afterSha256: string;
+}
+/** ADR 075 NativeFileIntent; only protected qualified filesystem broker evidence. */
+export interface NativeFileIntent {
+  readonly operation: NativeFileOperation;
+  readonly path: string;
+  readonly destination?: string;
+  readonly contentSha256?: string;
+}
+export type NativeFileOperation = "WRITE" | "RENAME";
+/** ADR 075 NativeFileQualification; only protected qualified filesystem broker evidence. */
+export interface NativeFileQualification {
+  readonly deviceId: string;
+  readonly deviceGroupId: string;
+  readonly imageDigest: string;
+  readonly expiresAtUnixMs: number;
+  readonly acknowledgedRisk: "UNFENCED_FILESYSTEM";
+}
+/** ADR 075 NativeFileScopeClosed; only protected qualified filesystem broker evidence. */
+export interface NativeFileScopeClosed {
+  readonly requestId: string;
+  readonly leaseId: string;
+  readonly fencingToken: string;
+}
 /** Control-created stamp for an immutable generated MCP tool policy; not accepted from approval or package authors. */
 export interface NativeMcpEffectReview {
   readonly toolId: string;
@@ -2853,13 +2913,38 @@ export interface WorkflowModelDeployment {
 }
 /** Explicit bounded inference parameters selected from the pinned model deployment, never from a runner request. */
 export interface WorkflowModelGeneration {
+  readonly reasoningEffort?: string;
   readonly maxOutputTokens: number;
   readonly temperature: number;
 }
-/** Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority. */
+/** Ordered model candidates; selection intersects this order with the pinned workflow ceiling. Only provider inference failures permit fallback; effects are never retried. */
 export interface WorkflowModelGroupDefinition {
   readonly id: string;
   readonly deploymentIds: ReadonlyArray<string>;
+  readonly standby?: boolean;
+}
+/** Gateway-only resolution of one authorized inference candidate, with current authority checked on every attempt. */
+export interface WorkflowModelResolveRequest {
+  readonly runId: string;
+  readonly stepToken: string;
+  readonly candidateIndex: number;
+}
+/** Private Gateway response; credentials must never be forwarded to runtime workers or logged. */
+export interface WorkflowModelResolveResponse {
+  readonly origin: string;
+  readonly modelId: string;
+  readonly credential: string;
+  readonly generation: WorkflowModelGeneration;
+  readonly deploymentId: string;
+  readonly candidateIndex: number;
+  readonly candidateCount: number;
+  readonly resultSchema: Record<string, unknown>;
+}
+/** Current tenant-scoped publication blockers, without credentials or remote payloads. Observational only; publication rechecks readiness. */
+export interface WorkflowProfileDiagnostics {
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly blockers: ReadonlyArray<string>;
 }
 /** Workflow profile lifecycle metadata; publication requires current authorization, reviewed content and dependency readiness. */
 export interface WorkflowProfilePublishRequest {
@@ -2880,7 +2965,50 @@ export interface WorkflowProfileStatus {
   readonly dependenciesReady: boolean;
   readonly reviewedBy?: string;
 }
+export type WorkflowProgressKind = "NODE_COMPLETED" | "AGENT_STARTED" | "AGENT_COMPLETED" | "MODEL_STARTED" | "MODEL_COMPLETED" | "TOOL_STARTED" | "TOOL_COMPLETED" | "TOOL_FAILED";
+export type WorkflowProgressSource = "CONTROL" | "RUNTIME";
 export type WorkflowRemediationMode = "PREPARE" | "APPLY";
+/** Backend-recorded structural progress. Runtime reports do not attest tool effects or finality. */
+export interface WorkflowRunProgressEvent {
+  readonly sequence: number;
+  readonly occurredAt: string;
+  readonly source: WorkflowProgressSource;
+  readonly kind: string;
+  readonly nodeId?: string;
+  readonly subjectId?: string;
+  readonly toolRef?: string;
+}
+/** Ordered durable progress for one tenant/run; cursor advances only through returned events. */
+export interface WorkflowRunProgressPage {
+  readonly items: ReadonlyArray<WorkflowRunProgressEvent>;
+  readonly nextCursor: number;
+}
+/** Lease-authenticated structural runtime observation. No input, output, provider text or credential is retained in progress evidence. */
+export interface WorkflowRunProgressRequest {
+  readonly leaseId: string;
+  readonly leaseToken: string;
+  readonly eventId: string;
+  readonly kind: WorkflowProgressKind;
+  readonly nodeId?: string;
+  readonly subjectId?: string;
+  readonly toolRef?: string;
+}
+/** Durable acceptance receipt; it is not evidence of execution success. */
+export interface WorkflowRunStartReceipt {
+  readonly runId: string;
+  readonly profileId: string;
+  readonly profileDigest: string;
+  readonly workflowId: string;
+  readonly state: "QUEUED";
+}
+/** Explicit text input for one published bot. Backend derives service group and configured mode; current authority and idempotency remain required. */
+export interface WorkflowRunStartRequest {
+  readonly profileDigest: string;
+  readonly expectedGeneration: number;
+  readonly entryAgentId: string;
+  readonly message: string;
+  readonly dispatchBindingId?: string;
+}
 /** Complete workflow-scoped local deployment declaration. Operator images and custody remain explicitly trusted; this grants no model or tool authority. */
 export interface WorkflowStackDeployment {
   readonly enabled: boolean;

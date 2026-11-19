@@ -237,14 +237,18 @@ def _validate(lease: RunLease) -> None:
 
 
 class _Execution:
-    def __init__(self, gate: ToolGate, lease: RunLease, clock: Callable[[], float]):
+    def __init__(self, gate: ToolGate, lease: RunLease, clock: Callable[[], float], progress=None):
         self.gate, self.lease, self.clock = gate, lease, clock
+        self.progress = progress
         self.deadline = clock() + lease.limits.max_duration_seconds
         self.steps = self.handoffs = 0
         self.agents = {a.agent_id: a for a in lease.agents}
         self.current_candidates: set[str] = set()
         self.context_results: dict[str, list[dict]] = {}
         self.completed: dict[str, object] = {}
+
+    def report(self,kind,**details):
+        if self.progress is not None:self.progress(kind,**details)
 
     def remaining(self) -> float:
         remaining = self.deadline - self.clock()
@@ -307,6 +311,7 @@ class _Execution:
             raise _Stop("MUTATION_NOT_ALLOWED")
         arguments = _json(arguments)
         timeout = self.remaining()
+        self.report("TOOL_STARTED",subjectId=grant.subject_id,toolRef=tool_id)
         try:
             outcome = self.gate.call_tool(self.lease, grant, tool_id, arguments, timeout_seconds=timeout)
         except (Denied, OwnershipLost):
@@ -323,6 +328,7 @@ class _Execution:
         if outcome.state != "SUCCEEDED":
             codes = {"DENIED": "DENIED", "OUTCOME_UNKNOWN": "TOOL_OUTCOME_UNKNOWN", "FAILED": "TOOL_FAILED"}
             raise _Stop(codes.get(outcome.state, "INVALID_TOOL_OUTCOME"))
+        self.report("TOOL_COMPLETED",subjectId=grant.subject_id,toolRef=tool_id)
         return _json(outcome.value)
 
     def context(self, agent: Agent | None, messages: list[dict]) -> list[dict]:
@@ -348,6 +354,7 @@ class _Execution:
         if self.lease.remediation_mode == "PREPARE":
             tools = tuple(t for t in tools if t.read_only)
         candidates = () if agent else self.candidates(grant)
+        self.report("MODEL_STARTED",subjectId=grant.subject_id)
         result = self.gate.infer(self.lease, grant,
             system_prompt=agent.system_prompt if agent else self.lease.supervisor_prompt,
             messages=_json(messages), tools=tools, candidates=candidates, timeout_seconds=self.remaining())
@@ -355,6 +362,7 @@ class _Execution:
         result = _json(result)
         if not isinstance(result, dict):
             raise _Stop("INVALID_MODEL_DECISION")
+        self.report("MODEL_COMPLETED",subjectId=grant.subject_id)
         return result
 
     def advance(self, state: _State) -> dict:
@@ -464,15 +472,19 @@ class _Capabilities:
             raise _Stop("INVALID_RESULT_MODE")
         agent = self.admit(agent_id)
         execution = self.execution
+        execution.report("AGENT_STARTED",subjectId=agent.agent_id)
         messages = execution.context(agent, [{"role": "user", "content": _json(value)}])
         if mode == "CONTEXT":
             if not agent.context_sources:
                 raise _Stop("CONTEXT_NOT_AVAILABLE")
+            execution.report("AGENT_COMPLETED",subjectId=agent.agent_id)
             return _json({"message": execution.lease.message, "context": execution.context_results[agent.agent_id]})
         while True:
             decision = execution.infer(agent, messages)
             if set(decision) == {"kind", "result"} and decision["kind"] == "finish":
-                return _json(decision["result"])
+                result=_json(decision["result"])
+                execution.report("AGENT_COMPLETED",subjectId=agent.agent_id)
+                return result
             if (set(decision) != {"kind", "toolId", "arguments"} or decision["kind"] != "tool"
                     or not isinstance(decision["toolId"], str) or not isinstance(decision["arguments"], dict)):
                 raise _Stop("INVALID_MODEL_DECISION")
@@ -518,8 +530,8 @@ class _Tools:
 
 
 class Runner:
-    def __init__(self, toolgate: ToolGate, *, clock: Callable[[], float] = time.monotonic, graph_directory=None):
-        self.toolgate, self.clock = toolgate, clock
+    def __init__(self, toolgate: ToolGate, *, clock: Callable[[], float] = time.monotonic, graph_directory=None, progress=None):
+        self.toolgate, self.clock, self.progress = toolgate, clock, progress
         self.graph_packages = GraphPackages(graph_directory)
 
     async def _graph(self, lease, execution):
@@ -539,6 +551,10 @@ class Runner:
                 if isinstance(update, dict) and "__interrupt__" in update:
                     raise _Stop("GRAPH_INTERRUPTS_UNSUPPORTED")
                 update = _json(update)
+                if kind == "updates" and isinstance(update,dict):
+                    for node in update:
+                        if isinstance(node,str) and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,127}",node):
+                            await asyncio.to_thread(execution.report,"NODE_COMPLETED",nodeId=node)
                 if kind == "values":
                     final = update
             if capabilities.fatal is not None:
@@ -566,7 +582,7 @@ class Runner:
         lease = deepcopy(lease)
         try:
             _validate(lease)
-            execution = _Execution(self.toolgate, lease, self.clock)
+            execution = _Execution(self.toolgate, lease, self.clock, self.progress)
             with tracing_context(enabled=False):
                 outcome = asyncio.run(self._bounded_graph(lease, execution))
         except OwnershipLost:

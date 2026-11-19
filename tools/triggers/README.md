@@ -69,3 +69,13 @@ Mock provider acceptance and shared-runtime/stack integration are separate
 checks. The real log demo additionally verifies source → configured agent/model
 → independently retrieved Control result. Live external provider qualification
 is not claimed by mocked protocol tests.
+
+### Shared SDK preparation
+
+Run `python tools/triggers/package_tests.py --prepare-sdk` from the repository
+root to publish the shared test SDK. CI uses this command before the parallel
+package matrix. Only dependency-resolution HTTP 429 failures qualify for retries:
+three attempts total, with 5- and 15-second delays. Each attempt is retained under
+`build/trigger-package-sdk/logs/gradle-<attempt>.log`. Compilation and test failures
+stop immediately; exhausted throttling remains a failed build. The command does
+not build the offline Rust package CLI; CI builds that separately afterward.

@@ -148,6 +148,7 @@ def markdown(report):
 
 
 def observation_passed(returncode, text):
+    text = text.replace("\r\n", "\n")
     name = "a_refused_send_gate_contacts_no_target_and_an_allowed_gate_sends_once_over_mtls"
     return (returncode == 0
             and re.search(r"^test " + name + r" \.\.\. ok$", text, re.MULTILINE) is not None

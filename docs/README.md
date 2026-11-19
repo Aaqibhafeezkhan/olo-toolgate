@@ -1,10 +1,13 @@
-# ToolGate documentation
+# OLO documentation
 
-ToolGate is in Beta Release. See [production and security status](../README.md#production-and-security-status)
+OLO is in Beta Release. See [production and security status](../README.md#production-and-security-status)
 for current limitations and their open enhancement tickets.
 
 For this branch's version series and channel, see [version.json](../version.json).
 For available build versions and artifacts, see the [published releases](https://github.com/olo-labs/olo-toolgate/releases).
+
+Start with [OLO community help](help/README.md) for bots, device/model updates
+and observability. OLO Orchestration runs bots; OLO ToolGate governs execution.
 
 Choose the guide for the task you are doing. Current operating instructions live
 with their component, including its supported behavior and current limitations.

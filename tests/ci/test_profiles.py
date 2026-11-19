@@ -9,23 +9,91 @@ import tempfile
 import unittest
 import zipfile
 
-from profiles import bundle
-from profiles import build as builder
+from bot import bundle
+from bot import build as builder
 from tools.release.profiles import collect
 
 ROOT=Path(__file__).resolve().parents[2]
 
 
 class ProfileTests(unittest.TestCase):
+    def test_multiagent_incident_handoff_keeps_entry_and_delegation_eligibility(self):
+        folder=ROOT/'bot/configurations/multiagent-incident'
+        profile=json.loads((folder/'bot.json').read_text(encoding='utf-8'))
+        workflow=profile['workflows']['workflows'][0]
+        first,second=workflow['agents']
+        self.assertTrue(first['entryEligible'])
+        self.assertFalse(second['entryEligible'])
+        self.assertTrue(second['delegationAllowed'])
+        graph=workflow['graph']['config']
+        self.assertEqual([first['agentId'],second['agentId']],[n['agentId'] for n in graph['nodes']])
+        self.assertEqual(['agent','agent'],[n['kind'] for n in graph['nodes']])
+        self.assertEqual({'$path':'/values/triage'},graph['nodes'][1]['input']['triage'])
+        self.assertEqual([(['START'],'triage'),(['triage'],'handover'),(['handover'],'END')],
+            [(e['from'],e['to']) for e in graph['edges']])
+        scoped=builder.scope(profile,workflow,[])
+        self.assertEqual({first['agentId'],second['agentId']},{a['agentId'] for a in scoped['workflows']['agentDefinitions']})
+        self.assertEqual([],scoped['packages'])
+
+    def test_same_release_different_configurations_cannot_alias_immutable_workflow_versions(self):
+        for identity in ('hotswap-demo','a'*128):
+            a=builder.workflow_version_id(identity,'hotswap-demo-a','1.0.0-demo.local')
+            b=builder.workflow_version_id(identity,'hotswap-demo-b','1.0.0-demo.local')
+            self.assertNotEqual(a,b)
+            self.assertLessEqual(len(a),128)
+            self.assertEqual(a,builder.workflow_version_id(identity,'hotswap-demo-a','1.0.0-demo.local'))
+
+    def test_all_public_bots_route_local_agents_and_keep_premium_unattached(self):
+        memberships={}
+        for folder in (ROOT/'bot/configurations').iterdir():
+            if not folder.is_dir():continue
+            profile=json.loads((folder/'bot.json').read_text(encoding='utf-8'))
+            references=json.loads((folder/'referenced-config.json').read_text(encoding='utf-8'))
+            for group in references['toolGroups']:
+                for tool in group['toolIds']:memberships.setdefault(tool,set()).add(group['id'])
+            config=profile['workflows']
+            def logical(value):return value if folder.name.startswith('hotswap-demo-') else value.removeprefix(folder.name+'-')
+            groups={logical(g['id']):[logical(x) for x in g['deploymentIds']] for g in config['modelGroups']}
+            deployments={logical(m['id']):m for m in config['modelDeployments']}
+            self.assertEqual(['local-qlora','local-lightweight'],groups['hotfolder-models'])
+            self.assertEqual(['local-lightweight'],groups['general-models'])
+            for workflow in config['workflows']:
+                self.assertNotIn('deployment',workflow)
+                self.assertNotIn('premium-openrouter',groups[logical(workflow['modelGroupId'])])
+                tools={node['agentId'] for node in workflow['graph']['config']['nodes'] if node['kind']=='tool'}
+                for agent in config['agentDefinitions']:
+                    self.assertEqual('hotfolder-models' if agent['agentId'] in tools else 'general-models',logical(agent['modelGroupId']))
+                    self.assertNotIn('premium-openrouter',groups[logical(agent['modelGroupId'])])
+                scoped=builder.scope(profile,workflow,json.loads((folder/'trigger-connections.json').read_text(encoding='utf-8')))
+                self.assertIn('premium-openrouter',{logical(m['id']) for m in scoped['workflows']['modelDeployments']})
+            self.assertEqual('olo-qlora-hotfolder:e376fb40',deployments['local-qlora']['modelId'])
+            self.assertEqual('qwen3:0.6b',deployments['local-lightweight']['modelId'])
+        self.assertTrue(all(len(groups)==1 for groups in memberships.values()),memberships)
+
+    def test_trigger_connections_keep_their_packages_without_deployment_fields(self):
+        from tools.workflows.demo_profiles import configurations
+        _,profile,_,connections=next(configurations())
+        scoped=builder.scope(profile,profile['workflows']['workflows'][0],connections)
+        self.assertEqual({'examples.hotfolder','examples.hotfolder-watch'},{p['packageId'] for p in scoped['packages']})
+        self.assertNotIn('deployment',scoped['workflows']['workflows'][0])
+
+    def test_sdk_descriptors_become_control_definitions_not_raw_sdk_objects(self):
+        descriptor=dict(toolId='files/read',description='Read',inputSchema={'type':'object'},outputSchema={'type':'object'},
+                        effect=dict(safety='READ_ONLY'),kind='JAVA',descriptorGeneration=2)
+        definition=builder.control_definition(descriptor)
+        self.assertEqual({'id','name','description','actions','inputSchema','outputSchema'},set(definition))
+        self.assertEqual([dict(name='invoke',resourceKinds=['CUSTOM'])],definition['actions'])
+        descriptor.update(effect=dict(safety='NON_IDEMPOTENT'),reconciliation='MANUAL')
+        self.assertEqual('MANUAL',builder.control_definition(descriptor)['reconciliation'])
     def test_graph_only_tool_packages_are_kept_in_workflow_scope(self):
-        profile=json.loads((ROOT/'profiles/configurations/text-summary/workflow-profile.json').read_text(encoding='utf-8'))
+        profile=json.loads((ROOT/'bot/configurations/text-summary/bot.json').read_text(encoding='utf-8'))
         workflow=profile['workflows']['workflows'][0]
         workflow['graph']['config']['nodes']=[dict(id='read',kind='tool',agentId=workflow['agents'][0]['agentId'],
             toolRef='graph.files/read',input={'toolRef':'unrelated/fake'})]
         profile['packages']=[dict(packageId=name) for name in ('graph.files','unrelated')]
-        self.assertEqual(['graph.files'],[item['packageId'] for item in builder.scope(profile,workflow)['packages']])
+        self.assertEqual(['graph.files'],[item['packageId'] for item in builder.scope(profile,workflow,[])['packages']])
         workflow['graph']['config']['nodes'][0]['toolRef']='invalid'
-        with self.assertRaisesRegex(ValueError,'tool reference'):builder.scope(profile,workflow)
+        with self.assertRaisesRegex(ValueError,'tool reference'):builder.scope(profile,workflow,[])
 
     def test_profile_artifact_names_are_platform_safe_and_do_not_alias_identifiers(self):
         self.assertNotEqual(builder.filename('workflow:one'),builder.filename('workflow-one'))
@@ -44,7 +112,7 @@ class ProfileTests(unittest.TestCase):
             config['agentDefinitions'][0]['contextSources']=[dict(toolId=tool['descriptor']['toolId'],arguments={})]
             profile=dict(profileVersion=2,profileId='file-source',packages=[],workflows=config)
             refs=dict(tools=[dict(id=tool['descriptor']['toolId'],packageDigest='a'*64)],bindings=[dict(allowedPackageDigests=['a'*64])])
-            for name,data in [('workflow-profile.json',profile),('referenced-data.json',refs),('connections.json',[]),('build.json',dict(packages=[dict(packageId=metadata['packageId'],version=metadata['version'],file='tool.olotool')]))]:
+            for name,data in [('bot.json',profile),('referenced-config.json',refs),('trigger-connections.json',[]),('package-build.json',dict(packages=[dict(packageId=metadata['packageId'],version=metadata['version'],file='tool.olotool')]))]:
                 (folder/name).write_text(json.dumps(data))
             rows=builder.build(folder,output,'1.2.3','b'*40,'test',{},None)
             self.assertEqual(1,len(rows))
@@ -98,14 +166,17 @@ class ProfileTests(unittest.TestCase):
             with self.assertRaises(ValueError):collect(source,output)
 
     def test_source_configurations_are_complete_and_only_new_archive_extension_is_used(self):
-        for folder in (ROOT/'profiles/configurations').iterdir():
+        for folder in (ROOT/'bot/configurations').iterdir():
             if not folder.is_dir():continue
-            for name in ('workflow-profile.json','referenced-data.json','connections.json','build.json','README.md'):self.assertTrue((folder/name).is_file(),str(folder/name))
-            refs=json.loads((folder/'referenced-data.json').read_text(encoding='utf-8'))
+            for name in ('bot.json','referenced-config.json','trigger-connections.json','package-build.json','README.md'):self.assertTrue((folder/name).is_file(),str(folder/name))
+            refs=json.loads((folder/'referenced-config.json').read_text(encoding='utf-8'))
             self.assertNotIn('users',refs);self.assertNotIn('identityBindings',refs)
-            self.assertTrue(json.loads((folder/'build.json').read_text())['packages'])
+            recipes=json.loads((folder/'package-build.json').read_text(encoding='utf-8'))['packages']
+            pins=json.loads((folder/'bot.json').read_text(encoding='utf-8'))['packages']
+            self.assertIsInstance(recipes,list)
+            self.assertTrue({item['packageId'] for item in pins}<={item['packageId'] for item in recipes})
         workflow=(ROOT/'.github/workflows/foundation.yml').read_text()
-        self.assertIn('python profiles/build.py',workflow)
+        self.assertIn('python bot/build.py',workflow)
         self.assertIn('foundation-stage-profiles',workflow)
         self.assertIn('tools/release/profiles.py',workflow)
 

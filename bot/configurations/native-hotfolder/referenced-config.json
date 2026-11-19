@@ -1,0 +1,599 @@
+{
+  "formatVersion": 2,
+  "tenantId": "destination",
+  "revision": 0,
+  "agents": [
+    {
+      "id": "native-hotfolder-langchain-linux-agent",
+      "name": "native-hotfolder-langchain-linux-agent",
+      "enabled": true,
+      "revision": 1,
+      "ownerUserId": "admin"
+    },
+    {
+      "id": "native-hotfolder-text-summarizer",
+      "name": "native-hotfolder-text-summarizer",
+      "enabled": true,
+      "revision": 1,
+      "ownerUserId": "admin"
+    }
+  ],
+  "agentGroups": [
+    {
+      "id": "native-hotfolder-langchain-linux-agents",
+      "name": "native-hotfolder-langchain-linux-agents",
+      "enabled": true,
+      "revision": 1,
+      "agentIds": [
+        "native-hotfolder-langchain-linux-agent"
+      ],
+      "roleIds": [
+        "native-hotfolder-configured-workflow-service"
+      ]
+    },
+    {
+      "id": "native-hotfolder-summary-agents",
+      "name": "native-hotfolder-summary-agents",
+      "enabled": true,
+      "revision": 1,
+      "agentIds": [
+        "native-hotfolder-text-summarizer"
+      ],
+      "roleIds": [
+        "native-hotfolder-configured-workflow-service"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "enabled": true,
+      "id": "native-hotfolder-configured-workflow-service",
+      "managementRules": [],
+      "name": "Configured workflow service",
+      "portalRole": "BASIC",
+      "revision": 1,
+      "roleType": "ACTOR_SERVICE"
+    }
+  ],
+  "grants": [
+    {
+      "enabled": true,
+      "id": "native-hotfolder-configured-workflow-service",
+      "name": "Configured workflow authority",
+      "purpose": "SERVICE",
+      "revision": 1,
+      "scope": {
+        "actions": [
+          "workflow.execute",
+          "model.infer"
+        ],
+        "allActions": false,
+        "conditions": {
+          "devicePosture": [],
+          "expiresAtUnixMs": 0,
+          "highRisk": false,
+          "hoursUtc": [],
+          "networkCidrs": [],
+          "notBeforeUnixMs": 0,
+          "regions": [],
+          "requireOnline": false
+        },
+        "deviceGroups": {
+          "all": true,
+          "ids": []
+        },
+        "resources": [
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "model-group:native-hotfolder-local-ceiling"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "model-group:native-hotfolder-hotfolder-models"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "model-group:native-hotfolder-general-models"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "workflow-group:native-hotfolder"
+          }
+        ],
+        "toolGroups": {
+          "all": true,
+          "ids": []
+        }
+      },
+      "sourceId": "native-hotfolder-configured-workflow-service",
+      "sourceType": "ROLE"
+    },
+    {
+      "enabled": true,
+      "id": "native-hotfolder-langchain-linux-capability",
+      "name": "LangChain capability",
+      "purpose": "CAPABILITY",
+      "revision": 1,
+      "scope": {
+        "actions": [
+          "invoke"
+        ],
+        "allActions": false,
+        "conditions": {
+          "devicePosture": [],
+          "expiresAtUnixMs": 0,
+          "highRisk": false,
+          "hoursUtc": [],
+          "networkCidrs": [],
+          "notBeforeUnixMs": 0,
+          "regions": [],
+          "requireOnline": true
+        },
+        "deviceGroups": {
+          "all": false,
+          "ids": [
+            "native-hotfolder-langchain-linux-devices"
+          ]
+        },
+        "resources": [
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/move",
+            "match": "EXACT"
+          },
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/read_text",
+            "match": "EXACT"
+          },
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/write_text",
+            "match": "EXACT"
+          }
+        ],
+        "toolGroups": {
+          "all": false,
+          "ids": [
+            "langchain-package-tools"
+          ]
+        }
+      },
+      "sourceId": "native-hotfolder-langchain-linux-agents",
+      "sourceType": "AGENT_GROUP"
+    },
+    {
+      "enabled": true,
+      "id": "native-hotfolder-langchain-linux-service",
+      "name": "LangChain service",
+      "purpose": "SERVICE",
+      "revision": 1,
+      "scope": {
+        "actions": [
+          "invoke"
+        ],
+        "allActions": false,
+        "conditions": {
+          "devicePosture": [],
+          "expiresAtUnixMs": 0,
+          "highRisk": false,
+          "hoursUtc": [],
+          "networkCidrs": [],
+          "notBeforeUnixMs": 0,
+          "regions": [],
+          "requireOnline": true
+        },
+        "deviceGroups": {
+          "all": false,
+          "ids": [
+            "native-hotfolder-langchain-linux-devices"
+          ]
+        },
+        "resources": [
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/move",
+            "match": "EXACT"
+          },
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/read_text",
+            "match": "EXACT"
+          },
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/write_text",
+            "match": "EXACT"
+          }
+        ],
+        "toolGroups": {
+          "all": false,
+          "ids": [
+            "langchain-package-tools"
+          ]
+        }
+      },
+      "sourceId": "native-hotfolder-langchain-linux-agents",
+      "sourceType": "AGENT_GROUP"
+    }
+  ],
+  "tools": [
+    {
+      "definition": {
+        "actions": [
+          {
+            "name": "invoke",
+            "resourceKinds": [
+              "CUSTOM"
+            ]
+          }
+        ],
+        "description": "Reads a UTF-8 text file from the HotFolder.",
+        "id": "examples.hotfolder/read_text",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "description": "File path, such as notes/today.txt",
+              "maxLength": 1024,
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "name": "examples.hotfolder/read_text",
+        "outputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "exists": {
+              "description": "Whether the file exists",
+              "type": "boolean"
+            },
+            "text": {
+              "description": "The file's text",
+              "type": "string"
+            }
+          },
+          "required": [
+            "exists",
+            "text"
+          ],
+          "type": "object"
+        }
+      },
+      "enabled": true,
+      "extractorId": "native-hotfolder-extract-4e42fa5438980bd0310bc1d22b6ba007",
+      "id": "examples.hotfolder/read_text",
+      "name": "examples.hotfolder/read_text",
+      "packageDigest": "45a5f0833d4f7f188a19a6123cb6b7aaff057422021c6230502628bf7fcdbfab",
+      "revision": 2,
+      "version": "0.1.0"
+    },
+    {
+      "definition": {
+        "actions": [
+          {
+            "name": "invoke",
+            "resourceKinds": [
+              "CUSTOM"
+            ]
+          }
+        ],
+        "description": "Moves a file to a new path that does not exist yet.",
+        "id": "examples.hotfolder/move",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "destination": {
+              "description": "New path",
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "path": {
+              "description": "File to move",
+              "maxLength": 1024,
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "path"
+          ],
+          "type": "object"
+        },
+        "name": "examples.hotfolder/move",
+        "outputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "moved": {
+              "description": "False when the source does not exist",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "moved"
+          ],
+          "type": "object"
+        },
+        "reconciliation": "MANUAL"
+      },
+      "enabled": true,
+      "extractorId": "native-hotfolder-extract-42369acf75b98ffbd79904c5e2c2006b",
+      "id": "examples.hotfolder/move",
+      "name": "examples.hotfolder/move",
+      "packageDigest": "285d52de81f1023f5d68d44127be920091eb75e4cebb808106fc15b1fd98ff50",
+      "revision": 2,
+      "version": "0.1.0"
+    },
+    {
+      "definition": {
+        "actions": [
+          {
+            "name": "invoke",
+            "resourceKinds": [
+              "CUSTOM"
+            ]
+          }
+        ],
+        "description": "Creates or replaces a text file.",
+        "id": "examples.hotfolder/write_text",
+        "inputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "description": "File path",
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "text": {
+              "description": "UTF-8 text",
+              "maxLength": 65536,
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "text"
+          ],
+          "type": "object"
+        },
+        "name": "examples.hotfolder/write_text",
+        "outputSchema": {
+          "additionalProperties": false,
+          "properties": {
+            "written": {
+              "description": "True once the text is durably stored",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "written"
+          ],
+          "type": "object"
+        },
+        "reconciliation": "DOWNSTREAM_IDEMPOTENCY"
+      },
+      "enabled": true,
+      "extractorId": "native-hotfolder-extract-ae6b08a8bc30115a681225ab29ca2231",
+      "id": "examples.hotfolder/write_text",
+      "name": "examples.hotfolder/write_text",
+      "packageDigest": "7d83a8eb6408a423e7be6fc339f914b5fa6f0d37b63a302ee2e2ccbcd1618d5e",
+      "revision": 2,
+      "version": "0.1.0"
+    }
+  ],
+  "toolGroups": [
+    {
+      "enabled": true,
+      "id": "default-tools",
+      "name": "Default tool group",
+      "revision": 15,
+      "toolIds": []
+    },
+    {
+      "enabled": true,
+      "id": "langchain-package-tools",
+      "name": "LangChain HotFolder package tools",
+      "revision": 5,
+      "toolIds": [
+        "examples.hotfolder/move",
+        "examples.hotfolder/read_text",
+        "examples.hotfolder/write_text"
+      ]
+    }
+  ],
+  "deviceGroups": [
+    {
+      "deviceIds": [],
+      "enabled": true,
+      "id": "native-hotfolder-ReadAndWriteDeviceGroup",
+      "name": "native-hotfolder-ReadAndWriteDeviceGroup",
+      "revision": 2
+    },
+    {
+      "deviceIds": [],
+      "enabled": true,
+      "id": "default-devices",
+      "name": "Default device group",
+      "revision": 2
+    },
+    {
+      "deviceIds": [],
+      "enabled": true,
+      "id": "native-hotfolder-langchain-linux-devices",
+      "name": "LangChain selected device",
+      "revision": 1
+    }
+  ],
+  "bindings": [
+    {
+      "actions": [
+        "invoke"
+      ],
+      "allowedPackageDigests": [],
+      "deviceGroupId": "default-devices",
+      "enabled": true,
+      "id": "native-hotfolder-binding-default",
+      "name": "Reviewed default execution boundary",
+      "ownerDependency": false,
+      "requireOnline": true,
+      "revision": 1,
+      "toolGroupId": "default-tools"
+    },
+    {
+      "actions": [
+        "invoke"
+      ],
+      "allowedPackageDigests": [
+        "285d52de81f1023f5d68d44127be920091eb75e4cebb808106fc15b1fd98ff50",
+        "3ea2439b7459ffee61a5bb050f61442d1e0bbd2a64b3e3976a71bbbb77ee513c",
+        "45a5f0833d4f7f188a19a6123cb6b7aaff057422021c6230502628bf7fcdbfab",
+        "7d83a8eb6408a423e7be6fc339f914b5fa6f0d37b63a302ee2e2ccbcd1618d5e"
+      ],
+      "deviceGroupId": "native-hotfolder-langchain-linux-devices",
+      "enabled": true,
+      "id": "native-hotfolder-langchain-linux-binding",
+      "name": "LangChain selected-device execution",
+      "ownerDependency": false,
+      "requireOnline": true,
+      "revision": 1,
+      "toolGroupId": "langchain-package-tools"
+    }
+  ],
+  "policies": [
+    {
+      "agentGroups": {
+        "all": false,
+        "ids": [
+          "native-hotfolder-langchain-linux-agents"
+        ]
+      },
+      "approverTeams": {
+        "all": false,
+        "ids": []
+      },
+      "decision": "ALLOW",
+      "enabled": true,
+      "id": "native-hotfolder-langchain-linux-access",
+      "name": "LangChain selected-device access",
+      "revision": 1,
+      "scope": {
+        "actions": [
+          "invoke"
+        ],
+        "allActions": false,
+        "conditions": {
+          "devicePosture": [],
+          "expiresAtUnixMs": 0,
+          "highRisk": false,
+          "hoursUtc": [],
+          "networkCidrs": [],
+          "notBeforeUnixMs": 0,
+          "regions": [],
+          "requireOnline": true
+        },
+        "deviceGroups": {
+          "all": false,
+          "ids": [
+            "native-hotfolder-langchain-linux-devices"
+          ]
+        },
+        "resources": [
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/move",
+            "match": "EXACT"
+          },
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/read_text",
+            "match": "EXACT"
+          },
+          {
+            "kind": "CUSTOM",
+            "locator": "tool://examples.hotfolder/write_text",
+            "match": "EXACT"
+          }
+        ],
+        "toolGroups": {
+          "all": false,
+          "ids": [
+            "langchain-package-tools"
+          ]
+        }
+      },
+      "teams": {
+        "all": false,
+        "ids": []
+      }
+    }
+  ],
+  "extractors": [
+    {
+      "enabled": true,
+      "extractorKind": "FIELDS",
+      "fields": [],
+      "fixedResources": [
+        {
+          "kind": "CUSTOM",
+          "locator": "tool://examples.hotfolder/read_text"
+        }
+      ],
+      "id": "native-hotfolder-extract-4e42fa5438980bd0310bc1d22b6ba007",
+      "maxResources": 32,
+      "name": "Resources for examples.hotfolder/read_text",
+      "revision": 1,
+      "version": "0.1.0"
+    },
+    {
+      "enabled": true,
+      "extractorKind": "FIELDS",
+      "fields": [],
+      "fixedResources": [
+        {
+          "kind": "CUSTOM",
+          "locator": "tool://examples.hotfolder/move"
+        }
+      ],
+      "id": "native-hotfolder-extract-42369acf75b98ffbd79904c5e2c2006b",
+      "maxResources": 32,
+      "name": "Resources for examples.hotfolder/move",
+      "revision": 1,
+      "version": "0.1.0"
+    },
+    {
+      "enabled": true,
+      "extractorKind": "FIELDS",
+      "fields": [],
+      "fixedResources": [
+        {
+          "kind": "CUSTOM",
+          "locator": "tool://examples.hotfolder/write_text"
+        }
+      ],
+      "id": "native-hotfolder-extract-ae6b08a8bc30115a681225ab29ca2231",
+      "maxResources": 32,
+      "name": "Resources for examples.hotfolder/write_text",
+      "revision": 1,
+      "version": "0.1.0"
+    }
+  ],
+  "teams": [],
+  "devices": [],
+  "delegations": [],
+  "agentDelegations": [],
+  "workloadBindings": [],
+  "requiredIdentities": [
+    {
+      "id": "admin",
+      "teamIds": []
+    }
+  ]
+}

@@ -52,6 +52,7 @@ export function validateReferences(value:unknown):ConfigurationFile{
   if(!value||typeof value!=='object')throw Error('Invalid referenced configuration.');
   const object=value as Record<string,unknown>,allowed=new Set(['formatVersion','tenantId','revision','requiredIdentities',...kinds,...emptyKinds]);
   if(object.formatVersion!==2||typeof object.tenantId!=='string'||Object.keys(object).some(key=>!allowed.has(key))||[...kinds,...emptyKinds].some(key=>!Array.isArray(object[key]))||emptyKinds.some(key=>(object[key] as unknown[]).length))throw Error('Workflow references cannot contain user accounts, credentials or runtime state.');
+  if((object.deviceGroups as Row[]).some(row=>!Array.isArray(row.deviceIds)||row.deviceIds.length))throw Error('Bot references cannot allocate device group membership.');
   return value as ConfigurationFile;
 }
 
@@ -68,9 +69,12 @@ export function mergeReferences(incoming:ConfigurationFile,current:Configuration
     const old=existing[key]?.find(item=>item.id===row.id);
     if(!old)return row;
     const comparable=clone(row),prior=clone(old);
+    if(key==='tools'&&row.version===old.version&&JSON.stringify(stable(row.definition))===JSON.stringify(stable(old.definition)))return old;
+    if(key==='bindings')comparable.allowedPackageDigests=prior.allowedPackageDigests;
     if(key==='agentGroups'){comparable.agentIds=prior.agentIds=[];}
     if(key==='toolGroups'){comparable.toolIds=prior.toolIds=[];}
     if(key==='deviceGroups'){comparable.deviceIds=prior.deviceIds=[];}
+    if(['agentGroups','toolGroups','deviceGroups'].includes(key))comparable.name=prior.name;
     if(!equal(comparable,prior))throw Error(`Existing referenced ${key} ${row.id} differs. Resolve the conflict without replacing shared data.`);
     if(key==='agentGroups')return {...old,agentIds:[...new Set([...(old.agentIds as string[]),...(row.agentIds as string[])])]};
     if(key==='toolGroups')return {...old,toolIds:[...new Set([...(old.toolIds as string[]),...(row.toolIds as string[])])]};

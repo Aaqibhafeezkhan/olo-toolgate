@@ -1,6 +1,172 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Multi-agent media integration — 2026-11-19
+
+Known base `41891b9e`; exact source inventory and checks are in the workflow
+media checkpoint and [run evidence](../media/olo-2026-11/evidence.json).
+The new text-only bot uses no trigger package and changes no #274 transport,
+subscription, ownership or module interface. Current trigger/device console
+captures replace active old-route aliases; earlier desktop enrollment captures
+remain historical. Twelve profile and 13 JSON-graph checks pass, as does the
+real two-agent run with three-cloud readback. Full repository checking stops
+at one existing Windows symlink-privilege error (564 cases; 11 skips). Full
+module/M12 matrices remain outstanding. **27% remains earned**; no module,
+Done-when, baseline scope/weight or denominator changes.
+
+## LangChain example package-build isolation — 2026-11-19
+
+Known base `e6d93675`; source hash and executed checks are in the workflow SDK
+repair checkpoint. Root-qualified SDK publication and the existing isolation
+guard avoid unrelated Control Plane plugin resolution. The real Docker build
+produces verified hot-folder tool/trigger packages; 13 focused checks pass.
+Trigger interfaces and the native-outcome refusal gate are unchanged. Hosted
+reevaluation and full module/M12 matrices remain outstanding. **27% remains
+earned**; no module scope, Done-when, weight or denominator changes.
+
+## Published-image launcher integration — 2026-11-19
+
+Known base `ed13f0f7`; source digest/checks are in the current workflow checkpoint.
+The new community deployment shares existing device/trigger setup and keeps its
+own project/custody; it changes no #274 wire/subscription/ownership interface.
+Six deployment and 16 shared tests pass. Actual local overrides verify blank
+startup, retained credentials and a deterministic graph run; published images
+and full module/M12 qualification remain pending. UI captures are from the
+existing debug stack, not unavailable public images. **27% remains earned**;
+no module scope, Done-when, weight or denominator changes.
+
+## Real-model bot acceptance integration — 2026-11-19
+
+Known base `90b3dffa`; source digest and executed checks are in the workflow
+local-model checkpoint. Seven device/file examples reuse existing #274 packages,
+subscriptions and dispatch; mock fixtures remain isolated from public bots.
+All nine bundles import structurally in the UI. Seven real device-triggered
+cases pass with 19 tool outcomes, unchanged core/device processes and Admin
+credentials; the two text bots also run. Cloud readbacks match the final trigger
+run across all three configured providers. These are bounded integration results,
+not full module qualification. Focused fresh SQLite/PostgreSQL
+workflow/delivery/configuration checks pass (49). This changes bot examples and
+model inference, not trigger transport or module interfaces. The broad Java gate
+retains Windows/local-PostgreSQL failures (the PostgreSQL case passes alone), and
+the lab/debug Device OS scan retains unchanged findings; see workflow status.
+Full module/M12
+matrices and reference-aware reconciliation remain outstanding.
+**27% remains earned**; no module scope, Done-when, weight or denominator changes.
+
+## Publication diagnostics integration — 2026-11-19
+
+Known base `aaf5824f`; source inventory/checks are in the workflow blocker checkpoint.
+Publication diagnostics report existing trigger preparation, current source/owner
+clearance and package/device readiness without changing #274 transport or
+provisioning. Focused SQLite/PostgreSQL workflow/delivery tests pass (36); the
+live console retains trigger/device blockers as red bullets. Full Java retains
+one Windows fixture failure; full module/M12 qualification is still outstanding.
+**27% remains earned**; no module scope/weight/Done-when or denominator changes.
+
+## Optional collector startup integration — 2026-11-19
+
+Known tested base `b141506e`; source digest and executed checks are in the current
+workflow checkpoint. Startup can create/reuse an optional collector with no
+cloud account or retain current settings. Four focused settings tests, actual
+interactive standalone startup choices and all three cloud readbacks pass.
+No trigger transport, subscription or module scope changes. **27% remains earned**;
+full M12/module matrices and reference-aware reconciliation remain outstanding.
+
+## Console/model/observability integration checkpoint — 2026-11-19
+
+Known base `d98fb169`; final source inventory/checks are recorded in the current
+workflow status checkpoint. Manual bot runs reuse existing Control execution
+without fabricating trigger events. Structural observations use existing
+progress and separate installation-only OTLP fan-out, not new trigger transport
+or effect authority. Actual Admin/Ollama execution and four-GPU model offload
+pass; full Linux runtime 121 and focused SQLite/PostgreSQL delivery/workflow 35
+pass. Cloud/production and full module matrices are not accepted by these local
+checks. **27% remains earned**; no module scope, Done-when or denominator changes.
+Next: complete module/M12 matrices and reference-aware reconciliation.
+
+## Manual bot admission and image-build repair — 2026-11-18
+
+Known tested base `d98fb169`; source inventory and executed checks are in the
+workflow status's Admin bot runs checkpoint. Manual runs reuse Control queue/
+lease execution without fabricating a trigger event or changing #274 transport.
+Control records queue/claim/finish progress for both manual and trigger-admitted
+runs; runtime observations remain lease-bound and distinct from effect receipts.
+The new text-only demo uses no trigger/device. Focused delivery/workflow tests
+pass on SQLite/PostgreSQL (35); real Admin console admission/progress/result
+acceptance passes. Image build recovery is limited to independently verified
+pinned Quarkus BOM configuration lookup failures; four focused tests and an
+actual Quickstart build pass. Hosted/full module matrices remain outstanding.
+**27% remains earned**; no module scope, Done-when, weight or denominator changes.
+Next work remains full M12/module acceptance and reference-aware reconciliation.
+
+## Backend-owned three-container demo dispatch — 2026-11-18
+
+Known base `2a0dd960`; source inventory and checks are in the workflow status's
+three-container checkpoint. Backend routing now dispatches published bot
+subscriptions using current #274 stream owner/source authorization, admission
+receipts and durable ACK cursors; the standard runtime no longer runs a listener
+or holds an Admin token. The bounded dispatcher admits/ACKs only after durable
+admission; denied admissions stay unacknowledged. SQLite/PostgreSQL delivery and
+workflow tests pass (35 cases), and the fresh three-core-container A/B demo
+passes two real triggers with six finalized tool calls. Existing trigger wire
+contracts are unchanged. No module scope/Done-when or denominator changes:
+**27% remains earned**. Full M12/module matrices, production scale/fairness
+qualification and reference-aware reconciliation remain outstanding.
+
+## Shared trigger SDK CI throttling repair — 2026-11-18
+
+Known tested base `350d012dfe23f3d6fba58e1361a20ddb1f5b1271`.
+
+The shared SDK preparation job now uses the same bounded Maven HTTP 429 retry
+helper as the parallel package jobs. Compilation/test failures and persistent
+resolution failures still stop the pipeline. Nine matrix/retry tests and actual
+shared SDK publication pass; preflight and source quality checks pass. Hosted
+rerun remains outstanding. No trigger module implementation, contract, baseline
+scope or Done-when changes; 27% remains earned. Full M12/module matrices and
+reference-aware reconciliation remain outstanding.
+
+## Console bot trigger closure repair — 2026-11-18
+
+Known tested base `e9cbb22de9be7dc8fccea5ceedc19b1f55263227`. UI bot bundles now retain trigger packages
+referenced only by graph dispatch connections. Portable assignment specifications
+use current `trigger` contracts; obsolete `triggerId` is rejected by builders and
+readers. Console import relies on Control-managed assignment placement and
+restores declared subscriptions, without device allocation or broadcast fallback.
+All seven actual built bot bundles pass the UI importer; the full UI suite has
+314 passes and one optional skip. New live console acceptance was interrupted
+by the operator removing the stack and remains unverified. Existing #274 transport
+is reused. No module scope, Done-when or baseline changes: **27% remains earned**.
+Next: full module/M12 matrices and durable reference-aware reconciliation.
+
+## Bots hot-swap integration — 2026-11-18
+
+The source authoring root is now `bot`; exact embedded `.olotool` trigger/tool
+packages still use current #274 interfaces. Dynamic assignment/subscription
+reconciliation runs on one persistent device. Import/switch does not change
+file content or create folders; explicit operator setup is documented. Native
+business-finality evidence is added by ADR 075, not by changing trigger transport.
+Source digest `2a51170e42f64e3c7568d36de865a120befa3341813d4bd78afe3cffe4442d8b` and checks are in
+[the workflow checkpoint](workflow-v1-status.md#qualified-native-file-execution-and-bots-authoring--2026-11-18).
+Final fresh-stack A/B acceptance passes: two real events, six finalized tool calls, unchanged core/device processes and post-drain retirement of A. This is bounded local integration evidence. No module Done-when, scope,
+baseline denominator or earned weight changes: **27% remains earned**. Durable
+reference-aware retirement/reconciliation and the full M12 matrix remain.
+
+## Persistent-device local integration — 2026-11-18
+
+The #295 local stack now starts one persistent device and follows dynamic
+subscriptions. Administrative scripts explicitly configure the existing device
+approval policy, review a named pending key, enable and allocate its groups.
+Profiles cannot supply device authority. The builder preserves trigger-package
+closure from dispatch connections, and exact embedded packages were installed
+through the existing Control/Gateway path. A real file event admitted a workflow;
+its native read business outcome remained UNKNOWN, so no A/B trigger handover
+or successful end-to-end run is accepted. Actual checks, source fingerprint and
+limits are in the [workflow checkpoint](workflow-v1-status.md#persistent-local-stack-device-scripts-and-launcher-recovery--2026-11-18).
+No trigger wire channel, module scope/Done-when or baseline weight changes;
+**27% remains earned**. Revision-isolated preparation and old assignment retirement
+remain outstanding.
+
+
 ## Runtime worker presence integration — 2026-11-18
 
 #295 publication/admission now checks recent compatible LangGraph worker

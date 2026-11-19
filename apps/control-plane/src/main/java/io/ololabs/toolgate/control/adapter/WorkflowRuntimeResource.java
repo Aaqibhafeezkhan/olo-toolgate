@@ -67,6 +67,11 @@ public class WorkflowRuntimeResource {
             profileId, digest, workflowId, expectedGeneration));
     }
 
+    @POST @Path("runs/{runId}/progress") @Consumes("application/json") @RolesAllowed(ROLE)
+    public Response progress(@PathParam("runId") String run,String document) {
+        if(document==null||document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>4096)throw Failure.validation();
+        return reply(new WorkflowProgress(store,codec,Clock.systemUTC()).report(worker(),run,document,correlation.id()));
+    }
     @POST @Path("runs/{runId}/finish") @Consumes("application/json") @RolesAllowed(ROLE)
     public Response finish(@PathParam("runId") String runId, String document) {
         var worker = worker();
@@ -94,19 +99,20 @@ public class WorkflowRuntimeResource {
     @POST @Path("model:resolve") @Consumes("application/json") @RolesAllowed("toolgate-relay-gateway")
     public Response resolveModel(String document) {
         var gateway = actors.service("toolgate-relay-gateway");
-        if (document == null || document.length() > 1024 || !(codec.value(document) instanceof JsonNode value)
-                || !value.isObject() || value.size() != 2 || !value.path("runId").isTextual() || !value.path("stepToken").isTextual())
-            throw Failure.validation();
-        String runId = value.path("runId").textValue();
+        var request = codec.model(document, io.ololabs.toolgate.contracts.v2.WorkflowModelResolveRequest.class);
+        String runId = request.runId();
         if (!runId.matches("run-[0-9a-f-]{36}")) throw Failure.validation();
         var clock = Clock.systemUTC();
         var vault = keys.required();
         var selection = new WorkflowModelSelection(profiles(gateway, clock, vault), codec, clock);
         return reply(store.transaction(gateway.tenant(), false, tx -> {
-            var model = selection.resolve(tx, gateway.tenant(), runId, value.path("stepToken").textValue());
+            var candidate = selection.resolve(tx, gateway.tenant(), runId, request.stepToken(), request.candidateIndex().intValue());
+            var model = candidate.deployment();
             var credential = new VaultService(store, codec, vault).workflowModelCredential(gateway.tenant(), tx, model);
             return new Store.Reply(200, codec.json(java.util.Map.of("origin", model.origin(), "modelId", model.modelId(),
-                "credential", credential, "generation", model.generation())), 0);
+                "credential", credential, "generation", model.generation(), "deploymentId", model.id(),
+                "candidateIndex", candidate.candidateIndex(), "candidateCount", candidate.candidateCount(),
+                "resultSchema", candidate.resultSchema())), 0);
         }));
     }
 

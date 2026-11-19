@@ -1,0 +1,247 @@
+[
+  {
+    "file": "screenshots/console-about.jpg",
+    "source": "olo-2026-11/console/about.jpg",
+    "sha256": "b6be95beab1168001210a0c9e69827eb1659e51ead5f4ee56107817a0a955e87"
+  },
+  {
+    "file": "screenshots/console-agentDelegations.jpg",
+    "source": "olo-2026-11/console/agentDelegations.jpg",
+    "sha256": "0dc9b55bf1bd4a87f52fdb65f87c43354b06fa916b2e085de7511fe554726fb6"
+  },
+  {
+    "file": "screenshots/console-agentGroups.jpg",
+    "source": "olo-2026-11/console/agentGroups.jpg",
+    "sha256": "64063265c56f1f5ea65ffe72cc3f8c02a543309b83053757daedfc92c472fefa"
+  },
+  {
+    "file": "screenshots/console-agents.jpg",
+    "source": "olo-2026-11/console/agents.jpg",
+    "sha256": "077f54c29e1f45ef059116dc56702c92738d003dc6abe502fcc8372e321f2762"
+  },
+  {
+    "file": "screenshots/console-analytics-full.jpg",
+    "source": "olo-2026-11/console/analytics-full.jpg",
+    "sha256": "abdda4546bbcf816756e38c907439a59685572169efdf60f0212fdde2087f0a5"
+  },
+  {
+    "file": "screenshots/console-analytics.jpg",
+    "source": "olo-2026-11/console/analytics.jpg",
+    "sha256": "b82e1ab134043498da1232cbbfa6761a741d93812168a780b5c14b1b3e049292"
+  },
+  {
+    "file": "screenshots/console-approvals.jpg",
+    "source": "olo-2026-11/console/approvals.jpg",
+    "sha256": "24e773380eff387fa98316eb79fc24f648165309dbeede3a81d1e7eb1ae292e2"
+  },
+  {
+    "file": "screenshots/console-audit.jpg",
+    "source": "olo-2026-11/console/audit.jpg",
+    "sha256": "fc91a37ba3ba0460ade00be80a32f2f7f21ba76011f21dc4688929264f17319c"
+  },
+  {
+    "file": "screenshots/console-bindings.jpg",
+    "source": "olo-2026-11/console/bindings.jpg",
+    "sha256": "f608ddd471a4c43398689758b199b968332ea23544fac3479afbce0fbf5a65f4"
+  },
+  {
+    "file": "screenshots/console-builder.jpg",
+    "source": "olo-2026-11/console/builder.jpg",
+    "sha256": "77d39de8cb78402ef12bde4936791fd19bf14da85753ee1fb808ca1d4eb8b910"
+  },
+  {
+    "file": "screenshots/console-config-backup.jpg",
+    "source": "olo-2026-11/console/config-backup.jpg",
+    "sha256": "69b30f0e25b549f5b9c625cc1fa3950ba70609952a2e18bcfd974cac03900f6e"
+  },
+  {
+    "file": "screenshots/console-config-device.jpg",
+    "source": "olo-2026-11/console/config-device.jpg",
+    "sha256": "daf09bdda33e898bd4b308b40a46da5f0e7a14641a93d926d6d0f86f586d85ad"
+  },
+  {
+    "file": "screenshots/console-config-reviews.jpg",
+    "source": "olo-2026-11/console/config-reviews.jpg",
+    "sha256": "060074857641ad1489f55cfb6ce59d5d77bda9c6c33210982c3de92a96193be3"
+  },
+  {
+    "file": "screenshots/console-config-server.jpg",
+    "source": "olo-2026-11/console/config-server.jpg",
+    "sha256": "0e39bae72679e59d3bcabd1b5ee4575a0023147fe35dfe06ad9e006ce3d38fbc"
+  },
+  {
+    "file": "screenshots/console-delegations.jpg",
+    "source": "olo-2026-11/console/delegations.jpg",
+    "sha256": "c9a3ad6edc9254b0cf82b9556cfa8e72fd8b0a0a2eb175bb6d5dfe6e53f3f6f7"
+  },
+  {
+    "file": "screenshots/console-deviceEvidence.jpg",
+    "source": "olo-2026-11/console/deviceEvidence.jpg",
+    "sha256": "3f9943791d4e6c17b1c1f4101d039b578a8441751f5a569b354f83fd1a118009"
+  },
+  {
+    "file": "screenshots/console-deviceGroups.jpg",
+    "source": "olo-2026-11/console/deviceGroups.jpg",
+    "sha256": "411433013cd3896db6cf7c78863213b2f508d91ff1af634867662181950fd74c"
+  },
+  {
+    "file": "screenshots/console-devices.jpg",
+    "source": "olo-2026-11/console/devices.jpg",
+    "sha256": "8b36c62af923da81d99d81acac92c2a96e7be60bcfb1f4601af2adb74ed8e34b"
+  },
+  {
+    "file": "console-devices.jpg",
+    "source": "olo-2026-11/console/devices.jpg",
+    "sha256": "8b36c62af923da81d99d81acac92c2a96e7be60bcfb1f4601af2adb74ed8e34b"
+  },
+  {
+    "file": "screenshots/console-enroll.jpg",
+    "source": "olo-2026-11/console/enroll.jpg",
+    "sha256": "d823ad5f53d46d856a0a08a730bfa8b6eee99c07a27dd511317634687d426422"
+  },
+  {
+    "file": "screenshots/console-extractors.jpg",
+    "source": "olo-2026-11/console/extractors.jpg",
+    "sha256": "d6927b5de0e11fcec7b432243434d5744200c358bead52ed2957c04146c55a2a"
+  },
+  {
+    "file": "screenshots/console-fleet.jpg",
+    "source": "olo-2026-11/console/fleet.jpg",
+    "sha256": "98bad233c016f489f5df582ff3b158e1b496db91270580e59cbad2950590dc30"
+  },
+  {
+    "file": "screenshots/console-grants.jpg",
+    "source": "olo-2026-11/console/grants.jpg",
+    "sha256": "d40cf5382960f108718befef789de4d128b019a40a55035d7abdf35d5431f5ec"
+  },
+  {
+    "file": "screenshots/console-identityBindings.jpg",
+    "source": "olo-2026-11/console/identityBindings.jpg",
+    "sha256": "50557912246eede13ff725be1860e3287612646d7823bb42b6de3f435e965459"
+  },
+  {
+    "file": "screenshots/console-local.jpg",
+    "source": "olo-2026-11/console/local.jpg",
+    "sha256": "52a17ec05b0b6907cfb529d3fac833c4e82244d532cae11fd9712d0ab28a07db"
+  },
+  {
+    "file": "screenshots/console-mapping.jpg",
+    "source": "olo-2026-11/console/mapping.jpg",
+    "sha256": "ccbf3ba6a56308267c6f5c709892d4c54bd5e171251902b9ed3febb94b656944"
+  },
+  {
+    "file": "screenshots/console-mcp-servers.jpg",
+    "source": "olo-2026-11/console/mcp-servers.jpg",
+    "sha256": "3cbef53ee8c3aace9bb84fae4cbfffb43de507cd3689805aadadebed34ef1e2f"
+  },
+  {
+    "file": "screenshots/console-outcomes.jpg",
+    "source": "olo-2026-11/console/outcomes.jpg",
+    "sha256": "62c3e8f92be4036d7d5c5871032a6e1f722711ac50b5f9af25ee1cb569226e0d"
+  },
+  {
+    "file": "screenshots/console-overview-light.jpg",
+    "source": "olo-2026-11/console/overview-light.jpg",
+    "sha256": "e8ac884959c12612fd16a57ea7ed71f8e53863a889ac850cb5fc72fee8626543"
+  },
+  {
+    "file": "console-overview-light.jpg",
+    "source": "olo-2026-11/console/overview-light.jpg",
+    "sha256": "e8ac884959c12612fd16a57ea7ed71f8e53863a889ac850cb5fc72fee8626543"
+  },
+  {
+    "file": "screenshots/console-overview.jpg",
+    "source": "olo-2026-11/console/overview.jpg",
+    "sha256": "b34574d2a459c35ab7f2e480d5cafc6c6e113e80b38b11d7411a7d30a34c80ec"
+  },
+  {
+    "file": "console-overview.jpg",
+    "source": "olo-2026-11/console/overview.jpg",
+    "sha256": "b34574d2a459c35ab7f2e480d5cafc6c6e113e80b38b11d7411a7d30a34c80ec"
+  },
+  {
+    "file": "screenshots/console-policies.jpg",
+    "source": "olo-2026-11/console/policies.jpg",
+    "sha256": "c3948f627c516254463d1b33737365b89e32d11d8c6b73adc91304daefb6dbfc"
+  },
+  {
+    "file": "console-policies.jpg",
+    "source": "olo-2026-11/console/policies.jpg",
+    "sha256": "c3948f627c516254463d1b33737365b89e32d11d8c6b73adc91304daefb6dbfc"
+  },
+  {
+    "file": "screenshots/console-requests.jpg",
+    "source": "olo-2026-11/console/requests.jpg",
+    "sha256": "5237bd41268a86ad2923cac89aa6c80923b115f77446d8647f09d9064e079195"
+  },
+  {
+    "file": "screenshots/console-roles.jpg",
+    "source": "olo-2026-11/console/roles.jpg",
+    "sha256": "f0e0df0c951ae7c024479180120bb85b6962991384ef95c5096a8bf3e7f0e667"
+  },
+  {
+    "file": "console-roles.jpg",
+    "source": "olo-2026-11/console/roles.jpg",
+    "sha256": "f0e0df0c951ae7c024479180120bb85b6962991384ef95c5096a8bf3e7f0e667"
+  },
+  {
+    "file": "screenshots/console-server-packages.jpg",
+    "source": "olo-2026-11/console/server-packages.jpg",
+    "sha256": "100aee0ebbe41d6ad9372be92f1168e377633939c2a40e133dccfd9537e5fd87"
+  },
+  {
+    "file": "console-server-packages.jpg",
+    "source": "olo-2026-11/console/server-packages.jpg",
+    "sha256": "100aee0ebbe41d6ad9372be92f1168e377633939c2a40e133dccfd9537e5fd87"
+  },
+  {
+    "file": "screenshots/console-sign-in.jpg",
+    "source": "olo-2026-11/console/sign-in.jpg",
+    "sha256": "b344af6fdd708d1f77eb6a46fc8f6af5488a2ff76746cd367af7f2f493a4e834"
+  },
+  {
+    "file": "screenshots/console-simulation.jpg",
+    "source": "olo-2026-11/console/simulation.jpg",
+    "sha256": "b7a1bb37ab36f5d7126bad7d52f05341bc27f7c7131498cec37b8eb361a1f19f"
+  },
+  {
+    "file": "screenshots/console-teams.jpg",
+    "source": "olo-2026-11/console/teams.jpg",
+    "sha256": "ec2b411b5cc11886655d57a2f599c818b7994fe6cd0db62ecd63f47c1baca452"
+  },
+  {
+    "file": "console-teams.jpg",
+    "source": "olo-2026-11/console/teams.jpg",
+    "sha256": "ec2b411b5cc11886655d57a2f599c818b7994fe6cd0db62ecd63f47c1baca452"
+  },
+  {
+    "file": "screenshots/console-toolGroups.jpg",
+    "source": "olo-2026-11/console/toolGroups.jpg",
+    "sha256": "7f12757304910794e76b99aabfba8a67a1b6dec45d041ab201f91412b84493b3"
+  },
+  {
+    "file": "screenshots/console-tools.jpg",
+    "source": "olo-2026-11/console/tools.jpg",
+    "sha256": "4051e04e21fe86cb5f5ca79bc5c7ae32f45a1cbf37b96c6889e945726a737e94"
+  },
+  {
+    "file": "console-tools.jpg",
+    "source": "olo-2026-11/console/tools.jpg",
+    "sha256": "4051e04e21fe86cb5f5ca79bc5c7ae32f45a1cbf37b96c6889e945726a737e94"
+  },
+  {
+    "file": "screenshots/console-users.jpg",
+    "source": "olo-2026-11/console/users.jpg",
+    "sha256": "ef8a9ff2cc3b64efd5f8e7ce28108b3b0847f5153a6b6a9f84c5278f3f64b935"
+  },
+  {
+    "file": "console-users.jpg",
+    "source": "olo-2026-11/console/users.jpg",
+    "sha256": "ef8a9ff2cc3b64efd5f8e7ce28108b3b0847f5153a6b6a9f84c5278f3f64b935"
+  },
+  {
+    "file": "screenshots/console-workloadBindings.jpg",
+    "source": "olo-2026-11/console/workloadBindings.jpg",
+    "sha256": "7cbaae125fee655634cbac9266457c3932a528c029d4248899835057fbbb20f5"
+  }
+]

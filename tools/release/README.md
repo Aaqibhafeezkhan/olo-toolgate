@@ -1,12 +1,12 @@
 # Release
 
-Workflow profiles are built from `profiles/configurations/` by the foundation
+Workflow profiles are built from `bot/configurations/` by the foundation
 profile gate. Versioned `.olo` files and `olo-profiles-<version>.json` are retained
 as `foundation-stage-profiles`, revalidated into foundation release assets, and
 collected unchanged by development/tagged/product publication. Manual development
 builds use the same builder and validator. `tools/release/profiles.py` refuses
 source/version/hash mismatches and checks every embedded tool archive. Release
-promotion does not rebuild profile packages. See [profiles](../../profiles/README.md).
+promotion does not rebuild profile packages. See [profiles](../../bot/README.md).
 
 Release branches are long-lived major lines such as `release/1.x`. Compatible
 patch and minor releases share the line; breaking changes start a new major

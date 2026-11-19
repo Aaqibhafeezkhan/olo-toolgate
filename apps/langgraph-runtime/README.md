@@ -4,7 +4,7 @@
 Phase 1 adds required profile `graph` selection: packageId, version, canonical
 manifest digest, named entryPoint and JSON config. The same declaration is pinned
 in the claimed run. The worker loads a fresh native StateGraph from an
-operator-installed immutable directory. Graph-less profiles/leases are refused;
+operator-installed immutable directory. Graph-less bot/leases are refused;
 there is no fallback or migration. Existing `agentStages` belongs to the installed
 supervisor package, not to the generic native graph loader.
 
@@ -300,7 +300,36 @@ See the [live status](../../docs/architecture/workflow-v1-status.md) and
 
 ## V1.3 trigger subscriber
 
-The standalone image packages the worker, listener, and LangGraph executor.
+The default image entrypoint runs `toolgate_runtime.service`: a supervised graph
+API and execution worker. Trigger routing belongs to Gateway/backend; there is
+no listener or identity issuer in the standard deployment. Process-local graph
+caches are bounded and disposable. Durable state and run leases belong to Control.
+
+Pass `--configuration /installation/service.json` with installation-owned JSON:
+
+```json
+{
+  "graphConfiguration": "/installation/graph.json",
+  "controlOrigin": "https://control.example",
+  "gatewayOrigin": "https://gateway.example",
+  "tokenFile": "/installation/worker.token",
+  "caFile": "/installation/ca.crt"
+}
+```
+
+The graph configuration retains the private mTLS contract described above. Mount
+only this service's credential/configuration directory read-only. The service
+writes no durable run state. Provision/replace credentials through external
+operator tooling; Admin passwords and signing keys never belong in this image.
+Required child failure stops siblings and exits nonzero. SIGTERM stops both;
+container health probes loopback `/health/ready` on port 19461. This reports local
+process/listener readiness, not permission to run any particular workflow.
+Single-instance Quickstart uses local caches. Production may scale identical
+instances behind a graph-API proxy with backend-issued exclusive run leases;
+external cache and checkpoint/resume remain separate future work.
+
+The image also retains explicit worker/listener module commands for protocol
+testing; the standard three-container stack does not launch a runtime listener.
 Release builds publish `olo-toolgate-langgraph-runtime:<release-version>` to
 `ghcr.io/olo-labs` and the configured Docker Hub namespace
 (`DOCKERHUB_NAMESPACE`, or `DOCKERHUB_USERNAME` when unset). For example, a
@@ -417,3 +446,40 @@ Publication and new admission require recent compatible worker presence for each
 prepared graph. This is bounded capability/liveness evidence, not remote code
 attestation, proof of instantaneous health, per-replica graph compilation or
 checkpoint/crash recovery. Other deployment and provider readiness still apply.
+
+## Explicit console runs and execution progress
+
+A current Super Admin can submit text to an exact published workflow revision
+through Control's manual-run API. Control encrypts the input, selects the
+configured entry agent/group and execution mode, checks current service grants,
+and queues the same run lease used by trigger admissions. No trigger event is
+fabricated. No configured dispatch mode means PREPARE; conflicting configured
+modes require an existing dispatch-binding selection.
+
+Workers report bounded structural node/agent/model/tool observations through
+`POST /internal/v1/runtime/runs/{runId}/progress`, authenticated with the service
+identity and current lease. Reports contain identifiers and phase only. Control
+owns queue/claim/terminal events, retained audit order and final results. Runtime
+reports are observations, not independent target receipts or chain of thought.
+The console polls ordered progress and displays the final backend result. No
+local run storage, provider retry, checkpoint/resume or external effect replay is
+added. Unknown submissions reuse their idempotency key; polling retries only read.
+
+## Optional cloud structural tracing
+
+Set `TOOLGATE_WORKFLOW_OTLP_TRACES_ENDPOINT` to an explicit private collector
+HTTP trace endpoint, for example `http://insights-collector:4318/v1/traces`.
+`TOOLGATE_WORKFLOW_OBSERVABILITY_ENVIRONMENT` labels the installation. Empty
+endpoint disables export. Worker observations form a bounded content-free OTLP
+trace with OpenInference/Langfuse/LangSmith attributes; a collector can fan it
+out to Langfuse, LangSmith and Phoenix. Vendor keys are collector-only. Model
+spans expose the configured model group, not an invented selected model ID,
+usage or cost. Native automatic LangChain content tracing remains disabled.
+
+Export uses a bounded asynchronous queue and bounded HTTP requests with redirects
+and ambient proxies disabled. Delivery failure drops telemetry without replaying
+workflow/tool execution or changing its authority/outcome. Node completions are
+zero-duration events because the progress interface has no node-entry timestamp.
+Full distributed tracing, durable telemetry delivery, content export and exact
+parallel-node occurrence correlation are outside this local integration slice.
+See the debug runbook for setup, private credentials and vendor verification.

@@ -204,6 +204,7 @@ struct Authority {
     canonical: Option<String>,
     mismatched_context_id: bool,
     outcome_unavailable: bool,
+    device_failed: bool,
     history_reads: Mutex<Vec<(String, Option<String>, u16)>>,
 }
 impl Authority {
@@ -237,7 +238,7 @@ impl Authority {
                 submitted_at_unix_ms: None,
                 response_at_unix_ms: None,
                 completed_at_unix_ms: None,
-                error: None,
+                error: self.device_failed.then_some(ErrorCode::Forbidden),
             },
             result: if state == RemoteToolState::Done {
                 Some(RemoteToolResult {
@@ -484,7 +485,13 @@ impl RelayPort for Authority {
         &'a self,
         _: &'a RequestContext,
     ) -> PortFuture<'a, Result<RemoteToolResponse, ErrorCode>> {
-        Box::pin(async move { Ok(self.progress(RemoteToolState::Done)) })
+        Box::pin(async move {
+            Ok(self.progress(if self.device_failed {
+                RemoteToolState::Failed
+            } else {
+                RemoteToolState::Done
+            }))
+        })
     }
 }
 fn state(a: Arc<Authority>) -> Arc<AppState> {
@@ -1073,6 +1080,36 @@ async fn an_unavailable_authorized_outcome_does_not_disclose_the_worker_result_o
     assert_eq!(body["error"]["data"]["state"], "OUTCOME_UNKNOWN");
     assert_eq!(body["error"]["data"]["retryable"], false);
     assert!(body.get("result").is_none());
+}
+
+#[tokio::test]
+async fn device_failure_preserves_the_authorized_unknown_outcome() {
+    for outcome_unavailable in [false, true] {
+        let authority = Arc::new(Authority {
+            device_failed: true,
+            outcome_unavailable,
+            ..Authority::default()
+        });
+        let (status, body) = call(
+            runtime_router(state(authority)),
+            mcp("tools/call", Some("files.read")),
+        )
+        .await;
+        if outcome_unavailable {
+            assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+            assert!(body.get("result").is_none());
+            assert_eq!(body["error"]["data"]["retryable"], false);
+        } else {
+            assert_eq!(status, StatusCode::OK, "{body}");
+            assert_eq!(body["result"]["isError"], true);
+            assert_eq!(body["result"]["structuredContent"]["code"], "FORBIDDEN");
+            let operation = &body["result"]["_meta"]["io.ololabs.toolgate/operationOutcome"];
+            assert_eq!(operation["state"], "OUTCOME_UNKNOWN");
+            assert_eq!(operation["retryable"], false);
+            assert_eq!(operation["finalized"], false);
+            assert_eq!(operation["unsettledAttemptCount"], 1);
+        }
+    }
 }
 
 #[tokio::test]

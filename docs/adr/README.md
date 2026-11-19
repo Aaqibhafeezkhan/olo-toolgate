@@ -86,20 +86,20 @@ Use `000-template.md`.
 
 - [047: Positive-proof operation rebinding](047-proof-bound-operation-rebinding.md)
 
-- [048 — Derived operation finalization and caller history](048-derived-operation-finalization.md)
+- [048 â€” Derived operation finalization and caller history](048-derived-operation-finalization.md)
 
 - [049: Isolated per-invocation brokers](049-isolated-invocation-brokers.md)
-- [050 — Strict qualified-worker protocol boundary](050-qualified-worker-protocol-boundary.md)
+- [050 â€” Strict qualified-worker protocol boundary](050-qualified-worker-protocol-boundary.md)
 
-- [051 — Verified leaf SPKI pins](051-verified-leaf-spki-pins.md)
+- [051 â€” Verified leaf SPKI pins](051-verified-leaf-spki-pins.md)
 
-- [052 — Managed containment crash qualification](052-managed-containment-crash-qualification.md)
+- [052 â€” Managed containment crash qualification](052-managed-containment-crash-qualification.md)
 
-- [053 — General effect intents and send grants](053-general-effect-intents-and-send-grants.md)
+- [053 â€” General effect intents and send grants](053-general-effect-intents-and-send-grants.md)
 
-- [054 — Native MCP effect authority](054-native-mcp-effect-authority.md)
+- [054 â€” Native MCP effect authority](054-native-mcp-effect-authority.md)
 
-- [055 — Exact effect consent and atomic slots](055-exact-effect-consent-slots.md)
+- [055 â€” Exact effect consent and atomic slots](055-exact-effect-consent-slots.md)
 
 - [ADR 056: Per-effect keys and qualified resend](056-per-effect-keys-and-qualified-resend.md)
 
@@ -130,3 +130,16 @@ Use `000-template.md`.
 - [ADR 070: Workflow-level .olo configuration transfer](070-workflow-olo-transfer.md)
 
 - [ADR 071: Buildable profiles and embedded tool packages](071-profile-builds-and-embedded-packages.md)
+
+- [ADR 072: One persistent profiled debug stack](072-profiled-debug-stack.md)
+
+- [ADR 073: Super Admin settings authority](073-super-admin-settings-authority.md)
+
+- [ADR 074: Local launcher credential reconciliation](074-local-launcher-credential-reconciliation.md)
+
+- [ADR 076: Three-container workflow stack](076-three-container-workflow-stack.md)
+
+- [ADR 077: Manual bot runs and progress](077-manual-bot-runs-and-progress.md)
+
+- [ADR 078: OLO bot publication diagnostics](078-bot-publication-diagnostics.md)
+- [ADR 079: Profile-selected model fallback](079-profile-model-fallback.md)

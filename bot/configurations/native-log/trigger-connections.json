@@ -1,0 +1,35 @@
+[
+  {
+    "id": "native-log-dispatch",
+    "assignment": "native-log-watch",
+    "subscription": "native-log-watch-events",
+    "assignmentSpec": {
+      "trigger": "examples.log-watch/error-spike",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "native-log-ReadAndWriteDeviceGroup"
+        ]
+      },
+      "config": {
+        "file": "native-log/logs/app.log",
+        "pattern": "ERROR|FATAL",
+        "threshold": 2,
+        "windowSeconds": 60,
+        "cooldownSeconds": 60
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "native-log-watch"
+        ]
+      },
+      "filter": "event.type == 'examples.logs.match.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

@@ -9,6 +9,155 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /api/control/v1/mcp/native-files/begin:
+    post:
+      operationId: beginNativeFileEffect
+      summary: ADR 075 protected filesystem begin
+      security:
+      - deviceCertificate: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileEffectBegin
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileEffectGrant
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/receipts:
+    post:
+      operationId: recordNativeFileReceipt
+      summary: ADR 075 protected filesystem receipts
+      security:
+      - deviceCertificate: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileEffectReceipt
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/close:
+    post:
+      operationId: closeNativeFileScope
+      summary: ADR 075 protected filesystem close
+      security:
+      - deviceCertificate: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileScopeClosed
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/qualifications:
+    post:
+      operationId: qualifyNativeFileOwner
+      summary: ADR 075 protected filesystem qualifications
+      security:
+      - adminAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileQualification
+      responses:
+        '200':
+          description: Recorded; SDK output alone is never target evidence
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+        '403':
+          description: Current qualified authority is absent
+        '409':
+          description: State or immutable intent conflicts
+  /api/control/v1/mcp/native-files/candidates/{id}:
+    get:
+      operationId: nativeFileCandidates
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Installed metadata, never execution authority
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileCandidatePage
+  /api/control/v1/mcp/native-files/qualifications/{id}:
+    delete:
+      operationId: revokeNativeFileQualification
+      security:
+      - adminAccessToken: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 128
+      responses:
+        '200':
+          description: Qualification revoked for further effects
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+  /internal/v1/runtime/model:resolve:
+    post:
+      operationId: resolveWorkflowModelCandidate
+      security:
+      - gatewayServiceToken: []
+      summary: Resolve one pinned inference candidate under current run and agent authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowModelResolveRequest'}
+      responses:
+        '200':
+          description: Private candidate and credential, for Gateway only
+          content:
+            application/json:
+              schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowModelResolveResponse'}
+        '400': {description: Invalid or obsolete candidate request}
+        '403': {description: Current run, step or candidate authority denied}
   /internal/v1/runtime/workers:heartbeat:
     post:
       operationId: reportWorkflowWorkerPresence
@@ -70,6 +219,59 @@ paths:
         '403': {description: Incorrect service role}
         '404': {description: Candidate or workflow unavailable in this tenant}
         '409': {description: Candidate is unreviewed or publication generation changed}
+  /api/control/v1/workflow-profiles/{profileId}/workflows/{workflowId}/runs:
+    parameters:
+    - {name: profileId, in: path, required: true, schema: {type: string}}
+    - {name: workflowId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: startWorkflowRun
+      description: Current tenant Super Admin explicitly runs a published bot with text. Requires exact publication, configured entry agent, live service grants and Idempotency-Key. Does not create a trigger event or write device input files.
+      parameters:
+      - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunStartRequest'}
+      responses:
+        '201':
+          description: Durable run accepted, or exact idempotent receipt replayed
+          content:
+            application/json:
+              schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunStartReceipt'}
+        '403': {description: Current management or service authority unavailable}
+        '409': {description: Publication changed, ambiguous mode or idempotency conflict}
+  /api/control/v1/workflow-runs/{runId}/progress:
+    parameters:
+    - {name: runId, in: path, required: true, schema: {type: string}}
+    - {name: after, in: query, schema: {type: integer, minimum: 0, default: 0}}
+    get:
+      operationId: getWorkflowRunProgress
+      description: Current tenant Super Admin reads ordered durable progress for this run only. Runtime observations are distinguished from Control decisions and do not prove effect finality.
+      responses:
+        '200':
+          description: Bounded ordered progress page
+          content:
+            application/json:
+              schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunProgressPage'}
+        '403': {description: Current Super Admin authority required}
+        '404': {description: Run unavailable in this tenant}
+  /internal/v1/runtime/runs/{runId}/progress:
+    parameters:
+    - {name: runId, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: reportWorkflowRunProgress
+      security:
+      - runtimeServiceToken: []
+      description: Direct TLS runtime service reports bounded structural progress under its current run lease. Bodies and tokens are never copied into audit evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunProgressRequest'}
+      responses:
+        '204': {description: Structural observation recorded}
+        '403': {description: Run lease expired or belongs to another worker}
   /api/control/v1/workflow-runs/{runId}:
     parameters:
     - {name: runId, in: path, required: true, schema: {type: string}}
@@ -226,6 +428,31 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileStatus
+        '403':
+          description: Current Super Admin required
+        '404':
+          description: Revision unavailable in this tenant
+  /api/control/v1/workflow-profiles/{profileId}/revisions/{digest}/diagnostics:
+    parameters:
+    - name: profileId
+      in: path
+      required: true
+      schema:
+        type: string
+    - name: digest
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      operationId: getWorkflowProfileDiagnostics
+      responses:
+        '200':
+          description: Current publication blockers for this exact revision; no-store, Super Admin only
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/WorkflowProfileDiagnostics
         '403':
           description: Current Super Admin required
         '404':
@@ -11744,6 +11971,11 @@ paths:
                 $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
 components:
   securitySchemes:
+    gatewayServiceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Verified tenant service JWT with toolgate-relay-gateway role, accepted only over direct TLS.
     runtimeServiceToken:
       type: http
       scheme: bearer

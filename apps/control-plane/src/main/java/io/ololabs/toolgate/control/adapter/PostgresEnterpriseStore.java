@@ -98,6 +98,15 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
     }
     public List<EnterpriseEffectHistory> effectHistory(String operation,int offset,int limit){
         if(offset<0||offset>4096||limit<1||limit>101)throw Failure.validation();
+        var nativeFiles=new JdbcNativeFiles(connection,tenant,codec);var nativeIntents=nativeFiles.intents(operation);
+        if(!nativeIntents.isEmpty())return nativeIntents.stream().skip(offset).limit(limit).map(intent->{
+            var receipts=nativeFiles.receipts(intent.effect());boolean complete=receipts.size()==1;
+            return new EnterpriseEffectHistory(intent.effect(),1L,intent.attempt(),"native-files:"+intent.value().operation().name(),intent.digest(),
+                receipts.isEmpty()?EnterpriseEffectGenerationState.AMBIGUOUS:complete?EnterpriseEffectGenerationState.COMPLETED:EnterpriseEffectGenerationState.CONFLICT,
+                complete?EnterpriseOutcomeGrade.TARGET_CONFIRMED:EnterpriseOutcomeGrade.UNKNOWN,EnterpriseEffectFencing.UNFENCED,
+                complete?List.of(EnterpriseEvidenceObservation.TARGET_OUTCOME):List.of(),(long)receipts.size(),
+                complete?JdbcOperationFinalization.nativeReceipt(tenant,codec,receipts.getFirst()):null);
+        }).toList();
         var result=new ArrayList<EnterpriseEffectHistory>();
         String evidence="EXISTS(SELECT 1 FROM control_effect_evidence w WHERE w.tenant_id=g.tenant_id AND w.effect_id=g.effect_id AND w.generation=g.generation AND ";
         try(var s=query("SELECT e.effect_id,g.generation,g.attempt_id,e.route_id,e.request_digest,g.state,g.consumer,g.claim_token,"
@@ -201,6 +210,8 @@ final class PostgresEnterpriseStore implements EnterpriseStore {
         queries.put("attempts","SELECT count(*) FROM control_operation_attempts WHERE tenant_id=? AND operation_id=?");
         queries.put("snapshots","SELECT count(*) FROM control_attempt_snapshots WHERE tenant_id=? AND operation_id=?");
         queries.put("executionEvidence","SELECT count(*) FROM control_execution_evidence WHERE tenant_id=? AND invocation_id=?");
+        queries.put("nativeReceipts","SELECT count(*) FROM control_native_file_receipts r JOIN control_native_file_intents i ON i.tenant_id=r.tenant_id AND i.effect_id=r.effect_id WHERE i.tenant_id=? AND i.operation_id=?");
+        queries.put("nativeClosures","SELECT count(*) FROM control_native_file_closures c JOIN control_native_file_scopes s ON s.tenant_id=c.tenant_id AND s.attempt_id=c.attempt_id WHERE s.tenant_id=? AND s.operation_id=?");
         queries.put("effects","SELECT count(*) FROM control_effects WHERE tenant_id=? AND operation_id=?");
         queries.put("generationRevision","SELECT COALESCE(sum(revision),0) FROM control_effect_generations WHERE tenant_id=? AND operation_id=?");
         queries.put("effectEvidence","SELECT count(*) FROM control_effect_evidence e WHERE e.tenant_id=? AND EXISTS(SELECT 1 FROM control_effects f WHERE f.tenant_id=e.tenant_id AND f.effect_id=e.effect_id AND f.operation_id=?)");

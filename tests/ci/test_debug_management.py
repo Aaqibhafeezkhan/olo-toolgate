@@ -1,6 +1,6 @@
-# Copyright 2026 OLO Labs
-# SPDX-License-Identifier: Apache-2.0
-"""Exercise local metadata repair with real generators and isolated deployment stubs."""
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+"""The Windows wrapper delegates only the selected operation to the stack manager."""
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -9,138 +9,79 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from tools.contracts import generate, version
+ROOT=Path(__file__).resolve().parents[2]
+spec=importlib.util.spec_from_file_location('profiled_stack',ROOT/'debug/profiled/stack.py')
+stack=importlib.util.module_from_spec(spec);spec.loader.exec_module(stack)
 
-ROOT = Path(__file__).resolve().parents[2]
-POWERSHELL = shutil.which('powershell.exe')
+
+class StackManagementTests(unittest.TestCase):
+    def test_profile_edits_do_not_change_runtime_image_but_source_edits_do(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);runtime=root/'apps/langgraph-runtime/worker.py';profile=root/'bot/configurations/demo/bot.json'
+            for path in (runtime,profile):path.parent.mkdir(parents=True,exist_ok=True);path.write_text('initial')
+            with patch.object(stack,'ROOT',root):
+                first=stack.image_tag('runtime');profile.write_text('another profile')
+                self.assertEqual(first,stack.image_tag('runtime'))
+                runtime.write_text('another worker')
+                self.assertNotEqual(first,stack.image_tag('runtime'))
+
+    def test_cached_images_are_reused_without_build(self):
+        with patch.object(stack,'image_tag',side_effect=lambda m:'image-'+m),patch.object(stack,'image_exists',return_value=True),patch.object(stack,'run') as run:
+            self.assertEqual({'quickstart':'image-quickstart','device':'image-device','runtime':'image-runtime'},stack.images())
+            run.assert_not_called()
+
+    def test_only_missing_module_is_built(self):
+        with patch.object(stack,'image_tag',side_effect=lambda m:'image-'+m),patch.object(stack,'image_exists',side_effect=lambda i:i!='image-device'),patch.object(stack,'run') as run:
+            stack.images()
+            self.assertEqual(1,run.call_count)
+            self.assertEqual(['docker','build','-f','debug/profiled/linux-device.Dockerfile','-t','image-device','.'],run.call_args.args[0])
+
+    def test_foreign_storage_is_preserved_and_refused(self):
+        outputs=[subprocess.CompletedProcess([],0,'toolgate-profiled_data\n'),subprocess.CompletedProcess([],0,json.dumps([{'Labels':{}}]))]
+        with patch.object(stack,'run',side_effect=outputs) as run:
+            with self.assertRaises(ValueError):stack.check_owned()
+            self.assertEqual(2,run.call_count)
+            self.assertTrue(all('rm' not in c.args[0] for c in run.call_args_list))
+
+    def test_blank_composition_contains_no_model_or_workflow_seed(self):
+        document=stack.definition({m:'image-'+m for m in ('quickstart','device','runtime')})
+        self.assertEqual({'quickstart','device','langgraph'},set(document['services']))
+        env=document['services']['quickstart']['environment']
+        self.assertEqual('',env['TOOLGATE_CONTROL_PROFILE_PATH'])
+        self.assertEqual('',env['TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH'])
+        self.assertNotIn('/var/run/docker.sock:/var/run/docker.sock',document['services']['quickstart']['volumes'])
+        self.assertEqual('langgraph',document['services']['langgraph']['volumes'][0]['volume']['subpath'])
 
 
-@unittest.skipUnless(os.name == 'nt' and POWERSHELL, 'Windows PowerShell is required')
+@unittest.skipUnless(os.name=='nt' and shutil.which('powershell.exe'),'Windows PowerShell required')
 class DebugManagementTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
-        sources = set(version.expected()) | {
-            ROOT/'VERSION', ROOT/'packages/contracts/VERSION', ROOT/'CHANGELOG.md',
-            ROOT/'LICENSE', ROOT/'NOTICE.md', ROOT/'RELEASE-NOTES.md', ROOT/'debug/profiled/manage.ps1',
-            ROOT/'tools/contracts/version.py', ROOT/'tools/contracts/generate.py',
-            ROOT/'tools/ci/preflight.py', ROOT/'tools/contracts/fixtures.py',
-        }
-        from tools.contracts import fixtures
-        sources.update(fixtures.outputs())
-        # v1 schemas reference v2 definitions, so copy every supported version.
-        for ver in generate.VERSIONS:
-            sources.update((ROOT/'packages/contracts/schemas'/ver).glob('*.json'))
-        for source in sources:
-            target = self.root/source.relative_to(ROOT)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target)
-        self.apis = [self.root/f'packages/contracts/openapi/{name}-v1.yaml'
-                     for name in ('gateway', 'control')]
-        self.api_originals = [path.read_bytes().replace(b'\r\n', b'\n') for path in self.apis]
-        for path, original in zip(self.apis, self.api_originals):
-            path.write_bytes(original.replace(b'\n', b'\r\n'))
-        # The metadata commands need only the standard library; dependency installs are stubbed.
-        subprocess.run([sys.executable, '-m', 'venv', '--without-pip',
-                        str(self.root/'.dev/debug/venv')], check=True, timeout=30)
-        (self.root/'debug/profiled/python.ps1').write_text('''
-$script:originalInvokeChecked = ${function:Invoke-Checked}
-function Find-DebugPython { return $env:TEST_DEBUG_PYTHON }
-function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
-    Add-Content -LiteralPath $env:TEST_DEBUG_CALLS -Value (ConvertTo-Json -InputObject @($Executable, $Arguments) -Depth 4 -Compress)
-    if ($Arguments[0] -in @('tools/contracts/version.py', 'tools/contracts/generate.py', 'tools/ci/preflight.py')) {
-        & $script:originalInvokeChecked $Executable $Arguments
-    } else {
-        $global:LASTEXITCODE = 0
-    }
-}
-''', encoding='utf-8')
-        (self.root/'debug/profiled/client-assets.ps1').write_text('param([string]$Python)\n', encoding='utf-8')
-        self.harness = self.root/'harness.ps1'
-        self.harness.write_text('''
-function docker {
-    Add-Content -LiteralPath $env:TEST_DEBUG_CALLS -Value (ConvertTo-Json -InputObject @('docker', @($args)) -Depth 4 -Compress)
-    $global:LASTEXITCODE = 0
-}
-function git {}
-function node {}
-function npm {}
-function Start-Process { param([string]$FilePath) }
-$options = @{}
-if ($env:TEST_DEBUG_VALIDATE -eq '1') { $options.ValidateOnly = $true }
-if ($env:TEST_DEBUG_FOCUSED -eq '1') { $options.FocusedCheck = $true }
-& $env:TEST_DEBUG_SCRIPT $env:TEST_DEBUG_OPERATION @options
-exit $LASTEXITCODE
-''', encoding='utf-8')
+    def test_corrupt_cached_bootstrap_is_refused_before_extraction_or_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);folder=root/'debug/profiled';folder.mkdir(parents=True)
+            shutil.copyfile(ROOT/'debug/profiled/python.ps1',folder/'python.ps1')
+            runtime=root/'.dev/profiled';runtime.mkdir(parents=True)
+            for architecture in ('amd64','arm64'):
+                (runtime/('python-3.14.10-embed-'+architecture+'.zip')).write_bytes(b'corrupt untrusted archive')
+            command=". '"+str(folder/'python.ps1')+"'; Install-DebugPython"
+            result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-Command',command],capture_output=True,text=True,timeout=30)
+            self.assertNotEqual(0,result.returncode)
+            self.assertIn('checksum mismatch',result.stderr)
+            self.assertEqual([],list(runtime.glob('extract-*')))
 
-    def manage(self, operation='restart', validate=False, focused=False):
-        log = self.root/'calls.jsonl'
-        env = dict(os.environ, TEST_DEBUG_SCRIPT=str(self.root/'debug/profiled/manage.ps1'),
-                   TEST_DEBUG_PYTHON=sys.executable, TEST_DEBUG_CALLS=str(log),
-                   TEST_DEBUG_OPERATION=operation, TEST_DEBUG_VALIDATE='1' if validate else '0',
-                   TEST_DEBUG_FOCUSED='1' if focused else '0')
-        result = subprocess.run([POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass',
-                                 '-File', str(self.harness)], cwd=self.root/'debug/profiled',
-                                # Regeneration now covers more than 1,500 bindings;
-                                # Windows process startup/antivirus can exceed 30s.
-                                env=env, capture_output=True, text=True, timeout=90)
-        calls = [json.loads(line) for line in log.read_text(encoding='utf-8-sig').splitlines()]
-        return result, calls
-
-    def test_start_and_restart_repair_crlf_and_stale_bindings_before_install_or_deploy(self):
-        binding = self.root/'packages/contracts/typescript/src/index.ts'
-        binding.parent.mkdir(parents=True, exist_ok=True)
-        for operation in ('start', 'restart'):
-            with self.subTest(operation=operation):
-                for path, original in zip(self.apis, self.api_originals):
-                    path.write_bytes(original.replace(b'\n', b'\r\n'))
-                binding.write_text('// stale binding\n', encoding='utf-8')
-                (self.root/'calls.jsonl').unlink(missing_ok=True)
-                result, calls = self.manage(operation)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn('Early release metadata and generated-binding gates passed', result.stdout)
-                self.assertEqual([path.read_bytes() for path in self.apis], self.api_originals)
-                self.assertIn(b'export interface ContractSet', binding.read_bytes())
-                arguments = [call[1] for call in calls]
-                repair = arguments.index(['tools/contracts/version.py'])
-                self.assertEqual(arguments[repair:repair + 3], [
-                    ['tools/contracts/version.py'], ['tools/contracts/generate.py'],
-                    ['tools/ci/preflight.py']])
-                self.assertLess(repair + 2, arguments.index(['ci', '--ignore-scripts']))
-                self.assertTrue(any(call[0] == 'docker' and 'up' in call[1] for call in calls))
-
-    def test_focused_start_builds_and_starts_without_unrelated_suites(self):
-        result, calls = self.manage('start', focused=True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        arguments = [call[1] for call in calls]
-        tests = [args for args in arguments if 'unittest' in args]
-        self.assertEqual(tests, [['-m', 'unittest', 'discover', '-s', 'tests/ci', '-p', 'test_debug_management.py', '-v']])
-        self.assertFalse(any('browser-downloads.mjs' in ' '.join(args) or 'test' in args for args in arguments))
-        self.assertTrue(any(args[0] == 'tools/quickstart/check.py' and '--build-only' in args for args in arguments))
-        self.assertTrue(any(call[0] == 'docker' and 'up' in call[1] for call in calls))
-
-    def test_generation_failure_stops_before_dependency_install_or_container_replacement(self):
-        schema = self.root/'packages/contracts/schemas/v1/invalid.schema.json'
-        schema.write_text('{"$defs":{"Invalid":{"type":"object","allOf":[]}}}\n', encoding='utf-8')
-        result, calls = self.manage()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn('Unsupported structural schema keywords', result.stderr)
-        self.assertIn('Deployment was not continued', result.stdout)
-        self.assertEqual(calls[-1][1], ['tools/contracts/generate.py'])
-        self.assertFalse(any(call[0] in ('npm', 'npx') or 'up' in call[1] for call in calls))
-
-    def test_stop_and_validate_leave_metadata_untouched(self):
-        originals = [path.read_bytes() for path in self.apis]
-        for operation, validate in (('stop', False), ('restart', True)):
-            with self.subTest(operation=operation, validate=validate):
-                (self.root/'calls.jsonl').unlink(missing_ok=True)
-                result, calls = self.manage(operation, validate)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertEqual([path.read_bytes() for path in self.apis], originals)
-                self.assertTrue(all(call[0] == 'docker' for call in calls))
+    def test_wrapper_delegates_from_any_working_directory_and_preserves_exit_status(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);folder=root/'debug/profiled';folder.mkdir(parents=True)
+            shutil.copyfile(ROOT/'debug/profiled/manage.ps1',folder/'manage.ps1')
+            (folder/'python.ps1').write_text('function Find-DebugPython { return $env:TEST_DEBUG_PYTHON }',encoding='utf-8')
+            (folder/'stack.py').write_text('import json,sys; print(json.dumps(sys.argv[1:])); sys.exit(7 if sys.argv[1]=="stop" else 0)',encoding='utf-8')
+            for operation,extra,expected in [('start',[],'start'),('stop',[],'stop'),('restart',[],'restart'),('start',['-ValidateOnly'],'validate')]:
+                with self.subTest(operation=operation,extra=extra):
+                    unattended=['-WithoutOllama','-WithoutMonitoring'] if operation=='start' and not extra else []
+                    result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(folder/'manage.ps1'),operation,*extra,*unattended],cwd=root,env=dict(os.environ,TEST_DEBUG_PYTHON=sys.executable),capture_output=True,text=True,timeout=30)
+                    self.assertEqual(7 if expected=='stop' else 0,result.returncode,result.stderr)
+                    self.assertEqual([expected],json.loads(result.stdout))
 
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__=='__main__':unittest.main()

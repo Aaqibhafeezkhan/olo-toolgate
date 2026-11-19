@@ -34,6 +34,13 @@ public class WorkflowProfileResource {
         if (document == null || document.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 262144) throw Failure.validation();
         return document;
     }
+    @POST @Path("{profileId}/workflows/{workflowId}/runs") @Consumes("application/json")
+    public Response startRun(@PathParam("profileId") String profile,@PathParam("workflowId") String workflow,
+            @HeaderParam("Idempotency-Key") String key,String document) {
+        var actor=actors.management();
+        return reply(new WorkflowManualRuns(store,codec,Clock.systemUTC(),service(actor),keys.required())
+            .start(actor,profile,workflow,body(document),key,correlation.id()));
+    }
     @POST @Consumes("application/json")
     public Response upload(String document) {
         var actor = actors.management(); return reply(service(actor).upload(actor, body(document), correlation.id()));
@@ -46,6 +53,10 @@ public class WorkflowProfileResource {
     @GET @Path("{profileId}/revisions/{digest}")
     public Response get(@PathParam("profileId") String id, @PathParam("digest") String digest) {
         var actor = actors.management(); return reply(service(actor).get(actor, id, digest));
+    }
+    @GET @Path("{profileId}/revisions/{digest}/diagnostics")
+    public Response diagnostics(@PathParam("profileId") String id, @PathParam("digest") String digest) {
+        var actor = actors.management(); return reply(service(actor).diagnostics(actor, id, digest));
     }
     @GET @Path("published")
     public Response published(@QueryParam("afterProfileId") String after, @QueryParam("limit") @DefaultValue("50") int limit) {

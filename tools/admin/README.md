@@ -81,7 +81,7 @@ a successful enablement as device approval or package execution permission.
 ## Workflow provisioning APIs and current limits
 
 Fresh profiled installations start blank with one password-protected admin.
-Use **Workflows → Import workflow .olo** for bundle transfer. The backend still
+Use **Workflows â†’ Import workflow .olo** for bundle transfer. The backend still
 has separate package upload, referenced-data review, workflow staging/review,
 provisioning, graph preparation and publication operations. `control.py` can
 call these existing APIs with bounded JSON input and exact `.olotool` bytes:
@@ -103,3 +103,32 @@ automatically apply referenced configuration/restore connections. It does not
 accept `.olo` as an `.olotool` package. That durable orchestration remains open
 in the [hot-swap plan](../../docs/plans/workflow-profile-hot-swap.md). No script
 success should be interpreted as a runnable workflow or end-to-end acceptance.
+
+## Automated device policy and allocation
+
+`provision_devices.py` uses the same settings API as the Admin console's
+`#config-device` page. With a current administrator token and trusted CA:
+
+```powershell
+python tools/admin/provision_devices.py @api --owner admin --days 30
+python tools/admin/provision_devices.py @api --owner admin --days 30 --device DEVICE_ID --group GROUP_ID --wait-seconds 180
+```
+
+The first command explicitly enables tenant-wide automatic approval of new
+reachable enrollments, with accountable owner and bounded approval duration.
+It does not grant execution permission. The second waits for the named device,
+enables it if needed, then unions the requested enabled groups with its current
+membership using the latest revision. No arbitrary discovered device is silently
+allocated to a group. For an already pending named device, the script re-reads its enrollment review
+and submits an exact-key decision through the enrollment API before waiting. A
+changed key or ambiguous identity stops without approval. Read-only polling
+can wait for a not-yet-created endpoint; authorization failures are never retried.
+Membership/enablement mutations are not automatically retried.
+
+`import_workflow.py WORKFLOW.olo @api` orchestrates verified embedded package
+uploads, nonconflicting reference import, workflow staging/review, provisioning,
+graph preparation and readiness-gated publication. It refuses copied accounts,
+workload credentials and device allocations. Destination service bindings are
+created locally for referenced agents. It does not restart containers. This is
+not yet a durable server-owned deployment operation; see the workflow status for
+candidate-readiness isolation, cleanup and execution-finality limitations.

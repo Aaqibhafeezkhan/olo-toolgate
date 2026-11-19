@@ -24,6 +24,73 @@ struct Authorization {
     child: Option<String>,
 }
 impl AuthorizationPort for Authorization {
+    fn file_effect_begin(
+        &self,
+        intent: olo_toolgate_contracts::v2::NativeFileIntent,
+        ordinal: u64,
+    ) -> Call<'_, olo_toolgate_contracts::v2::NativeFileEffectGrant> {
+        Box::pin(async move {
+            let fence = self
+                .fencing
+                .lock()
+                .map_err(|_| Failure::Unavailable)?
+                .clone()
+                .ok_or(Failure::Unauthorized)?;
+            if crate::now() >= self.task.expires_at_unix_ms {
+                return Err(Failure::Expired);
+            }
+            let grant = self
+                .control
+                .native_file_begin(
+                    self.identity.clone(),
+                    olo_toolgate_contracts::v2::NativeFileEffectBegin {
+                        request_id: self.task.request_id.clone(),
+                        lease_id: self.task.lease_id.clone(),
+                        fencing_token: fence,
+                        ordinal,
+                        intent,
+                    },
+                )
+                .await?;
+            if crate::now() >= self.task.expires_at_unix_ms {
+                return Err(Failure::Expired);
+            }
+            Ok(grant)
+        })
+    }
+    fn file_effect_receipt(
+        &self,
+        grant: olo_toolgate_contracts::v2::NativeFileEffectGrant,
+        before: Option<String>,
+        after: String,
+    ) -> Call<'_, ()> {
+        Box::pin(async move {
+            let fence = self
+                .fencing
+                .lock()
+                .map_err(|_| Failure::Unavailable)?
+                .clone()
+                .ok_or(Failure::Unauthorized)?;
+            let ack = self
+                .control
+                .native_file_receipt(
+                    self.identity.clone(),
+                    olo_toolgate_contracts::v2::NativeFileEffectReceipt {
+                        request_id: self.task.request_id.clone(),
+                        lease_id: self.task.lease_id.clone(),
+                        fencing_token: fence,
+                        effect_id: grant.effect_id,
+                        before_sha256: before,
+                        after_sha256: after,
+                    },
+                )
+                .await?;
+            if !ack.accepted {
+                return Err(Failure::Unauthorized);
+            }
+            Ok(())
+        })
+    }
     fn revoked(&self) -> Call<'_, ()> {
         Box::pin(async {
             let accepted = self
@@ -153,6 +220,10 @@ async fn execute(
         .find(|r| r.id == registration.runtime_id)
         .ok_or(Failure::Unauthorized)?;
     let installed = crate::authorization_profile::managed_info(registration, runtime)?;
+    let file_scope = matches!(
+        registration.file_access.as_ref(),
+        Some(LocalFileAccess::Read | LocalFileAccess::Write)
+    );
     if installed.tool_digest != task.invocation.evaluation.tool_digest
         || installed.package_digest != task.invocation.evaluation.package_digest
     {
@@ -167,12 +238,43 @@ async fn execute(
         arguments: task.request.arguments,
     };
     let started = crate::now();
-    let result = tokio::select! {
+    let mut result = tokio::select! {
         _=cancelled.changed()=>Err(Failure::Revoked),
         outcome=tokio::time::timeout(std::time::Duration::from_millis(valid_until.saturating_sub(crate::now())),manager.invoke(input,valid_until))=>outcome.unwrap_or(Err(Failure::Expired)).map(|output|output.output),
     };
     let (frames, dropped) = manager.take_frames();
     manager.shutdown().await?;
+    // Only the protected owner, after child/broker termination, can close the scope.
+    let fence = auth
+        .fencing
+        .lock()
+        .map_err(|_| Failure::Unavailable)?
+        .clone();
+    if let Some(fence) = fence.filter(|_| file_scope) {
+        let closure = auth
+            .control
+            .native_file_close(
+                auth.identity.clone(),
+                olo_toolgate_contracts::v2::NativeFileScopeClosed {
+                    request_id: auth.task.request_id.clone(),
+                    lease_id: auth.task.lease_id.clone(),
+                    fencing_token: fence,
+                },
+            )
+            .await
+            .and_then(|ack| {
+                if ack.accepted {
+                    Ok(())
+                } else {
+                    Err(Failure::Unauthorized)
+                }
+            });
+        if result.is_ok() {
+            if let Err(error) = closure {
+                result = Err(error);
+            }
+        }
+    }
     forward_frames(&auth, frames, dropped).await;
     forward_span(&auth, started, result.is_ok()).await;
     result

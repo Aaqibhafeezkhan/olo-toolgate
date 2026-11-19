@@ -471,8 +471,10 @@ final class WorkflowProfilesTest {
             assertEquals(Set.of(200, 201), Set.of(a.get(15, java.util.concurrent.TimeUnit.SECONDS), b.get(15, java.util.concurrent.TimeUnit.SECONDS)));
         } finally { executor.shutdownNow(); }
     }
-    @Test void realDependencyChecksRequireVaultScopeAndCurrentAgentMembership() throws Exception {
-        var rig = rig(false); var deps = new WorkflowProfileDependencies(codec, java.time.Clock.systemUTC(), null, null, rig.tenant);
+    @Test void realDependencyChecksRequireVaultScopeAndCurrentAgentMembership() throws Exception { dependencyDiagnostics(false); }
+    @Test void postgresDependencyDiagnosticsAreTenantScopedAndCurrent() throws Exception { dependencyDiagnostics(true); }
+    private void dependencyDiagnostics(boolean postgres) throws Exception {
+        var rig = rig(postgres); var deps = new WorkflowProfileDependencies(codec, java.time.Clock.systemUTC(), null, null, rig.tenant);
         var service = new WorkflowProfiles(rig.store, codec, deps, keys()); var value = profile();
         value.putArray("packages").addObject().put("packageId", "examples.hotfolder-watch")
             .put("version", "0.1.0").put("source", "PREBUILT_CORE").put("required", true);
@@ -487,6 +489,17 @@ final class WorkflowProfilesTest {
             tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries)); return null;
         });
         String digest = node(service.upload(rig.admin, value.toString(), "stage")).path("profileDigest").asText();
+        var initialDiagnostics = node(service.diagnostics(rig.admin, "support", digest));
+        assertTrue(initialDiagnostics.path("blockers").toString().contains("Review this exact"));
+        assertTrue(initialDiagnostics.path("blockers").toString().contains("graph is not prepared"));
+        assertTrue(initialDiagnostics.path("blockers").toString().contains("missing vault secret model-key"));
+        assertTrue(initialDiagnostics.path("blockers").toString().contains("Packages have not been provisioned"));
+        assertEquals(digest, initialDiagnostics.path("profileDigest").asText());
+        var noAdmin = new DirectoryService.Actor(rig.tenant, DirectoryService.digest("not-admin"), true, false, "not-admin");
+        assertEquals(403, assertThrows(Failure.class, () -> service.diagnostics(noAdmin, "support", digest)).status());
+        var foreign = new DirectoryService.Actor(Tenants.id("foreign"), DirectoryService.digest("foreign-root"), true, false, "root");
+        assertTrue(Set.of(403, 404).contains(assertThrows(Failure.class, () -> service.diagnostics(foreign, "support", digest)).status()));
+        rig.store.transaction(rig.tenant, false, tx -> { assertNull(tx.workflowProfiles().publication("support")); return null; });
         service.review(rig.admin, "support", review(digest), "review");
         rig.store.transaction(rig.tenant, true, tx -> {
             tx.packages().saveProvisioning(new PackageStore.Provisioning("support", 1, digest, "{\"state\":\"READY\"}"));
@@ -497,6 +510,9 @@ final class WorkflowProfilesTest {
         new VaultService(rig.store, codec, keys).write(rig.admin,
             codec.json(Map.of("name", "model-key", "toolGroupId", "default-tools", "deviceGroupId", "default-devices", "value", "fixture-value")), "wrong-scope");
         assertEquals(409, assertThrows(Failure.class, () -> service.publish(rig.admin, "support", publish(digest, 0), "wrong-secret-scope")).status());
+        var wrongScope = node(service.diagnostics(rig.admin, "support", digest)).path("blockers").toString();
+        assertTrue(wrongScope.contains("different tool/device group scope"));
+        assertFalse(wrongScope.contains("fixture-value"));
         new VaultService(rig.store, codec, keys).write(rig.admin,
             codec.json(Map.of("name", "model-key", "toolGroupId", "model-tools", "deviceGroupId", "model-devices", "value", "fixture-value")), "secret");
         rig.store.transaction(rig.tenant, true, tx -> {
@@ -518,6 +534,7 @@ final class WorkflowProfilesTest {
         rig.store.transaction(rig.tenant, true, tx -> {
             tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker("worker-a", "a".repeat(64), "sha256:" + "b".repeat(64), List.of(graphDigest), System.currentTimeMillis()+60000), System.currentTimeMillis()); return null;
         });
+        assertTrue(node(service.diagnostics(rig.admin, "support", digest)).path("blockers").isEmpty());
         assertTrue(node(service.publish(rig.admin, "support", publish(digest, 0), "publish")).path("dependenciesReady").asBoolean());
         rig.store.transaction(rig.tenant, true, tx -> {
             tx.workflowRuns().reportWorker(new WorkflowRunStore.Worker("worker-a", "a".repeat(64), "sha256:" + "b".repeat(64), List.of(graphDigest), System.currentTimeMillis()-1), System.currentTimeMillis()); return null;
@@ -533,6 +550,7 @@ final class WorkflowProfilesTest {
             tx.save(before, new io.ololabs.toolgate.control.domain.Directory(before.revision() + 1, entries)); return null;
         });
         assertFalse(node(service.get(rig.admin, "support", digest)).path("dependenciesReady").asBoolean());
+        assertTrue(node(service.diagnostics(rig.admin, "support", digest)).path("blockers").toString().contains("not a member of configured agent group"));
         assertEquals(403, assertThrows(Failure.class, () -> rig.store.transaction(rig.tenant, false, tx -> service.published(tx, rig.tenant, "support"))).status());
     }
     @Test void privateDocumentsAreEncryptedBoundToTenantAndSurviveReadOnlyKeyRotation() throws Exception {

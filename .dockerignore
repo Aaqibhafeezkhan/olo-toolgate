@@ -1,8 +1,10 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
 .git
-profiles/bin
+bot/bin
 .dev
+debug/profiled/state
+debug/profiled/installation.env
 .data
 examples/langchain/.state
 deploy/compose/WorkflowStack/state

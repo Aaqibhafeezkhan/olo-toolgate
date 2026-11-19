@@ -1,20 +1,13 @@
 {
-  "integrityPassed": true,
-  "blankImageCheckPassed": true,
-  "coverageComplete": false,
-  "freshCaptureEntries": 49,
-  "requiredRoutes": 38,
-  "missingRoutes": [
-    "/console/#test"
-  ],
-  "missingStates": [
-    "screenshots/operator-invocation-detail.jpg",
-    "screenshots/operator-overview.jpg"
-  ],
-  "blockedReason": "Capture session ended before the remaining views; reload the tour to collect them",
-  "renderPauseSeconds": 2,
-  "deferredIssues": [
-    "https://github.com/olo-labs/olo-mono/issues/25",
-    "https://github.com/olo-labs/olo-mono/issues/26"
+  "capturedDate": "2026-11-19",
+  "inventory": "screenshots.json",
+  "scope": "Current OLO console route refresh and two-agent run in three cloud consoles; not all possible product states.",
+  "capturedEntries": 58,
+  "loadedConsoleRoutes": 44,
+  "acceptanceEvidence": "olo-2026-11/evidence.json",
+  "limitations": [
+    "No current independent-approval interaction or native desktop-client capture.",
+    "Older Operator Insights, Grafana and New Relic captures are historical, not this run.",
+    "Published development images remain unavailable; captures use the existing debug stack."
   ]
 }
