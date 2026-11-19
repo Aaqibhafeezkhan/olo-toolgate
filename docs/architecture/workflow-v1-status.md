@@ -1,6 +1,37 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## LangChain failed-device outcome repair — 2026-11-19
+
+Known tested base `aea889e5c379be24e27c87763a2e2f992914f5b5`.
+The published LangChain job `135626378539` failed after the device executed its
+read and Control rejected unqualified native scope closure. Failed/expired
+device results now retain `isError: true` and the fixed error code, then read
+the authenticated Control operation projection through the existing identity
+checks. Unknown effects remain non-retryable. Failure to read that projection
+still withholds the device result. This covers the normal MCP tools/call path.
+
+Source SHA-256 for `apps/gateway/src/mcp.rs` is
+`065450908542041be8c81f7bc66fff224757b10bd85f1124c1bb6565cd42d834`.
+Regression source `apps/gateway/tests/core.rs` is
+`862c87e922b6a2ad32832def2cd9fe61ca14abbb137d8b572580b7df9e8d219b`.
+Validation includes 36 LangChain management tests, five package tests and Rust
+format checking. The full repository check passed metadata/binding preflight
+and release-note validation, then stopped in the 564-case CI suite with nine
+errors and 11 skips on Windows, including symlink privilege and default-text
+encoding errors. A prior sandboxed attempt also had local HTTP transport
+failures. A full repository pass is not claimed. The pinned Rust container ran
+`cargo test -p olo-toolgate-gateway --locked` successfully, all 82 tests passed.
+The focused 42-case integration suite also passed independently, including the
+failed-device unknown outcome and unavailable-projection regression. Markdown
+links (391 files), staged PR policy and whitespace checks passed. Gitleaks
+reported no leaks in 4489 working source files.
+
+Native scope qualification/closure, business finality and hosted image acceptance
+remain outstanding. No workflow phase weight, baseline scope or denominator
+changes. Keep umbrella #297 draft. Next, rerun the published LangChain gate and
+complete the original native qualification and workflow acceptance matrices.
+
 ## Two-agent community demo and refreshed media — 2026-11-19
 
 Known tested base `41891b9e8528016fd1d2b4f4a4fee1b3b9a351e2`; eight-path

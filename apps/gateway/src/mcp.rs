@@ -775,13 +775,13 @@ async fn tools_call(
                 );
             }
             RemoteToolState::Failed | RemoteToolState::Expired => {
-                return Err(rpc_error(
-                    StatusCode::OK,
-                    id.clone(),
-                    -32000,
-                    "Local tool execution failed",
-                    json!({"code":response.record.error.unwrap_or(ErrorCode::Timeout),"requestId":context.request_id}),
-                ));
+                // Execution failure still needs Control's independently graded outcome.
+                // In particular, a closure refusal cannot hide an uncertain effect.
+                return Ok(json!({
+                    "content":[{"type":"text","text":"Local tool execution failed"}],
+                    "isError":true,
+                    "structuredContent":{"code":response.record.error.unwrap_or(ErrorCode::Timeout)}
+                }));
             }
             _ => {}
         }
