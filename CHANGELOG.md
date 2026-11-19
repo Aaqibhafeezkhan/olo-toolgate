@@ -6,6 +6,9 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Fix the LangChain package image to publish only the root Java SDK task and
+  enforce SDK isolation from unrelated Quarkus/analysis plugins during packaging.
+
 - Add the community pull-only three-service deployment at `deploy/docker/quickstart/dev`,
   sharing blank startup, private credentials and optional model/collector setup
   with the debug launcher. Keep separate installation ownership and configurable

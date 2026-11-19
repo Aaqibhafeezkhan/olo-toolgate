@@ -32,6 +32,11 @@ The package is built inside a pinned JDK container using the selected Quickstart
 CLI and this checkout's SDK source. No host JDK, Rust compiler or Marketplace
 account is needed. Keep the checkout and selected Quickstart/device versions aligned.
 
+The package builder requests the root-qualified `:publishJavaSdkLocally` task
+with the SDK isolation guard. SDK publication must not configure Control Plane
+or load its Quarkus/analysis plugins; dependency, compilation and package
+validation failures still stop the build.
+
 The local evaluation executor explicitly mounts the system Docker socket to run
 signed OCI packages. Tools run in separate confined containers with no socket or
 host mounts; they access files through the generic broker. The local registry is

@@ -1,6 +1,16 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## LangChain example package-build isolation — 2026-11-19
+
+Known base `e6d93675`; source hash and executed checks are in the workflow SDK
+repair checkpoint. Root-qualified SDK publication and the existing isolation
+guard avoid unrelated Control Plane plugin resolution. The real Docker build
+produces verified hot-folder tool/trigger packages; 13 focused checks pass.
+Trigger interfaces and the native-outcome refusal gate are unchanged. Hosted
+reevaluation and full module/M12 matrices remain outstanding. **27% remains
+earned**; no module scope, Done-when, weight or denominator changes.
+
 ## Published-image launcher integration — 2026-11-19
 
 Known base `ed13f0f7`; source digest/checks are in the current workflow checkpoint.

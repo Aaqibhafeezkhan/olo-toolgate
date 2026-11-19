@@ -1,6 +1,30 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## LangChain SDK package-build isolation repair — 2026-11-19
+
+Known tested base `e6d93675afbb9246d8798609c9567f956e1b6078`; changed
+`examples/langchain/package.Dockerfile` SHA-256 `389cb964d692d522f5e5ef09a5c4995c12e6588aed28b83db34f3ef07fb9da0c`
+(`build/langchain-sdk-ci-fix-source.json`). Hosted run 44469199487/job
+135424233596 failed before demo startup because unqualified SDK task selection
+configured Control Plane and attempted unrelated Quarkus 3.40.1 resolution.
+The package builder now explicitly requests root `:publishJavaSdkLocally` and
+reuses `tools/ci/sdk-isolation.init.gradle` to reject application/analysis plugin
+loading in this SDK-only stage. The native-outcome refusal gate is unchanged.
+
+Executed: the old command reproducibly fails on Control Plane configuration
+under the isolation guard; the corrected actual Docker package build succeeds,
+including 62 SDK publication tasks and eight example packaging tasks. Both
+`examples.hotfolder` and `examples.hotfolder-watch` 0.1.0 archives validate their
+complete content checksums/current manifest format. Thirteen focused Gradle/
+trigger-package checks pass. Evidence: `build/langchain-sdk-unqualified-reproduction.log`,
+`build/langchain-sdk-ci-fixed-build.log`,
+`build/langchain-sdk-ci-fixed-package-evidence.json`. This is build-path repair,
+not new native business finality or full published-stack acceptance. Hosted
+LangChain/aggregate checks must rerun after push. No authority implementation,
+wire/schema, module scope, roadmap denominator or compatibility support changes.
+**Baseline remains 0/100; no phase credit.**
+
 ## Published-image community launcher and current OLO captures — 2026-11-19
 
 Known tested base `ed13f0f7087c4377e3cd0c0b039ee65719b93823`; non-document
