@@ -12,6 +12,11 @@ Quickstart, LangGraph and Device; Ollama/TLS and collector are optional companio
 | LangSmith | [LangSmith](https://smith.langchain.com/) | Settings → API Keys → Create API Key. [Guide](https://docs.langchain.com/langsmith/create-account-api-key) |
 | Phoenix | [Phoenix Cloud](https://app.phoenix.arize.com/) | Space → Settings; API key and collector endpoint. [Guide](https://arize.com/docs/phoenix/prompt-engineering/quickstart-prompts/quickstart-prompts-ui) |
 
+For the [published-image launcher](../../deploy/docker/quickstart/dev/README.md),
+use `deploy/docker/quickstart/dev/start.bat -WithMonitoring` and that folder's
+`credentials/observability.json`. Do not copy another installation's generated
+collector files or Admin custody. Provider fields/URLs below are shared.
+
 Run `debug\profiled\start.bat`, choose collector **1**, or run
 `debug\profiled\start-monitoring.bat`. First use creates private
 `debug/profiled/credentials/observability.json`. Fill the destinations you want

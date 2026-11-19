@@ -10,7 +10,8 @@ import subprocess
 import sys
 import urllib.parse
 
-HERE=Path(__file__).resolve().parent
+SOURCE=Path(__file__).resolve().parent
+HERE=SOURCE
 
 
 def endpoint(value,suffix):
@@ -60,11 +61,15 @@ def configuration(settings,*,allow_local=False):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('operation',choices=['configure','start','stop']);args=parser.parse_args()
-    profiled=HERE.parent;root=profiled.parents[1];private=profiled/'credentials';sys.path.insert(0,str(root))
-    compose=['docker','compose','-p','toolgate-profiled-observability','-f',str(HERE/'compose.yaml')]
-    def run(command,**options):return subprocess.run(command,cwd=root,check=True,**options)
+    profiled=Path(os.environ.get('OLO_STACK_HOME',str(HERE.parent))).resolve();root=SOURCE.parents[2];private=profiled/'credentials';sys.path.insert(0,str(root))
+    sys.path.insert(0,str(SOURCE.parent))
+    import stack
+    project=stack.PROJECT
+    process_environment={**os.environ,'OLO_STACK_CREDENTIALS':str(private),'OLO_STACK_PROJECT':project}
+    compose=['docker','compose','-p',project+'-observability','-f',str(HERE/'compose.yaml')]
+    def run(command,**options):return subprocess.run(command,cwd=root,check=True,env=process_environment,**options)
     if args.operation=='stop':run(compose+['stop']);return
-    private.mkdir(mode=0o700,exist_ok=True)
+    stack.secure_directory(private)
     def write(name,raw):
         with open(private/name,'w',encoding='utf-8',opener=lambda p,f:os.open(p,f,0o600)) as stream:stream.write(raw)
     settings_path=private/'observability.json'
@@ -80,7 +85,7 @@ def main():
     if args.operation=='configure':return
     run(compose+['run','--rm','--no-deps','collector','validate','--config=/etc/otelcol/config.json'])
     run(compose+['up','-d'])
-    spec=importlib.util.spec_from_file_location('profiled_stack',profiled/'stack.py');stack=importlib.util.module_from_spec(spec);spec.loader.exec_module(stack)
+    # Stack module inherits the selected installation and pull-only image mode.
     stack.check_owned();current=json.loads((profiled/'state/compose.json').read_text(encoding='utf-8'))
     selected=stack.images();base=current['services']['quickstart']['environment']['TOOLGATE_CONTROL_CLIENT_IMAGES_BASE']
     command=stack.compose(stack.definition(selected,base))

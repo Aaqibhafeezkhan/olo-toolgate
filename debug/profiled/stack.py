@@ -12,10 +12,17 @@ import time
 import urllib.request
 import uuid
 
-HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[1]
+SOURCE=Path(__file__).resolve().parent
+ROOT=SOURCE.parents[1]
+HERE=Path(os.environ.get('OLO_STACK_HOME',str(SOURCE))).resolve()
 STATE=HERE/'state'
-PROJECT='toolgate-profiled'
+PROJECT=os.environ.get('OLO_STACK_PROJECT','toolgate-profiled')
+HTTP_PORT=int(os.environ.get('OLO_STACK_HTTP_PORT','18090'))
+TLS_PORT=int(os.environ.get('OLO_STACK_TLS_PORT','18450'))
+REGISTRY_PORT=int(os.environ.get('OLO_STACK_REGISTRY_PORT','18552'))
+if not all(1024<=port<=65535 for port in (HTTP_PORT,TLS_PORT,REGISTRY_PORT)) or len({HTTP_PORT,TLS_PORT,REGISTRY_PORT})!=3:
+    raise ValueError('Use three distinct unprivileged installation ports')
+if not __import__('re').fullmatch('[a-z][a-z0-9-]{0,62}',PROJECT):raise ValueError('Invalid installation project')
 BASE='eclipse-temurin@sha256:000fd431958bc81a24abe1e8e5f0f0fd3ae365a594bd50aadb20696805f9408c'
 
 
@@ -73,8 +80,17 @@ def image_tag(module):
     return 'olo-toolgate-'+module+':profiled-'+digest.hexdigest()[:20]
 
 
-def images():
+def images(*,validate_only=False):
+    if os.environ.get('OLO_STACK_IMAGE_MODE')=='published':
+        import re
+        selected={key:os.environ.get('OLO_STACK_'+key.upper()+'_IMAGE','') for key in ('quickstart','device','runtime')}
+        for image in selected.values():
+            if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9./_:@-]{0,511}',image) or (':' not in image and '@sha256:' not in image):
+                raise ValueError('Set explicit application image tags or digests')
+            if not validate_only and not image_exists(image):run(['docker','pull',image])
+        return selected
     selected={module:image_tag(module) for module in ('quickstart','device','runtime')}
+    if validate_only:return selected
     for module,image in selected.items():
         if image_exists(image):
             print('Reusing '+module+' image '+image,flush=True);continue
@@ -96,14 +112,18 @@ def images():
     return selected
 
 
-def private(path,data):
-    path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+def secure_directory(folder):
+    folder.mkdir(parents=True,exist_ok=True,mode=0o700)
     if os.name=='nt':
         account=run(['whoami','/user','/fo','csv','/nh'],capture_output=True,text=True).stdout
         sid=next(csv.reader(account.strip().splitlines()))[-1]
         if not sid.startswith('S-1-') or any(c not in 'S-0123456789' for c in sid):raise ValueError('Cannot resolve private-folder owner')
-        run(['icacls',str(path.parent),'/inheritance:r','/grant:r','*'+sid+':(OI)(CI)F'],capture_output=True,text=True)
-    else:path.parent.chmod(0o700)
+        run(['icacls',str(folder),'/inheritance:r','/grant:r','*'+sid+':(OI)(CI)F'],capture_output=True,text=True)
+    else:folder.chmod(0o700)
+
+
+def private(path,data):
+    secure_directory(path.parent)
     with open(path,'x',encoding='utf-8',opener=lambda p,f:os.open(p,f,0o600)) as stream:stream.write(data)
 
 
@@ -117,7 +137,7 @@ def sync_credentials(command,timeout=180):
     folder=HERE/'credentials/admin'
     password_file=folder/'password.txt'
     candidate=password_file.read_text(encoding='utf-8-sig').rstrip('\r\n') if password_file.exists() else None
-    script=(HERE/'credential-state.py').read_text(encoding='utf-8')
+    script=(SOURCE/'credential-state.py').read_text(encoding='utf-8')
     deadline=time.monotonic()+timeout
     while True:
         result=subprocess.run(command+['exec','-T','quickstart','/opt/quickstart-python/bin/python','-c',script],
@@ -143,18 +163,18 @@ def sync_credentials(command,timeout=180):
 
 def definition(selected,base=None):
     owner={'io.ololabs.toolgate.profiled-root':str(HERE),'io.ololabs.toolgate.profiled-format':'2'}
-    control='https://localhost:18450'
+    control=f'https://localhost:{TLS_PORT}'
     secure=dict(read_only=True,cap_drop=['ALL'],security_opt=['no-new-privileges:true'])
     services={
         'quickstart':dict(image=selected['quickstart'],user='0:0',
             entrypoint=['/opt/quickstart-python/bin/python','/opt/quickstart/workflow_installation.py'],
-            ports=['127.0.0.1:18090:8080','127.0.0.1:18450:8443','127.0.0.1:18552:18552'],
+            ports=[f'127.0.0.1:{HTTP_PORT}:8080',f'127.0.0.1:{TLS_PORT}:8443',f'127.0.0.1:{REGISTRY_PORT}:18552'],
             environment={'TOOLGATE_QUICKSTART_WORKFLOW_STACK':'true','TOOLGATE_QUICKSTART_ADMIN_ONLY':'true','TOOLGATE_DISABLE_ADMIN_PASSWORD':'false',
                 'TOOLGATE_CONTROL_PROFILE_PATH':'','TOOLGATE_CONTROL_CORE_PACKAGES_LOCK_PATH':'',
                 'TOOLGATE_TRIGGERS_CONTROL_CORE_ENABLED':'true',
                 'TOOLGATE_QUICKSTART_DATABASE_MODE':'sqlite','TOOLGATE_QUICKSTART_CLIENT_CREDENTIALS':'true',
                 'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL':control,'TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL':control,
-                'TOOLGATE_CONTROL_ENDPOINT_CONSOLE_URL':'http://127.0.0.1:18090',
+                'TOOLGATE_CONTROL_ENDPOINT_CONSOLE_URL':f'http://127.0.0.1:{HTTP_PORT}',
                 'TOOLGATE_CONTROL_RUNTIME_BUILDER_ORIGIN':'https://localhost:19460',
                 'TOOLGATE_CONTROL_RUNTIME_BUILDER_IDENTITY_PATH':'/custody/control/identity.p12',
                 'TOOLGATE_CONTROL_RUNTIME_BUILDER_PASSWORD_PATH':'/custody/control/password',
@@ -166,10 +186,11 @@ def definition(selected,base=None):
                 'TOOLGATE_CONTROL_CLIENT_IMAGES_PLATFORMS':'LINUX'},
             volumes=['data:/data','custody:/custody','registry:/registry'],tmpfs=['/tmp:rw,noexec,nosuid,size=128m,uid=65532,gid=65532'],
             restart='unless-stopped',stop_grace_period='35s',cap_add=['CHOWN','FOWNER','DAC_OVERRIDE','SETUID','SETGID'],**secure),
-        'device':dict(image=selected['device'],hostname='toolgate-profiled-device',
+        'device':dict(image=selected['device'],hostname=PROJECT+'-device',
+            entrypoint=['python3','-u','/opt/toolgate/installation_device.py'] if os.environ.get('OLO_STACK_IMAGE_MODE')=='published' else None,
             depends_on={'quickstart':{'condition':'service_healthy'}},
-            environment={'TOOLGATE_DEVICE_UPSTREAM':'quickstart','TOOLGATE_DEVICE_HTTP_PORT':'18090',
-                         'TOOLGATE_DEVICE_TLS_PORT':'18450','TOOLGATE_DEVICE_WAIT_TIMEOUT':'0'},
+            environment={'TOOLGATE_DEVICE_UPSTREAM':'quickstart','TOOLGATE_DEVICE_HTTP_PORT':str(HTTP_PORT),
+                         'TOOLGATE_DEVICE_TLS_PORT':str(TLS_PORT),'TOOLGATE_DEVICE_WAIT_TIMEOUT':'0'},
             volumes=['device-config:/etc/olo-toolgate','device-state:/var/lib/olo-toolgate','files:/var/lib/olo-toolgate/files',
                      dict(type='volume',source='custody',target='/installation-trust',read_only=True,volume=dict(subpath='device')),
                      '/var/run/docker.sock:/var/run/docker.sock'],
@@ -194,14 +215,14 @@ def registry_base(command):
     deadline=time.monotonic()+90
     while True:
         try:
-            with urllib.request.urlopen('http://localhost:18552/v2/',timeout=2):break
+            with urllib.request.urlopen(f'http://localhost:{REGISTRY_PORT}/v2/',timeout=2):break
         except OSError:
             if time.monotonic()>deadline:raise ValueError('Embedded registry unavailable')
             time.sleep(1)
     if not image_exists(BASE):run(['docker','pull','--platform','linux/amd64',BASE])
-    target='localhost:18552/toolgate/java-base:approved'
+    target=f'localhost:{REGISTRY_PORT}/toolgate/java-base:approved'
     run(['docker','tag',BASE,target]);run(['docker','push',target])
-    request=urllib.request.Request('http://localhost:18552/v2/toolgate/java-base/manifests/approved',
+    request=urllib.request.Request(f'http://localhost:{REGISTRY_PORT}/v2/toolgate/java-base/manifests/approved',
         headers={'Accept':'application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json'})
     with urllib.request.urlopen(request,timeout=20) as response:
         return 'toolgate/java-base@sha256:'+hashlib.sha256(response.read()).hexdigest()
@@ -215,12 +236,12 @@ def provision_runtime(command):
     def request(path,body,token=None):
         headers={'Content-Type':'application/json'}
         if token:headers['Authorization']='Bearer '+token
-        query=urllib.request.Request('http://127.0.0.1:18090'+path,json.dumps(body).encode(),headers,method='POST')
+        query=urllib.request.Request(f'http://127.0.0.1:{HTTP_PORT}'+path,json.dumps(body).encode(),headers,method='POST')
         with opener.open(query,timeout=20) as response:return json.load(response)
     deadline=time.monotonic()+180
     while True:
         try:
-            with opener.open('http://127.0.0.1:18090/health/ready',timeout=3) as response:
+            with opener.open(f'http://127.0.0.1:{HTTP_PORT}/health/ready',timeout=3) as response:
                 if response.status==200:break
         except OSError:
             if time.monotonic()>deadline:raise ValueError('Quickstart API readiness unavailable; credentials preserved')
@@ -230,6 +251,19 @@ def provision_runtime(command):
     run(command+['exec','-T','--user','0:0','quickstart','/opt/quickstart-python/bin/python',
         '/opt/quickstart/workflow_installation.py','provision'],input=json.dumps(credential),text=True)
     print('Runtime service credential provisioned by operator API script; Admin password unchanged.',flush=True)
+
+
+def operator_client():
+    from tools.admin.control import Control
+    folder=HERE/'credentials/admin'
+    password=(folder/'password.txt').read_text(encoding='utf-8-sig').rstrip('\r\n')
+    request=urllib.request.Request(f'http://127.0.0.1:{HTTP_PORT}/api/quickstart/v1/login',
+        json.dumps(dict(username='admin',password=password)).encode(),{'Content-Type':'application/json'},method='POST')
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(request,timeout=20) as response:token=json.load(response)['accessToken']
+    pending=folder/('operator.'+uuid.uuid4().hex+'.next');private(pending,token)
+    path=folder/'operator.token';os.replace(pending,path)
+    return Control(f'https://127.0.0.1:{TLS_PORT}',path,folder/'gateway-ca.crt')
 
 
 def check_owned():
@@ -273,7 +307,7 @@ def main():
             sync_credentials(command);provision_runtime(command)
         return
     if args.operation=='validate':
-        document=definition({key:image_tag(key) for key in ('quickstart','device','runtime')})
+        document=definition(images(validate_only=True))
         run(['docker','compose','-p',PROJECT,'-f','-','config','--quiet'],input=json.dumps(document),text=True);return
     check_owned()
     existing=STATE/'compose.json'
@@ -289,7 +323,7 @@ def main():
     provision_runtime(command)
     command=compose(definition(selected,base))
     run(command+['up','-d','--no-recreate','--pull','never'])
-    print('Blank console: http://127.0.0.1:18090/console/; existing installations preserve their profiles.',flush=True)
+    print(f'Blank console: http://127.0.0.1:{HTTP_PORT}/console/; existing installations preserve their profiles.',flush=True)
     sync_credentials(command)
 
 

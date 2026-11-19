@@ -23,10 +23,10 @@ readiness, see [current limits](#production-and-security-status).
 [Enterprise evaluation](docs/enterprise-access-control/README.md) ·
 [Build a tool](TOOL-SDK-GUIDE.md) · [Contribute](CONTRIBUTING.md)
 
-## Why ToolGate
+## Why OLO
 
 AI agents act through tools: they write files, call APIs and change systems. Each
-tool call crosses a trust boundary. ToolGate sits on that boundary and decides, at
+tool call crosses a trust boundary. OLO ToolGate sits on that boundary and decides, at
 the moment of the call, whether it may proceed. The executor cannot act without
 that decision.
 
@@ -47,34 +47,57 @@ that decision.
 
 ## Quickstart
 
-Quickstart is a local, single-node evaluation. It runs Control, Gateway, the console
-and local execution in one container with SQLite.
+OLO's bot stack has three persistent core services: **Quickstart**, **LangGraph**
+and **Device**. Quickstart contains Gateway, backend, Admin UI and SQLite;
+LangGraph runs the configured graph; the connected device runs tools/triggers.
+Optional Ollama/TLS and observability companions are separate. Package executors
+may create additional containers.
 
-**Prerequisites:** Docker with Compose, and Git.
+**Use the current branch today, from source:** Docker builds the applications;
+no host Node, Java or Rust toolchain is required. On Windows the launcher also
+bootstraps private Python if needed.
 
-```bash
+```powershell
 git clone https://github.com/olo-labs/olo-toolgate.git
-cd olo-toolgate/deploy/compose/QuickStart
-sh manage.sh deploy        # Windows: .\manage.ps1 deploy
+cd olo-toolgate\debug\profiled
+.\start.bat
 ```
 
-The helper creates `.env` from `.env.example` on first run and keeps the data volume
-across restarts. The default image, `ololab/olo-toolgate-quickstart:dev`, is a mutable
-development tag, so its version can change between deployments; check the
-version and build on the console's **About** page after deployment. For a
-reproducible evaluation, copy `.env.example` to `.env` first and set `QUICKSTART_IMAGE`
-to a versioned tag or an image digest (`ololab/olo-toolgate-quickstart@sha256:…`); see
-[development releases](docs/development/development-releases.md).
+**Deploy published development images:** the community launcher is prepared at
+[`deploy/docker/quickstart/dev`](deploy/docker/quickstart/dev/README.md).
+The new matching `dev` containers are **not published yet**. Once available,
+from the repository root:
 
-**What you get:** the console at `http://localhost:8080/console/`, with separate
-`admin`, `reviewer-1` and `reviewer-2` accounts. Their generated passwords are in the
-container's private `/data/credentials.json`; see [first login](docs/getting-started/first-login.md).
+```powershell
+cd deploy\docker\quickstart\dev
+.\start.bat
+# Linux/macOS with Python 3.11+: sh start.sh
+```
 
-**What you still do:** a fresh installation runs nothing. Tools and the local agent
-start disabled with zero runtime rights, by design. Follow
-[your first tool](docs/getting-started/first-tool.md) to enroll a device, grant
-access and make a governed call. The full walkthrough is in the
-[Quickstart guide](docs/getting-started/one-minute-quickstart.md).
+It reuses/pulls `ololab/olo-toolgate-quickstart`,
+`ololab/olo-toolgate-langgraph-runtime` and `ololab/olo-toolgate-device` images,
+without compiling OLO. Use matching versioned tags/digests for repeatability;
+missing/incompatible images fail rather than falling back to a source build.
+Both launchers ask independently about local Ollama and the collector.
+[Deployment settings, ports, credentials and stop/restart](deploy/docker/quickstart/dev/README.md).
+
+Open **http://127.0.0.1:18090/console/**. A fresh installation has the initial
+`admin` login and no imported bot. Its password is in `credentials/admin/password.txt`
+under the launcher folder. Restarts preserve the account and storage. The two
+launchers use separate projects/volumes; stop the other one or select different
+ports before using their shared defaults.
+
+Import a self-contained `.olo` in **Bots**; approve/enable the destination device,
+assign the bot's groups and provide the model's local vault secret. Resolve the
+red readiness bullets, review/provision/prepare/publish, then click **▶ Run** or
+place the file described in the bot's README. Containers and Admin credentials
+stay unchanged during bot switching; input/output folders remain your responsibility.
+
+Start with [community help](docs/help/README.md),
+[the seven file examples and two text bots](bot/README.md),
+[device setup](docs/help/device.md), [models](docs/help/models.md) and
+[observability](docs/help/observability.md). The older single-container
+[ToolGate-only Quickstart](deploy/compose/QuickStart/README.md) remains separate.
 
 ## Architecture
 
@@ -116,8 +139,18 @@ cached policy. See [architecture](ARCHITECTURE.md),
 
 ## Capabilities
 
+**OLO Orchestration** defines bots, agent prompts, JSON-configured graphs,
+trigger mappings and model order. **OLO ToolGate** governs the tools and devices
+those runs can use. Administrator management rights do not replace current
+agent/service grants or execution authorization.
+
 | Capability | What it does | Status |
 |---|---|---|
+| [Portable bots](docs/help/run-bots.md) | Import/export one `.olo` with its referenced configuration and exact tool/trigger packages | Current development branch; published images pending |
+| [Graph and agent authoring](docs/help/author-bots.md) | JSON editors for graph configuration, agents, prompts, model groups and trigger mappings | Current development branch; full workflow roadmap qualification pending |
+| [Manual and triggered runs](docs/help/run-bots.md) | Published bot Run input, durable progress/result and device trigger dispatch | Nine local examples accepted; full distributed matrix pending |
+| [Model routing](docs/help/models.md) | File agents use OLO QLoRA then Qwen3; other agents use Qwen3; premium OpenRouter is unattached standby | Real local-model acceptance; no automatic paid calls |
+| [Workflow observability](docs/help/observability.md) | Optional collector to Langfuse, LangSmith and Phoenix with content-free structural spans | Three-cloud local acceptance; installation configuration |
 | [MCP governance](docs/gateway/mcp-proxy.md) | Put existing MCP servers behind ToolGate policy, approval and audit without changing them | Available |
 | [Runtime policy](docs/security/README.md) | ALLOW / ASK / BLOCK on every tool invocation, against current authority | Available |
 | [Delegated authority](docs/security/enterprise-access-control.md) | Constrain what an agent may do on behalf of a person or another agent | Available |
@@ -139,136 +172,80 @@ Details: [MCP proxy guide](docs/gateway/mcp-proxy.md).
 
 ## See it work
 
-<p align="center">
-  <img src="docs/media/audit-flow.gif" width="100%" alt="Audit flow: requests, independent approval, outcomes, Analytics tool calls and Operator Insights">
-</p>
+These are actual **November 19, 2026** captures from the running debug stack,
+using the current OLO Admin UI and real local Ollama inference. The configured
+bots, policies and device are demonstration data, not fresh-install defaults.
+They are not screenshots of the unpublished Docker deployment.
+[Capture details and originals](docs/media/olo-2026-11/README.md).
 
-**Audit, approvals and tool calls.** A live remediation call waits on an `ASK`
-policy, an independent reviewer checks the exact invocation, and the approved call
-resumes through ToolGate into its outcome, audit trail and Analytics. The example
-uses Qwen2.5 7B through Ollama; scripted acceptance traffic is labelled.
+### One workspace, two sections
 
-> 💡 **Tip:** For individual, high-resolution step frames or manual navigation, browse the
-> [Step-by-Step Tour Guide](docs/media/TOURS.md). Every snapshot is in the repository:
-> console and operator screens in [`docs/media/screenshots`](docs/media/screenshots) and
-> device/client captures in [`docs/media`](docs/media).
+![OLO overview with Orchestration and ToolGate navigation](docs/media/olo-2026-11/overview.png)
+
+The console puts **Bots** below Overview and **Agents** directly below Bots.
+OLO ToolGate groups tools, devices, access and audit controls in the same workspace.
+
+### Import, publish and run bots
+
+![Published OLO bots and their Run actions](docs/media/olo-2026-11/bots.png)
+
+A `.olo` carries the bot and referenced packages/configuration. Review its exact
+revision, prepare the graph and dependencies, then publish. Persistent red bullets
+explain missing dependencies. Imports retain destination credentials and device
+membership and never clean your hot folders.
+
+### Follow a real run to its result
+
+![Successful OLO bot run with agent/model progress and a real Ollama summary](docs/media/olo-2026-11/bot-result.png)
+
+Click **▶ Run**, enter the input expected by that bot, and follow queue, agent,
+model and node progress through the terminal result. File bots can instead start
+from a configured device watcher. Seven device/file examples and both text bots
+have local end-to-end acceptance; model output quality and production reliability
+are separate from successful execution.
 
 <details>
-<summary><strong>💻 Devices and device client</strong>: enroll, verify and approve a device</summary>
-<br>
+<summary><strong>Agents, devices and trigger assignment administration</strong></summary>
 
-<p align="center">
-  <img src="docs/media/device-flow.gif" width="100%" alt="Device flow: native client, enrollment, fingerprint review, approval, connection, activity log and device administration">
-</p>
+![OLO agents and their governed identities](docs/media/olo-2026-11/agents.png)
 
-**What to look for in the loop:**
+Agent definitions select prompts, model groups and output schemas. Runtime grants
+remain separate from the administrator's ability to configure a bot.
 
-- 💻 The device client opening from the tray and reporting its status.
-- 🔑 Enrollment pausing until an administrator compares the key fingerprint.
-- ✅ The approved device connecting, with its details and activity log.
-- 🗂️ Devices, device groups, device evidence and packages in the console.
+![OLO connected device management](docs/media/olo-2026-11/devices.png)
 
-Earlier enrollment/client captures are labelled in the tour guide.
+Approve the actual destination device and assign its declared groups. Packages
+and watcher settings reconcile over its existing Gateway connection.
+
+![OLO trigger assignment administration](docs/media/olo-2026-11/triggers.png)
+
+Assignments show package versions, desired/running state and instance actions.
+This capture is the administration section; agent-facing subscriptions require
+their own runtime authority.
 
 </details>
 
-<details>
-<summary><strong>🧰 Tools and delegated access</strong>: least privilege from tool to execution binding</summary>
-<br>
+### Model and monitoring setup
 
-<p align="center">
-  <img src="docs/media/console-tools-tour.gif" width="100%" alt="Tools and access flow: authoring, packages, groups, agents, delegation, grants, policies, execution bindings and access simulation">
-</p>
+File agents try **OLO QLoRA in Ollama**, then **Qwen3 0.6B** on inference failure;
+other agents use Qwen3. Model group/deployment settings live in bot JSON. Premium
+OpenRouter is configured as inactive standby until explicitly attached. Local
+weights, provider trust and credentials remain installation configuration.
 
-**What to look for in the loop:**
+The optional collector sends structural run/agent/model/tool spans to **Langfuse,
+LangSmith and Phoenix**. Prompts, completions, tool arguments, credentials and
+private thinking are excluded. See [workflow observability](docs/help/observability.md)
+for credential creation and configuration. Existing
+[Prometheus/Grafana](deploy/prometheus/README.md),
+[New Relic](deploy/newrelic/README.md) and [Insights](docs/control-plane/insights.md)
+guides cover additional monitoring.
 
-- 🧰 Tools built, packaged and grouped, with resource extractors.
-- 🤖 Agents, agent groups and workload identities.
-- 🤝 Human and agent delegations constraining what an agent may act on.
-- 📜 Grants, ALLOW / ASK / BLOCK policies and execution bindings.
-- 🔍 Access simulation showing the final decision before anything runs.
-
-</details>
-
-<details>
-<summary><strong>⚙️ Workspace administration</strong>: people, identities and server settings</summary>
-<br>
-
-<p align="center">
-  <img src="docs/media/console-administration.gif" width="100%" alt="Workspace administration flow: sign-in, overview, themes, people, identities, MCP servers, settings, backup, vault and version">
-</p>
-
-**What to look for in the loop:**
-
-- 🔐 Tenant sign-in and the workspace overview, in dark and light themes.
-- 👥 Users, teams, typed roles and human identities.
-- 🔌 MCP servers and server settings.
-- 💾 Backup/restore, the local vault and the About page.
-
-</details>
-
-Screens were captured from a local `0.10.0-dev` installation on October 27, 2026.
-Enabled tools and grants are fictional demo configuration, not installation defaults.
-
-### Observability: Grafana, Prometheus and New Relic
-
-ToolGate exports OpenTelemetry traces and metrics through a collector, so the same
-gateway request, authorization, dispatch and Tool Host execution data can be explored
-in your own monitoring stack. Ready-to-run stacks:
-[Prometheus and Grafana](deploy/prometheus/README.md) and
-[New Relic](deploy/newrelic/README.md); see also [Insights](docs/control-plane/insights.md).
-
-<details>
-<summary><strong>📊 Grafana</strong>: ToolGate tool-call overview dashboard</summary>
-<br>
-
-<p align="center">
-  <img src="docs/media/screenshots/grafana-toolgate-full.jpg" width="100%" alt="Grafana ToolGate tool-call overview: call totals and rate, p95 duration, call rate by outcome, duration percentiles, busiest tools and policy denials">
-</p>
-
-The bundled **Tool-call overview** dashboard, filterable by tenant and tool: call
-volume and rate, call rate by outcome, p50/p95/p99 execution duration, busiest tools
-and admission rate by category (for example `POLICY_DENIED`).
-
-</details>
-
-<details>
-<summary><strong>🔥 Prometheus</strong>: ToolGate metrics</summary>
-<br>
-
-<p align="center">
-  <img src="docs/media/screenshots/prometheus-toolgate-full.jpg" width="100%" alt="Prometheus query summing toolgate_insights_calls by tool name and outcome">
-</p>
-
-The same metrics queried directly in PromQL: `toolgate_insights_calls` summed by
-tool name and outcome for one tenant.
-
-</details>
-
-<details>
-<summary><strong>🔭 New Relic</strong>: distributed traces of a governed tool call</summary>
-<br>
-
-<p align="center">
-  <img src="docs/media/newrelic-traces.gif" width="100%" alt="New Relic slideshow: trace overview, call waterfall and execution attributes for a governed tool call">
-</p>
-
-**What to look for in the slides:**
-
-- 🔭 **Trace overview:** traces from the `olo-toolgate-newrelic` service for a Hello World call.
-- 🪜 **Call waterfall:** gateway request, authorization, dispatch and Tool Host execution spans.
-- 🏷️ **Execution attributes:** correlation attributes linking the span to the ToolGate execution.
-
-Full-resolution frames: [overview](docs/media/screenshots/newrelic-traces-overview-full.jpg),
-[waterfall](docs/media/screenshots/newrelic-call-waterfall-full.jpg) and
-[attributes](docs/media/screenshots/newrelic-execution-attributes-full.jpg).
-More captures: [New Relic capture notes](docs/media/screenshots/newrelic-captures.md).
-
-</details>
+Earlier console/device/Grafana/New Relic captures remain in the
+[historical tour guide](docs/media/TOURS.md); they do not illustrate the current branding.
 
 ## Production and security status
 
-ToolGate is in Beta Release. The authorization path described above is
+OLO is in Beta Release. The authorization path described above is
 enforced today; the following are **not yet** in place:
 
 - **Tool Host isolation:** [qualified Python OCI pools](docs/operations/rootless-tool-host.md)
@@ -283,6 +260,9 @@ enforced today; the following are **not yet** in place:
 - **Offline protected effects:** unsupported; live Control authority remains
   required. Design review: [#239](https://github.com/olo-labs/olo-toolgate/issues/239).
 - **Nested or dynamic groups:** unsupported. Enhancement: [#240](https://github.com/olo-labs/olo-toolgate/issues/240).
+- **Bot orchestration:** bounded local examples work; complete lifecycle, recovery,
+  HA and security matrices remain in the [workflow live status](docs/architecture/workflow-v1-status.md).
+  Native file mutations remain UNFENCED and are never automatically retried.
 - **Quickstart:** single-node evaluation software with no HA guarantee.
   Production HA qualification: [#241](https://github.com/olo-labs/olo-toolgate/issues/241).
 - **Authoring:** Java and Python implementations are available; TypeScript and .NET

@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add the community pull-only three-service deployment at `deploy/docker/quickstart/dev`,
+  sharing blank startup, private credentials and optional model/collector setup
+  with the debug launcher. Keep separate installation ownership and configurable
+  ports. Refresh the root OLO README with actual current debug-stack captures;
+  matching public development images remain awaiting publication.
+
 - Rebuild Quickstart's embedded Distribution registry from pinned v3.1.2 source
   with patched Go and affected modules; retain licenses/checksums and the image
   vulnerability gate. Pin Docker CLI 29.10.0 with its patched Go runtime in

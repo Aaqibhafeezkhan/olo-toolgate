@@ -58,4 +58,4 @@ volumes:
 networks:
   installation:
     external: true
-    name: toolgate-profiled_default
+    name: ${OLO_STACK_PROJECT:-toolgate-profiled}_default

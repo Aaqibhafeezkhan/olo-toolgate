@@ -1,6 +1,17 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Published-image launcher integration — 2026-11-19
+
+Known base `ed13f0f7`; source digest/checks are in the current workflow checkpoint.
+The new community deployment shares existing device/trigger setup and keeps its
+own project/custody; it changes no #274 wire/subscription/ownership interface.
+Six deployment and 16 shared tests pass. Actual local overrides verify blank
+startup, retained credentials and a deterministic graph run; published images
+and full module/M12 qualification remain pending. UI captures are from the
+existing debug stack, not unavailable public images. **27% remains earned**;
+no module scope, Done-when, weight or denominator changes.
+
 ## Real-model bot acceptance integration — 2026-11-19
 
 Known base `90b3dffa`; source digest and executed checks are in the workflow

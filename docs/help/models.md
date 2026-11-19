@@ -37,6 +37,11 @@ separately authorized.
 
 ## Local Ollama and the real adapter
 
+For the [published-image launcher](../../deploy/docker/quickstart/dev/README.md),
+use its `start.bat` choices and `manage.ps1 ollama-vault`; its private model and
+Admin custody is separate from `debug/profiled`. Application images must first
+be published. The commands below describe the existing source-build launcher.
+
 From the repository root on Windows, with Docker Desktop's Linux engine running:
 
 ```powershell

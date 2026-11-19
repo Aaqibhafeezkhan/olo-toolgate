@@ -37,6 +37,7 @@ COPY --from=extract /opt/toolgate/client /opt/toolgate/client
 # reached only through the socket a deployment mounts. Root-owned, as the client requires of its engine binary.
 COPY --from=docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d /usr/local/bin/docker /usr/bin/docker
 COPY debug/profiled/device-entrypoint.py /opt/toolgate/device_entrypoint.py
+COPY debug/profiled/device.py /opt/toolgate/installation_device.py
 COPY debug/profiled/device-systemctl.sh /usr/bin/systemctl
 COPY apps/device/entrypoint.py /opt/toolgate/device.py
 COPY examples/langchain/device.py /opt/toolgate/langchain-device.py

@@ -7,6 +7,7 @@ repository, image and API names still use `olo-toolgate`.
 
 | Task | Guide |
 |---|---|
+| Start from published images, once available | [Docker Quickstart dev](../../deploy/docker/quickstart/dev/README.md) |
 | Start the local installation | [Profiled Quickstart](../../debug/profiled/README.md) |
 | Import, publish, run or switch | [Run bots](run-bots.md) |
 | Approve a device, change folders or install packages | [Device setup and updates](device.md) |

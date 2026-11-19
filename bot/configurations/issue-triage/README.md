@@ -41,7 +41,7 @@ Import/switch never creates or changes device files. Run this separate operator
 action to create only this case's directories and retain the debug device owner's access. Inputs must be owned by the device account with mode 0600. For host mounts, use the host permission commands in the device guide.
 
 ```powershell
-$compose = @('compose','-p','toolgate-profiled','-f','debug/profiled/state/compose.json')
+if (-not $compose) { $compose = @('compose','-p','toolgate-profiled','-f','debug/profiled/state/compose.json') }
 docker @compose exec -T device python3 -c "from pathlib import Path; import os; root=Path('/var/lib/olo-toolgate/files'); [(p.mkdir(parents=True,exist_ok=True),p.chmod(0o700)) for p in [root/x for x in ['issue-triage/inbox', 'issue-triage/processed', 'issue-triage/summaries']]]"
 ```
 

@@ -74,13 +74,15 @@ def provision(payload):
     private(runtime/'gateway-ca.crt',ca)
     private(runtime/'worker.token',payload['accessToken'])
     private(runtime/'credential-status.json',json.dumps({'expiresAtUnixMs':payload['expiresAtUnixMs']}))
-    graph=dict(controlOrigin='https://localhost:18450',controlCaFile='/installation/gateway-ca.crt',
+    control=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443')
+    gateway=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL','https://localhost:8443')
+    graph=dict(controlOrigin=control,controlCaFile='/installation/gateway-ca.crt',
         readers={payload['tenantId']:'/installation/worker.token'},host='0.0.0.0',port=19460,
         certificate='/installation/server.crt',key='/installation/server.key',
         clientCa='/installation/ca.crt',clientNames=['workflow-control'])
     private(runtime/'graph.json',json.dumps(graph))
     private(runtime/'service.json',json.dumps(dict(graphConfiguration='/installation/graph.json',
-        controlOrigin='https://localhost:18450',gatewayOrigin='https://localhost:18450',
+        controlOrigin=control,gatewayOrigin=gateway,
         tokenFile='/installation/worker.token',caFile='/installation/gateway-ca.crt')))
     public=dict(releaseKeys=json.loads(Path('/data/keys/release-keys.json').read_text()),
         organizationKeys=json.loads(Path('/data/keys/organization-keys.json').read_text()))

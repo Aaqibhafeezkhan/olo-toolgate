@@ -5,6 +5,19 @@ Bots declare packages, trigger settings and target groups. A destination
 operator approves/enables a real connected device and assigns its membership.
 Packages and live settings travel through Gateway to that device.
 
+## Choose the installation
+
+| Mode | Launcher | Private Admin folder | Compose project |
+|---|---|---|---|
+| Local source build | `debug/profiled/start.bat` | `debug/profiled/credentials/admin` | `toolgate-profiled` |
+| Published images, once available | `deploy/docker/quickstart/dev/start.bat` | `deploy/docker/quickstart/dev/credentials/admin` | `olo-quickstart-dev` |
+
+The [published-image runbook](../../deploy/docker/quickstart/dev/README.md)
+provides its exact Compose command, first login and optional model/collector
+settings. Select its `$compose` array before using the bot file commands below;
+bot guides retain an explicitly selected array. The logical Admin/API steps are
+the same. The examples below otherwise default to the source-build installation.
+
 ## Prepare a destination
 
 Start the [profiled installation](../../debug/profiled/README.md), open
@@ -41,7 +54,7 @@ files. Prepare the exact folders in the selected bot's README yourself. From
 the repository root, in PowerShell:
 
 ```powershell
-$compose = @('compose','-p','toolgate-profiled','-f','debug/profiled/state/compose.json')
+if (-not $compose) { $compose = @('compose','-p','toolgate-profiled','-f','debug/profiled/state/compose.json') }
 docker @compose exec -T device python3 -c "from pathlib import Path; import os; root=Path('/var/lib/olo-toolgate/files'); paths=[root/'inbox-a',root/'processed',root/'summaries']; [(p.mkdir(parents=True,exist_ok=True),p.chmod(0o700)) for p in paths]"
 ```
 

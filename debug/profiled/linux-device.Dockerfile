@@ -31,11 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-cert
 COPY --from=builder /client /opt/toolgate/client
 COPY --from=docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d /usr/local/bin/docker /usr/bin/docker
 COPY debug/profiled/device-entrypoint.py /opt/toolgate/device_entrypoint.py
-COPY debug/profiled/device.py /opt/toolgate/device.py
+COPY debug/profiled/device.py /opt/toolgate/installation_device.py
 COPY debug/profiled/device-systemctl.sh /usr/bin/systemctl
 COPY LICENSE NOTICE.md /usr/share/licenses/olo-toolgate/
 RUN chmod 755 /opt/toolgate/client /usr/bin/systemctl
 LABEL org.opencontainers.image.title="ToolGate Linux debug device" \
       org.opencontainers.image.licenses="Apache-2.0"
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["python3", "-u", "/opt/toolgate/device.py"]
+ENTRYPOINT ["python3", "-u", "/opt/toolgate/installation_device.py"]

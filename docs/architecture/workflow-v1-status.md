@@ -1,6 +1,47 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Published-image community launcher and current OLO captures — 2026-11-19
+
+Known tested base `ed13f0f7087c4377e3cd0c0b039ee65719b93823`; non-document
+implementation inventory SHA-256 `c06981d421eb8932cbb720f35e83fbf1846761c8e4e0547d3a9621b9c251ad39`
+(20 paths; `build/image-deployment-source-inventory.json`).
+
+Delivered: `deploy/docker/quickstart/dev` reuses the current three-service
+provisioning logic in pull-only application-image mode, with separate ownership,
+volumes, private Admin/collector credentials and configurable loopback ports.
+Windows reuses the pinned private Python bootstrap; shell entrypoints use
+Python 3.11+. Optional Ollama/collector choices use this installation's network
+and custody. The Device image includes the installation-owned file/engine setup
+entrypoint; runtime provisioning derives Control/Gateway origins from configured
+endpoints. Imports do not own files, device membership or container settings.
+The root README now describes OLO's two sections and current bot/model/monitoring
+features, using seven actual debug-stack browser captures with checksums and a
+real successful Ollama run. Historical tours remain linked separately.
+
+Executed: six new deployment tests and 16 shared stack/credential/device/model/
+collector tests pass; Python compilation, capture-tool JavaScript syntax and
+Markdown links (2,955 files) pass. Full repository CI suite executes 563 cases
+and stops on the existing Windows symlink privilege error (11 skips); it is not
+a green broad gate. Local image overrides start a blank installation on ports
+28090/28450/28552 with one Admin and no bots. Repeated start preserves core
+processes and credentials. Admin imports/prepares/publishes/runs an injected
+JSON value-graph fixture successfully, without model inference; stop/start
+retains the account and run. Screenshots come exclusively from the existing
+port-18090 debug installation and include real Qwen3 run
+`run-c97498c2-e711-4fbc-91ea-74ac3ca8fdca`.
+
+Limits: matching public dev images are not yet published; pull-only startup
+fails on missing/incompatible images instead of building or substituting them.
+Local verification uses locally built Quickstart and debug Device overrides;
+it does not qualify the published native-client release asset pipeline. The
+standalone production Device build attempt stopped because that local Quickstart
+had no release client-download manifest. The optional collector validates and starts in local-only mode after fixing a
+process-environment shadowing error; its network and credential folder are
+installation-specific. No cloud keys were copied to the new installation. Current-source full production/security/release matrices remain
+outstanding. No Java/Rust authority implementation is changed in this slice.
+**Baseline remains 0/100; no phase/scope/weight/denominator credit.**
+
 ## Real local-model bots, portable routing and image scan repair — 2026-11-19
 
 Known tested base `90b3dffa8bd015035610c57ed69f372b08213b95`; staged non-document

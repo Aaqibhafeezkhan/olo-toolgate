@@ -73,7 +73,7 @@ def main():
     parser.add_argument('operation',choices=['start','stop','activate','vault','initialize','configure'])
     args=parser.parse_args()
     if args.operation=='initialize':initialize();return
-    here=Path(__file__).resolve().parent;root=here.parents[1];sys.path.insert(0,str(root))
+    source=Path(__file__).resolve().parent;here=Path(os.environ.get('OLO_STACK_HOME',str(source))).resolve();root=source.parents[1];sys.path.insert(0,str(root))
     if args.operation=='configure':
         settings=here/'installation.env'
         lines=settings.read_text(encoding='utf-8').splitlines() if settings.exists() else []
@@ -90,19 +90,19 @@ def main():
         print('Local Ollama installation origin/trust configured; other settings retained. Bot activation remains explicit.')
         return
     # The standalone embeddable Python intentionally does not add script directories.
-    sys.path.insert(0,str(here))
+    sys.path.insert(0,str(source))
     import stack
     stack.check_owned()
     document=json.loads((here/'state/compose.json').read_text(encoding='utf-8'))
     env={**os.environ,'TOOLGATE_PROFILED_ROOT':str(here),'TOOLGATE_PROFILED_CUSTODY':document['volumes']['custody']['name'],
         'TOOLGATE_PROFILED_OLLAMA_STORAGE':document['volumes']['files']['name']+'-ollama-models'}
-    compose=['docker','compose','-p','toolgate-profiled-model','-f',str(here/'ollama.compose.yaml')]
+    compose=['docker','compose','-p',stack.PROJECT+'-model','-f',str(source/'ollama.compose.yaml')]
     def run(command,**kwargs):return subprocess.run(command,cwd=root,env=env,check=True,**kwargs)
     if args.operation=='stop':run(compose+['stop']);return
     if args.operation=='start':
         run(['docker','run','--rm','--network','none','--user','0:0','--mount',
             'type=volume,source='+env['TOOLGATE_PROFILED_CUSTODY']+',target=/custody',
-            '-v',str(here/'ollama.py')+':/ollama.py:ro','--entrypoint','/opt/quickstart-python/bin/python',
+            '-v',str(source/'ollama.py')+':/ollama.py:ro','--entrypoint','/opt/quickstart-python/bin/python',
             document['services']['quickstart']['image'],'/ollama.py','initialize'])
         run(compose+['up','-d','--wait','--wait-timeout','180'])
         if MODEL not in installed_models(run, compose):
@@ -111,7 +111,7 @@ def main():
         prepare_qlora(run,root,env['TOOLGATE_PROFILED_OLLAMA_STORAGE'],compose)
         run(compose+['exec','-T','ollama','ollama','run',QLORA_MODEL,'--keepalive','24h',''])
         run(compose+['exec','-T','ollama','ollama','run',MODEL,'--keepalive','24h',''])
-        core=['docker','compose','-p','toolgate-profiled','-f',str(here/'state/compose.json')]
+        core=['docker','compose','-p',stack.PROJECT,'-f',str(here/'state/compose.json')]
         ids=run(core+['ps','-q','quickstart'],capture_output=True,text=True).stdout.strip()
         actual=json.loads(run(['docker','inspect',ids],capture_output=True,text=True).stdout)[0]
         values=dict(item.split('=',1) for item in actual['Config']['Env'] if '=' in item)
@@ -124,20 +124,19 @@ def main():
             run(core+['up','-d','langgraph'])
         print('Ollama ready: '+QLORA_MODEL+' and '+MODEL+'; TLS origin https://ollama-provider:9443; no host model ports opened.')
         return
-    from tools.workflows.hotswap_demo import login
     from tools.admin.import_workflow import call,deploy
     if args.operation=='vault':
-        key=run(['docker','compose','-p','toolgate-profiled','-f',str(here/'state/compose.json'),
+        key=run(['docker','compose','-p',stack.PROJECT,'-f',str(here/'state/compose.json'),
             'exec','-T','quickstart','cat','/custody/ollama/token'],capture_output=True,text=True).stdout.strip()
-        call(login(),'/api/control/v1/vault',dict(name='ollama-local-key',value=key,
+        call(stack.operator_client(),'/api/control/v1/vault',dict(name='ollama-local-key',value=key,
             toolGroupId='default-tools',deviceGroupId='default-devices'))
         print('Saved this installation\'s Ollama credential in the OLO vault; no bot or device files changed.')
         return
     bundle=root/'bot/bin/ollama-summary-ollama-summary-1.0.0-demo.ollama.olo'
     run([sys.executable,str(root/'bot/build.py'),'--configuration','ollama-summary','--version','1.0.0-demo.ollama'])
-    key=run(['docker','compose','-p','toolgate-profiled','-f',str(here/'state/compose.json'),
+    key=run(['docker','compose','-p',stack.PROJECT,'-f',str(here/'state/compose.json'),
         'exec','-T','quickstart','cat','/custody/ollama/token'],capture_output=True,text=True).stdout.strip()
-    client=login()
+    client=stack.operator_client()
     def vault(_profile):call(client,'/api/control/v1/vault',dict(name='ollama-local-key',value=key,toolGroupId='default-tools',deviceGroupId='default-devices'))
     result=deploy(client,bundle.read_bytes(),after_provision=vault)
     print(json.dumps(result));print('Open Bots > ollama-summary > Run; enter a short incident to summarize.')

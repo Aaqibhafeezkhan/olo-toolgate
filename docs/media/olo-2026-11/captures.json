@@ -1,0 +1,57 @@
+{
+  "sourceRevision": "ed13f0f7087c4377e3cd0c0b039ee65719b93823",
+  "installation": "Existing debug/profiled stack; real local Ollama and demonstration bot/device configuration. Published deployment images are not yet available.",
+  "runId": "run-c97498c2-e711-4fbc-91ea-74ac3ca8fdca",
+  "captures": [
+    {
+      "file": "overview.png",
+      "title": "OLO workspace overview and navigation",
+      "url": "http://127.0.0.1:18090/console/#overview",
+      "capturedAt": "2026-11-19T05:45:09.867Z",
+      "sha256": "51f1f5466cde99f47f713ba70f07e6e37c1189aedb050606b268f3507ba5d27f"
+    },
+    {
+      "file": "bots.png",
+      "title": "Published bot revisions and Run actions",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T05:45:10.526Z",
+      "sha256": "f65194e4e99402f8af52c14c64b40442930a5217c7e88d62b9d8290b40b3a4a4"
+    },
+    {
+      "file": "bot-running.png",
+      "title": "Live agent and model progress from an Admin bot run",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T05:45:13.491Z",
+      "sha256": "f7be2b901cb1682a77d25eafff74be4945fae0cca7407c10b5a9afaa5e4ca6ef"
+    },
+    {
+      "file": "bot-result.png",
+      "title": "Real Ollama summary and retained run timeline",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T05:45:15.082Z",
+      "sha256": "b8abd11dab0c1678e15bd058abc30ebc004b06eb15f316fca578dac486e47089"
+    },
+    {
+      "file": "agents.png",
+      "title": "Agents and their governed identities",
+      "url": "http://127.0.0.1:18090/console/#agents",
+      "capturedAt": "2026-11-19T05:45:15.467Z",
+      "sha256": "d94b188ea29788d5806454cf384af9bcb7ccba53c082915582ccd2304bf4f68c"
+    },
+    {
+      "file": "devices.png",
+      "title": "Connected device and runtime status",
+      "url": "http://127.0.0.1:18090/console/#devices",
+      "capturedAt": "2026-11-19T05:45:16.214Z",
+      "sha256": "aaef602b66393f798c75d5cadffcc6a81c3e7b46ba49109013d5c9a8c72f0018"
+    },
+    {
+      "file": "triggers.png",
+      "title": "Trigger assignment administration",
+      "url": "http://127.0.0.1:18090/console/#triggers",
+      "capturedAt": "2026-11-19T05:49:06.753Z",
+      "sha256": "3a0841059655f5c7d2ccb69dc7bb31c6ebd4cc3a2980f651862353d10f171c13",
+      "scope": "Actual administration section; the agent-facing consumer view is separate and requires runtime grants."
+    }
+  ]
+}
