@@ -9,6 +9,7 @@ export const operations = {
   qualifyNativeFileOwner: { method: 'POST', path: '/api/control/v1/mcp/native-files/qualifications' },
   nativeFileCandidates: { method: 'GET', path: '/api/control/v1/mcp/native-files/candidates/{id}' },
   revokeNativeFileQualification: { method: 'DELETE', path: '/api/control/v1/mcp/native-files/qualifications/{id}' },
+  resolveWorkflowModelCandidate: { method: 'POST', path: '/internal/v1/runtime/model:resolve' },
   reportWorkflowWorkerPresence: { method: 'POST', path: '/internal/v1/runtime/workers:heartbeat' },
   claimCompatibleWorkflowRun: { method: 'POST', path: '/internal/v1/runtime/claim' },
   getRuntimeGraphCandidate: { method: 'GET', path: '/internal/v1/runtime/graph-candidates/{profileId}/{digest}/{workflowId}' },

@@ -1,19 +1,19 @@
 [
   {
-    "id": "log-triage-dispatch",
-    "assignment": "log-triage-watch",
-    "subscription": "log-triage-events",
+    "id": "native-log-dispatch",
+    "assignment": "native-log-watch",
+    "subscription": "native-log-watch-events",
     "assignmentSpec": {
       "trigger": "examples.log-watch/error-spike",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
         "deviceGroups": [
-          "log-devices"
+          "native-log-ReadAndWriteDeviceGroup"
         ]
       },
       "config": {
-        "file": "logs/app.log",
+        "file": "native-log/logs/app.log",
         "pattern": "ERROR|FATAL",
         "threshold": 2,
         "windowSeconds": 60,
@@ -25,7 +25,7 @@
     "subscriptionSpec": {
       "sources": {
         "assignments": [
-          "log-triage-watch"
+          "native-log-watch"
         ]
       },
       "filter": "event.type == 'examples.logs.match.v1'",

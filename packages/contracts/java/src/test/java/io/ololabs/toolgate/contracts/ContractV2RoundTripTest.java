@@ -472,6 +472,8 @@ final class ContractV2RoundTripTest {
         "WorkflowModelDeployment",
         "WorkflowModelGeneration",
         "WorkflowModelGroupDefinition",
+        "WorkflowModelResolveRequest",
+        "WorkflowModelResolveResponse",
         "WorkflowProfileDiagnostics",
         "WorkflowProfilePublishRequest",
         "WorkflowProfileReviewRequest",

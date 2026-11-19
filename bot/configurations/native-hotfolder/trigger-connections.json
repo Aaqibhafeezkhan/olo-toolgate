@@ -1,19 +1,19 @@
 [
   {
-    "id": "hotfolder-dispatch",
-    "assignment": "hotfolder-inbox",
-    "subscription": "configured-workflow",
+    "id": "native-hotfolder-dispatch",
+    "assignment": "native-hotfolder-watch",
+    "subscription": "native-hotfolder-watch-events",
     "assignmentSpec": {
       "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
         "deviceGroups": [
-          "ReadAndWriteDeviceGroup"
+          "native-hotfolder-ReadAndWriteDeviceGroup"
         ]
       },
       "config": {
-        "folder": "inbox",
+        "folder": "native-hotfolder/inbox",
         "extension": ".txt"
       },
       "globals": {},
@@ -22,7 +22,7 @@
     "subscriptionSpec": {
       "sources": {
         "assignments": [
-          "hotfolder-inbox"
+          "native-hotfolder-watch"
         ]
       },
       "filter": "event.type == 'examples.files.observed.v1'",

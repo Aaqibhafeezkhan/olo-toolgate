@@ -2,18 +2,18 @@
   {
     "id": "log-triage-dispatch",
     "assignment": "log-triage-watch",
-    "subscription": "log-triage-events",
+    "subscription": "log-triage-watch-events",
     "assignmentSpec": {
       "trigger": "examples.log-watch/error-spike",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
         "deviceGroups": [
-          "log-devices"
+          "log-triage-ReadAndWriteDeviceGroup"
         ]
       },
       "config": {
-        "file": "logs/app.log",
+        "file": "log-triage/logs/app.log",
         "pattern": "ERROR|FATAL",
         "threshold": 2,
         "windowSeconds": 60,

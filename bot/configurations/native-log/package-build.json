@@ -1,6 +1,12 @@
 {
   "packages": [
     {
+      "packageId": "examples.hotfolder",
+      "version": "0.1.0",
+      "project": "examples/java-tools",
+      "task": ":hotfolder:toolgatePackage"
+    },
+    {
       "packageId": "examples.log-watch",
       "version": "0.1.0",
       "project": "examples/java-tools",

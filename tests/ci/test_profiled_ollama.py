@@ -4,12 +4,32 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[2]
 
 
 class OllamaCustodyTests(unittest.TestCase):
+    def test_source_qualified_model_is_reused_and_missing_model_is_prepared_in_docker(self):
+        spec=importlib.util.spec_from_file_location('profiled_ollama',ROOT/'debug/profiled/ollama.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        calls=[]
+        def existing(command,**kwargs):
+            calls.append(command)
+            return SimpleNamespace(stdout='NAME ID SIZE\n'+module.QLORA_MODEL+' fixture 1GB\n')
+        compose=['docker','compose','-p','fixture']
+        module.prepare_qlora(existing,ROOT,'fixture-models',compose)
+        self.assertEqual([compose+['exec','-T','ollama','ollama','list']],calls)
+        calls.clear()
+        def missing(command,**kwargs):
+            calls.append(command);return SimpleNamespace(stdout='NAME ID SIZE\n')
+        module.prepare_qlora(missing,ROOT,'fixture-models',compose)
+        self.assertEqual('build',calls[1][1])
+        self.assertIn('type=volume,source=fixture-models,target=/models',calls[2])
+        self.assertIn(module.QLORA_MODEL,calls[-1])
+        self.assertNotIn('pull',calls[-1])
+
     def test_opt_in_preserves_other_provider_origins_and_monitoring_and_refuses_custom_ca(self):
         spec=importlib.util.spec_from_file_location('profiled_ollama',ROOT/'debug/profiled/ollama.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

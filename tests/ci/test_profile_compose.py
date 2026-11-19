@@ -212,7 +212,12 @@ class ProfileComposeTests(unittest.TestCase):
         self.assertEqual({'$path':'/values/stage-2'},graph['output'])
         self.assertEqual(workflow['resultSchema'],graph['outputSchema'])
         source=json.loads((ROOT/'bot/configurations/text-summary/bot.json').read_text())
-        self.assertEqual(workflow['graph'],source['workflows']['workflows'][0]['graph'])
+        # This fixture exercises the configured adapter's context projection;
+        # portable bots now own explicit file/model/write nodes instead.
+        portable=source['workflows']['workflows'][0]
+        self.assertEqual(workflow['graph']['packageId'],portable['graph']['packageId'])
+        self.assertEqual(workflow['resultSchema'],portable['resultSchema'])
+        self.assertEqual({'tool','model','agent','value'},{node['kind'] for node in portable['graph']['config']['nodes']})
         self.assertEqual('uid',configuration.resolve('${SUBSCRIPTION_UID}',{'${SUBSCRIPTION_UID}':'uid'}))
         with self.assertRaises(ValueError):
             configuration.resolve('${TOKEN}',{})

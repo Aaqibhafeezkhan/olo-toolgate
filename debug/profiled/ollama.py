@@ -10,6 +10,29 @@ import subprocess
 import sys
 
 MODEL='qwen3:0.6b'
+QLORA_MODEL='olo-qlora-hotfolder:e376fb40'
+QLORA_REVISION='e376fb40c313a8827c4d5ce6ca2abe2b6fe7a4c6'
+
+
+def installed_models(run, compose):
+    result=run(compose+['exec','-T','ollama','ollama','list'],capture_output=True,text=True)
+    return {line.split()[0] for line in result.stdout.splitlines()[1:] if line.split()}
+
+
+def prepare_qlora(run, root, storage, compose):
+    """Reuse a source-qualified local import, otherwise prepare inside Docker."""
+    if QLORA_MODEL in installed_models(run, compose):
+        print('Reusing local OLO QLoRA model: '+QLORA_MODEL)
+        return
+    run(['docker','build','-f','debug/profiled/qlora-builder.Dockerfile','-t','olo-qlora-builder:local','.'])
+    output='/models/olo-import/'+QLORA_REVISION
+    run(['docker','run','--rm','--memory','8g','--cpus','8','--mount',
+        'type=volume,source='+storage+',target=/models','olo-qlora-builder:local','--output',output])
+    model_path='/root/.ollama/olo-import/'+QLORA_REVISION+'/model-f16.gguf'
+    # All arguments and paths here are fixed installation-owned constants.
+    run(compose+['exec','-T','ollama','sh','-c',
+        'printf "FROM '+model_path+'\\nPARAMETER num_ctx 4096\\n" > /root/.ollama/olo-import/Modelfile'])
+    run(compose+['exec','-T','ollama','ollama','create',QLORA_MODEL,'-f','/root/.ollama/olo-import/Modelfile'])
 
 
 def initialize():
@@ -47,7 +70,7 @@ def initialize():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation',choices=['start','stop','activate','initialize','configure'])
+    parser.add_argument('operation',choices=['start','stop','activate','vault','initialize','configure'])
     args=parser.parse_args()
     if args.operation=='initialize':initialize();return
     here=Path(__file__).resolve().parent;root=here.parents[1];sys.path.insert(0,str(root))
@@ -82,7 +105,11 @@ def main():
             '-v',str(here/'ollama.py')+':/ollama.py:ro','--entrypoint','/opt/quickstart-python/bin/python',
             document['services']['quickstart']['image'],'/ollama.py','initialize'])
         run(compose+['up','-d','--wait','--wait-timeout','180'])
-        run(compose+['exec','-T','ollama','ollama','pull',MODEL])
+        if MODEL not in installed_models(run, compose):
+            run(compose+['exec','-T','ollama','ollama','pull',MODEL])
+        else:print('Reusing local model: '+MODEL)
+        prepare_qlora(run,root,env['TOOLGATE_PROFILED_OLLAMA_STORAGE'],compose)
+        run(compose+['exec','-T','ollama','ollama','run',QLORA_MODEL,'--keepalive','24h',''])
         run(compose+['exec','-T','ollama','ollama','run',MODEL,'--keepalive','24h',''])
         core=['docker','compose','-p','toolgate-profiled','-f',str(here/'state/compose.json')]
         ids=run(core+['ps','-q','quickstart'],capture_output=True,text=True).stdout.strip()
@@ -95,10 +122,17 @@ def main():
             run(core+['up','-d','--no-deps','--force-recreate','quickstart'])
             stack.sync_credentials(core);stack.provision_runtime(core)
             run(core+['up','-d','langgraph'])
-        print('Ollama ready: '+MODEL+'; TLS origin https://ollama-provider:9443; no host model ports opened.')
+        print('Ollama ready: '+QLORA_MODEL+' and '+MODEL+'; TLS origin https://ollama-provider:9443; no host model ports opened.')
         return
     from tools.workflows.hotswap_demo import login
     from tools.admin.import_workflow import call,deploy
+    if args.operation=='vault':
+        key=run(['docker','compose','-p','toolgate-profiled','-f',str(here/'state/compose.json'),
+            'exec','-T','quickstart','cat','/custody/ollama/token'],capture_output=True,text=True).stdout.strip()
+        call(login(),'/api/control/v1/vault',dict(name='ollama-local-key',value=key,
+            toolGroupId='default-tools',deviceGroupId='default-devices'))
+        print('Saved this installation\'s Ollama credential in the OLO vault; no bot or device files changed.')
+        return
     bundle=root/'bot/bin/ollama-summary-ollama-summary-1.0.0-demo.ollama.olo'
     run([sys.executable,str(root/'bot/build.py'),'--configuration','ollama-summary','--version','1.0.0-demo.ollama'])
     key=run(['docker','compose','-p','toolgate-profiled','-f',str(here/'state/compose.json'),

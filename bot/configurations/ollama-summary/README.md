@@ -1,36 +1,44 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Local Ollama incident summary
+# OLO bot: ollama-summary
 
-A text-only bot uses a configured summarization agent and local `qwen3:0.6b`
-thinking model. It needs no device files, tools or triggers. The model is served
-by optional `ollama/ollama:latest` companions in the [debug runbook](../../../debug/profiled/README.md).
-Ollama supports Qwen3 thinking and OpenAI-compatible structured output. Its
-reasoning is not displayed or retained as execution progress.
+A text-only bot uses `qwen3:0.6b` through the configured agent. It needs
+no device/tool/trigger. QLoRA is declared but not selected for this general agent;
+OpenRouter is unattached standby with no automatic paid fallback.
 
-`bot.json` defines the provider, model, generation limits, graph and agent prompt.
-`referenced-config.json` defines scoped agent service grants. There are no
-embedded packages, credentials, container settings or model weights in the `.olo`.
-The destination supplies the Ollama server, TLS trust and `ollama-local-key`
-vault secret. The TLS front end validates that key; Ollama's HTTP API is private
-to the Docker network. PREPARE mode refuses tool mutations.
+Start with the centralized [device setup/update guide](../../../docs/help/device.md)
+and [model setup/update guide](../../../docs/help/models.md). Also read
+[import/publish/run](../../../docs/help/run-bots.md),
+[observability](../../../docs/help/observability.md) and
+[authoring](../../../docs/help/author-bots.md). Installation settings, credentials,
+model weights and folder permissions are outside this bot.
 
 Build from the repository root:
 
 ```powershell
-& $debugPython bot/build.py --configuration ollama-summary --version 1.0.0-demo.ollama
+. .\debug\profiled\python.ps1
+$debugPython = Find-DebugPython
+& $debugPython bot/build.py --configuration ollama-summary --version 1.0.0-demo.local
 ```
 
-Import `bot/bin/ollama-summary-ollama-summary-1.0.0-demo.ollama.olo` on Bots,
-configure the destination secret/provider, then publish. The runbook provides
-an explicit operator activation command which performs those Admin API steps.
-Click **Run** and enter:
+The `.olo` and version/hash inventory are in `bot/bin/`. Import in **Bots**,
+resolve every persistent red readiness bullet, review, provision packages,
+prepare graphs and publish. The first Super Admin can perform these operations
+and run the published bot. Runtime grants still govern every effect.
+
+Start optional Ollama with `debug\profiled\start.bat -WithOllama` and, after
+referenced groups exist, run `& $debugPython debug/profiled/ollama.py vault`.
+Click this published bot's run symbol and enter:
 
 ```text
 The database connection pool was exhausted. Restarting the pool restored service.
 ```
 
-Check recorded progress and the semantic `summary` in the same Run dialog. The
-wording is model-generated, not a fixed expected string. No folders or file
-permissions are needed. Use short inputs; this small demo model is not a
-production quality or high-volume recommendation. Model downloads persist in
-the installation's dedicated Ollama volume. No model port is exposed to the host.
+The dialog shows progress and a JSON object with a generated `summary`. No
+folder/output file is used. Wording is model-generated, not an exact fixture.
+Edit the agent prompt/group and deployments in `bot.json` or the corresponding
+Admin editors, then publish a new revision. Export includes referenced data but
+never the model secret or weights; use the two central guides on a new system.
+
+Model-group/deployment identifiers in this bot are prefixed with `ollama-summary-`
+to keep its independently published configuration separate from other bots.
+The provider model IDs and ordered routing are unchanged.

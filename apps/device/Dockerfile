@@ -35,7 +35,7 @@ RUN apt-get -o Acquire::Retries=0 update && \
 COPY --from=extract /opt/toolgate/client /opt/toolgate/client
 # The container engine CLI the client drives for signed package tools (ADR 026); the engine itself runs elsewhere and is
 # reached only through the socket a deployment mounts. Root-owned, as the client requires of its engine binary.
-COPY --from=docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/bin/docker
+COPY --from=docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d /usr/local/bin/docker /usr/bin/docker
 COPY debug/profiled/device-entrypoint.py /opt/toolgate/device_entrypoint.py
 COPY debug/profiled/device-systemctl.sh /usr/bin/systemctl
 COPY apps/device/entrypoint.py /opt/toolgate/device.py

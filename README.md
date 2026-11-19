@@ -1,15 +1,18 @@
-# OLO ToolGate
+# OLO
 
 > **Zero Trust for Agentic AI.**
 > **Secure Every Tool Boundary.**
 
-OLO ToolGate is an open-source, self-hosted security gateway for AI agents, MCP
-servers and tool execution.
+OLO is an open-source, self-hosted platform with two sections: **OLO ToolGate**
+governs AI agent tool execution, MCP servers and devices; **OLO Orchestration**
+authors and runs bots with configured agents, triggers and model routing.
+
+Start with the [community help](docs/help/README.md) for bot/device/model setup.
 
 Enforce identity, least-privilege access, runtime authorization, human approvals and
 auditable execution at every governed tool boundary.
 
-**Status:** ToolGate is in Beta Release.
+**Status:** OLO is in Beta Release.
 
 **Version and channel:** see this branch's [version configuration](version.json) and the
 [published releases](https://github.com/olo-labs/olo-toolgate/releases). For deployment

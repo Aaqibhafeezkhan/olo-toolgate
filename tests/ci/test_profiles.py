@@ -17,6 +17,41 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class ProfileTests(unittest.TestCase):
+    def test_same_release_different_configurations_cannot_alias_immutable_workflow_versions(self):
+        for identity in ('hotswap-demo','a'*128):
+            a=builder.workflow_version_id(identity,'hotswap-demo-a','1.0.0-demo.local')
+            b=builder.workflow_version_id(identity,'hotswap-demo-b','1.0.0-demo.local')
+            self.assertNotEqual(a,b)
+            self.assertLessEqual(len(a),128)
+            self.assertEqual(a,builder.workflow_version_id(identity,'hotswap-demo-a','1.0.0-demo.local'))
+
+    def test_all_public_bots_route_local_agents_and_keep_premium_unattached(self):
+        memberships={}
+        for folder in (ROOT/'bot/configurations').iterdir():
+            if not folder.is_dir():continue
+            profile=json.loads((folder/'bot.json').read_text(encoding='utf-8'))
+            references=json.loads((folder/'referenced-config.json').read_text(encoding='utf-8'))
+            for group in references['toolGroups']:
+                for tool in group['toolIds']:memberships.setdefault(tool,set()).add(group['id'])
+            config=profile['workflows']
+            def logical(value):return value if folder.name.startswith('hotswap-demo-') else value.removeprefix(folder.name+'-')
+            groups={logical(g['id']):[logical(x) for x in g['deploymentIds']] for g in config['modelGroups']}
+            deployments={logical(m['id']):m for m in config['modelDeployments']}
+            self.assertEqual(['local-qlora','local-lightweight'],groups['hotfolder-models'])
+            self.assertEqual(['local-lightweight'],groups['general-models'])
+            for workflow in config['workflows']:
+                self.assertNotIn('deployment',workflow)
+                self.assertNotIn('premium-openrouter',groups[logical(workflow['modelGroupId'])])
+                tools={node['agentId'] for node in workflow['graph']['config']['nodes'] if node['kind']=='tool'}
+                for agent in config['agentDefinitions']:
+                    self.assertEqual('hotfolder-models' if agent['agentId'] in tools else 'general-models',logical(agent['modelGroupId']))
+                    self.assertNotIn('premium-openrouter',groups[logical(agent['modelGroupId'])])
+                scoped=builder.scope(profile,workflow,json.loads((folder/'trigger-connections.json').read_text(encoding='utf-8')))
+                self.assertIn('premium-openrouter',{logical(m['id']) for m in scoped['workflows']['modelDeployments']})
+            self.assertEqual('olo-qlora-hotfolder:e376fb40',deployments['local-qlora']['modelId'])
+            self.assertEqual('qwen3:0.6b',deployments['local-lightweight']['modelId'])
+        self.assertTrue(all(len(groups)==1 for groups in memberships.values()),memberships)
+
     def test_trigger_connections_keep_their_packages_without_deployment_fields(self):
         from tools.workflows.demo_profiles import configurations
         _,profile,_,connections=next(configurations())

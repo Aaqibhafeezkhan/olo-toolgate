@@ -5362,15 +5362,40 @@ pub struct WorkflowModelDeployment {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowModelGeneration {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
     pub max_output_tokens: u64,
     pub temperature: f64,
 }
-/// Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority.
+/// Ordered model candidates; selection intersects this order with the pinned workflow ceiling. Only provider inference failures permit fallback; effects are never retried.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowModelGroupDefinition {
     pub id: String,
     pub deployment_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby: Option<bool>,
+}
+/// Gateway-only resolution of one authorized inference candidate, with current authority checked on every attempt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowModelResolveRequest {
+    pub run_id: String,
+    pub step_token: String,
+    pub candidate_index: u64,
+}
+/// Private Gateway response; credentials must never be forwarded to runtime workers or logged.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowModelResolveResponse {
+    pub origin: String,
+    pub model_id: String,
+    pub credential: String,
+    pub generation: WorkflowModelGeneration,
+    pub deployment_id: String,
+    pub candidate_index: u64,
+    pub candidate_count: u64,
+    pub result_schema: std::collections::BTreeMap<String, serde_json::Value>,
 }
 /// Current tenant-scoped publication blockers, without credentials or remote payloads. Observational only; publication rechecks readiness.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -5315,6 +5315,7 @@
     "resultMode": "MODEL"
   },
   "WorkflowModelGeneration": {
+    "reasoningEffort": "none",
     "maxOutputTokens": 512,
     "temperature": 0.25
   },
@@ -5841,5 +5842,23 @@
     "blockers": [
       "Model intake requires vault secret model-key."
     ]
+  },
+  "WorkflowModelResolveRequest": {
+    "runId": "run-10000000-0000-4000-8000-000000000001",
+    "stepToken": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "candidateIndex": 0
+  },
+  "WorkflowModelResolveResponse": {
+    "origin": "https://model.example",
+    "modelId": "fixture-model",
+    "credential": "structural-fixture-not-a-credential",
+    "generation": {
+      "maxOutputTokens": 512,
+      "temperature": 0.0
+    },
+    "deploymentId": "local",
+    "candidateIndex": 0,
+    "candidateCount": 2,
+    "resultSchema": {}
   }
 }

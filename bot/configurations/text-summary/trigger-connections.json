@@ -1,19 +1,19 @@
 [
   {
-    "id": "hotfolder-dispatch",
-    "assignment": "hotfolder-inbox",
-    "subscription": "configured-workflow",
+    "id": "text-summary-dispatch",
+    "assignment": "text-summary-watch",
+    "subscription": "text-summary-watch-events",
     "assignmentSpec": {
       "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
         "deviceGroups": [
-          "ReadAndWriteDeviceGroup"
+          "text-summary-ReadAndWriteDeviceGroup"
         ]
       },
       "config": {
-        "folder": "inbox",
+        "folder": "text-summary/inbox",
         "extension": ".txt"
       },
       "globals": {},
@@ -22,7 +22,7 @@
     "subscriptionSpec": {
       "sources": {
         "assignments": [
-          "hotfolder-inbox"
+          "text-summary-watch"
         ]
       },
       "filter": "event.type == 'examples.files.observed.v1'",

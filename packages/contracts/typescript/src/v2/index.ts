@@ -2913,13 +2913,32 @@ export interface WorkflowModelDeployment {
 }
 /** Explicit bounded inference parameters selected from the pinned model deployment, never from a runner request. */
 export interface WorkflowModelGeneration {
+  readonly reasoningEffort?: string;
   readonly maxOutputTokens: number;
   readonly temperature: number;
 }
-/** Profile declaration for WorkflowModelGroupDefinition; eligibility and configuration confer no runtime authority. */
+/** Ordered model candidates; selection intersects this order with the pinned workflow ceiling. Only provider inference failures permit fallback; effects are never retried. */
 export interface WorkflowModelGroupDefinition {
   readonly id: string;
   readonly deploymentIds: ReadonlyArray<string>;
+  readonly standby?: boolean;
+}
+/** Gateway-only resolution of one authorized inference candidate, with current authority checked on every attempt. */
+export interface WorkflowModelResolveRequest {
+  readonly runId: string;
+  readonly stepToken: string;
+  readonly candidateIndex: number;
+}
+/** Private Gateway response; credentials must never be forwarded to runtime workers or logged. */
+export interface WorkflowModelResolveResponse {
+  readonly origin: string;
+  readonly modelId: string;
+  readonly credential: string;
+  readonly generation: WorkflowModelGeneration;
+  readonly deploymentId: string;
+  readonly candidateIndex: number;
+  readonly candidateCount: number;
+  readonly resultSchema: Record<string, unknown>;
 }
 /** Current tenant-scoped publication blockers, without credentials or remote payloads. Observational only; publication rechecks readiness. */
 export interface WorkflowProfileDiagnostics {

@@ -9,17 +9,19 @@ namespace OloLabs\ToolGate\Contracts\V2;
 final readonly class WorkflowModelGeneration implements \JsonSerializable {
     public function __construct(
         public int $maxOutputTokens,
-        public float $temperature
+        public float $temperature,
+        public ?string $reasoningEffort = null
     ) {}
 
     /** Decode a structural model; canonical schema validation is also required. */
     public static function fromArray(array $data): self {
-        if (array_diff(array_keys($data), ['maxOutputTokens', 'temperature']) || array_diff(['maxOutputTokens', 'temperature'], array_keys($data))) {
+        if (array_diff(array_keys($data), ['reasoningEffort', 'maxOutputTokens', 'temperature']) || array_diff(['maxOutputTokens', 'temperature'], array_keys($data))) {
             throw new \InvalidArgumentException('Unknown or missing contract fields');
         }
         return new self(
             $data['maxOutputTokens'],
-            $data['temperature']
+            $data['temperature'],
+            array_key_exists('reasoningEffort', $data) ? $data['reasoningEffort'] : null
         );
     }
 

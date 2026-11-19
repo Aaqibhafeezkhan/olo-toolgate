@@ -35,6 +35,13 @@ def filename(value,limit=48):
     return safe
 
 
+def workflow_version_id(workflow_id,configuration,version):
+    identity=workflow_id+'-'+filename(configuration)+'-'+version.replace('+','-')
+    if len(identity)>128:
+        identity=workflow_id[:80]+'-'+digest((workflow_id+'\0'+configuration+'\0'+version).encode())[7:47]
+    return identity
+
+
 def inside(root,name):
     path=(root/name).resolve()
     if not path.is_relative_to(root.resolve()) or path.is_symlink():raise ValueError('Build input leaves its source directory')
@@ -75,7 +82,7 @@ def scope(profile,workflow,connections):
     agents={item['agentId'] for item in workflow['agents']}
     config['agentDefinitions']=[item for item in config['agentDefinitions'] if item['agentId'] in agents]
     groups={workflow['modelGroupId']}|{item['modelGroupId'] for item in config['agentDefinitions']}
-    config['modelGroups']=[item for item in config['modelGroups'] if item['id'] in groups]
+    config['modelGroups']=[item for item in config['modelGroups'] if item['id'] in groups or item.get('standby') is True]
     models={model for item in config['modelGroups'] for model in item['deploymentIds']}
     config['modelDeployments']=[item for item in config['modelDeployments'] if item['id'] in models]
     config['workflowGroups']=[item for item in config['workflowGroups'] if item['id']==workflow['workflowGroupId']]
@@ -105,8 +112,7 @@ def build(folder,output,version,commit,build_id,cache,prebuilt):
     rows=[]
     for workflow in profile['workflows']['workflows']:
         selected=scope(profile,workflow,connections);config=selected['workflows'];definition=config['workflows'][0]
-        definition['versionId']=definition['id']+'-'+version.replace('+','-')
-        if len(definition['versionId'])>128:definition['versionId']=definition['id'][:80]+'-'+digest((definition['id']+'\0'+version).encode())[7:47]
+        definition['versionId']=workflow_version_id(definition['id'],folder.name,version)
         mapped=[]
         for binding in config['dispatchBindings']:
             connection=next(item for item in connections if item['id']==binding['id'])

@@ -56,6 +56,8 @@ def expression(value, state):
                 return pointer(state, args)
             if op == '$literal':
                 return json_value(args)
+            if op == '$json':
+                return canonical(expression(args, state)).decode('ascii')
             if op in ('$eq', '$lt', '$and', '$or', '$add'):
                 if not isinstance(args, list) or len(args) != 2:
                     raise GraphRefused('JSON_GRAPH_EXPRESSION')
@@ -79,7 +81,7 @@ def _validate_expression(value):
     if isinstance(value, dict):
         special = [key for key in value if key.startswith('$')]
         if special:
-            if len(value) != 1 or special[0] not in ('$path', '$literal', '$eq', '$lt', '$and', '$or', '$add'):
+            if len(value) != 1 or special[0] not in ('$path', '$literal', '$json', '$eq', '$lt', '$and', '$or', '$add'):
                 raise GraphRefused('JSON_GRAPH_EXPRESSION')
             op = special[0]
             if op == '$path':
@@ -88,6 +90,9 @@ def _validate_expression(value):
                     raise GraphRefused('JSON_GRAPH_POINTER')
                 return
             if op == '$literal':
+                return
+            if op == '$json':
+                _validate_expression(value[op])
                 return
             if not isinstance(value[op], list) or len(value[op]) != 2:
                 raise GraphRefused('JSON_GRAPH_EXPRESSION')

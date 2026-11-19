@@ -18,16 +18,26 @@ public final class WorkflowModelSelection {
         this.clock = clock;
     }
 
-    public WorkflowModelDeployment resolve(Store.Session tx, Ids.TenantId tenant, String runId, String stepToken) {
+    public record Candidate(WorkflowModelDeployment deployment, int candidateIndex, int candidateCount,
+                            java.util.Map<String, com.fasterxml.jackson.databind.JsonNode> resultSchema) {}
+
+    public Candidate resolve(Store.Session tx, Ids.TenantId tenant, String runId, String stepToken, int candidateIndex) {
         var runtime = context(tx, tenant, runId, stepToken);
         var config = runtime.config();
         var workflowModels = config.modelGroups().stream().filter(group -> group.id().equals(runtime.workflow().modelGroupId()))
             .findFirst().orElseThrow(Failure::unavailable).deploymentIds();
         var stepModels = config.modelGroups().stream().filter(group -> group.id().equals(runtime.step().modelGroupId()))
             .findFirst().orElseThrow(Failure::unavailable).deploymentIds();
-        var model = workflowModels.stream().filter(stepModels::contains).findFirst().orElseThrow(ManagementAccess::denied);
-        return config.modelDeployments().stream().filter(deployment -> deployment.id().equals(model))
+        var candidates = stepModels.stream().filter(workflowModels::contains).toList();
+        if (candidateIndex < 0 || candidateIndex >= candidates.size()) throw ManagementAccess.denied();
+        var model = candidates.get(candidateIndex);
+        var deployment = config.modelDeployments().stream().filter(item -> item.id().equals(model))
             .findFirst().orElseThrow(Failure::unavailable);
+        var resultSchema = "AGENT".equals(runtime.step().kind())
+            ? config.agentDefinitions().stream().filter(agent -> agent.agentId().equals(runtime.step().subjectId()))
+                .findFirst().orElseThrow(Failure::unavailable).outputSchema()
+            : runtime.workflow().resultSchema();
+        return new Candidate(deployment, candidateIndex, candidates.size(), resultSchema);
     }
 
     record Runtime(WorkflowRunStore.QueuedRun run, WorkflowRunStore.Step step,

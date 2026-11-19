@@ -1,19 +1,19 @@
 [
   {
-    "id": "hotfolder-dispatch",
-    "assignment": "hotfolder-inbox",
-    "subscription": "configured-workflow",
+    "id": "issue-triage-dispatch",
+    "assignment": "issue-triage-watch",
+    "subscription": "issue-triage-watch-events",
     "assignmentSpec": {
       "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
         "deviceGroups": [
-          "ReadAndWriteDeviceGroup"
+          "issue-triage-ReadAndWriteDeviceGroup"
         ]
       },
       "config": {
-        "folder": "inbox",
+        "folder": "issue-triage/inbox",
         "extension": ".txt"
       },
       "globals": {},
@@ -22,7 +22,7 @@
     "subscriptionSpec": {
       "sources": {
         "assignments": [
-          "hotfolder-inbox"
+          "issue-triage-watch"
         ]
       },
       "filter": "event.type == 'examples.files.observed.v1'",

@@ -4,15 +4,15 @@
   "revision": 0,
   "agents": [
     {
-      "id": "langchain-linux-agent",
-      "name": "langchain-linux-agent",
+      "id": "hotswap-langchain-linux-agent",
+      "name": "hotswap-langchain-linux-agent",
       "enabled": true,
       "revision": 1,
       "ownerUserId": "admin"
     },
     {
-      "id": "text-summarizer",
-      "name": "text-summarizer",
+      "id": "hotswap-text-summarizer",
+      "name": "hotswap-text-summarizer",
       "enabled": true,
       "revision": 1,
       "ownerUserId": "admin"
@@ -20,36 +20,34 @@
   ],
   "agentGroups": [
     {
-      "id": "langchain-linux-agents",
-      "name": "langchain-linux-agents",
+      "id": "hotswap-langchain-linux-agents",
+      "name": "hotswap-langchain-linux-agents",
       "enabled": true,
       "revision": 1,
       "agentIds": [
-        "langchain-linux-agent",
-        "text-summarizer"
+        "hotswap-langchain-linux-agent"
       ],
       "roleIds": [
-        "configured-workflow-service"
+        "hotswap-configured-workflow-service"
       ]
     },
     {
-      "id": "summary-agents",
-      "name": "summary-agents",
+      "id": "hotswap-summary-agents",
+      "name": "hotswap-summary-agents",
       "enabled": true,
       "revision": 1,
       "agentIds": [
-        "langchain-linux-agent",
-        "text-summarizer"
+        "hotswap-text-summarizer"
       ],
       "roleIds": [
-        "configured-workflow-service"
+        "hotswap-configured-workflow-service"
       ]
     }
   ],
   "roles": [
     {
       "enabled": true,
-      "id": "configured-workflow-service",
+      "id": "hotswap-configured-workflow-service",
       "managementRules": [],
       "name": "Configured workflow service",
       "portalRole": "BASIC",
@@ -60,7 +58,7 @@
   "grants": [
     {
       "enabled": true,
-      "id": "configured-workflow-service",
+      "id": "hotswap-configured-workflow-service",
       "name": "Configured workflow authority",
       "purpose": "SERVICE",
       "revision": 1,
@@ -88,12 +86,22 @@
           {
             "kind": "CUSTOM",
             "match": "EXACT",
+            "locator": "model-group:local-ceiling"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
             "locator": "model-group:hotfolder-models"
           },
           {
             "kind": "CUSTOM",
             "match": "EXACT",
-            "locator": "workflow-group:hotfolder"
+            "locator": "model-group:general-models"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "workflow-group:hotswap"
           }
         ],
         "toolGroups": {
@@ -101,12 +109,12 @@
           "ids": []
         }
       },
-      "sourceId": "configured-workflow-service",
+      "sourceId": "hotswap-configured-workflow-service",
       "sourceType": "ROLE"
     },
     {
       "enabled": true,
-      "id": "langchain-linux-capability",
+      "id": "hotswap-langchain-linux-capability",
       "name": "LangChain capability",
       "purpose": "CAPABILITY",
       "revision": 1,
@@ -128,7 +136,7 @@
         "deviceGroups": {
           "all": false,
           "ids": [
-            "langchain-linux-devices"
+            "hotswap-langchain-linux-devices"
           ]
         },
         "resources": [
@@ -155,12 +163,12 @@
           ]
         }
       },
-      "sourceId": "langchain-linux-agents",
+      "sourceId": "hotswap-langchain-linux-agents",
       "sourceType": "AGENT_GROUP"
     },
     {
       "enabled": true,
-      "id": "langchain-linux-service",
+      "id": "hotswap-langchain-linux-service",
       "name": "LangChain service",
       "purpose": "SERVICE",
       "revision": 1,
@@ -182,7 +190,7 @@
         "deviceGroups": {
           "all": false,
           "ids": [
-            "langchain-linux-devices"
+            "hotswap-langchain-linux-devices"
           ]
         },
         "resources": [
@@ -209,7 +217,7 @@
           ]
         }
       },
-      "sourceId": "langchain-linux-agents",
+      "sourceId": "hotswap-langchain-linux-agents",
       "sourceType": "AGENT_GROUP"
     }
   ],
@@ -261,7 +269,7 @@
         }
       },
       "enabled": true,
-      "extractorId": "extract-4e42fa5438980bd0310bc1d22b6ba007",
+      "extractorId": "hotswap-extract-4e42fa5438980bd0310bc1d22b6ba007",
       "id": "examples.hotfolder/read_text",
       "name": "examples.hotfolder/read_text",
       "packageDigest": "45a5f0833d4f7f188a19a6123cb6b7aaff057422021c6230502628bf7fcdbfab",
@@ -317,7 +325,7 @@
         "reconciliation": "MANUAL"
       },
       "enabled": true,
-      "extractorId": "extract-42369acf75b98ffbd79904c5e2c2006b",
+      "extractorId": "hotswap-extract-42369acf75b98ffbd79904c5e2c2006b",
       "id": "examples.hotfolder/move",
       "name": "examples.hotfolder/move",
       "packageDigest": "285d52de81f1023f5d68d44127be920091eb75e4cebb808106fc15b1fd98ff50",
@@ -373,7 +381,7 @@
         "reconciliation": "DOWNSTREAM_IDEMPOTENCY"
       },
       "enabled": true,
-      "extractorId": "extract-ae6b08a8bc30115a681225ab29ca2231",
+      "extractorId": "hotswap-extract-ae6b08a8bc30115a681225ab29ca2231",
       "id": "examples.hotfolder/write_text",
       "name": "examples.hotfolder/write_text",
       "packageDigest": "7d83a8eb6408a423e7be6fc339f914b5fa6f0d37b63a302ee2e2ccbcd1618d5e",
@@ -405,8 +413,8 @@
     {
       "deviceIds": [],
       "enabled": true,
-      "id": "ReadAndWriteDeviceGroup",
-      "name": "ReadAndWriteDeviceGroup",
+      "id": "hotswap-ReadAndWriteDeviceGroup",
+      "name": "hotswap-ReadAndWriteDeviceGroup",
       "revision": 2
     },
     {
@@ -419,7 +427,7 @@
     {
       "deviceIds": [],
       "enabled": true,
-      "id": "langchain-linux-devices",
+      "id": "hotswap-langchain-linux-devices",
       "name": "LangChain selected device",
       "revision": 1
     }
@@ -432,7 +440,7 @@
       "allowedPackageDigests": [],
       "deviceGroupId": "default-devices",
       "enabled": true,
-      "id": "binding-default",
+      "id": "hotswap-binding-default",
       "name": "Reviewed default execution boundary",
       "ownerDependency": false,
       "requireOnline": true,
@@ -449,9 +457,9 @@
         "45a5f0833d4f7f188a19a6123cb6b7aaff057422021c6230502628bf7fcdbfab",
         "7d83a8eb6408a423e7be6fc339f914b5fa6f0d37b63a302ee2e2ccbcd1618d5e"
       ],
-      "deviceGroupId": "langchain-linux-devices",
+      "deviceGroupId": "hotswap-langchain-linux-devices",
       "enabled": true,
-      "id": "langchain-linux-binding",
+      "id": "hotswap-langchain-linux-binding",
       "name": "LangChain selected-device execution",
       "ownerDependency": false,
       "requireOnline": true,
@@ -464,7 +472,7 @@
       "agentGroups": {
         "all": false,
         "ids": [
-          "langchain-linux-agents"
+          "hotswap-langchain-linux-agents"
         ]
       },
       "approverTeams": {
@@ -473,7 +481,7 @@
       },
       "decision": "ALLOW",
       "enabled": true,
-      "id": "langchain-linux-access",
+      "id": "hotswap-langchain-linux-access",
       "name": "LangChain selected-device access",
       "revision": 1,
       "scope": {
@@ -494,7 +502,7 @@
         "deviceGroups": {
           "all": false,
           "ids": [
-            "langchain-linux-devices"
+            "hotswap-langchain-linux-devices"
           ]
         },
         "resources": [
@@ -538,7 +546,7 @@
           "locator": "tool://examples.hotfolder/read_text"
         }
       ],
-      "id": "extract-4e42fa5438980bd0310bc1d22b6ba007",
+      "id": "hotswap-extract-4e42fa5438980bd0310bc1d22b6ba007",
       "maxResources": 32,
       "name": "Resources for examples.hotfolder/read_text",
       "revision": 1,
@@ -554,7 +562,7 @@
           "locator": "tool://examples.hotfolder/move"
         }
       ],
-      "id": "extract-42369acf75b98ffbd79904c5e2c2006b",
+      "id": "hotswap-extract-42369acf75b98ffbd79904c5e2c2006b",
       "maxResources": 32,
       "name": "Resources for examples.hotfolder/move",
       "revision": 1,
@@ -570,7 +578,7 @@
           "locator": "tool://examples.hotfolder/write_text"
         }
       ],
-      "id": "extract-ae6b08a8bc30115a681225ab29ca2231",
+      "id": "hotswap-extract-ae6b08a8bc30115a681225ab29ca2231",
       "maxResources": 32,
       "name": "Resources for examples.hotfolder/write_text",
       "revision": 1,

@@ -136,6 +136,7 @@ def observations():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--bundles-dir',type=Path,default=ROOT/'build/hotswap-mock/bin',help='Explicit deterministic fixture bundle directory; public bots use real Ollama models')
     parser.add_argument('--approve-local-device',action='store_true',required=True,
                         help='Explicitly approve the real local device and assign the demo device groups')
     parser.add_argument('--resume-preparation',action='store_true',help='Explicitly resume this demo after a failed preparation; does not claim a new blank-start observation')
@@ -160,22 +161,22 @@ def main():
         "assert all((root/name).is_dir() for name in ('inbox-a','inbox-b','processed','summaries')), 'Create the demo folders explicitly using debug/profiled/README.md'")
     # The import cannot enable/approve/join devices. The operator creates the
     # empty destination groups and explicitly allocates this verified device.
-    for group in ('ReadAndWriteDeviceGroup','default-devices','langchain-linux-devices'):
+    for group in ('hotswap-ReadAndWriteDeviceGroup','default-devices','hotswap-langchain-linux-devices'):
         page=call(client,'/api/control/v1/device-groups?limit=100')['items']
         if not any(row['id']==group for row in page):
             call(client,'/api/control/v1/device-groups',dict(id=group,name=group,revision=1,enabled=True,deviceIds=[]))
-    allocate(client,device,['ReadAndWriteDeviceGroup','default-devices','langchain-linux-devices'])
+    allocate(client,device,['hotswap-ReadAndWriteDeviceGroup','default-devices','hotswap-langchain-linux-devices'])
     # The model secret is destination custody and is never copied into a bundle.
     call(client,'/api/control/v1/vault',dict(name='demo-provider-key',value=token,
         toolGroupId='default-tools',deviceGroupId='default-devices'))
     start=containers()
     previous_runs={row['runId'] for row in observations()}
     previous_operations={row['id'] for row in call(client,'/api/control/v1/access/invocations?limit=100')['items']}
-    a=ROOT/'bot/bin/hotswap-demo-a-hotswap-demo-1.0.0-demo.a.olo'
-    b=ROOT/'bot/bin/hotswap-demo-b-hotswap-demo-1.0.0-demo.b.olo'
+    a=args.bundles_dir/'hotswap-demo-a-hotswap-demo-1.0.0-demo.a.olo'
+    b=args.bundles_dir/'hotswap-demo-b-hotswap-demo-1.0.0-demo.b.olo'
     def qualify_owner(profile):
         tools={node['toolRef'] for workflow in profile['workflows']['workflows'] for node in workflow['graph']['config']['nodes'] if node['kind']=='tool'}
-        qualify(client,device,'ReadAndWriteDeviceGroup',tools)
+        qualify(client,device,'hotswap-ReadAndWriteDeviceGroup',tools)
     first=deploy(client,a.read_bytes(),after_provision=qualify_owner)
     if args.prepare_only:
         print('Workflow A is ready. Place a UTF-8 .txt file under /var/lib/olo-toolgate/files/inbox-a; see debug/profiled/README.md for switching and output commands.',flush=True)

@@ -139,6 +139,25 @@ paths:
             application/json:
               schema:
                 $ref: ../schemas/v2/native-files.schema.json#/$defs/NativeFileAck
+  /internal/v1/runtime/model:resolve:
+    post:
+      operationId: resolveWorkflowModelCandidate
+      security:
+      - gatewayServiceToken: []
+      summary: Resolve one pinned inference candidate under current run and agent authority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowModelResolveRequest'}
+      responses:
+        '200':
+          description: Private candidate and credential, for Gateway only
+          content:
+            application/json:
+              schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowModelResolveResponse'}
+        '400': {description: Invalid or obsolete candidate request}
+        '403': {description: Current run, step or candidate authority denied}
   /internal/v1/runtime/workers:heartbeat:
     post:
       operationId: reportWorkflowWorkerPresence
@@ -11952,6 +11971,11 @@ paths:
                 $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
 components:
   securitySchemes:
+    gatewayServiceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Verified tenant service JWT with toolgate-relay-gateway role, accepted only over direct TLS.
     runtimeServiceToken:
       type: http
       scheme: bearer

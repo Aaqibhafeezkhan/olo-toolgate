@@ -6,6 +6,23 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Rebuild Quickstart's embedded Distribution registry from pinned v3.1.2 source
+  with patched Go and affected modules; retain licenses/checksums and the image
+  vulnerability gate. Pin Docker CLI 29.10.0 with its patched Go runtime in
+  Quickstart and device images.
+
+- Route file agents through the real OLO QLoRA model served by Ollama, with
+  ordered lightweight-model inference fallback and current authorization before
+  each attempt. Keep premium OpenRouter explicitly unattached standby; never
+  replay tool effects as model fallback. Prepare/reuse both local models in
+  Docker with all NVIDIA GPUs available.
+  Configure provider reasoning effort in bot JSON and validate typed finish
+  results before file writes, within Gateway's request deadline.
+- Refresh all seven file bots and two text examples with portable local-model
+  settings, explicit graphs and bundled tools/triggers. Add central community
+  device/model help and exact per-bot input/output commands. Brand the console
+  OLO, with OLO Orchestration and OLO ToolGate navigation sections.
+
 - Show persistent red bullet diagnostics for imported OLO bot revisions, using
   current backend publication checks. Refresh readiness automatically, retain
   previous issues on connection failures and expose no credentials/event payloads.

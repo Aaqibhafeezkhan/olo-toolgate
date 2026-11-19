@@ -1,6 +1,7 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 """Workflow import refuses implicit identity authority and shared-definition replacement."""
 from copy import deepcopy
+import json
 import unittest
 import tempfile
 from pathlib import Path
@@ -12,6 +13,26 @@ from tools.admin import provision_devices as provision
 
 
 class WorkflowImportTests(unittest.TestCase):
+    def test_preflight_precedes_upload_and_confirmed_registration_refreshes_import_revision(self):
+        metadata=dict(packageId='example.files',version='1.0.0',packageDigest='sha256:'+'a'*64,path='packages/files.olotool')
+        manifest={'packages':[metadata]};files={'workflow.json':b'{}','referenced-data.json':json.dumps({'policies':[{'id':'new-policy'}]}).encode(),metadata['path']:b'fixture'}
+        first=self.snapshot();first['revision']=7
+        current=deepcopy(first);current['revision']=8
+        events=[];exports=iter([first,current])
+        def call(_client,path,body=None,**kwargs):
+            events.append((path,body,kwargs))
+            if path.endswith('/config/export'):return next(exports)
+            if path.endswith('/packages/uploads'):return {**metadata,'state':'VERIFIED'}
+            if path.endswith('/config/import'):
+                self.assertEqual(7 if body['dryRun'] else 8,kwargs['revision'])
+                return {'changes':[{}]}
+            self.fail('Unexpected call '+path)
+        with patch.object(importer,'verify',return_value=manifest),patch.object(importer,'inventory',return_value=files),\
+                patch.object(importer,'call',side_effect=call),patch.object(importer,'service_bindings',side_effect=Refused('stop after confirmed configuration')):
+            with self.assertRaisesRegex(Refused,'stop after confirmed'):importer.deploy(object(),b'fixture')
+        self.assertEqual(['/api/control/v1/config/export','/api/control/v1/config/import',
+            '/api/control/v1/packages/uploads','/api/control/v1/config/export','/api/control/v1/config/import'],[event[0] for event in events])
+
     def test_changed_installation_ca_preserves_operator_files_before_any_login(self):
         from tools.workflows import hotswap_demo
         with tempfile.TemporaryDirectory() as temporary:

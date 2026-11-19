@@ -70,14 +70,28 @@ class JsonGraphTests(unittest.TestCase):
             supervisor_model_group_id=workflow['modelGroupId'],agents=agents,graph=workflow['graph'],
             limits=Limits(workflow['limits']['maxSteps'],workflow['limits']['maxHandoffs'],60))
         gate=Gate(run)
-        gate.catalogs={agents[0].agent_id:(Tool('examples.hotfolder/read_text',True),),agents[1].agent_id:()}
+        gate.catalogs={agents[0].agent_id:tuple(Tool('examples.hotfolder/'+name,name=='read_text') for name in ('read_text','write_text','move')),agents[1].agent_id:()}
         gate.tool_outcome=ToolOutcome('SUCCEEDED',{'text':'A configured source document.'})
+        gate.decisions[agents[0].agent_id]=deque([{'kind':'finish','result':{'summary':'File proposal.'}}])
         gate.decisions[agents[1].agent_id]=deque([{'kind':'finish','result':{'summary':'Configured summary.'}}])
         result=Runner(gate).execute(run)
-        self.assertEqual(('SUCCEEDED',{'summary':'Configured summary.'}),(result.state,result.result))
-        self.assertEqual([(agents[0].agent_id,'examples.hotfolder/read_text',{'path':'inbox/configured.txt'})],gate.calls)
-        self.assertEqual([agents[1].agent_id],[item[0] for item in gate.inferences])
-        self.assertEqual('A configured source document.',gate.inferences[0][3][0]['content']['context'][0]['content']['text'])
+        self.assertEqual(('SUCCEEDED',{'summary':'Configured summary.'}),(result.state,result.result),result.code)
+        self.assertEqual(['examples.hotfolder/read_text','examples.hotfolder/write_text','examples.hotfolder/move'],[item[1] for item in gate.calls])
+        self.assertEqual([agents[0].agent_id,agents[1].agent_id],[item[0] for item in gate.inferences])
+        self.assertEqual('A configured source document.',gate.inferences[0][3][0]['content'])
+        self.assertEqual('A configured source document.',gate.inferences[1][3][0]['content']['text'])
+
+    def test_model_message_expressions_return_proposals_without_executing_tools(self):
+        proposal=dict(kind='tool',toolId='files/write',arguments={'text':'must not execute'})
+        config=spec([dict(id='messages',kind='value',input={'messages':[
+            dict(role='user',content={'$json':{'text':{'$path':'/message'}}})]}),
+            dict(id='proposal',kind='model',agentId='support-fixer',input={'$path':'/values/messages/messages'})],
+            [{'from':['START'],'to':'messages'},{'from':['messages'],'to':'proposal'},{'from':['proposal'],'to':'END'}],{'$path':'/values/proposal'})
+        gate=Gate(lease());gate.decisions['support-fixer']=deque([proposal])
+        result,_=self.execute(config,gate=gate)
+        self.assertEqual(('SUCCEEDED',proposal),(result.state,result.result),result.code)
+        self.assertEqual([],gate.calls)
+        self.assertEqual({'text':'Please investigate.'},json.loads(gate.inferences[0][3][0]['content']))
 
     def test_agent_selection_comes_from_json_and_retains_authorization(self):
         config=spec([dict(id='chosen',kind='agent',agentId='support-fixer',input={'$path':'/message'})],

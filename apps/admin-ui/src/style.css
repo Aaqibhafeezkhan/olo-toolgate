@@ -750,3 +750,5 @@ button.link { background:none; border:0; padding:0; color:var(--accent); text-de
 .bot-issues ul {margin:0;padding-left:24px}
 .bot-issues li+li {margin-top:8px}
 .bot-issues .notice {margin:0;padding:0;border:0}
+
+.nav-section-label { color:var(--muted); font-size:.75rem; font-weight:600; margin:18px 12px 6px; }

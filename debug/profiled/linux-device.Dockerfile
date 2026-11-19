@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 ca-cert
     && mkdir -p /etc/systemd/system /etc/olo-toolgate /var/lib/olo-toolgate /usr/local/lib/olo-toolgate \
     && chmod 700 /var/lib/olo-toolgate
 COPY --from=builder /client /opt/toolgate/client
-COPY --from=docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/bin/docker
+COPY --from=docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d /usr/local/bin/docker /usr/bin/docker
 COPY debug/profiled/device-entrypoint.py /opt/toolgate/device_entrypoint.py
 COPY debug/profiled/device.py /opt/toolgate/device.py
 COPY debug/profiled/device-systemctl.sh /usr/bin/systemctl

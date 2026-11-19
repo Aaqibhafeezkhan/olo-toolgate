@@ -25,6 +25,10 @@ pub struct WorkflowModel {
     pub model_id: String,
     pub credential: String,
     pub generation: olo_toolgate_contracts::v2::WorkflowModelGeneration,
+    pub deployment_id: String,
+    pub candidate_index: u8,
+    pub candidate_count: u8,
+    pub result_schema: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -127,6 +131,7 @@ pub trait RelayPort: Send + Sync {
         &'a self,
         _run: &'a str,
         _step: &'a str,
+        _candidate_index: u8,
     ) -> PortFuture<'a, Result<WorkflowModel, ErrorCode>> {
         Box::pin(async { Err(ErrorCode::DependencyUnavailable) })
     }
@@ -512,10 +517,11 @@ impl RelayPort for HttpRelay {
         &'a self,
         run: &'a str,
         step: &'a str,
+        candidate_index: u8,
     ) -> PortFuture<'a, Result<WorkflowModel, ErrorCode>> {
         Box::pin(self.workflow_resolution(
             "model:resolve",
-            serde_json::json!({"runId": run, "stepToken": step}),
+            serde_json::json!({"runId": run, "stepToken": step, "candidateIndex": candidate_index}),
         ))
     }
     fn cancel<'a>(

@@ -206,38 +206,68 @@ async fn workflow_inference(State(s): State<Arc<AppState>>, request: Request) ->
             && object.get("content").is_some_and(Value::is_string))) {
             return Err(ErrorCode::Validation);
         }
-        let model = s.gateway.authority.workflow_model(&run, &token).await?;
-        let (max_tokens, temperature) = workflow_generation(&model)?;
-        let origin = reqwest::Url::parse(&model.origin).map_err(|_| ErrorCode::DependencyUnavailable)?;
-        let approved = std::env::var("TOOLGATE_WORKFLOW_MODEL_ORIGINS").unwrap_or_default();
-        if origin.scheme() != "https" || origin.host_str().is_none() || origin.path() != "/" || !origin.username().is_empty()
-            || origin.password().is_some() || origin.query().is_some() || origin.fragment().is_some()
-            || !approved.split(',').map(str::trim).any(|entry| entry == origin.origin().ascii_serialization()) {
-            return Err(ErrorCode::Forbidden);
+        // Resolve credentials afresh before each attempt. Provider failures alone
+        // permit fallback; authority and installation configuration fail closed.
+        let deadline = tokio::time::Instant::now() + inference_budget(s.config.limits.request_timeout_ms);
+        let mut count = None;
+        for index in 0..16u8 {
+            let model = tokio::time::timeout_at(deadline,
+                s.gateway.authority.workflow_model(&run, &token, index)).await
+                .map_err(|_| ErrorCode::DependencyUnavailable)??;
+            validate_candidate(&model, index, count)?;
+            count = Some(model.candidate_count);
+            let (max_tokens, temperature) = workflow_generation(&model)?;
+            let origin = reqwest::Url::parse(&model.origin).map_err(|_| ErrorCode::DependencyUnavailable)?;
+            let approved = std::env::var("TOOLGATE_WORKFLOW_MODEL_ORIGINS").unwrap_or_default();
+            if origin.scheme() != "https" || origin.host_str().is_none() || origin.path() != "/" || !origin.username().is_empty()
+                || origin.password().is_some() || origin.query().is_some() || origin.fragment().is_some()
+                || !approved.split(',').map(str::trim).any(|entry| entry == origin.origin().ascii_serialization()) {
+                return Err(ErrorCode::Forbidden);
+            }
+            let mut builder = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none())
+                .retry(reqwest::retry::never()).tls_sslkeylogfile(false).connect_timeout(Duration::from_secs(3));
+            if let Some(path) = std::env::var_os("TOOLGATE_WORKFLOW_MODEL_CA_FILE") {
+                let bytes = crate::config::read_bytes(std::path::Path::new(&path)).map_err(|_| ErrorCode::DependencyUnavailable)?;
+                let roots = reqwest::Certificate::from_pem_bundle(&bytes).map_err(|_| ErrorCode::DependencyUnavailable)?;
+                if roots.is_empty() { return Err(ErrorCode::DependencyUnavailable); }
+                builder = builder.tls_certs_only(roots);
+            }
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() { return Err(ErrorCode::DependencyUnavailable); }
+            // Reserve remaining time for later candidates after a stalled provider.
+            let timeout = remaining / u32::from(model.candidate_count - index);
+            let client = builder.timeout(timeout).build().map_err(|_| ErrorCode::DependencyUnavailable)?;
+            let format = workflow_decision_format(&model.result_schema)?;
+            let validator = jsonschema::options().with_draft(jsonschema::Draft::Draft202012)
+                .build(&format["json_schema"]["schema"]).map_err(|_| ErrorCode::DependencyUnavailable)?;
+            let attempt = async {
+                let mut payload = serde_json::json!({"model":model.model_id,"messages":messages,"stream":false,"max_tokens":max_tokens,
+                    "temperature":temperature,"response_format":format});
+                if let Some(effort) = &model.generation.reasoning_effort {
+                    payload["reasoning_effort"] = Value::String(effort.clone());
+                }
+                let response = client.post(origin.join("v1/chat/completions").map_err(|_| ErrorCode::Validation)?)
+                    .bearer_auth(&model.credential).header("Content-Type", "application/json")
+                    .header("traceparent", &correlation.traceparent)
+                    .body(payload.to_string())
+                    .send().await.map_err(|_| ErrorCode::DependencyUnavailable)?;
+                if !response.status().is_success() { return Err(ErrorCode::DependencyUnavailable); }
+                let body = crate::relay::read_workflow_body(response, 98_304).await?;
+                let value = crate::validation::strict_json(&body).map_err(|_| ErrorCode::Validation)?;
+                let content = value["choices"][0]["message"]["content"].as_str().ok_or(ErrorCode::Validation)?;
+                let decision = crate::validation::strict_json(content.as_bytes()).map_err(|_| ErrorCode::Validation)?;
+                if !s.gateway.contracts.valid("WorkflowModelDecision", &decision) || !validator.is_valid(&decision) { return Err(ErrorCode::Validation); }
+                Ok(decision)
+            }.await;
+            tracing::info!(run_id = %run, deployment_id = %model.deployment_id, model_id = %model.model_id,
+                candidate_index = index, succeeded = attempt.is_ok(), "workflow inference attempt");
+            match attempt {
+                Ok(decision) => return Ok(decision),
+                Err(code) if index + 1 == model.candidate_count => return Err(code),
+                Err(_) => {},
+            }
         }
-        let mut builder = reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none())
-            .retry(reqwest::retry::never()).tls_sslkeylogfile(false).connect_timeout(Duration::from_secs(3))
-            .timeout(Duration::from_secs(30));
-        if let Some(path) = std::env::var_os("TOOLGATE_WORKFLOW_MODEL_CA_FILE") {
-            let bytes = crate::config::read_bytes(std::path::Path::new(&path)).map_err(|_| ErrorCode::DependencyUnavailable)?;
-            let roots = reqwest::Certificate::from_pem_bundle(&bytes).map_err(|_| ErrorCode::DependencyUnavailable)?;
-            if roots.is_empty() { return Err(ErrorCode::DependencyUnavailable); }
-            builder = builder.tls_certs_only(roots);
-        }
-        let client = builder.build().map_err(|_| ErrorCode::DependencyUnavailable)?;
-        let response = client.post(origin.join("v1/chat/completions").map_err(|_| ErrorCode::Validation)?)
-            .bearer_auth(model.credential).header("Content-Type", "application/json")
-            .header("traceparent", &correlation.traceparent)
-            .body(serde_json::json!({"model":model.model_id,"messages":messages,"stream":false,"max_tokens":max_tokens,
-                "temperature":temperature,"response_format":workflow_decision_format()?}).to_string())
-            .send().await.map_err(|_| ErrorCode::DependencyUnavailable)?;
-        if !response.status().is_success() { return Err(ErrorCode::DependencyUnavailable); }
-        let body = crate::relay::read_workflow_body(response, 98_304).await?;
-        let value = crate::validation::strict_json(&body).map_err(|_| ErrorCode::Validation)?;
-        let content = value["choices"][0]["message"]["content"].as_str().ok_or(ErrorCode::Validation)?;
-        let decision = crate::validation::strict_json(content.as_bytes()).map_err(|_| ErrorCode::Validation)?;
-        if !s.gateway.contracts.valid("WorkflowModelDecision", &decision) { return Err(ErrorCode::Validation); }
-        Ok(decision)
+        Err(ErrorCode::DependencyUnavailable)
     }.await;
     match result {
         Ok(decision) => ([("cache-control", "no-store")], Json(decision)).into_response(),
@@ -245,17 +275,83 @@ async fn workflow_inference(State(s): State<Arc<AppState>>, request: Request) ->
     }
 }
 
+fn inference_budget(request_timeout_ms: u64) -> Duration {
+    Duration::from_millis(request_timeout_ms.saturating_sub(500).min(25_000))
+}
+
+fn validate_candidate(
+    model: &crate::relay::WorkflowModel,
+    index: u8,
+    count: Option<u8>,
+) -> Result<(), ErrorCode> {
+    if model.candidate_index != index
+        || !(1..=16).contains(&model.candidate_count)
+        || index >= model.candidate_count
+        || count.is_some_and(|value| value != model.candidate_count)
+        || model.deployment_id.is_empty()
+        || model.credential.is_empty()
+    {
+        return Err(ErrorCode::DependencyUnavailable);
+    }
+    Ok(())
+}
+
 /// The provider receives the same closed decision schema validated at Gateway.
 /// Decoding constrains syntax; it grants no agent, tool, context or model authority.
-fn workflow_decision_format() -> Result<Value, ErrorCode> {
+fn workflow_decision_format(result_schema: &Value) -> Result<Value, ErrorCode> {
     let document: Value = serde_json::from_str(include_str!(
         "../../../packages/contracts/rust/schemas/v2/workflow-decision.schema.json"
     ))
     .map_err(|_| ErrorCode::DependencyUnavailable)?;
+    if !result_schema.is_object() || result_schema.to_string().len() > 65_536 {
+        return Err(ErrorCode::DependencyUnavailable);
+    }
+    let mut result_schema = result_schema.clone();
+    scope_result_refs(&mut result_schema)?;
+    let mut decisions = document["$defs"]
+        .as_object()
+        .ok_or(ErrorCode::DependencyUnavailable)?
+        .clone();
+    decisions
+        .get_mut("WorkflowFinishDecision")
+        .ok_or(ErrorCode::DependencyUnavailable)?["properties"]["result"] =
+        serde_json::json!({"$ref":"#/$defs/configuredResult"});
     Ok(serde_json::json!({"type":"json_schema","json_schema":{
-        "name":"toolgate_workflow_decision","strict":true,
-        "schema":{"oneOf":document["$defs"].as_object().ok_or(ErrorCode::DependencyUnavailable)?
-            .values().cloned().collect::<Vec<_>>()}}}))
+        "name":"toolgate_workflow_decision","strict":true,"schema":{
+            "$defs":{"configuredResult":result_schema},"oneOf":decisions.values().cloned().collect::<Vec<_>>()}}}))
+}
+
+/// Preserve local result-schema pointers when embedded in the decision schema.
+/// Refuse resource IDs and remote references before either validation or provider IO.
+fn scope_result_refs(value: &mut Value) -> Result<(), ErrorCode> {
+    match value {
+        Value::Object(object) => {
+            if object.contains_key("$id") {
+                return Err(ErrorCode::DependencyUnavailable);
+            }
+            for (key, item) in object {
+                if matches!(key.as_str(), "$ref" | "$dynamicRef") {
+                    let reference = item
+                        .as_str()
+                        .filter(|text| text.starts_with('#'))
+                        .ok_or(ErrorCode::DependencyUnavailable)?;
+                    if reference == "#" || reference.starts_with("#/") {
+                        *item =
+                            Value::String(format!("#/$defs/configuredResult{}", &reference[1..]));
+                    }
+                } else {
+                    scope_result_refs(item)?;
+                }
+            }
+        }
+        Value::Array(array) => {
+            for item in array {
+                scope_result_refs(item)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 fn workflow_generation(model: &crate::relay::WorkflowModel) -> Result<(u64, f64), ErrorCode> {
@@ -263,6 +359,10 @@ fn workflow_generation(model: &crate::relay::WorkflowModel) -> Result<(u64, f64)
     if !(1..=4096).contains(&generation.max_output_tokens)
         || !generation.temperature.is_finite()
         || !(0.0..=2.0).contains(&generation.temperature)
+        || generation
+            .reasoning_effort
+            .as_deref()
+            .is_some_and(|effort| !matches!(effort, "none" | "low" | "medium" | "high"))
     {
         return Err(ErrorCode::DependencyUnavailable);
     }
@@ -909,9 +1009,17 @@ mod trace_context {
     #[test]
     fn model_generation_is_profile_selected_and_bounded() {
         let mut value = serde_json::json!({"origin":"https://model.example","modelId":"profile-model",
-            "credential":"fixture","generation":{"maxOutputTokens":256,"temperature":0.25}});
+            "credential":"fixture","deploymentId":"local","candidateIndex":0,"candidateCount":1,"resultSchema":{},"generation":{"maxOutputTokens":256,"temperature":0.25}});
         let model = serde_json::from_value(value.clone()).unwrap();
         assert_eq!(super::workflow_generation(&model).unwrap(), (256, 0.25));
+        value["generation"]["reasoningEffort"] = "unsupported".into();
+        assert!(
+            super::workflow_generation(&serde_json::from_value(value.clone()).unwrap()).is_err()
+        );
+        value["generation"]["reasoningEffort"] = "none".into();
+        assert!(
+            super::workflow_generation(&serde_json::from_value(value.clone()).unwrap()).is_ok()
+        );
         value["generation"]["maxOutputTokens"] = 4097.into();
         assert!(
             super::workflow_generation(&serde_json::from_value(value.clone()).unwrap()).is_err()
@@ -921,8 +1029,15 @@ mod trace_context {
     }
 
     #[test]
+    fn inference_finishes_before_the_outer_request_deadline() {
+        assert_eq!(super::inference_budget(20_000).as_millis(), 19_500);
+        assert_eq!(super::inference_budget(30_000).as_millis(), 25_000);
+        assert_eq!(super::inference_budget(10).as_millis(), 0);
+    }
+
+    #[test]
     fn provider_decoding_uses_the_canonical_closed_decisions() {
-        let format = super::workflow_decision_format().unwrap();
+        let format = super::workflow_decision_format(&serde_json::json!({})).unwrap();
         assert_eq!(format["type"], "json_schema");
         assert_eq!(format["json_schema"]["strict"], true);
         let schema = &format["json_schema"]["schema"];
@@ -930,6 +1045,26 @@ mod trace_context {
         let validator = jsonschema::validator_for(schema).unwrap();
         assert!(validator.is_valid(&serde_json::json!({"kind":"finish_context"})));
         assert!(!validator.is_valid(&serde_json::json!({"kind":"finish_context","result":"extra"})));
+    }
+
+    #[test]
+    fn finish_results_are_validated_with_pinned_schema_and_local_references() {
+        let result = serde_json::json!({"type":"object","required":["summary"],"additionalProperties":false,
+            "properties":{"summary":{"$ref":"#/$defs/text"}},"$defs":{"text":{"type":"string","minLength":1}}});
+        let format = super::workflow_decision_format(&result).unwrap();
+        let validator = jsonschema::validator_for(&format["json_schema"]["schema"]).unwrap();
+        assert!(validator
+            .is_valid(&serde_json::json!({"kind":"finish","result":{"summary":"confirmed"}})));
+        assert!(!validator
+            .is_valid(&serde_json::json!({"kind":"finish","result":{"status":"success"}})));
+        assert!(!validator.is_valid(&serde_json::json!({"kind":"finish","result":{"summary":""}})));
+        for schema in [
+            serde_json::json!({"$ref":"https://unapproved.invalid/schema"}),
+            serde_json::json!({"$dynamicRef":"file:///private"}),
+            serde_json::json!({"$id":"https://unapproved.invalid"}),
+        ] {
+            assert!(super::workflow_decision_format(&schema).is_err());
+        }
     }
 
     #[test]

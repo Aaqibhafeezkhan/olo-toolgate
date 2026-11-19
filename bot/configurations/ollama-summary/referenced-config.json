@@ -72,7 +72,12 @@
           {
             "kind": "CUSTOM",
             "match": "EXACT",
-            "locator": "model-group:ollama-summary-models"
+            "locator": "model-group:ollama-summary-local-ceiling"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "model-group:ollama-summary-general-models"
           }
         ],
         "toolGroups": {

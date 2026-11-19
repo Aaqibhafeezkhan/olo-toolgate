@@ -1,5 +1,5 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Buildable bots
+# OLO bots
 
 `configurations/<name>/` contains the editable source needed to build each
 profile: workflow/agent/model JSON, referenced directory definitions, logical
@@ -11,7 +11,9 @@ using the installed `olo.json-graph` factory. Edit its nodes, edges and output
 expressions to change the topology; agent definitions supply the governed model
 and tool capabilities. The compiler supports value, agent, model, tool, branching,
 static joins and bounded loops. Compilation does not provision devices or make a
-profile runnable. Automatic hot-swap deployment is still being implemented; see
+bot runnable. Start with [community help](../docs/help/README.md), especially
+[device updates](../docs/help/device.md) and [model updates](../docs/help/models.md).
+Actual execution acceptance and remaining work are recorded in
 the [live workflow status](../docs/architecture/workflow-v1-status.md).
 
 From any directory on Windows:
@@ -63,7 +65,7 @@ Product/profile versions and tool package versions are independently recorded.
 Long or platform-sensitive labels are shortened in filenames; the inventory
 retains the complete original identifiers and version.
 
-Import a bundle on **Workflows → Import workflow .olo**. Importing its embedded
+Import a bundle on **Bots → Import workflow .olo**. Importing its embedded
 packages is part of that action: all exact archives must verify through Control
 before the new workflow is staged. Apply referenced configuration under the existing
 configuration policy, restore trigger mappings, review and publish. Upload does
@@ -79,3 +81,8 @@ development and immutable product publication collect the tested bytes and
 version inventory as release assets. Publication rechecks source/version,
 configuration hashes and the full embedded package inventory rather than
 rebuilding profiles during promotion.
+
+The seven file examples use the real OLO QLoRA model first for file agents,
+then lightweight Ollama on inference failure. Other agents use the lightweight
+model; OpenRouter remains unattached standby. The two text-only examples use
+lightweight Ollama. Each source README contains exact input and output commands.

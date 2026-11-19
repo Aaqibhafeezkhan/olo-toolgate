@@ -95,11 +95,16 @@ def deploy(client,bundle,*,timeout=360,after_provision=None):
         if not call(client,'/api/control/v1/users/'+owner['id'])['enabled']:
             raise Refused('A referenced destination owner is disabled')
     merged=merge_references(snapshot,references)
+    call(client,'/api/control/v1/config/import',dict(snapshot=merged,mode='MERGE',dryRun=True),revision=snapshot['revision'])
     # All local bundle/identity/conflict checks precede server-side effects.
     for item in manifest['packages']:
         stored=call(client,'/api/control/v1/packages/uploads',raw=files[item['path']])
         if stored.get('state')!='VERIFIED' or any(stored.get(key)!=item[key] for key in ('packageId','version','packageDigest')):
             raise Refused('Control did not confirm the exact verified embedded package')
+    # Confirmed package registration can update directory state. Merge against a
+    # fresh observation, never retry a rejected/unknown configuration write.
+    snapshot=call(client,'/api/control/v1/config/export')
+    merged=merge_references(snapshot,references)
     if merged!=snapshot:
         call(client,'/api/control/v1/config/import',dict(snapshot=merged,mode='MERGE',dryRun=False),revision=snapshot['revision'])
     service_bindings(client,profile)

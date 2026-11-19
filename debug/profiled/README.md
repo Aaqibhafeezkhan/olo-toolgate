@@ -1,5 +1,123 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Persistent profile-driven debug stack
+# OLO local debug stack
+
+OLO Orchestration runs bots/agents. OLO ToolGate governs tools, devices, triggers
+and access. Start with the real local-model path below; the separate mock
+reference later is for deterministic transport acceptance.
+
+## Real local-model bots: start here
+
+Run in PowerShell from the repository root. Docker Desktop's Linux engine and
+a functioning NVIDIA driver/Docker GPU integration are operator prerequisites.
+Host Node, JDK, Rust, pip, Torch and Transformers are unnecessary. Startup
+bootstraps private Python if needed; builds and model preparation use Docker.
+
+```powershell
+.\debug\profiled\start.bat -WithOllama -WithMonitoring
+. .\debug\profiled\python.ps1
+$debugPython = Find-DebugPython
+$env:PYTHONUTF8 = '1'
+$compose = @('compose','-p','toolgate-profiled','-f','debug/profiled/state/compose.json')
+```
+
+Interactive startup asks independently about Ollama and the collector: **1**
+installs/reuses it, **2/Enter** keeps the current setup. The three core containers
+are Quickstart, LangGraph and Device. Ollama/TLS and collector are optional
+companions. First start leaves a blank console with `admin`; it never seeds bot
+data or device files. Existing credentials/storage are reused. Read the password
+privately at `debug/profiled/credentials/admin/password.txt`; it is never exported.
+
+Ollama serves **both** `olo-qlora-hotfolder:e376fb40` and `qwen3:0.6b`, with all
+four GPUs exposed and two models permitted to remain loaded. Startup merges
+the real pinned OLO PEFT adapter with its pinned Qwen2.5 base, converts to F16
+GGUF in an isolated CPU builder and imports it. First preparation needs Internet,
+several GB disk and up to 8 GB builder RAM. Restarts reuse prepared weights.
+File agents use QLoRA first, lightweight Ollama on inference failure; other agents
+use lightweight Ollama. Premium OpenRouter is unattached standby and is never
+called automatically. No model failure retries a tool effect.
+
+Read the two central guides before changing an installation:
+
+- [Device setup, permissions, groups and live updates](../../docs/help/device.md).
+- [Models, exact QLoRA revisions, routing, replacements and OpenRouter](../../docs/help/models.md).
+
+Build public bots with `bot\build.bat --version 1.0.0-demo.local`. Outputs go to
+`bot/bin/`. To reuse exact locally built `.olotool` archives instead:
+
+```powershell
+& $debugPython bot/build.py --packages-dir build/hotswap-runbook-packages --no-sdk-build --version 1.0.0-demo.local --output build/local-model-bots
+```
+
+That directory must contain hotfolder, `hotfolder-watch` and `log-watch` packages;
+omit `--packages-dir` to build their recipes. Each `.olo` contains one workflow,
+its referenced configuration and required packages. No README, account/password,
+model weight or credential is inside. Source READMEs remain beside configurations.
+
+| Bot | Exact input/output and permission commands |
+|---|---|
+| Hot swap A | [README](../../bot/configurations/hotswap-demo-a/README.md) |
+| Hot swap B | [README](../../bot/configurations/hotswap-demo-b/README.md) |
+| Issue triage | [README](../../bot/configurations/issue-triage/README.md) |
+| Log triage | [README](../../bot/configurations/log-triage/README.md) |
+| Native hot folder | [README](../../bot/configurations/native-hotfolder/README.md) |
+| Native log | [README](../../bot/configurations/native-log/README.md) |
+| Text summary | [README](../../bot/configurations/text-summary/README.md) |
+
+Import a public `.olo` in **OLO Orchestration > Bots**. Explicitly approve/enable
+the real device and assign every declared package/execution-binding group.
+Permit the file root and `.txt`, `.json`, `.log` extensions, provision packages
+and qualify native file execution. Then store this installation's model bridge
+key through the vault API:
+
+```powershell
+& $debugPython debug/profiled/ollama.py vault
+```
+
+This uses the saved Admin login and does not rotate its password, import a bot
+or touch device files. Resolve every persistent red bot blocker, review,
+provision packages, prepare graphs and publish. A gray Publish button means
+readiness is incomplete. Use **▶ Run**, enter that README's input, and inspect
+the recorded progress/result. Watcher cases run after you explicitly prepare
+their folders/permissions and place their exact sample input. Import/switch
+never creates, removes or moves folder content. Fixed demo artifact paths must
+be inspected/changed/removed explicitly before a repeat.
+
+A/B intentionally share `hotswap-demo`; publishing B changes new admissions
+without restarting core/device or changing Admin. Admitted runs stay pinned.
+The other cases have independent IDs. Stop a retired assignment explicitly.
+
+For automated acceptance, first build all public bundles into
+`build/local-model-bots` with the command above. This explicit test consumer
+approves/enables the selected local device, allocates groups, prepares folders
+and inputs, qualifies native file execution, imports/publishes and triggers each
+case. It checks results/archive contents, progress, core/device process identity
+and Admin preservation. It refuses to delete pre-existing demo artifacts.
+
+```powershell
+& $debugPython debug/profiled/stack.py provision-runtime
+& $debugPython tools/workflows/local_models_demo.py --approve-local-device --prepare-demo-folders --acknowledge-unfenced-files
+# To select one case, add: --configuration log-triage
+```
+
+Read the native filesystem qualification limitations before accepting that flag.
+Evidence is `build/local-model-bots-evidence.json`; only completed cases are
+listed. Folder preparation belongs to this explicit test action, never import.
+Use `--verify-existing` only to verify matching confirmed completed demo
+artifacts without submitting another event. Unsafe/unknown outcomes are never
+replayed. Hot-folder source identity is path plus size; the automated consumer
+uses unique input names. For manual repeats, use a new `.txt` name or wait for
+a watcher poll after removing the old source; inspect fixed outputs separately.
+
+The runtime service credential is separate from Admin; its operator API script
+does not change the Admin password. See [community help](../../docs/help/README.md)
+for lifecycle, authoring, observability, troubleshooting and current limits.
+
+## Deterministic mock acceptance reference
+
+The following reference uses separate mock-only fixtures for exact transport
+assertions. It is not the public seven-bot local-model setup above. Use a
+separate blank/prepared test installation; do not replace public sources with
+mock configuration.
 
 This community runbook starts a blank installation and demonstrates changing its
 trigger, graph configuration, agent model and output paths while the same core
@@ -14,8 +132,9 @@ The core composition contains exactly **three** containers:
 | `langgraph` | Private graph API and execution worker; no trigger listener or identity issuer |
 | `device` | Persistent device runtime, installed tools and triggers |
 
-The three services are the persistent core. Native tool calls may launch
-short-lived isolated execution containers through the Device's Docker runtime.
+The three services are the persistent core. The Device's Docker runtime also
+launches isolated package executors. Tool-call executors may be short-lived;
+watcher executors remain running while their trigger assignments are active.
 An optional external model fixture or monitoring system is separate from the
 core stack.
 
@@ -145,14 +264,13 @@ keeping packages aligned with the stack without host SDK dependencies:
 ```powershell
 New-Item -ItemType Directory -Force build/hotswap-packages | Out-Null
 docker @compose cp quickstart:/opt/toolgate/workflow-stack/packages/. build/hotswap-packages
-& $debugPython bot/build.py --configuration hotswap-demo-a --packages-dir build/hotswap-packages --no-sdk-build --version 1.0.0-demo.a
-& $debugPython bot/build.py --configuration hotswap-demo-b --packages-dir build/hotswap-packages --no-sdk-build --version 1.0.0-demo.b
+& $debugPython tools/workflows/demo_profiles.py --packages-dir build/hotswap-packages
 ```
 
 Outputs:
 
-- `bot/bin/hotswap-demo-a-hotswap-demo-1.0.0-demo.a.olo`
-- `bot/bin/hotswap-demo-b-hotswap-demo-1.0.0-demo.b.olo`
+- `build/hotswap-mock/bin/hotswap-demo-a-hotswap-demo-1.0.0-demo.a.olo`
+- `build/hotswap-mock/bin/hotswap-demo-b-hotswap-demo-1.0.0-demo.b.olo`
 
 Each embeds its exact `.olotool` hotfolder tools and `hotfolder-watch` package,
 workflow/agent/model JSON and referenced data. Accounts, device membership,
@@ -165,7 +283,8 @@ separate READMEs are in `bot/configurations/hotswap-demo-a` and
 Use this instead of the deterministic mock when you want a real generated
 summary. The optional companion composition adds **Ollama** and a **TLS proxy**;
 Quickstart, LangGraph and Device remain the three core ToolGate services.
-`ollama/ollama:latest` serves `qwen3:0.6b`, a small open-source thinking model
+`ollama/ollama:latest` serves the real merged OLO QLoRA model plus
+`qwen3:0.6b`, a small open-source thinking model
 ([model](https://ollama.com/library/qwen3:0.6b),
 [OpenAI-compatible structured output](https://github.com/ollama/ollama/blob/main/docs/capabilities/structured-outputs.mdx)).
 The TLS proxy uses the gateway's existing HTTPS provider contract. Neither
@@ -434,7 +553,7 @@ the configured workflow model.
 ### Switch to B without restarting
 
 ```powershell
-& $debugPython tools/admin/import_workflow.py bot/bin/hotswap-demo-b-hotswap-demo-1.0.0-demo.b.olo @api
+& $debugPython tools/admin/import_workflow.py build/hotswap-mock/bin/hotswap-demo-b-hotswap-demo-1.0.0-demo.b.olo @api
 ```
 
 Wait for `PUBLISHED`. Import uploads/verifies embedded packages, merges
@@ -464,7 +583,7 @@ docker @compose exec -T device python3 -c "from pathlib import Path;print(Path('
 Toggle back with:
 
 ```powershell
-& $debugPython tools/admin/import_workflow.py bot/bin/hotswap-demo-a-hotswap-demo-1.0.0-demo.a.olo @api
+& $debugPython tools/admin/import_workflow.py build/hotswap-mock/bin/hotswap-demo-a-hotswap-demo-1.0.0-demo.a.olo @api
 ```
 
 Only the current publication admits new runs. Generic import currently leaves
@@ -502,7 +621,7 @@ Private state/credentials are ignored by Git. The separate fixture container
 - UNKNOWN tool result: inspect business evidence and native qualification. SDK
   success or Admin authority cannot substitute for it. Qualification expires;
   renew deliberately with `tools/admin/qualify_native_files.py`, the same `$api`,
-  exact `--device DEVICE_ID --group ReadAndWriteDeviceGroup`, each
+  exact `--device DEVICE_ID --group hotswap-ReadAndWriteDeviceGroup`, each
   `--tool examples.hotfolder/read_text`, `--tool examples.hotfolder/write_text`,
   `--tool examples.hotfolder/move`, and `--days 1 --acknowledge-unfenced-files`.
 - Model failure: inspect fixture health, workflow origin/model/vault reference,
@@ -552,72 +671,13 @@ access does not manufacture effect evidence. The signed-in Admin cannot delete
 itself. Underlying API/schema identifiers still use `workflow`/`profile` names;
 these are execution contracts, not a second authoring directory or old-path alias.
 
-## 8. Use OpenRouter instead of the mock
+## 8. Premium OpenRouter activation
 
-OpenRouter uses `https://openrouter.ai/api/v1/chat/completions` ([official
-integration guide](https://openrouter.ai/docs/quickstart)). The current Gateway
-accepts an HTTPS **origin** and sends `/v1/chat/completions`; it cannot accept
-`/api` in that origin. Do not configure `https://openrouter.ai/api` directly.
-Use your external LLM router, or the following explicit debug bridge. It changes
-only the separate model service; core/device containers and bot file data stay
-untouched. An actual OpenRouter account/key is required; vendor ingestion and
-live inference have not been verified without your credentials.
-
-First complete manual preparation above so destination TLS custody exists. Then
-stop the mock and attach the external bridge using that same debug-only TLS
-identity. The bridge forwards the vault bearer over verified HTTPS to OpenRouter;
-it has no API key in its configuration and does not log request contents.
-
-```powershell
-docker pull nginx:stable-alpine
-$nginxImage = docker image inspect --format '{{index .RepoDigests 0}}' nginx:stable-alpine
-$custody = (Get-Content debug/profiled/state/compose.json -Raw | ConvertFrom-Json).volumes.custody.name
-$bridge = (Resolve-Path debug/profiled/openrouter-bridge.conf.example).Path
-docker stop toolgate-profiled-demo-provider
-docker network disconnect toolgate-profiled_default toolgate-profiled-demo-provider
-docker run -d --name toolgate-profiled-openrouter --network toolgate-profiled_default --network-alias demo-provider --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:rw,noexec,nosuid,size=16m,mode=1777 --mount "type=volume,source=${custody},target=/custody/provider,readonly,volume-subpath=provider" -v "${bridge}:/etc/nginx/nginx.conf:ro" --entrypoint nginx $nginxImage -g 'daemon off;'
-```
-
-Store the OpenRouter key through the authenticated vault API, with its private
-input file under credentials. Do not put keys in `bot.json`, shell history or a
-bundle. The destination already has the demo tool/device groups:
-
-```powershell
-New-Item -ItemType Directory -Force debug/profiled/credentials/openrouter | Out-Null
-$keyFolder = (Resolve-Path debug/profiled/credentials/openrouter).Path
-$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-icacls $keyFolder /inheritance:r /grant:r "*${sid}:(OI)(CI)F" | Out-Null
-$secureKey = Read-Host 'OpenRouter API key' -AsSecureString
-$key = [System.Net.NetworkCredential]::new('', $secureKey).Password
-@{name='openrouter-key';value=$key;toolGroupId='default-tools';deviceGroupId='default-devices'} | ConvertTo-Json | Set-Content -Encoding utf8 "$keyFolder/vault-request.json"
-& $debugPython tools/admin/control.py @api --method POST --path /api/control/v1/vault --json-file "$keyFolder/vault-request.json"
-Remove-Variable key,secureKey
-```
-
-Create a separate source configuration, choose a current model ID from
-[OpenRouter models](https://openrouter.ai/models), and select a provider supporting
-JSON-schema structured output. The model must return the Gateway's decision
-schema, not free text. The configured 512-token limit bounds each response.
-
-```powershell
-Copy-Item bot/configurations/hotswap-demo-a bot/configurations/openrouter-summary -Recurse
-$botPath = 'bot/configurations/openrouter-summary/bot.json'
-$bot = Get-Content $botPath -Raw | ConvertFrom-Json
-$bot.workflows.modelDeployments[0].modelId = Read-Host 'Exact OpenRouter model ID'
-$bot.workflows.modelDeployments[0].secretName = 'openrouter-key'
-# Origin remains https://demo-provider:9443, now the external bridge.
-$bot | ConvertTo-Json -Depth 100 | Set-Content -Encoding utf8 $botPath
-& $debugPython bot/build.py --configuration openrouter-summary --packages-dir build/hotswap-packages --no-sdk-build --version 1.0.0-openrouter.1
-& $debugPython tools/admin/import_workflow.py bot/bin/openrouter-summary-hotswap-demo-1.0.0-openrouter.1.olo @api
-docker logs --tail 30 toolgate-profiled-openrouter
-```
-
-Update the copied README for your chosen model. Use the A input/output folders;
-preserve and clear an existing archive destination before another input. Real
-summary text differs from the mock's exact prefix. Check successful Control
-outcomes and the two output files. Keep provider routing/trust and secrets out
-of portable bundles. For production, use separately managed TLS and a reviewed
-external model router rather than the demo custody/bridge.
+OpenRouter is declared as unattached standby in every public bot. It is not
+called and requires no key until explicitly attached. Follow the centralized
+[model guide](../../docs/help/models.md) to configure its key, HTTPS trust,
+agent candidate order, workflow ceiling and reviewed publication. Keep secrets
+in the destination vault and process environment outside bot bundles.
 
 ## 9. Monitoring: local logs, Insights and external collectors
 

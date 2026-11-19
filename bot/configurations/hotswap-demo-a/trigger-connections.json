@@ -1,14 +1,15 @@
 [
   {
     "id": "demo-dispatch-a",
-    "subscription": "demo-a",
     "assignment": "demo-a",
+    "subscription": "demo-a-events",
     "assignmentSpec": {
+      "trigger": "examples.hotfolder-watch/new-file",
       "packageVersion": "0.1.0",
       "target": {
         "executor": "CLIENT",
         "deviceGroups": [
-          "ReadAndWriteDeviceGroup"
+          "hotswap-ReadAndWriteDeviceGroup"
         ]
       },
       "config": {
@@ -16,8 +17,7 @@
         "extension": ".txt"
       },
       "globals": {},
-      "desiredState": "Running",
-      "trigger": "examples.hotfolder-watch/new-file"
+      "desiredState": "Running"
     },
     "subscriptionSpec": {
       "sources": {

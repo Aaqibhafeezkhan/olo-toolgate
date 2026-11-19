@@ -30,8 +30,8 @@ export function workflowScope(profile:DeploymentProfile,id:string,connections:re
   const agentDefinitions=source.agentDefinitions.filter(item=>agents.has(item.agentId));
   if(agentDefinitions.length!==agents.size)fail('Workflow agent definitions are incomplete.');
   const groups=new Set([workflow.modelGroupId,...agentDefinitions.map(item=>item.modelGroupId)]);
-  const modelGroups=source.modelGroups.filter(item=>groups.has(item.id));
-  if(modelGroups.length!==groups.size)fail('Workflow model groups are incomplete.');
+  const modelGroups=source.modelGroups.filter(item=>groups.has(item.id)||item.standby===true);
+  if([...groups].some(id=>!modelGroups.some(item=>item.id===id)))fail('Workflow model groups are incomplete.');
   const deployments=new Set(modelGroups.flatMap(item=>item.deploymentIds));
   const modelDeployments=source.modelDeployments.filter(item=>deployments.has(item.id));
   if(modelDeployments.length!==deployments.size)fail('Workflow model deployments are incomplete.');

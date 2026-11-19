@@ -68,7 +68,7 @@ export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [presentation,setPresentation]=useState<ReturnType<typeof sessionPresentation>>();
   const [superAdmin,setSuperAdmin]=useState(false);
-  // ToolGate is multi-tenant; the console shows which tenant it administers.
+  // OLO is multi-tenant; the console shows which tenant it administers.
   const [tenant,setTenant]=useState<string>();
   const [tenantName,setTenantName]=useState<string>();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -180,8 +180,8 @@ export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
       <details className="nav-group" key={group.label} open={expandedGroups.includes(group.label)} onToggle={event=>{const opened=event.currentTarget.open;setExpandedGroups(previous=>opened===previous.includes(group.label)?previous:opened?[...previous,group.label]:previous.filter(label=>label!==group.label));}}><summary><MenuIcon name={group.label}/>{group.label}</summary><div className="nav-submenu">{group.routes.filter(value=>(quickstart||value!=='local')&&(isWorkflowPage(value)?(superAdmin||permissions.workflowRead(value)):permissions.view(value))).map(value=><a key={value} href={`#${value}`} aria-current={route===value?'page':undefined}><MenuIcon name={value}/>{sections.find(([key])=>key===value)![1]}</a>)}</div></details>;
   }
   return <><a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
-    {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>ToolGate</span></div>
-      <ThemePicker /></header><div className="connect-card"><p className="eyebrow">Organization console</p><h1>Manage your workspace</h1><p className="tagline">Zero Trust for Agentic AI. Secure Every Tool Boundary.</p>
+    {!client ? <main id="main" tabIndex={-1} className="connect-page"><header className="login-header"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /> <span>OLO</span></div>
+      <ThemePicker /></header><div className="connect-card"><p className="eyebrow">Organization console</p><h1>Manage your workspace</h1><p className="tagline">OLO Orchestration builds and runs bots. OLO ToolGate governs tools, devices and access.</p>
         {quickstart ? <p role="status" className="notice">Quickstart · Single node · Non-HA{tenantName?` · Tenant: ${tenantName}`:''}{tenant?` · Tenant ID: ${tenant}`:''}.</p> : <p>Connect to Control with an access token issued by your organization’s identity provider.</p>}
         {!quickstart && <p>Workspace: {window.location.hostname}</p>}
         {!safeOrigin() && <div role="alert" className="notice error">Open this console over HTTPS before connecting.</div>}
@@ -193,12 +193,12 @@ export function App({initialLogin}:{initialLogin?:LoginLink}={}) {
           <p id="token-help" className="hint">{quickstart ? 'Your session survives refresh until it expires or you disconnect. Your password is never saved in the browser.' : 'Kept in memory for this session. Refreshing or disconnecting clears it.'}</p>
           <button className="primary" disabled={connecting || !safeOrigin()}>{connecting ? 'Connecting…' : 'Connect to workspace'}</button>
           {connecting && <p role="status">Verifying your session with Control…</p>}
-        </form></div><ClientDownloads /><footer>ToolGate {__APP_VERSION__} · Organization administration</footer></main>
-    : <WorkflowWorkspaceProvider><div className="app-frame"><header className="topbar app-topbar"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /><span>ToolGate</span></div><span className="portal-label">{administrator?'Admin Portal':'Approval workspace'}</span><div className="topbar-actions"><span className="tag">{quickstart ? 'Quickstart · Non-HA' : 'Organization workspace'}</span>{tenantName&&<span className="tag">Tenant: {tenantName}</span>}{tenant&&<span className="tag">Tenant ID: {tenant}</span>}<ThemePicker /></div></header>
+        </form></div><ClientDownloads /><footer>OLO {__APP_VERSION__} · Organization administration</footer></main>
+    : <WorkflowWorkspaceProvider><div className="app-frame"><header className="topbar app-topbar"><div className="brand"><img className="brand-logo" src={oloLogo} alt="OLO" /><span>OLO</span></div><span className="portal-label">{administrator?'Admin Portal':'Approval workspace'}</span><div className="topbar-actions"><span className="tag">{quickstart ? 'Quickstart · Non-HA' : 'Organization workspace'}</span>{tenantName&&<span className="tag">Tenant: {tenantName}</span>}{tenant&&<span className="tag">Tenant ID: {tenant}</span>}<ThemePicker /></div></header>
       <div className={`shell${sidebarCollapsed ? ' navigation-collapsed' : ''}`}><aside id="sidebar" className={`sidebar${sidebarCollapsed ? ' sidebar-collapsed' : ''}`} style={{width:sidebarCollapsed ? 64 : sidebarWidth}}>
       {!sidebarCollapsed && <p className="sidebar-caption">{administrator?'Workspace':'Approval workspace'}</p>}
       <nav aria-label="Main navigation"><div className="navigation-scroll"><a href="#overview" title="Overview" aria-label={sidebarCollapsed?'Overview':undefined} aria-current={route==='overview'?'page':undefined}><MenuIcon name="overview"/>{!sidebarCollapsed&&'Overview'}</a>
-        {administrator?navigationGroups.slice(0,-1).map(navigationGroup):<a href="#approvals" title="Approvals" aria-label={sidebarCollapsed?'Approvals':undefined} aria-current={route==='approvals'?'page':undefined}><MenuIcon name="approvals"/>{!sidebarCollapsed&&'Approvals'}</a>}
+        {administrator?<>{!sidebarCollapsed&&<p className="nav-section-label">OLO Orchestration</p>}{navigationGroups.slice(0,2).map(navigationGroup)}{!sidebarCollapsed&&<p className="nav-section-label">OLO ToolGate</p>}{navigationGroups.slice(2,-1).map(navigationGroup)}</>:<a href="#approvals" title="Approvals" aria-label={sidebarCollapsed?'Approvals':undefined} aria-current={route==='approvals'?'page':undefined}><MenuIcon name="approvals"/>{!sidebarCollapsed&&'Approvals'}</a>}
       </div>{administrator&&navigationGroup(navigationGroups[navigationGroups.length-1])}<a href="#about" title="About" aria-label={sidebarCollapsed?'About':undefined} aria-current={route==='about'?'page':undefined}><MenuIcon name="about"/>{!sidebarCollapsed&&'About'}</a></nav>
       <div className="sidebar-bottom"><div className="sidebar-user">{!sidebarCollapsed&&<span className="signed-in-user" title={presentation?.name}>{presentation?.name}</span>}<ApprovalBell client={client} administrator={administrator} superAdmin={superAdmin} userId={presentation?.userId}/></div>{!sidebarCollapsed&&<><span className="connection">Connected to Control</span><small>v{__APP_VERSION__}</small></>}<button title="Disconnect" aria-label="Disconnect" onClick={disconnect}>{sidebarCollapsed?<MenuIcon name="disconnect"/>:'Disconnect'}</button></div></aside>
       <div className="navigation-controls" role="region" aria-label="Navigation controls"><button className="sidebar-toggle" style={{left:sidebarCollapsed?18:sidebarWidth-38}} aria-label={sidebarCollapsed?'Expand navigation':'Collapse navigation'} aria-controls="sidebar" aria-expanded={!sidebarCollapsed} onClick={toggleSidebar}>{sidebarCollapsed?'>':'<'}</button>
@@ -253,8 +253,8 @@ const iconPaths: Record<string,string> = {
 function MenuIcon({name}:{name:string}) { return <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={iconPaths[name]}/></svg>; }
 
 function About() {
-  return <section aria-labelledby="about-heading"><div className="page-heading"><h1 id="about-heading">About ToolGate</h1></div>
-    <p className="tagline">Zero Trust for Agentic AI. Secure Every Tool Boundary.</p>
+  return <section aria-labelledby="about-heading"><div className="page-heading"><h1 id="about-heading">About OLO</h1></div>
+    <p className="tagline">OLO Orchestration builds and runs bots. OLO ToolGate governs tools, devices and access.</p>
     <dl><dt>Version</dt><dd>{__APP_VERSION__}</dd><dt>Build</dt><dd>{__APP_BUILD__}</dd></dl>
     <p>OLO Labs · Licensed under Apache-2.0</p></section>;
 }

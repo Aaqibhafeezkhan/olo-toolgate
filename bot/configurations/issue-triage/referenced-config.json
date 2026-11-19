@@ -4,8 +4,15 @@
   "revision": 0,
   "agents": [
     {
-      "id": "langchain-linux-agent",
-      "name": "langchain-linux-agent",
+      "id": "issue-triage-langchain-linux-agent",
+      "name": "issue-triage-langchain-linux-agent",
+      "enabled": true,
+      "revision": 1,
+      "ownerUserId": "admin"
+    },
+    {
+      "id": "issue-triage-text-summarizer",
+      "name": "issue-triage-text-summarizer",
       "enabled": true,
       "revision": 1,
       "ownerUserId": "admin"
@@ -13,22 +20,34 @@
   ],
   "agentGroups": [
     {
-      "id": "langchain-linux-agents",
-      "name": "langchain-linux-agents",
+      "id": "issue-triage-langchain-linux-agents",
+      "name": "issue-triage-langchain-linux-agents",
       "enabled": true,
       "revision": 1,
       "agentIds": [
-        "langchain-linux-agent"
+        "issue-triage-langchain-linux-agent"
       ],
       "roleIds": [
-        "configured-workflow-service"
+        "issue-triage-configured-workflow-service"
+      ]
+    },
+    {
+      "id": "issue-triage-summary-agents",
+      "name": "issue-triage-summary-agents",
+      "enabled": true,
+      "revision": 1,
+      "agentIds": [
+        "issue-triage-text-summarizer"
+      ],
+      "roleIds": [
+        "issue-triage-configured-workflow-service"
       ]
     }
   ],
   "roles": [
     {
       "enabled": true,
-      "id": "configured-workflow-service",
+      "id": "issue-triage-configured-workflow-service",
       "managementRules": [],
       "name": "Configured workflow service",
       "portalRole": "BASIC",
@@ -39,7 +58,7 @@
   "grants": [
     {
       "enabled": true,
-      "id": "configured-workflow-service",
+      "id": "issue-triage-configured-workflow-service",
       "name": "Configured workflow authority",
       "purpose": "SERVICE",
       "revision": 1,
@@ -67,12 +86,22 @@
           {
             "kind": "CUSTOM",
             "match": "EXACT",
-            "locator": "model-group:hotfolder-models"
+            "locator": "model-group:issue-triage-local-ceiling"
           },
           {
             "kind": "CUSTOM",
             "match": "EXACT",
-            "locator": "workflow-group:hotfolder"
+            "locator": "model-group:issue-triage-hotfolder-models"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "model-group:issue-triage-general-models"
+          },
+          {
+            "kind": "CUSTOM",
+            "match": "EXACT",
+            "locator": "workflow-group:issue-triage"
           }
         ],
         "toolGroups": {
@@ -80,12 +109,12 @@
           "ids": []
         }
       },
-      "sourceId": "configured-workflow-service",
+      "sourceId": "issue-triage-configured-workflow-service",
       "sourceType": "ROLE"
     },
     {
       "enabled": true,
-      "id": "langchain-linux-capability",
+      "id": "issue-triage-langchain-linux-capability",
       "name": "LangChain capability",
       "purpose": "CAPABILITY",
       "revision": 1,
@@ -107,15 +136,10 @@
         "deviceGroups": {
           "all": false,
           "ids": [
-            "langchain-linux-devices"
+            "issue-triage-langchain-linux-devices"
           ]
         },
         "resources": [
-          {
-            "kind": "CUSTOM",
-            "locator": "tool://examples.hotfolder/list",
-            "match": "EXACT"
-          },
           {
             "kind": "CUSTOM",
             "locator": "tool://examples.hotfolder/move",
@@ -139,12 +163,12 @@
           ]
         }
       },
-      "sourceId": "langchain-linux-agents",
+      "sourceId": "issue-triage-langchain-linux-agents",
       "sourceType": "AGENT_GROUP"
     },
     {
       "enabled": true,
-      "id": "langchain-linux-service",
+      "id": "issue-triage-langchain-linux-service",
       "name": "LangChain service",
       "purpose": "SERVICE",
       "revision": 1,
@@ -166,15 +190,10 @@
         "deviceGroups": {
           "all": false,
           "ids": [
-            "langchain-linux-devices"
+            "issue-triage-langchain-linux-devices"
           ]
         },
         "resources": [
-          {
-            "kind": "CUSTOM",
-            "locator": "tool://examples.hotfolder/list",
-            "match": "EXACT"
-          },
           {
             "kind": "CUSTOM",
             "locator": "tool://examples.hotfolder/move",
@@ -198,7 +217,7 @@
           ]
         }
       },
-      "sourceId": "langchain-linux-agents",
+      "sourceId": "issue-triage-langchain-linux-agents",
       "sourceType": "AGENT_GROUP"
     }
   ],
@@ -250,333 +269,11 @@
         }
       },
       "enabled": true,
-      "extractorId": "extract-4e42fa5438980bd0310bc1d22b6ba007",
+      "extractorId": "issue-triage-extract-4e42fa5438980bd0310bc1d22b6ba007",
       "id": "examples.hotfolder/read_text",
       "name": "examples.hotfolder/read_text",
       "packageDigest": "45a5f0833d4f7f188a19a6123cb6b7aaff057422021c6230502628bf7fcdbfab",
       "revision": 2,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "Appends text, creating the file when needed.",
-        "id": "examples.hotfolder/append_text",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "description": "File path",
-              "maxLength": 1024,
-              "type": "string"
-            },
-            "text": {
-              "description": "UTF-8 text",
-              "maxLength": 65536,
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "text"
-          ],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/append_text",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "written": {
-              "description": "True once the text is durably stored",
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "written"
-          ],
-          "type": "object"
-        },
-        "reconciliation": "MANUAL"
-      },
-      "enabled": false,
-      "extractorId": "extract-2e6f226db08d54ef1acf4a90854720f7",
-      "id": "examples.hotfolder/append_text",
-      "name": "examples.hotfolder/append_text",
-      "packageDigest": "88723d136340fee58bc4eba416b161380a52bce93f523b424d187fdba8514817",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "Copies a file to a new path that does not exist yet.",
-        "id": "examples.hotfolder/copy",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "destination": {
-              "description": "New path",
-              "maxLength": 1024,
-              "type": "string"
-            },
-            "path": {
-              "description": "File to copy",
-              "maxLength": 1024,
-              "type": "string"
-            }
-          },
-          "required": [
-            "destination",
-            "path"
-          ],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/copy",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "copied": {
-              "description": "False when the source does not exist",
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "copied"
-          ],
-          "type": "object"
-        },
-        "reconciliation": "MANUAL"
-      },
-      "enabled": false,
-      "extractorId": "extract-ba2d5268bfbe76950f018c3cef8cb858",
-      "id": "examples.hotfolder/copy",
-      "name": "examples.hotfolder/copy",
-      "packageDigest": "9371859578ffa7d6ee3792c0e58ac89924e314ca31776ad355b1636a4c089a4b",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "Reports whether a file exists and its size.",
-        "id": "examples.hotfolder/file_info",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "description": "File path",
-              "maxLength": 1024,
-              "type": "string"
-            }
-          },
-          "required": [
-            "path"
-          ],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/file_info",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "bytes": {
-              "description": "Size in bytes",
-              "maximum": 9007199254740991,
-              "minimum": -9007199254740991,
-              "type": "integer"
-            },
-            "exists": {
-              "description": "Whether the file exists",
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "bytes",
-            "exists"
-          ],
-          "type": "object"
-        }
-      },
-      "enabled": false,
-      "extractorId": "extract-9e403f9350904e3b0d85ccfe1718cf40",
-      "id": "examples.hotfolder/file_info",
-      "name": "examples.hotfolder/file_info",
-      "packageDigest": "053f46524b544253b55d8e38c3364e79388a5dc071ba5203646f84cadf4b8cf8",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "SHA-256 of a text file.",
-        "id": "examples.hotfolder/hash",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "description": "File path",
-              "maxLength": 1024,
-              "type": "string"
-            }
-          },
-          "required": [
-            "path"
-          ],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/hash",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "exists": {
-              "description": "Whether the file exists",
-              "type": "boolean"
-            },
-            "sha256": {
-              "description": "SHA-256, hex",
-              "type": "string"
-            }
-          },
-          "required": [
-            "exists",
-            "sha256"
-          ],
-          "type": "object"
-        }
-      },
-      "enabled": false,
-      "extractorId": "extract-293b76fa8c15b84bc53a1e7dfd1f8f65",
-      "id": "examples.hotfolder/hash",
-      "name": "examples.hotfolder/hash",
-      "packageDigest": "36d848809850aeb5beeb18c04dc055fbda53acee0a14173534f17b64ecf3f978",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "Lists the files and folders in a folder of the HotFolder, or all of them.",
-        "id": "examples.hotfolder/list",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "folder": {
-              "description": "Folder to list, such as inbox; empty lists everything",
-              "maxLength": 1024,
-              "type": "string"
-            }
-          },
-          "required": [],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/list",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "paths": {
-              "description": "Files and folders, sorted",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "paths"
-          ],
-          "type": "object"
-        }
-      },
-      "enabled": true,
-      "extractorId": "extract-4d3587cb654f3a4ca62773257ccef39c",
-      "id": "examples.hotfolder/list",
-      "name": "examples.hotfolder/list",
-      "packageDigest": "3ea2439b7459ffee61a5bb050f61442d1e0bbd2a64b3e3976a71bbbb77ee513c",
-      "revision": 2,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "Creates a folder inside the HotFolder.",
-        "id": "examples.hotfolder/mkdir",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "description": "Folder path",
-              "maxLength": 1024,
-              "type": "string"
-            }
-          },
-          "required": [
-            "path"
-          ],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/mkdir",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "created": {
-              "description": "True once the folder exists",
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "created"
-          ],
-          "type": "object"
-        },
-        "reconciliation": "DOWNSTREAM_IDEMPOTENCY"
-      },
-      "enabled": false,
-      "extractorId": "extract-c88dba1c90b1a59c9619854ff9490ee3",
-      "id": "examples.hotfolder/mkdir",
-      "name": "examples.hotfolder/mkdir",
-      "packageDigest": "8f1e77fb943081478bf0bea14abebaa5e1a6495d444c509d43cac8a97cf76217",
-      "revision": 1,
       "version": "0.1.0"
     },
     {
@@ -628,77 +325,11 @@
         "reconciliation": "MANUAL"
       },
       "enabled": true,
-      "extractorId": "extract-42369acf75b98ffbd79904c5e2c2006b",
+      "extractorId": "issue-triage-extract-42369acf75b98ffbd79904c5e2c2006b",
       "id": "examples.hotfolder/move",
       "name": "examples.hotfolder/move",
       "packageDigest": "285d52de81f1023f5d68d44127be920091eb75e4cebb808106fc15b1fd98ff50",
       "revision": 2,
-      "version": "0.1.0"
-    },
-    {
-      "definition": {
-        "actions": [
-          {
-            "name": "invoke",
-            "resourceKinds": [
-              "CUSTOM"
-            ]
-          }
-        ],
-        "description": "Line numbers of a text file that contain the query.",
-        "id": "examples.hotfolder/search_text",
-        "inputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "path": {
-              "description": "File path",
-              "maxLength": 1024,
-              "type": "string"
-            },
-            "query": {
-              "description": "Text to find",
-              "maxLength": 256,
-              "minLength": 1,
-              "type": "string"
-            }
-          },
-          "required": [
-            "path",
-            "query"
-          ],
-          "type": "object"
-        },
-        "name": "examples.hotfolder/search_text",
-        "outputSchema": {
-          "additionalProperties": false,
-          "properties": {
-            "exists": {
-              "description": "Whether the file exists",
-              "type": "boolean"
-            },
-            "lines": {
-              "description": "Line numbers containing the query, at most 100",
-              "items": {
-                "maximum": 2147483647,
-                "minimum": -2147483648,
-                "type": "integer"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "exists",
-            "lines"
-          ],
-          "type": "object"
-        }
-      },
-      "enabled": false,
-      "extractorId": "extract-0ef18f3e33673ab513368a8efa4e36ad",
-      "id": "examples.hotfolder/search_text",
-      "name": "examples.hotfolder/search_text",
-      "packageDigest": "b5233ed1806548d25b274b29a3bfb58c8cf26f0c36bd735c4afb16195b9b10cf",
-      "revision": 1,
       "version": "0.1.0"
     },
     {
@@ -750,7 +381,7 @@
         "reconciliation": "DOWNSTREAM_IDEMPOTENCY"
       },
       "enabled": true,
-      "extractorId": "extract-ae6b08a8bc30115a681225ab29ca2231",
+      "extractorId": "issue-triage-extract-ae6b08a8bc30115a681225ab29ca2231",
       "id": "examples.hotfolder/write_text",
       "name": "examples.hotfolder/write_text",
       "packageDigest": "7d83a8eb6408a423e7be6fc339f914b5fa6f0d37b63a302ee2e2ccbcd1618d5e",
@@ -764,14 +395,7 @@
       "id": "default-tools",
       "name": "Default tool group",
       "revision": 15,
-      "toolIds": [
-        "examples.hotfolder/append_text",
-        "examples.hotfolder/copy",
-        "examples.hotfolder/file_info",
-        "examples.hotfolder/hash",
-        "examples.hotfolder/mkdir",
-        "examples.hotfolder/search_text"
-      ]
+      "toolIds": []
     },
     {
       "enabled": true,
@@ -779,7 +403,6 @@
       "name": "LangChain HotFolder package tools",
       "revision": 5,
       "toolIds": [
-        "examples.hotfolder/list",
         "examples.hotfolder/move",
         "examples.hotfolder/read_text",
         "examples.hotfolder/write_text"
@@ -790,8 +413,8 @@
     {
       "deviceIds": [],
       "enabled": true,
-      "id": "ReadAndWriteDeviceGroup",
-      "name": "ReadAndWriteDeviceGroup",
+      "id": "issue-triage-ReadAndWriteDeviceGroup",
+      "name": "issue-triage-ReadAndWriteDeviceGroup",
       "revision": 2
     },
     {
@@ -804,7 +427,7 @@
     {
       "deviceIds": [],
       "enabled": true,
-      "id": "langchain-linux-devices",
+      "id": "issue-triage-langchain-linux-devices",
       "name": "LangChain selected device",
       "revision": 1
     }
@@ -817,7 +440,7 @@
       "allowedPackageDigests": [],
       "deviceGroupId": "default-devices",
       "enabled": true,
-      "id": "binding-default",
+      "id": "issue-triage-binding-default",
       "name": "Reviewed default execution boundary",
       "ownerDependency": false,
       "requireOnline": true,
@@ -834,9 +457,9 @@
         "45a5f0833d4f7f188a19a6123cb6b7aaff057422021c6230502628bf7fcdbfab",
         "7d83a8eb6408a423e7be6fc339f914b5fa6f0d37b63a302ee2e2ccbcd1618d5e"
       ],
-      "deviceGroupId": "langchain-linux-devices",
+      "deviceGroupId": "issue-triage-langchain-linux-devices",
       "enabled": true,
-      "id": "langchain-linux-binding",
+      "id": "issue-triage-langchain-linux-binding",
       "name": "LangChain selected-device execution",
       "ownerDependency": false,
       "requireOnline": true,
@@ -849,7 +472,7 @@
       "agentGroups": {
         "all": false,
         "ids": [
-          "langchain-linux-agents"
+          "issue-triage-langchain-linux-agents"
         ]
       },
       "approverTeams": {
@@ -858,7 +481,7 @@
       },
       "decision": "ALLOW",
       "enabled": true,
-      "id": "langchain-linux-access",
+      "id": "issue-triage-langchain-linux-access",
       "name": "LangChain selected-device access",
       "revision": 1,
       "scope": {
@@ -879,15 +502,10 @@
         "deviceGroups": {
           "all": false,
           "ids": [
-            "langchain-linux-devices"
+            "issue-triage-langchain-linux-devices"
           ]
         },
         "resources": [
-          {
-            "kind": "CUSTOM",
-            "locator": "tool://examples.hotfolder/list",
-            "match": "EXACT"
-          },
           {
             "kind": "CUSTOM",
             "locator": "tool://examples.hotfolder/move",
@@ -928,57 +546,9 @@
           "locator": "tool://examples.hotfolder/read_text"
         }
       ],
-      "id": "extract-4e42fa5438980bd0310bc1d22b6ba007",
+      "id": "issue-triage-extract-4e42fa5438980bd0310bc1d22b6ba007",
       "maxResources": 32,
       "name": "Resources for examples.hotfolder/read_text",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/search_text"
-        }
-      ],
-      "id": "extract-0ef18f3e33673ab513368a8efa4e36ad",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/search_text",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/hash"
-        }
-      ],
-      "id": "extract-293b76fa8c15b84bc53a1e7dfd1f8f65",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/hash",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/append_text"
-        }
-      ],
-      "id": "extract-2e6f226db08d54ef1acf4a90854720f7",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/append_text",
       "revision": 1,
       "version": "0.1.0"
     },
@@ -992,41 +562,9 @@
           "locator": "tool://examples.hotfolder/move"
         }
       ],
-      "id": "extract-42369acf75b98ffbd79904c5e2c2006b",
+      "id": "issue-triage-extract-42369acf75b98ffbd79904c5e2c2006b",
       "maxResources": 32,
       "name": "Resources for examples.hotfolder/move",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/list"
-        }
-      ],
-      "id": "extract-4d3587cb654f3a4ca62773257ccef39c",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/list",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/file_info"
-        }
-      ],
-      "id": "extract-9e403f9350904e3b0d85ccfe1718cf40",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/file_info",
       "revision": 1,
       "version": "0.1.0"
     },
@@ -1040,41 +578,9 @@
           "locator": "tool://examples.hotfolder/write_text"
         }
       ],
-      "id": "extract-ae6b08a8bc30115a681225ab29ca2231",
+      "id": "issue-triage-extract-ae6b08a8bc30115a681225ab29ca2231",
       "maxResources": 32,
       "name": "Resources for examples.hotfolder/write_text",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/copy"
-        }
-      ],
-      "id": "extract-ba2d5268bfbe76950f018c3cef8cb858",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/copy",
-      "revision": 1,
-      "version": "0.1.0"
-    },
-    {
-      "enabled": true,
-      "extractorKind": "FIELDS",
-      "fields": [],
-      "fixedResources": [
-        {
-          "kind": "CUSTOM",
-          "locator": "tool://examples.hotfolder/mkdir"
-        }
-      ],
-      "id": "extract-c88dba1c90b1a59c9619854ff9490ee3",
-      "maxResources": 32,
-      "name": "Resources for examples.hotfolder/mkdir",
       "revision": 1,
       "version": "0.1.0"
     }

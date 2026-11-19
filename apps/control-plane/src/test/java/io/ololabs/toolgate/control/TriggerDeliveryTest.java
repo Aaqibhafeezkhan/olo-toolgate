@@ -550,6 +550,11 @@ final class TriggerDeliveryTest {
             String assignment = JSON.readTree(w.triggers().get(w.admin(), "inbox").body()).path("metadata").path("uid").asText();
             var path = Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
             var config = JSON.readTree(Files.readString(path)).path("WorkflowConfiguration");
+            var fallback = config.path("modelDeployments").get(0).deepCopy();
+            ((ObjectNode) fallback).put("id", "fallback-model").put("modelId", "lightweight-model");
+            ((com.fasterxml.jackson.databind.node.ArrayNode) config.path("modelDeployments")).add(fallback);
+            ((com.fasterxml.jackson.databind.node.ArrayNode) config.path("modelGroups").get(0).path("deploymentIds"))
+                .add("fallback-model");
             ((ObjectNode) config.path("dispatchBindings").get(0)).put("subscriptionUid", uid)
                 .put("sourceAssignmentUid", assignment).put("messagePointer", "/name")
                 .put("serviceAgentId", "investigator").put("serviceAgentGroupId", "support-agents");
@@ -714,9 +719,15 @@ final class TriggerDeliveryTest {
             var summaryGrant = JSON.readTree(leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "summarizer", "models").body());
             w.store().transaction(w.tenant(), false, tx -> {
                 var models = new WorkflowModelSelection(profiles, codec, w.clock());
-                assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText()).id());
+                assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText(), 0).deployment().id());
+                var second = models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText(), 1);
+                assertEquals("lightweight-model", second.deployment().modelId());
+                assertEquals(1, second.candidateIndex());
+                assertEquals(2, second.candidateCount());
+                assertEquals(403, status(() -> models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText(), 2)));
+                assertEquals(403, status(() -> models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText(), -1)));
                 assertEquals(config.path("modelDeployments").get(0).path("modelId").asText(),
-                    models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText()).modelId());
+                    models.resolve(tx, w.tenant(), runId, summaryGrant.path("token").asText(), 0).deployment().modelId());
                 assertEquals(403, status(() -> new WorkflowToolAuthority(codec, models, w.clock()).resolve(tx, w.tenant(), runId,
                     summaryGrant.path("token").asText(), "files/read", "summary-no-tools")));
                 return null;
@@ -731,7 +742,9 @@ final class TriggerDeliveryTest {
             assertEquals(403, status(() -> leases.authorizeStep(worker, runId, leaseId, token, "AGENT", "summarizer", "models")));
             w.store().transaction(w.tenant(), false, tx -> {
                 assertEquals(403, status(() -> new WorkflowModelSelection(profiles, codec, w.clock()).resolve(tx, w.tenant(), runId,
-                    summaryGrant.path("token").asText())));
+                    summaryGrant.path("token").asText(), 0)));
+                assertEquals(403, status(() -> new WorkflowModelSelection(profiles, codec, w.clock()).resolve(tx, w.tenant(), runId,
+                    summaryGrant.path("token").asText(), 1)), "fallback must recheck revoked agent authority");
                 return null;
             });
             var grant = JSON.readTree(leases.authorizeStep(worker, runId, leaseId, token, "WORKFLOW", "investigate", "models").body());
@@ -742,12 +755,12 @@ final class TriggerDeliveryTest {
                 assertEquals(DirectoryService.digest(agentGrant.path("token").asText()), tx.workflowRuns().activeStep(runId).tokenDigest());
                 assertFalse(grant.path("token").asText().equals(agentGrant.path("token").asText()));
                 var models = new WorkflowModelSelection(profiles, codec, w.clock());
-                assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, agentGrant.path("token").asText()).id());
+                assertEquals("deployment-1", models.resolve(tx, w.tenant(), runId, agentGrant.path("token").asText(), 0).deployment().id());
                 var toolContext = new WorkflowToolAuthority(codec, models, w.clock()).resolve(tx, w.tenant(), runId,
                     agentGrant.path("token").asText(), null, "file-tools");
                 assertEquals("investigator", toolContext.context().agentId());
                 assertEquals("files-workload", toolContext.context().workloadBindingId());
-                assertEquals(403, status(() -> models.resolve(tx, w.tenant(), runId, grant.path("token").asText())));
+                assertEquals(403, status(() -> models.resolve(tx, w.tenant(), runId, grant.path("token").asText(), 0).deployment()));
                 return null;
             });
             var result = JSON.createObjectNode().put("issueId", "issue-123").put("summary", "Timeout investigated");
@@ -776,7 +789,7 @@ final class TriggerDeliveryTest {
                 nextSnapshot.path("leaseId").asText(), nextSnapshot.path("leaseToken").asText(), "AGENT", "investigator", "models").body());
             w.store().transaction(w.tenant(), false, tx -> {
                 assertEquals("replacement-model", new WorkflowModelSelection(profiles, codec, w.clock()).resolve(tx, w.tenant(),
-                    nextSnapshot.path("runId").asText(), nextGrant.path("token").asText()).modelId());
+                    nextSnapshot.path("runId").asText(), nextGrant.path("token").asText(), 0).deployment().modelId());
                 return null;
             });
         }

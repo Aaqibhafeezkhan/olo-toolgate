@@ -75,7 +75,7 @@ describe('Management shell states', () => {
     expect(screen.getByRole('link',{name:'About'}).getAttribute('href')).toBe('#about');
     window.location.hash = '#about';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
-    expect(await screen.findByRole('heading',{name:'About ToolGate'})).toBeTruthy();
+    expect(await screen.findByRole('heading',{name:'About OLO'})).toBeTruthy();
     expect(screen.getByText('Build').nextElementSibling?.textContent).toBe('local');
   });
 

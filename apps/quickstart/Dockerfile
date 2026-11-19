@@ -2,6 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # Build Control from its existing Dockerfile under this tag before composition.
 ARG CONTROL_IMAGE=olo-toolgate-control:module11
+FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS registry-build
+WORKDIR /src
+# Official v3.1.2 source, checksum-bound; its published binary still has affected
+# Go/dependency versions. Patch only the identified modules and retain checksums.
+ADD --checksum=sha256:2f9b6fc00bec854e62e9b720903a9c9b48018505177f7c7a8ce7b74da2b23e4f https://codeload.github.com/distribution/distribution/tar.gz/refs/tags/v3.1.2 /tmp/distribution.tar.gz
+RUN tar -xzf /tmp/distribution.tar.gz --strip-components=1 -C /src && rm /tmp/distribution.tar.gz
+ENV GOTOOLCHAIN=local CGO_ENABLED=0
+RUN --mount=type=cache,id=toolgate-registry-go-modules,target=/go/pkg/mod \
+    --mount=type=cache,id=toolgate-registry-go-build,target=/root/.cache/go-build \
+    go get github.com/go-jose/go-jose/v4@v4.1.6 github.com/klauspost/compress@v1.18.7 golang.org/x/net@v0.62.0 && \
+    go build -mod=mod -trimpath -ldflags='-s -w -X github.com/distribution/distribution/v3/version.version=v3.1.2-olo.1' -o /registry ./cmd/registry && \
+    mkdir -p /registry-licenses && cp LICENSE go.mod go.sum /registry-licenses/ && \
+    go list -mod=mod -m -f '{{.Path}} {{.Dir}}' all > /registry-licenses/modules.txt && \
+    while read -r module directory; do \
+      test -n "$directory" || continue; mkdir -p "/registry-licenses/$module"; \
+      for notice in "$directory"/LICENSE* "$directory"/COPYING* "$directory"/NOTICE*; do \
+        if test -f "$notice"; then cp "$notice" "/registry-licenses/$module/"; fi; \
+      done; \
+    done < /registry-licenses/modules.txt
+
 FROM rust:1.94.1-alpine@sha256:77237dd363a0b127bb5ef532c2d64c0deb380b738e43a9c4bdac73398d6d0a08 AS rust-build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml VERSION TOOL-SDK-GUIDE.md ./
@@ -24,8 +44,9 @@ RUN --mount=type=cache,id=toolgate-gateway-registry,target=/usr/local/cargo/regi
 
 FROM ${CONTROL_IMAGE}
 USER root
-COPY --from=registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e /bin/registry /usr/local/bin/distribution
-COPY --from=docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/bin/docker
+COPY --from=registry-build /registry /usr/local/bin/distribution
+COPY --from=registry-build /registry-licenses /usr/share/licenses/olo-toolgate/registry/
+COPY --from=docker:29.10.0-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d /usr/local/bin/docker /usr/bin/docker
 COPY apps/quickstart/requirements.txt /opt/quickstart-requirements.txt
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv libpq5 && \
     python3 -m venv /opt/quickstart-python && /opt/quickstart-python/bin/pip install --no-cache-dir -r /opt/quickstart-requirements.txt && \

@@ -1,6 +1,120 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Real local-model bots, portable routing and image scan repair — 2026-11-19
+
+Known tested base `90b3dffa8bd015035610c57ed69f372b08213b95`; staged non-document
+source inventory SHA-256 `c1f0aebf4b4fdde03729fab4e20df359d9dfbeda82d29cb721591dc656174d9a`
+(83 paths; `build/local-model-final-source-inventory.json`). ADR 079 records the
+ordered inference-only fallback and current-authority boundary.
+
+Delivered: all seven device/file bots and two text examples build as self-contained
+`.olo` bundles. File agents select the real pinned OLO PEFT adapter merged with
+its pinned Qwen base, converted to F16 GGUF and served in Ollama as
+`olo-qlora-hotfolder:e376fb40`, then `qwen3:0.6b` on inference failure. Other
+agents select Qwen3; premium OpenRouter is explicit unattached standby. Both
+models are loaded with GPU offload; local weights and credentials remain
+installation data. Generation can configure provider-supported reasoning effort;
+the examples disable reasoning for short closed JSON results. Gateway reserves
+an inference budget inside its outer request deadline, reauthorizes each model
+candidate and validates the pinned finish-result schema before downstream file
+writes. Authority/configuration failures stop; model fallback never replays tools.
+
+Portable bundle closure retains standby declarations; independent bots own unique
+model/agent references while shared ToolGate tool IDs retain one primary group.
+Configuration-specific immutable workflow version IDs distinguish A/B artifacts.
+CLI import checks references before package uploads, then observes the new directory
+revision before its reviewed write; unknown/rejected writes are not retried.
+Mock fixtures build separately from public real-model bots. The console is branded
+OLO, with OLO Orchestration and OLO ToolGate sections. Central `docs/help/` and all
+nine bot guides describe device/model updates, exact inputs/outputs, explicit
+permissions, lifecycle, authoring and installation-only cloud observability.
+
+CI run 44417621775/job 135220518724 failed on 55 HIGH/CRITICAL findings in the
+embedded old Distribution binary. Quickstart now rebuilds pinned Distribution
+v3.1.2 source with patched modules and Go 1.27.4, retaining licenses/source
+checksums. The refreshed database also exposed Docker CLI's older Go stdlib;
+Quickstart and device builds now pin Docker 29.10.0/Go 1.27.4. Scan gates stay enabled.
+
+Executed component checks: UI **324 pass**, including all nine built-bundle imports;
+fresh SQLite/PostgreSQL workflow/delivery/configuration **49 pass**, plus four
+Java contract tests; complete Rust contracts/Gateway checks include actual HTTPS
+provider failures, malformed/invalid typed results, current-authority revocation,
+unapproved origins and reasoning-setting forwarding. Linux runtime **122 pass**;
+focused Python **38 pass**; PHP **479** v2 roundtrips; TypeScript build/typecheck
+and two tests; 1,626 generated bindings/fixtures/OpenAPI checks; Markdown **2,953**
+files, source quality and PR policy pass.
+
+Actual acceptance uses release `1.0.0-demo.reasoning` and the final image
+`olo-toolgate-quickstart:profiled-b69131b1474f17c819d2`, device
+`olo-toolgate-device:profiled-ca67508f403a3733f1c8` and unchanged runtime
+`olo-toolgate-runtime:profiled-a41fe6d60baee3bfe6c2`. All seven device cases
+verify exact output/source archive content, progress, unchanged core process
+IDs/start times/restart counts, device identity and Admin credentials. Across
+those cases, **14 successful model selections** are QLoRA then Qwen3, with
+**19 successful tool outcomes** and no OpenRouter attempt. The two additional
+text bots also run successfully through the current Super Admin API.
+
+| Configuration | Confirmed run | Result |
+|---|---|---|
+| hotswap-demo-a | `run-c1129694-2794-4a16-8c1f-75608054f9e4` | SUCCEEDED |
+| hotswap-demo-b | `run-5e605dc3-84a0-4da5-bced-53648bae004b` | SUCCEEDED |
+| issue-triage | `run-51ef7a03-d650-48fa-9668-cc1ca86c0c13` | SUCCEEDED |
+| log-triage | `run-936e14a1-5d21-4041-9e71-257725b83fb7` | SUCCEEDED |
+| native-hotfolder | `run-8524b8bb-4381-4ee1-b1ea-6fd3aa0c6e24` | SUCCEEDED |
+| native-log | `run-0ba50e1d-e3a8-4c1e-bcc8-cbcc67c1a1fd` | SUCCEEDED |
+| text-summary | `run-4301c83f-3606-4b5e-a774-c6487c030c26` | SUCCEEDED |
+| interactive-summary | `run-1c34ea2c-12d7-4e63-b41b-ad57d6e51815` | SUCCEEDED |
+| ollama-summary | `run-2dec53e5-6d75-47a4-9b98-f988ebe4e495` | SUCCEEDED |
+
+Both loaded models report **100% GPU**; all four Quadro P4000 devices are
+exposed and have allocated GPU memory. Langfuse, LangSmith and Phoenix read APIs
+each return **14 matching spans** for the final device run
+`run-4301c83f-3606-4b5e-a774-c6487c030c26`, trace
+`fedfe1cec9f073657fe226873ea3f4fe`. Evidence is local/ignored:
+`build/local-model-reasoning-evidence.json`, `build/local-model-text-evidence.json`,
+`build/local-model-routing-evidence.json`, `build/local-model-cloud-evidence.json`.
+The final image passes Trivy 0.61.1 HIGH/CRITICAL and secret scanning with
+**zero findings**; fresh composed enterprise runtime checks, including restart
+and signed backup/restore, pass (`build/quickstart-reasoning-final-scan.json`,
+`build/quickstart-reasoning-final-smoke.log`). Hosted CI must rerun after push.
+
+Acceptance follows an explicit operator image upgrade and preservation of
+previous trial artifacts, including a failed read-only native-hotfolder run.
+That run exceeded the request deadline before any write; explicit reasoning
+configuration and the bounded inference budget repair it. Earlier malformed
+triage output was also preserved, driving the pinned pre-write result-schema
+check. These are fresh test events, not automatic retries of unknown effects.
+Imports do not clean or convert existing data. Full `tools/check.py` executes
+557 CI cases and stops on one Windows symlink privilege error (11 skips); that
+specific case passes in Linux. The broad repository gate is not accepted.
+
+Full frozen-source Java gate: **389 ordinary tests, zero failures, eight skips**;
+**462 enterprise tests, two failures, zero skips**. Failures are the Windows
+POSIX permission fixture and a PostgreSQL `BindException: Address already in
+use: getsockopt`; the latter passes as an isolated fresh-database rerun (one
+case). The full gate remains failed, not waived. Evidence:
+`build/local-model-frozen-java-evidence.json`,
+`build/local-model-postgres-fixture-recheck.log`.
+
+The optional Debian-12 **debug Device image** retains **113 OS findings**
+(111 HIGH/two CRITICAL, no vendor fixed versions reported), unchanged from the
+prior debug image under the same database. Its patched Docker CLI has zero
+findings. This debug image is distinct from the published Ubuntu Device build;
+no production image/security qualification is inferred. Reports:
+`build/device-reasoning-final-scan.json`, `build/device-prior-scan.json`.
+Next work includes the debug base-image findings and full hosted/Linux gates.
+
+
+
+Limitations: small-model factual accuracy is not guaranteed. Result schemas use
+the current bounded local-reference subset; remote resource IDs/references are
+refused. Native file operations remain explicitly UNFENCED, with operator-created
+folders and no automatic effect replay. Core service identity, Admin credentials,
+model/cloud installation data and existing device files are not owned by imports.
+Full production, distributed failure/security and roadmap matrices remain next work.
+**Baseline remains 0/100; no phase, scope, weight or denominator credit.**
+
 ## Persistent bot publication blockers — 2026-11-19
 
 Known tested base `aaf5824f`; staged non-document source inventory SHA-256

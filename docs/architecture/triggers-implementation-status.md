@@ -1,6 +1,24 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Real-model bot acceptance integration — 2026-11-19
+
+Known base `90b3dffa`; source digest and executed checks are in the workflow
+local-model checkpoint. Seven device/file examples reuse existing #274 packages,
+subscriptions and dispatch; mock fixtures remain isolated from public bots.
+All nine bundles import structurally in the UI. Seven real device-triggered
+cases pass with 19 tool outcomes, unchanged core/device processes and Admin
+credentials; the two text bots also run. Cloud readbacks match the final trigger
+run across all three configured providers. These are bounded integration results,
+not full module qualification. Focused fresh SQLite/PostgreSQL
+workflow/delivery/configuration checks pass (49). This changes bot examples and
+model inference, not trigger transport or module interfaces. The broad Java gate
+retains Windows/local-PostgreSQL failures (the PostgreSQL case passes alone), and
+the lab/debug Device OS scan retains unchanged findings; see workflow status.
+Full module/M12
+matrices and reference-aware reconciliation remain outstanding.
+**27% remains earned**; no module scope, Done-when, weight or denominator changes.
+
 ## Publication diagnostics integration — 2026-11-19
 
 Known base `aaf5824f`; source inventory/checks are in the workflow blocker checkpoint.
