@@ -1,0 +1,477 @@
+{
+  "capturedDate": "2026-10-27",
+  "scope": "Disposable test sign-in gateway and scripted IdP; real ToolGate, services and Temporal. Fictional data. Interactive responses use Ollama; acceptance uses a separately labelled deterministic model.",
+  "screens": [
+    {
+      "file": "screenshots/console-sign-in.jpg",
+      "title": "ToolGate tenant console sign-in",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/",
+      "sha256": "d44376b12c7d188c9574ea4f928ad1a4727d1d2d097351ccf1eed973c466a670",
+      "capturedAt": "2026-10-27T14:38:39.977Z"
+    },
+    {
+      "file": "screenshots/console-overview.jpg",
+      "title": "Loaded tenant overview and scoped demo directories",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#overview",
+      "sha256": "f89840de728d9e51232e15f003ee5c89dcd2d3441f6d05eb4280dd8fde292a4d",
+      "capturedAt": "2026-10-27T14:39:25.326Z"
+    },
+    {
+      "file": "screenshots/console-approvals-pending.jpg",
+      "title": "Live Ollama remediation waiting for independent approval",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#approvals",
+      "sha256": "878851c07080d9b09d04ad2da275148f8f6b63af170f87317e687ece0a51c606",
+      "capturedAt": "2026-10-27T14:57:15.751Z"
+    },
+    {
+      "file": "screenshots/console-approval-review.jpg",
+      "title": "Independent reviewer checks the exact delegated remediation invocation",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#approvals",
+      "sha256": "f16cfad03e2049bf1599c62bc1c98491ef7a6532cb70044c3972b57599c0901b",
+      "capturedAt": "2026-10-27T14:57:36.770Z"
+    },
+    {
+      "file": "screenshots/console-approval-approved.jpg",
+      "title": "Independent approval recorded; original invocation resumes through ToolGate",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#approvals",
+      "sha256": "bc443b9547024c675c3ee4cb82e3b6614feae95f01dd6458ac9d26af1906fda6",
+      "capturedAt": "2026-10-27T14:58:09.492Z"
+    },
+    {
+      "file": "screenshots/console-tools.jpg",
+      "title": "Tools \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#tools",
+      "sha256": "00f3e825f867118f58e843a0583596fee226f394549bd805ab2c7fa745ca47e3",
+      "capturedAt": "2026-10-27T14:49:05.629Z"
+    },
+    {
+      "file": "screenshots/console-toolGroups.jpg",
+      "title": "Tool groups \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#toolGroups",
+      "sha256": "2c9e1189ef85307a66d694291c51a9408aef927b44e3dd0d12b8eb5bb285d1d9",
+      "capturedAt": "2026-10-27T14:49:08.233Z"
+    },
+    {
+      "file": "screenshots/console-grants.jpg",
+      "title": "Access grants \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#grants",
+      "sha256": "289041375f2f1224ab1f3736f38f810bb8ef577c99f4de3b727305e366d890a0",
+      "capturedAt": "2026-10-27T14:49:11.024Z"
+    },
+    {
+      "file": "screenshots/console-bindings.jpg",
+      "title": "Execution bindings \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#bindings",
+      "sha256": "d58bd564be23775f88ba14733b5ce8779f548a3ea15d15b084210653906e6ed4",
+      "capturedAt": "2026-10-27T14:49:13.935Z"
+    },
+    {
+      "file": "screenshots/console-policies.jpg",
+      "title": "Policies \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#policies",
+      "sha256": "8f1485f797046f0bb6bcf3ff1d95209547fccf82944d2a039cf29732d3c82745",
+      "capturedAt": "2026-10-27T14:49:16.540Z"
+    },
+    {
+      "file": "screenshots/console-extractors.jpg",
+      "title": "Resource extractors \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#extractors",
+      "sha256": "7776f13ec3e2bdbfeafce4e360e494f9200983771a94cd6c7b092b900661baf5",
+      "capturedAt": "2026-10-27T14:49:19.686Z"
+    },
+    {
+      "file": "screenshots/console-users.jpg",
+      "title": "Users \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#users",
+      "sha256": "5775eafc79ad4b776eaf90bd9395156d091d76e8c62f9b785e67220f8dcc9938",
+      "capturedAt": "2026-10-27T14:50:17.232Z"
+    },
+    {
+      "file": "screenshots/console-teams.jpg",
+      "title": "Teams \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#teams",
+      "sha256": "290c380ca2469cfbacee69119bc09645fb1cff7b33b0397b350c96405c284251",
+      "capturedAt": "2026-10-27T14:50:19.745Z"
+    },
+    {
+      "file": "screenshots/console-roles.jpg",
+      "title": "Typed roles \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#roles",
+      "sha256": "8796dd53a7a3631e9a4377d7a09c44dea4cb97164220265c70346a0a77e66ecb",
+      "capturedAt": "2026-10-27T14:50:22.507Z"
+    },
+    {
+      "file": "screenshots/console-identityBindings.jpg",
+      "title": "Human identities \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#identityBindings",
+      "sha256": "0fb98a0b22b3bd6b127cc170f0f6fbdf30bd9420afce78f6ffa48b0cb41ead9a",
+      "capturedAt": "2026-10-27T14:50:24.986Z"
+    },
+    {
+      "file": "screenshots/console-delegations.jpg",
+      "title": "Human delegations \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#delegations",
+      "sha256": "682d1bd9428892a15c4917a8439c3e41054a3f09e1cda48f326426cce5212cea",
+      "capturedAt": "2026-10-27T14:50:27.576Z"
+    },
+    {
+      "file": "screenshots/console-agents.jpg",
+      "title": "Agents \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#agents",
+      "sha256": "6df319ae7d3f01f3ce6a3578c336e80104168e144fb3d595a2ab830c0f5135f0",
+      "capturedAt": "2026-10-27T14:50:30.810Z"
+    },
+    {
+      "file": "screenshots/console-agentGroups.jpg",
+      "title": "Agent groups \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#agentGroups",
+      "sha256": "48cd9002534576209a72f0730884b60486bbc7c3cbb7b40863369b517b151bfd",
+      "capturedAt": "2026-10-27T14:50:33.431Z"
+    },
+    {
+      "file": "screenshots/console-workloadBindings.jpg",
+      "title": "Workload identities \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#workloadBindings",
+      "sha256": "8dfd595b818e73ac15f37d5bfde69156a71dbae0838a1fea5c94afd0c48706d3",
+      "capturedAt": "2026-10-27T14:50:35.919Z"
+    },
+    {
+      "file": "screenshots/console-agentDelegations.jpg",
+      "title": "Agent delegations \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#agentDelegations",
+      "sha256": "ef45049a4bfbf158bd58dc4225da0f8fbbc769460aaa088cbb0c8140abcadf42",
+      "capturedAt": "2026-10-27T14:50:38.525Z"
+    },
+    {
+      "file": "screenshots/console-devices.jpg",
+      "title": "Devices \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#devices",
+      "sha256": "bb7be1d3d6500c83963b1bed57be615e9c281554d7a2e2a23f73fe37640bcf67",
+      "capturedAt": "2026-10-27T14:51:29.692Z"
+    },
+    {
+      "file": "screenshots/console-deviceGroups.jpg",
+      "title": "Device groups \u00b7 current incident environment",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#deviceGroups",
+      "sha256": "d5308376ea3c8b1de4f1562db5917bdb3ff2033e525ed13fb53d32935d546d2b",
+      "capturedAt": "2026-10-27T14:52:30.858Z"
+    },
+    {
+      "file": "screenshots/console-deviceEvidence.jpg",
+      "title": "Device evidence \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#deviceEvidence",
+      "sha256": "c04c478701c740c0cae55f2cb615c7d01c35c8e9edd7d2295d6125f17d58039b",
+      "capturedAt": "2026-10-27T14:52:33.397Z"
+    },
+    {
+      "file": "screenshots/console-mapping.jpg",
+      "title": "Agent Group tool mapping \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#mapping",
+      "sha256": "80f6639d2328d15239f1fdace509532f65138b203219cf4107c9499fe3fa9fab",
+      "capturedAt": "2026-10-27T14:58:43.536Z"
+    },
+    {
+      "file": "screenshots/console-config-server.jpg",
+      "title": "Server \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#config-server",
+      "sha256": "495b21f05c7928fc4e4c22c3532629f40c911d1e170cf88ea13b6b6c00f07cac",
+      "capturedAt": "2026-10-27T14:52:42.438Z"
+    },
+    {
+      "file": "screenshots/console-config-device.jpg",
+      "title": "Device \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#config-device",
+      "sha256": "f40a18a5244e490d5d59955162e74c24e05481fa452123857c974463a4f6eda3",
+      "capturedAt": "2026-10-27T14:52:45.237Z"
+    },
+    {
+      "file": "screenshots/console-config-backup.jpg",
+      "title": "Backup/Restore \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#config-backup",
+      "sha256": "632aa1ca07f297f8def11fe4498445b8ea29c211e984e75628b379ffb9b6fcf4",
+      "capturedAt": "2026-10-27T14:52:47.543Z"
+    },
+    {
+      "file": "screenshots/console-mcp-servers.jpg",
+      "title": "MCP servers \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#mcp-servers",
+      "sha256": "50e22f3b3f41dd4389258e3b425e58437eb2140682de9e7a0ba6c06aecfd4ceb",
+      "capturedAt": "2026-10-27T14:52:50.118Z"
+    },
+    {
+      "file": "screenshots/console-about.jpg",
+      "title": "About \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#about",
+      "sha256": "1176fff7a278f0534f8518200177c33456a75a632afd04e9f785698b96e1a143",
+      "capturedAt": "2026-10-27T14:52:52.666Z"
+    },
+    {
+      "file": "screenshots/console-config-reviews.jpg",
+      "title": "Configuration reviews \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#config-reviews",
+      "sha256": "00be6a0d784a2c4ac6dc2ebe2638278664fe7b2603050d9977f12acb16a46c36",
+      "capturedAt": "2026-10-27T14:53:15.952Z"
+    },
+    {
+      "file": "screenshots/console-outcomes.jpg",
+      "title": "Effect outcomes \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#outcomes",
+      "sha256": "c97659a12d494c678e7caa86d78e0640ae8f4d1e9b390fe1e332941ec627590c",
+      "capturedAt": "2026-10-27T14:53:18.717Z"
+    },
+    {
+      "file": "screenshots/console-simulation.jpg",
+      "title": "Access simulation \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#simulation",
+      "sha256": "0bb9b63ca655b93afe4a6c832cc3e73153615a3108f555cbb34ef6e3aa8e6d95",
+      "capturedAt": "2026-10-27T14:53:21.016Z"
+    },
+    {
+      "file": "screenshots/console-server-packages.jpg",
+      "title": "Server packages \u00b7 deployed official incident package",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#server-packages",
+      "sha256": "76a104c0998347fea3a677bc1a6a3da9b2d8937d7f91f13629c4dd62ab3e0508",
+      "capturedAt": "2026-10-27T14:53:37.710Z"
+    },
+    {
+      "file": "screenshots/console-builder.jpg",
+      "title": "Tool builder \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#builder",
+      "sha256": "bddaf6e3dee744a52070acaf3d704cbd94625c0fed31176ae481717215f20f29",
+      "capturedAt": "2026-10-27T14:53:40.514Z"
+    },
+    {
+      "file": "screenshots/console-local.jpg",
+      "title": "Local vault \u00b7 current incident environment",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#local",
+      "sha256": "e2d727ac93d57e9b7446301fc9f042d9d0efb7e23bc67482902089817fdd1268",
+      "capturedAt": "2026-10-27T14:55:17.836Z"
+    },
+    {
+      "file": "screenshots/console-requests.jpg",
+      "title": "Client tool requests \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#requests",
+      "sha256": "2b9f79660cb0b8ff1783920b37d7daf30d8100b0d35da3b577f4d590608ddfc0",
+      "capturedAt": "2026-10-27T14:55:21.030Z"
+    },
+    {
+      "file": "screenshots/console-enroll.jpg",
+      "title": "Enroll device \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#enroll",
+      "sha256": "a2ce058382a11cbbe604e38b54f8d6f367306fb7d86d4fd335c8d34fd4b9e05f",
+      "capturedAt": "2026-10-27T14:52:36.266Z"
+    },
+    {
+      "file": "screenshots/console-fleet.jpg",
+      "title": "Packages \u00b7 current incident walkthrough",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#fleet",
+      "sha256": "0060acef6de3a34db6b4d21a43eabe7cdc004bb80383df19439592ddc7b9e0ad",
+      "capturedAt": "2026-10-27T14:52:39.303Z"
+    },
+    {
+      "file": "screenshots/console-analytics.jpg",
+      "title": "Tenant Analytics \u00b7 actual memory, RAG and incident tool calls",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#analytics",
+      "sha256": "2bcfc49c16a122bbaa0be0e8d4727d7b5a46de2663c51a1962bc2cf918c2a983",
+      "capturedAt": "2026-10-27T14:56:59.589Z"
+    },
+    {
+      "file": "screenshots/console-analytics-full.jpg",
+      "title": "Full tenant Analytics page with per-tool call counts",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#analytics",
+      "sha256": "f10ba3e3facffad1068655c051c47aa3ed10bcf1e84326172230d08a92e82ff6",
+      "capturedAt": "2026-10-27T14:57:01.727Z"
+    },
+    {
+      "file": "screenshots/console-analytics-tool.jpg",
+      "title": "Remediation tool drilldown \u00b7 actual calls and outcomes",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#analytics?tool=examples.incidents%2Fremediate",
+      "sha256": "6756e03c85847bd3a8aac271f3e4b69a70c66957d78e3aed5a9fe49ac47275e1",
+      "capturedAt": "2026-10-27T14:57:07.185Z"
+    },
+    {
+      "file": "screenshots/operator-sign-in.jpg",
+      "title": "Labelled operator test gateway with separate mTLS certificate",
+      "group": "operator",
+      "url": "http://localhost:58002/tour/login",
+      "sha256": "d97f5156cdeb2b0088884393d9d3e716d4a657c6d01a23cdb3385f8865e18528",
+      "capturedAt": "2026-10-27T14:40:04.766Z"
+    },
+    {
+      "file": "screenshots/console-audit.jpg",
+      "title": "ToolGate audit trail with actor and request correlation",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#audit",
+      "sha256": "9a11ab3da094915127fbc24d5c53fdfe9e004918195a6fb5824a8068fd2d8fd6",
+      "capturedAt": "2026-10-27T14:41:39.458Z"
+    },
+    {
+      "file": "screenshots/operator-usage-charts.jpg",
+      "title": "Operator usage charts and busiest tools \u00b7 scrolled dashboard",
+      "group": "operator",
+      "url": "http://localhost:58002/",
+      "sha256": "79ca3afbf20493188eb86d6b5cf88fd5364e4d5937f5ddb0d547ffaa6d64c4a3",
+      "capturedAt": "2026-10-27T14:48:09.067Z"
+    },
+    {
+      "file": "screenshots/console-approvals.jpg",
+      "title": "Approval requests in the current incident environment",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#approvals",
+      "sha256": "2fe37810c04ec43f1c1a304fa3da4a0f339f020177cc6cf0b77b845fbf919001",
+      "capturedAt": "2026-10-27T14:53:13.097Z"
+    },
+    {
+      "file": "screenshots/console-analytics-tools.jpg",
+      "title": "Actual tool-call counts for memory, RAG and the incident agents",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#analytics",
+      "sha256": "941f00f64773ffb9a0ba4c97114dbee1cc712c29f4539c3866901b475bf6175d",
+      "capturedAt": "2026-10-27T14:57:04.260Z"
+    },
+    {
+      "file": "screenshots/console-overview-light.jpg",
+      "title": "Current tenant console in light theme",
+      "group": "console",
+      "url": "http://127.0.0.1:56289/console/#overview",
+      "sha256": "6ab886049065f500ac2114664ca37cfd9aa923ec8b123a3e05da4a8955da4d0b",
+      "capturedAt": "2026-10-27T14:58:40.343Z"
+    },
+    {
+      "file": "screenshots/operator-session-timeline.jpg",
+      "title": "Caller-declared fixture session \u00b7 denial, cancellation and expiry checks",
+      "group": "operator",
+      "url": "http://localhost:58002/",
+      "sha256": "51aae2a73a1dce0e5ecf27b7cd7b8a57915c89279b3ed4e219d499d2f1baae6b",
+      "capturedAt": "2026-10-27T14:59:14.106Z"
+    },
+    {
+      "file": "screenshots/operator-denied-detail.jpg",
+      "title": "Denied test operation \u00b7 identity, spans and ledger transitions",
+      "group": "operator",
+      "url": "http://localhost:58002/",
+      "sha256": "f84f2714d9f7a86c805ad42887a3a415204730ece9355adcca7d48147fe1a80e",
+      "capturedAt": "2026-10-27T14:59:26.613Z"
+    }
+  ],
+  "expectedRoutes": [
+    "/console/#overview",
+    "/console/#analytics",
+    "/console/#audit",
+    "/console/#approvals",
+    "/console/#users",
+    "/console/#teams",
+    "/console/#roles",
+    "/console/#tools",
+    "/console/#policies",
+    "/console/#devices",
+    "/console/#agents",
+    "/console/#agentGroups",
+    "/console/#toolGroups",
+    "/console/#deviceGroups",
+    "/console/#grants",
+    "/console/#delegations",
+    "/console/#agentDelegations",
+    "/console/#bindings",
+    "/console/#extractors",
+    "/console/#workloadBindings",
+    "/console/#identityBindings",
+    "/console/#deviceEvidence",
+    "/console/#config-reviews",
+    "/console/#config-server",
+    "/console/#config-device",
+    "/console/#config-backup",
+    "/console/#outcomes",
+    "/console/#simulation",
+    "/console/#fleet",
+    "/console/#server-packages",
+    "/console/#mcp-servers",
+    "/console/#builder",
+    "/console/#test",
+    "/console/#enroll",
+    "/console/#local",
+    "/console/#requests",
+    "/console/#mapping",
+    "/console/#about"
+  ],
+  "requiredScreens": [
+    "screenshots/operator-overview.jpg",
+    "screenshots/operator-invocation-detail.jpg",
+    "screenshots/operator-session-timeline.jpg"
+  ],
+  "pendingRetakes": [
+    {
+      "file": "screenshots/console-downloads-full.jpg",
+      "reason": "Retake in the current GPU-backed walkthrough; previous capture excluded"
+    },
+    {
+      "file": "screenshots/console-tool-picker.jpg",
+      "reason": "Retake in the current GPU-backed walkthrough; previous capture excluded"
+    },
+    {
+      "file": "screenshots/console-triage-tool-scope.jpg",
+      "reason": "Retake in the current GPU-backed walkthrough; previous capture excluded"
+    },
+    {
+      "file": "screenshots/console-test.jpg",
+      "reason": "Session expired before capture; sign-in page excluded"
+    },
+    {
+      "file": "screenshots/operator-overview.jpg",
+      "reason": "Capture the dashboard heading and overview cards; the saved view contains charts and busiest tools"
+    }
+  ],
+  "captureStatus": "Partial current-run captures; remaining views explicitly listed for a later capture session",
+  "renderPauseSeconds": 2,
+  "model": {
+    "provider": "Ollama",
+    "model": "qwen2.5:7b",
+    "gpus": "4 x NVIDIA Quadro P4000",
+    "ragInput": "One short fictional runbook, one retrieved passage"
+  },
+  "deferredIssues": [
+    "https://github.com/olo-labs/olo-mono/issues/25",
+    "https://github.com/olo-labs/olo-mono/issues/26"
+  ]
+}

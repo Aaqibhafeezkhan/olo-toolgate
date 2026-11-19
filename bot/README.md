@@ -84,5 +84,11 @@ rebuilding profiles during promotion.
 
 The seven file examples use the real OLO QLoRA model first for file agents,
 then lightweight Ollama on inference failure. Other agents use the lightweight
-model; OpenRouter remains unattached standby. The two text-only examples use
+model; OpenRouter remains unattached standby. The three text-only examples use
 lightweight Ollama. Each source README contains exact input and output commands.
+
+For a multi-agent demonstration, build/import
+[`multiagent-incident`](configurations/multiagent-incident/README.md). One agent
+classifies an incident; a second receives that triage and the original incident
+to produce a handover. It requires no device files or tool packages.
+[Recorded local run and three-cloud traces](../docs/media/olo-2026-11/README.md).

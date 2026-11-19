@@ -94,7 +94,7 @@ place the file described in the bot's README. Containers and Admin credentials
 stay unchanged during bot switching; input/output folders remain your responsibility.
 
 Start with [community help](docs/help/README.md),
-[the seven file examples and two text bots](bot/README.md),
+[the seven file examples and three text bots](bot/README.md),
 [device setup](docs/help/device.md), [models](docs/help/models.md) and
 [observability](docs/help/observability.md). The older single-container
 [ToolGate-only Quickstart](deploy/compose/QuickStart/README.md) remains separate.
@@ -148,7 +148,7 @@ agent/service grants or execution authorization.
 |---|---|---|
 | [Portable bots](docs/help/run-bots.md) | Import/export one `.olo` with its referenced configuration and exact tool/trigger packages | Current development branch; published images pending |
 | [Graph and agent authoring](docs/help/author-bots.md) | JSON editors for graph configuration, agents, prompts, model groups and trigger mappings | Current development branch; full workflow roadmap qualification pending |
-| [Manual and triggered runs](docs/help/run-bots.md) | Published bot Run input, durable progress/result and device trigger dispatch | Nine local examples accepted; full distributed matrix pending |
+| [Manual and triggered runs](docs/help/run-bots.md) | Published bot Run input, durable progress/result and device trigger dispatch | Ten local examples accepted, including a two-agent handover; full distributed matrix pending |
 | [Model routing](docs/help/models.md) | File agents use OLO QLoRA then Qwen3; other agents use Qwen3; premium OpenRouter is unattached standby | Real local-model acceptance; no automatic paid calls |
 | [Workflow observability](docs/help/observability.md) | Optional collector to Langfuse, LangSmith and Phoenix with content-free structural spans | Three-cloud local acceptance; installation configuration |
 | [MCP governance](docs/gateway/mcp-proxy.md) | Put existing MCP servers behind ToolGate policy, approval and audit without changing them | Available |
@@ -180,39 +180,45 @@ They are not screenshots of the unpublished Docker deployment.
 
 ### One workspace, two sections
 
-![OLO overview with Orchestration and ToolGate navigation](docs/media/olo-2026-11/overview.png)
+![OLO overview with Orchestration and ToolGate navigation](docs/media/olo-2026-11/console/overview.jpg)
 
 The console puts **Bots** below Overview and **Agents** directly below Bots.
 OLO ToolGate groups tools, devices, access and audit controls in the same workspace.
 
 ### Import, publish and run bots
 
-![Published OLO bots and their Run actions](docs/media/olo-2026-11/bots.png)
+![Published OLO bots and their Run actions](docs/media/olo-2026-11/console/bots.jpg)
 
 A `.olo` carries the bot and referenced packages/configuration. Review its exact
 revision, prepare the graph and dependencies, then publish. Persistent red bullets
 explain missing dependencies. Imports retain destination credentials and device
 membership and never clean your hot folders.
 
-### Follow a real run to its result
+### Follow two agents from input to result
 
-![Successful OLO bot run with agent/model progress and a real Ollama summary](docs/media/olo-2026-11/bot-result.png)
+![Two-agent incident bot: input, real model execution and result](docs/media/orchestration-flow.gif)
 
 Click **▶ Run**, enter the input expected by that bot, and follow queue, agent,
 model and node progress through the terminal result. File bots can instead start
-from a configured device watcher. Seven device/file examples and both text bots
-have local end-to-end acceptance; model output quality and production reliability
-are separate from successful execution.
+from a configured device watcher. The [multi-agent incident bot](bot/configurations/multiagent-incident/README.md)
+classifies an incident with one agent, then passes the original text and triage
+to a second agent for an operations handover. Both call local Qwen3; the result
+contains the triage and summary. Seven device/file examples and three text bots
+have bounded local end-to-end acceptance. Model output quality and production
+reliability are separate from successful execution.
+
+[Open the real two-agent result](docs/media/olo-2026-11/console/multiagent-output.jpg) ·
+[Exact run and cloud evidence](docs/media/olo-2026-11/evidence.json).
 
 <details>
 <summary><strong>Agents, devices and trigger assignment administration</strong></summary>
 
-![OLO agents and their governed identities](docs/media/olo-2026-11/agents.png)
+![OLO agents and their governed identities](docs/media/olo-2026-11/console/agents.jpg)
 
 Agent definitions select prompts, model groups and output schemas. Runtime grants
 remain separate from the administrator's ability to configure a bot.
 
-![OLO connected device management](docs/media/olo-2026-11/devices.png)
+![OLO connected device management](docs/media/olo-2026-11/console/devices.jpg)
 
 Approve the actual destination device and assign its declared groups. Packages
 and watcher settings reconcile over its existing Gateway connection.
@@ -240,8 +246,57 @@ for credential creation and configuration. Existing
 [New Relic](deploy/newrelic/README.md) and [Insights](docs/control-plane/insights.md)
 guides cover additional monitoring.
 
-Earlier console/device/Grafana/New Relic captures remain in the
-[historical tour guide](docs/media/TOURS.md); they do not illustrate the current branding.
+These three captures show the **same successful two-agent run**, trace
+`386029e4f45057cfd8c07c24c5a2d628`. Each provider's API readback matched eight
+spans. Missing content/token/cost fields are intentional; displayed `$0` values
+are not measured model cost.
+
+| Langfuse | LangSmith | Phoenix |
+|---|---|---|
+| ![Langfuse two-agent trace](docs/media/olo-2026-11/monitoring/langfuse-tree.jpg) | ![LangSmith two-agent trace](docs/media/olo-2026-11/monitoring/langsmith-expanded.jpg) | ![Phoenix matching successful trace](docs/media/olo-2026-11/monitoring/phoenix-trace.jpg) |
+
+![Same-run trace views across three monitoring services](docs/media/monitoring-flow.gif)
+
+### Console tours and overview video
+
+The original four slideshows now use current OLO console captures. These are
+navigation slides, not continuous recordings; empty approval queues remain empty.
+[Step-by-step originals and provenance](docs/media/TOURS.md).
+
+| Audit and approvals | Devices and packages |
+|---|---|
+| ![Current audit and approval views](docs/media/audit-flow.gif) | ![Current device management views](docs/media/device-flow.gif) |
+
+| Tools and runtime access | Workspace administration |
+|---|---|
+| ![Current tools and access views](docs/media/console-tools-tour.gif) | ![Current OLO administration views](docs/media/console-administration.gif) |
+
+[![OLO overview video poster](docs/media/toolgate-overview.png)](docs/media/toolgate-overview.mp4)
+
+[Watch the captioned overview](docs/media/toolgate-overview.mp4) ·
+[Animated preview](docs/media/toolgate-overview.gif) ·
+[Captions and rebuild instructions](docs/media/README.md).
+The overview is a diagram-based explainer. Earlier native desktop, independent
+approval, Operator Insights, Grafana and New Relic captures are
+[historical](docs/media/HISTORICAL.md).
+
+<details>
+<summary><strong>Earlier infrastructure monitoring examples</strong></summary>
+
+These retained Grafana, Prometheus and New Relic captures come from earlier
+installations. They show separate integrations, not the two-agent run above.
+
+![Earlier Grafana tool-call overview](docs/media/screenshots/grafana-toolgate-full.jpg)
+
+![Earlier Prometheus tool-call metrics](docs/media/screenshots/prometheus-toolgate-full.jpg)
+
+![Earlier New Relic trace slideshow](docs/media/newrelic-traces.gif)
+
+New Relic originals: [overview](docs/media/screenshots/newrelic-traces-overview-full.jpg),
+[waterfall](docs/media/screenshots/newrelic-call-waterfall-full.jpg),
+[attributes](docs/media/screenshots/newrelic-execution-attributes-full.jpg).
+
+</details>
 
 ## Production and security status
 

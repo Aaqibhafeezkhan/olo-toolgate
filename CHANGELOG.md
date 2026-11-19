@@ -6,6 +6,11 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Add a local two-agent incident bot with triage-to-handover configuration and
+  exact demo input. Refresh OLO console screenshots and the four existing tours;
+  add multi-agent and same-run Langfuse/LangSmith/Phoenix views, restore overview
+  video links and retain explicit provenance for historical captures.
+
 - Fix the LangChain package image to publish only the root Java SDK task and
   enforce SDK isolation from unrelated Quarkus/analysis plugins during packaging.
 

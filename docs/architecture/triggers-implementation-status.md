@@ -1,6 +1,19 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Multi-agent media integration — 2026-11-19
+
+Known base `41891b9e`; exact source inventory and checks are in the workflow
+media checkpoint and [run evidence](../media/olo-2026-11/evidence.json).
+The new text-only bot uses no trigger package and changes no #274 transport,
+subscription, ownership or module interface. Current trigger/device console
+captures replace active old-route aliases; earlier desktop enrollment captures
+remain historical. Twelve profile and 13 JSON-graph checks pass, as does the
+real two-agent run with three-cloud readback. Full repository checking stops
+at one existing Windows symlink-privilege error (564 cases; 11 skips). Full
+module/M12 matrices remain outstanding. **27% remains earned**; no module,
+Done-when, baseline scope/weight or denominator changes.
+
 ## LangChain example package-build isolation — 2026-11-19
 
 Known base `e6d93675`; source hash and executed checks are in the workflow SDK

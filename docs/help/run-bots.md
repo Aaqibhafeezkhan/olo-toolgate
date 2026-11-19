@@ -22,6 +22,13 @@ runtime authority still governs every tool/model call. File triggers also run
 when their watcher sees a new matching file. Check run observations/results and
 the configured output files. Never resend an unknown write outcome blindly.
 
+For a text-only multi-agent run, use
+[`multiagent-incident`](../../bot/configurations/multiagent-incident/README.md).
+Its README supplies the exact incident input. The first agent classifies it;
+the second uses the triage plus original incident to write a handover. Both use
+local Qwen3. The second agent is explicitly eligible for delegated invocation;
+entry eligibility alone does not enable a subsequent graph handoff.
+
 Distinct bot IDs can coexist. `hotswap-demo-a/b` intentionally share
 `hotswap-demo`: publishing B replaces that bot's revision. It does not recreate
 containers, change users or move A's files. Admitted runs remain pinned to A;

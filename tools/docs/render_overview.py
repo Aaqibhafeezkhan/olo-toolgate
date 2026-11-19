@@ -15,14 +15,14 @@ MUTED, PURPLE, CYAN = "#bac7de", "#ab96ff", "#65e4df"
 SCENES = [
     ("Zero Trust for Agentic AI.", "Secure Every Tool Boundary.", ["AI agents", "OLO ToolGate", "Your tools"],
      "Govern every tool call with identity, policy enforcement, least-privilege access and end-to-end auditability."),
-    ("One request. Clear boundaries.", "Example: an agent writes a file", ["Agent request", "Gateway checks", "Device executes"],
-     "An agent calls hotfolder.write_text. The Gateway checks access before a protected effect."),
+    ("One workspace. Two sections.", "OLO ToolGate + OLO Orchestration", ["Portable bots", "Governed tools", "Live progress"],
+     "Import a bot bundle, configure agents and models, publish its revision and follow execution in the OLO console."),
     ("Access starts with groups.", "Teams + Agent Groups + Tool Groups + Device Groups", ["People / agents", "Group grants", "Tools / devices"],
      "Groups hold access mappings. Default groups grant no access; new verified users start disabled."),
     ("Allow. Ask. Block.", "Policy applies after the required grants", ["ALLOW", "ASK", "BLOCK"],
      "Allow permits an authorized action. Ask requires independent approval. Block prevents execution."),
-    ("Manage it. See what happened.", "The console and endpoint client work together", ["Admin console", "Device status", "Activity / audit"],
-     "Manage groups and devices in the console. The Windows tray shows command progress and activity."),
+    ("Two agents. One trace.", "Local models and optional cloud observability", ["Triage agent", "Handover agent", "Run / cloud trace"],
+     "Agents run in sequence. Follow structural spans in Langfuse, LangSmith and Phoenix; model output needs human review."),
     ("Your first PR can be small.", "Start with a glossary, example or short guide", ["Pick an issue", "Make one change", "Open a PR"],
      "Visit github.com/olo-labs/olo-toolgate. Choose a good first issue and help improve the docs."),
 ]
@@ -63,7 +63,7 @@ def frame(t):
     logo.thumbnail((82, 42))
     draw.rounded_rectangle((48, 35, 145, 91), radius=12, fill=WHITE)
     im.paste(logo, (96 - logo.width // 2, 63 - logo.height // 2), logo)
-    draw.text((163, 43), "ToolGate", font=font(28, True), fill=WHITE)
+    draw.text((163, 43), "OLO", font=font(28, True), fill=WHITE)
     draw.text((1030, 50), f"{index + 1:02d} / 06", font=font(22), fill=MUTED)
     draw.text((64, 146), title, font=font(51, True), fill=WHITE)
     draw.text((66, 220), subtitle, font=font(26), fill=CYAN)
@@ -111,7 +111,7 @@ def main():
     transcript = ["WEBVTT", ""]
     for i, (_, _, _, caption) in enumerate(SCENES):
         transcript += [f"00:00:{i * 6:02d}.000 --> 00:00:{(i + 1) * 6:02d}.000", caption, ""]
-    (OUT / "toolgate-overview.vtt").write_text("\n".join(transcript), encoding="utf-8")
+    (OUT / "toolgate-overview.vtt").write_text("\n".join(transcript), encoding="utf-8", newline="\n")
     for path in sorted(OUT.glob("toolgate-overview.*")):
         print(f"{path.name}: {path.stat().st_size:,} bytes")
 

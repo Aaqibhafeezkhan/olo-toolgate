@@ -1,57 +1,472 @@
 {
   "sourceRevision": "ed13f0f7087c4377e3cd0c0b039ee65719b93823",
-  "installation": "Existing debug/profiled stack; real local Ollama and demonstration bot/device configuration. Published deployment images are not yet available.",
-  "runId": "run-c97498c2-e711-4fbc-91ea-74ac3ca8fdca",
+  "knownRepositoryBase": "41891b9e8528016fd1d2b4f4a4fee1b3b9a351e2",
+  "installation": "Existing debug/profiled installation at port 18090, with real local Ollama inference and demonstration configuration. UI image source ed13f0f7; repository base 41891b9e. Published dev images are not the capture source. Cloud consoles show the same successful two-agent trace. No independent approval, desktop-client, cost or production qualification is claimed.",
+  "runId": "run-f7672b57-3229-4afa-8c59-2d715a498fc2",
   "captures": [
     {
-      "file": "overview.png",
-      "title": "OLO workspace overview and navigation",
-      "url": "http://127.0.0.1:18090/console/#overview",
-      "capturedAt": "2026-11-19T05:45:09.867Z",
-      "sha256": "51f1f5466cde99f47f713ba70f07e6e37c1189aedb050606b268f3507ba5d27f"
+      "file": "console/about.jpg",
+      "title": "About OLO",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#about",
+      "capturedAt": "2026-11-19T09:28:52.316602Z",
+      "sha256": "b6be95beab1168001210a0c9e69827eb1659e51ead5f4ee56107817a0a955e87"
     },
     {
-      "file": "bots.png",
-      "title": "Published bot revisions and Run actions",
-      "url": "http://127.0.0.1:18090/console/#workflows",
-      "capturedAt": "2026-11-19T05:45:10.526Z",
-      "sha256": "f65194e4e99402f8af52c14c64b40442930a5217c7e88d62b9d8290b40b3a4a4"
+      "file": "console/agent-configuration.jpg",
+      "title": "Models & prompts",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#agent-configuration",
+      "capturedAt": "2026-11-19T09:40:54.075234Z",
+      "sha256": "db4758cb2c68f83c614cac44cfede91dc66ea42aff89579d3a9ce3f31abb7a99"
     },
     {
-      "file": "bot-running.png",
-      "title": "Live agent and model progress from an Admin bot run",
-      "url": "http://127.0.0.1:18090/console/#workflows",
-      "capturedAt": "2026-11-19T05:45:13.491Z",
-      "sha256": "f7be2b901cb1682a77d25eafff74be4945fae0cca7407c10b5a9afaa5e4ca6ef"
+      "file": "console/agent-workflow-mappings.jpg",
+      "title": "Bot mappings",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#agent-workflow-mappings",
+      "capturedAt": "2026-11-19T09:40:55.015074Z",
+      "sha256": "7a0f1a8aa2bf205c7de66fb4b723d85aad75c83f4b38bfb790aa0488ec47d9d7"
     },
     {
-      "file": "bot-result.png",
-      "title": "Real Ollama summary and retained run timeline",
-      "url": "http://127.0.0.1:18090/console/#workflows",
-      "capturedAt": "2026-11-19T05:45:15.082Z",
-      "sha256": "b8abd11dab0c1678e15bd058abc30ebc004b06eb15f316fca578dac486e47089"
+      "file": "console/agentDelegations.jpg",
+      "title": "Agent delegations",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#agentDelegations",
+      "capturedAt": "2026-11-19T09:28:33.801896Z",
+      "sha256": "0dc9b55bf1bd4a87f52fdb65f87c43354b06fa916b2e085de7511fe554726fb6"
     },
     {
-      "file": "agents.png",
-      "title": "Agents and their governed identities",
+      "file": "console/agentGroups.jpg",
+      "title": "Agent groups",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#agentGroups",
+      "capturedAt": "2026-11-19T09:28:32.755071Z",
+      "sha256": "64063265c56f1f5ea65ffe72cc3f8c02a543309b83053757daedfc92c472fefa"
+    },
+    {
+      "file": "console/agents.jpg",
+      "title": "Agents",
+      "group": "console",
       "url": "http://127.0.0.1:18090/console/#agents",
-      "capturedAt": "2026-11-19T05:45:15.467Z",
-      "sha256": "d94b188ea29788d5806454cf384af9bcb7ccba53c082915582ccd2304bf4f68c"
+      "capturedAt": "2026-11-19T09:28:32.232424Z",
+      "sha256": "077f54c29e1f45ef059116dc56702c92738d003dc6abe502fcc8372e321f2762"
     },
     {
-      "file": "devices.png",
-      "title": "Connected device and runtime status",
+      "file": "console/analytics-full.jpg",
+      "title": "Full-page tool analytics and outcome evidence",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#analytics-full",
+      "capturedAt": "2026-11-19T09:29:20.849839Z",
+      "sha256": "abdda4546bbcf816756e38c907439a59685572169efdf60f0212fdde2087f0a5"
+    },
+    {
+      "file": "console/analytics.jpg",
+      "title": "Tool usage and performance",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#analytics",
+      "capturedAt": "2026-11-19T09:28:58.415668Z",
+      "sha256": "b82e1ab134043498da1232cbbfa6761a741d93812168a780b5c14b1b3e049292"
+    },
+    {
+      "file": "console/approvals.jpg",
+      "title": "Approvals",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#approvals",
+      "capturedAt": "2026-11-19T09:28:59.470321Z",
+      "sha256": "24e773380eff387fa98316eb79fc24f648165309dbeede3a81d1e7eb1ae292e2"
+    },
+    {
+      "file": "console/audit.jpg",
+      "title": "Audit log",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#audit",
+      "capturedAt": "2026-11-19T09:28:58.961458Z",
+      "sha256": "fc91a37ba3ba0460ade00be80a32f2f7f21ba76011f21dc4688929264f17319c"
+    },
+    {
+      "file": "console/bindings.jpg",
+      "title": "Execution bindings",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#bindings",
+      "capturedAt": "2026-11-19T09:28:37.897345Z",
+      "sha256": "f608ddd471a4c43398689758b199b968332ea23544fac3479afbce0fbf5a65f4"
+    },
+    {
+      "file": "console/bots.jpg",
+      "title": "Published Bots and Run actions",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:41:06.757383Z",
+      "sha256": "890e59a6a1b4f91f60cb3027ed1b72231ce15df3724e8ee5c0e577fcc87815ec"
+    },
+    {
+      "file": "console/builder.jpg",
+      "title": "Tool Builder",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#builder",
+      "capturedAt": "2026-11-19T09:28:55.582018Z",
+      "sha256": "77d39de8cb78402ef12bde4936791fd19bf14da85753ee1fb808ca1d4eb8b910"
+    },
+    {
+      "file": "console/config-backup.jpg",
+      "title": "Backup/Restore",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#config-backup",
+      "capturedAt": "2026-11-19T09:28:51.598312Z",
+      "sha256": "69b30f0e25b549f5b9c625cc1fa3950ba70609952a2e18bcfd974cac03900f6e"
+    },
+    {
+      "file": "console/config-device.jpg",
+      "title": "Device",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#config-device",
+      "capturedAt": "2026-11-19T09:28:51.414859Z",
+      "sha256": "daf09bdda33e898bd4b308b40a46da5f0e7a14641a93d926d6d0f86f586d85ad"
+    },
+    {
+      "file": "console/config-reviews.jpg",
+      "title": "Configuration reviews",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#config-reviews",
+      "capturedAt": "2026-11-19T09:28:52.887445Z",
+      "sha256": "060074857641ad1489f55cfb6ce59d5d77bda9c6c33210982c3de92a96193be3"
+    },
+    {
+      "file": "console/config-server.jpg",
+      "title": "Server",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#config-server",
+      "capturedAt": "2026-11-19T09:28:50.892861Z",
+      "sha256": "0e39bae72679e59d3bcabd1b5ee4575a0023147fe35dfe06ad9e006ce3d38fbc"
+    },
+    {
+      "file": "console/delegations.jpg",
+      "title": "Human delegations",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#delegations",
+      "capturedAt": "2026-11-19T09:28:49.471068Z",
+      "sha256": "c9a3ad6edc9254b0cf82b9556cfa8e72fd8b0a0a2eb175bb6d5dfe6e53f3f6f7"
+    },
+    {
+      "file": "console/deviceEvidence.jpg",
+      "title": "Device evidence",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#deviceEvidence",
+      "capturedAt": "2026-11-19T09:28:35.816139Z",
+      "sha256": "3f9943791d4e6c17b1c1f4101d039b578a8441751f5a569b354f83fd1a118009"
+    },
+    {
+      "file": "console/deviceGroups.jpg",
+      "title": "Device groups",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#deviceGroups",
+      "capturedAt": "2026-11-19T09:28:35.356234Z",
+      "sha256": "411433013cd3896db6cf7c78863213b2f508d91ff1af634867662181950fd74c"
+    },
+    {
+      "file": "console/devices.jpg",
+      "title": "Clients",
+      "group": "console",
       "url": "http://127.0.0.1:18090/console/#devices",
-      "capturedAt": "2026-11-19T05:45:16.214Z",
-      "sha256": "aaef602b66393f798c75d5cadffcc6a81c3e7b46ba49109013d5c9a8c72f0018"
+      "capturedAt": "2026-11-19T09:28:34.643855Z",
+      "sha256": "8b36c62af923da81d99d81acac92c2a96e7be60bcfb1f4601af2adb74ed8e34b"
     },
     {
-      "file": "triggers.png",
-      "title": "Trigger assignment administration",
-      "url": "http://127.0.0.1:18090/console/#triggers",
-      "capturedAt": "2026-11-19T05:49:06.753Z",
-      "sha256": "3a0841059655f5c7d2ccb69dc7bb31c6ebd4cc3a2980f651862353d10f171c13",
-      "scope": "Actual administration section; the agent-facing consumer view is separate and requires runtime grants."
+      "file": "console/enroll.jpg",
+      "title": "Enroll this device",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#enroll",
+      "capturedAt": "2026-11-19T09:28:57.120243Z",
+      "sha256": "d823ad5f53d46d856a0a08a730bfa8b6eee99c07a27dd511317634687d426422"
+    },
+    {
+      "file": "console/extractors.jpg",
+      "title": "Resource extractors",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#extractors",
+      "capturedAt": "2026-11-19T09:28:38.877285Z",
+      "sha256": "d6927b5de0e11fcec7b432243434d5744200c358bead52ed2957c04146c55a2a"
+    },
+    {
+      "file": "console/fleet.jpg",
+      "title": "Package deployments",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#fleet",
+      "capturedAt": "2026-11-19T09:28:57.983661Z",
+      "sha256": "98bad233c016f489f5df582ff3b158e1b496db91270580e59cbad2950590dc30"
+    },
+    {
+      "file": "console/grants.jpg",
+      "title": "Access grants",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#grants",
+      "capturedAt": "2026-11-19T09:28:37.420655Z",
+      "sha256": "d40cf5382960f108718befef789de4d128b019a40a55035d7abdf35d5431f5ec"
+    },
+    {
+      "file": "console/identityBindings.jpg",
+      "title": "Human identities",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#identityBindings",
+      "capturedAt": "2026-11-19T09:28:48.933344Z",
+      "sha256": "50557912246eede13ff725be1860e3287612646d7823bb42b6de3f435e965459"
+    },
+    {
+      "file": "console/local.jpg",
+      "title": "Local vault",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#local",
+      "capturedAt": "2026-11-19T09:28:55.792770Z",
+      "sha256": "52a17ec05b0b6907cfb529d3fac833c4e82244d532cae11fd9712d0ab28a07db"
+    },
+    {
+      "file": "console/mapping.jpg",
+      "title": "Agent Group tool mapping",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#mapping",
+      "capturedAt": "2026-11-19T09:28:50.374840Z",
+      "sha256": "ccbf3ba6a56308267c6f5c709892d4c54bd5e171251902b9ed3febb94b656944"
+    },
+    {
+      "file": "console/mcp-servers.jpg",
+      "title": "MCP servers",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#mcp-servers",
+      "capturedAt": "2026-11-19T09:28:52.074815Z",
+      "sha256": "3cbef53ee8c3aace9bb84fae4cbfffb43de507cd3689805aadadebed34ef1e2f"
+    },
+    {
+      "file": "console/multiagent-input.jpg",
+      "title": "Incident input for two agents",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:38.492882Z",
+      "sha256": "5cbfd36e8bfe015d6098bc5d0f03f49897644768502448424a45ab644c6c4cb4"
+    },
+    {
+      "file": "console/multiagent-output.jpg",
+      "title": "Triage and handover result",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:27:08.819278Z",
+      "sha256": "688c818aff4d1410547e29ca1198187402952b791df1c78408684bf89bea5910"
+    },
+    {
+      "file": "console/multiagent-queued.jpg",
+      "title": "Accepted multi-agent run",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:38.914365Z",
+      "sha256": "f5b3354cb9e4aaedbf9f428192679ace4b70d8539e6b71f3be2313d08f9e0c55"
+    },
+    {
+      "file": "console/multiagent-result.jpg",
+      "title": "Successful multi-agent run status",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:52.636274Z",
+      "sha256": "1d90e9e47d362ae6e0079c4164c7aaae91fda149e05852350bb252ecedfb9a7a"
+    },
+    {
+      "file": "console/multiagent-running.jpg",
+      "title": "Live multi-agent execution progress",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflows",
+      "capturedAt": "2026-11-19T09:22:45.857446Z",
+      "sha256": "7c03e0d64a9cfb2d9f25f8e5f972b9b978dd3d22b19e97c0b63fea964b7adaf6"
+    },
+    {
+      "file": "console/outcomes.jpg",
+      "title": "Effect outcomes",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#outcomes",
+      "capturedAt": "2026-11-19T09:28:53.553306Z",
+      "sha256": "62c3e8f92be4036d7d5c5871032a6e1f722711ac50b5f9af25ee1cb569226e0d"
+    },
+    {
+      "file": "console/overview-light.jpg",
+      "title": "OLO overview in light theme",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#overview-light",
+      "capturedAt": "2026-11-19T09:38:51.336315Z",
+      "sha256": "e8ac884959c12612fd16a57ea7ed71f8e53863a889ac850cb5fc72fee8626543"
+    },
+    {
+      "file": "console/overview.jpg",
+      "title": "Your organization, at a glance",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#overview",
+      "capturedAt": "2026-11-19T09:28:31.727227Z",
+      "sha256": "b34574d2a459c35ab7f2e480d5cafc6c6e113e80b38b11d7411a7d30a34c80ec"
+    },
+    {
+      "file": "console/policies.jpg",
+      "title": "Policies",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#policies",
+      "capturedAt": "2026-11-19T09:28:38.371059Z",
+      "sha256": "c3948f627c516254463d1b33737365b89e32d11d8c6b73adc91304daefb6dbfc"
+    },
+    {
+      "file": "console/requests.jpg",
+      "title": "Client tool requests",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#requests",
+      "capturedAt": "2026-11-19T09:28:56.496097Z",
+      "sha256": "5237bd41268a86ad2923cac89aa6c80923b115f77446d8647f09d9064e079195"
+    },
+    {
+      "file": "console/roles.jpg",
+      "title": "Typed roles",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#roles",
+      "capturedAt": "2026-11-19T09:28:48.415563Z",
+      "sha256": "f0e0df0c951ae7c024479180120bb85b6962991384ef95c5096a8bf3e7f0e667"
+    },
+    {
+      "file": "console/server-packages.jpg",
+      "title": "Server packages",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#server-packages",
+      "capturedAt": "2026-11-19T09:28:54.795238Z",
+      "sha256": "100aee0ebbe41d6ad9372be92f1168e377633939c2a40e133dccfd9537e5fd87"
+    },
+    {
+      "file": "console/sign-in.jpg",
+      "title": "OLO Admin sign-in",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/",
+      "capturedAt": "2026-11-19T09:18:00.007078Z",
+      "sha256": "b344af6fdd708d1f77eb6a46fc8f6af5488a2ff76746cd367af7f2f493a4e834"
+    },
+    {
+      "file": "console/simulation.jpg",
+      "title": "Access simulation",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#simulation",
+      "capturedAt": "2026-11-19T09:28:53.812985Z",
+      "sha256": "b7a1bb37ab36f5d7126bad7d52f05341bc27f7c7131498cec37b8eb361a1f19f"
+    },
+    {
+      "file": "console/teams.jpg",
+      "title": "Teams",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#teams",
+      "capturedAt": "2026-11-19T09:28:47.885137Z",
+      "sha256": "ec2b411b5cc11886655d57a2f599c818b7994fe6cd0db62ecd63f47c1baca452"
+    },
+    {
+      "file": "console/toolGroups.jpg",
+      "title": "Tool groups",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#toolGroups",
+      "capturedAt": "2026-11-19T09:28:36.833544Z",
+      "sha256": "7f12757304910794e76b99aabfba8a67a1b6dec45d041ab201f91412b84493b3"
+    },
+    {
+      "file": "console/tools.jpg",
+      "title": "Tools",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#tools",
+      "capturedAt": "2026-11-19T09:28:36.308522Z",
+      "sha256": "4051e04e21fe86cb5f5ca79bc5c7ae32f45a1cbf37b96c6889e945726a737e94"
+    },
+    {
+      "file": "console/users.jpg",
+      "title": "Users",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#users",
+      "capturedAt": "2026-11-19T09:28:47.335181Z",
+      "sha256": "ef8a9ff2cc3b64efd5f8e7ce28108b3b0847f5153a6b6a9f84c5278f3f64b935"
+    },
+    {
+      "file": "console/workflow-dispatch.jpg",
+      "title": "Trigger mappings",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-dispatch",
+      "capturedAt": "2026-11-19T09:29:12.910716Z",
+      "sha256": "56a4a5e20dc74ddc42b7b232e32a7c2de3e0b16656abbe61c4a6b10d39031e01"
+    },
+    {
+      "file": "console/workflow-models.jpg",
+      "title": "Models",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-models",
+      "capturedAt": "2026-11-19T09:40:43.576769Z",
+      "sha256": "6599ce14f41a25a9c1757c391e118c9054ea0255ff14f0dbdae3886b35f51394"
+    },
+    {
+      "file": "console/workflow-profiles.jpg",
+      "title": "Bot bundles",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-profiles",
+      "capturedAt": "2026-11-19T09:29:13.152063Z",
+      "sha256": "c45f77585e2389d78c3bc672c617864eddf04647e725a6dee77c60454e164e0c"
+    },
+    {
+      "file": "console/workflow-trigger-packages.jpg",
+      "title": "Trigger packages",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workflow-trigger-packages",
+      "capturedAt": "2026-11-19T09:29:12.627245Z",
+      "sha256": "a5775d2bb9f870b8da26e444c9707dcd94a3efe6ce351cd016af5d7340a85e13"
+    },
+    {
+      "file": "console/workloadBindings.jpg",
+      "title": "Workload identities",
+      "group": "console",
+      "url": "http://127.0.0.1:18090/console/#workloadBindings",
+      "capturedAt": "2026-11-19T09:28:33.337397Z",
+      "sha256": "7cbaae125fee655634cbac9266457c3932a528c029d4248899835057fbbb20f5"
+    },
+    {
+      "file": "monitoring/langfuse-timeline.jpg",
+      "title": "Langfuse: sequential agent/model timeline",
+      "group": "monitoring",
+      "url": "https://cloud.langfuse.com/project/cmwmgb1u601e9ad0d45b47ob9/traces",
+      "capturedAt": "2026-11-19T09:29:45.507511Z",
+      "sha256": "e55ba8f016bcc58a77f2d9635e0f7a3c689bc260660dcbd379488e0ef536b10f"
+    },
+    {
+      "file": "monitoring/langfuse-tree.jpg",
+      "title": "Langfuse: two agents and two model calls",
+      "group": "monitoring",
+      "url": "https://cloud.langfuse.com/project/cmwmgb1u601e9ad0d45b47ob9/traces",
+      "capturedAt": "2026-11-19T09:26:36.731675Z",
+      "sha256": "c4a5d5bb707f34e791809162fcc84bac47425a5beae22af358aea839aed36e7a"
+    },
+    {
+      "file": "monitoring/langsmith-expanded.jpg",
+      "title": "LangSmith: expanded two-agent execution",
+      "group": "monitoring",
+      "url": "https://smith.langchain.com/o/a5b7dc49-c48e-4bcc-84e8-ffbb1ac95203/a/toolgate-community-debug/projects/p/86a9358b-3044-483d-bf9f-9e78bcd39256",
+      "capturedAt": "2026-11-19T09:27:18.815738Z",
+      "sha256": "1843d414c260774e4fe3b86d65851db02c0d878015ecabeedf7f2de8c08d66ee"
+    },
+    {
+      "file": "monitoring/langsmith-tree.jpg",
+      "title": "LangSmith: matching multi-agent trace",
+      "group": "monitoring",
+      "url": "https://smith.langchain.com/o/a5b7dc49-c48e-4bcc-84e8-ffbb1ac95203/a/toolgate-community-debug/projects/p/86a9358b-3044-483d-bf9f-9e78bcd39256",
+      "capturedAt": "2026-11-19T09:26:57.730946Z",
+      "sha256": "375e278647573a9b6f699dc033cb57cabc7e2907f9485382da645824f86ecfa5"
+    },
+    {
+      "file": "monitoring/phoenix-agent.jpg",
+      "title": "Phoenix: handover agent details",
+      "group": "monitoring",
+      "url": "https://app.phoenix.arize.com/s/rahulnigamfzd/projects/UHJvamVjdDoz/spans/386029e4f45057cfd8c07c24c5a2d628",
+      "capturedAt": "2026-11-19T09:30:06.272628Z",
+      "sha256": "74ff1c9faecbefe429255d8040fcc4a6c5999d2d042312d58f5ed60776ac0188"
+    },
+    {
+      "file": "monitoring/phoenix-trace.jpg",
+      "title": "Phoenix: matching successful trace and run metadata",
+      "group": "monitoring",
+      "url": "https://app.phoenix.arize.com/s/rahulnigamfzd/projects/UHJvamVjdDoz/spans/386029e4f45057cfd8c07c24c5a2d628",
+      "capturedAt": "2026-11-19T09:26:57.860563Z",
+      "sha256": "830a4fa32f0286d8f46c70df53838b39072abe6ec6e7b83ab6f79bbbe3f1c056"
     }
   ]
 }

@@ -35,3 +35,11 @@ prompt/result/secret bodies and currently omit tokens, cost and chosen fallback
 attributes. Gateway attempt logs identify the model/deployment/index. Collector
 outage drops telemetry without retrying effects or changing a confirmed outcome.
 Use OLO's audit/outcome records to establish tool execution.
+
+For a reproducible two-agent example, run
+[`multiagent-incident`](../../bot/configurations/multiagent-incident/README.md).
+The [recorded walkthrough](../media/olo-2026-11/README.md) shows both agents and
+model calls in all three services for the same successful run. The linked
+screenshots and API readbacks record eight matching spans per provider. This
+establishes bounded telemetry integration, not model quality or tool-effect
+finality. A cloud UI's `$0` is not a measured cost when usage is not exported.

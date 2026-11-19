@@ -1,0 +1,84 @@
+{
+  "runId": "run-f7672b57-3229-4afa-8c59-2d715a498fc2",
+  "traceId": "386029e4f45057cfd8c07c24c5a2d628",
+  "destinations": {
+    "langfuse": {
+      "matchingSpans": 8
+    },
+    "langsmith": {
+      "matchingSpans": 8
+    },
+    "phoenix": {
+      "matchingSpans": 8
+    }
+  },
+  "profileId": "multiagent-incident",
+  "profileDigest": "sha256:b921b4fc26d4728887344e59389939709e9f498e12b55560153ff0e50fbfc1cb",
+  "state": "SUCCEEDED",
+  "agents": [
+    "incident-triage-agent",
+    "incident-summary-agent"
+  ],
+  "modelCalls": 2,
+  "tools": 0,
+  "model": "qwen3:0.6b",
+  "sourceBase": "41891b9e8528016fd1d2b4f4a4fee1b3b9a351e2",
+  "notes": [
+    "Readbacks each match eight spans by run/trace identity.",
+    "Two earlier configuration trials failed AGENT_NOT_AVAILABLE; enabling delegated eligibility for the second agent fixed the bot configuration.",
+    "No runtime implementation was changed. No tool effects or remediation in this text-only demo.",
+    "Cloud content export is disabled; missing input/output/token/cost fields are intentional. UI $0 values do not measure model cost.",
+    "After capture, the demo runtime credential expired. External provision-runtime plus an operator restart of LangGraph restored dependencies-ready. This does not qualify unattended credential renewal; Admin credentials and bot configuration were unchanged."
+  ],
+  "sourceInventory": {
+    "sha256": "754ba357f91fa2f72f375e1ac7c9e82ab109de2c4682f88fe69f120def280668",
+    "files": [
+      {
+        "path": "bot/configurations/multiagent-incident/bot.json",
+        "sha256": "ce99ffc6d64c05dd0b12623fecb1bfc070f5c0116d0657443a50de1c98d3a58d"
+      },
+      {
+        "path": "bot/configurations/multiagent-incident/package-build.json",
+        "sha256": "608aa314a915a7ce8cf2c2c7d82bde956b1c1a4973c736662516e5a642eec673"
+      },
+      {
+        "path": "bot/configurations/multiagent-incident/README.md",
+        "sha256": "860a6c18a953e989ec6daa9a9b5d1fc345a0dcd7d54bd6a8f70b29a688ad52ec"
+      },
+      {
+        "path": "bot/configurations/multiagent-incident/referenced-config.json",
+        "sha256": "2a42390a6b17b09e96974ca7ea1d2525ebc7cb976e01d0945fb5c259e5272db8"
+      },
+      {
+        "path": "bot/configurations/multiagent-incident/trigger-connections.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "path": "tests/ci/test_profiles.py",
+        "sha256": "e86eaace8d144cbe6cc3a8302b6edc5563242dbddd002b526493dfe1fc025908"
+      },
+      {
+        "path": "tools/docs/build_console_tours.py",
+        "sha256": "45a508f3a410eb89e4b84f1bfcf606bcf74ed09cd47172a65583f4e55c63b0f7"
+      },
+      {
+        "path": "tools/docs/render_overview.py",
+        "sha256": "0e6e517e1bd2980bb985f57d6c4bf33c94221fa8602840aef2bd111f6a665eac"
+      }
+    ]
+  },
+  "validation": {
+    "profileTests": 12,
+    "jsonGraphRuntimeTests": 13,
+    "captureOriginals": 58,
+    "refreshedAliases": 49,
+    "tours": 6,
+    "negativeMediaChecks": 9,
+    "fullRepositoryCheck": {
+      "tests": 564,
+      "errors": 1,
+      "skipped": 11,
+      "error": "Existing Windows symlink creation privilege (WinError 1314) in test_langchain_device; remaining full gates were not reached."
+    }
+  }
+}

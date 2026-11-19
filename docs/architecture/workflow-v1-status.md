@@ -1,6 +1,48 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Two-agent community demo and refreshed media — 2026-11-19
+
+Known tested base `41891b9e8528016fd1d2b4f4a4fee1b3b9a351e2`; eight-path
+bot/test/media-tool source inventory SHA-256
+`754ba357f91fa2f72f375e1ac7c9e82ab109de2c4682f88fe69f120def280668`.
+Inventory, run identity and executed checks are recorded in
+[`docs/media/olo-2026-11/evidence.json`](../media/olo-2026-11/evidence.json).
+
+Delivered: a text-only `multiagent-incident` bot uses existing JSON agent nodes
+to invoke triage then handover, passing the original incident and prior result.
+Both use real local Qwen3; premium routing remains unattached. The second agent
+explicitly permits delegated invocation. Its exact bundle rebuild matches the
+bytes used for acceptance. No runtime, authority, trigger transport or schema
+implementation changes. Fifty-eight new browser originals refresh current OLO
+console/cloud views; 49 existing route-equivalent aliases are byte-identical
+copies. The original four slideshows and overview video references are restored
+with current content; two additional tours show execution and monitoring.
+Historical approval/native-client/Operator/other monitoring views are labelled.
+
+Executed: actual run `run-f7672b57-3229-4afa-8c59-2d715a498fc2` succeeds with two
+agents/two local model calls and a retained triage/summary result. Langfuse,
+LangSmith and Phoenix API readbacks each match eight spans for trace
+`386029e4f45057cfd8c07c24c5a2d628`; owner-signed-in UI views corroborate them.
+Twelve profile packaging/configuration tests and 13 real JSON-graph runtime
+tests pass. All six GIFs rebuild with checksums, nonblank/frame/coverage checks;
+nine malformed/blank media-plan cases are refused. Originals/aliases were
+visually inspected, and the captioned MP4/GIF/poster were regenerated.
+Markdown links pass. `python tools/check.py` reaches 564 CI cases: one existing
+Windows `WinError 1314` symlink-privilege error and 11 skips stop the full gate;
+later full component gates were not reached. No full-green claim.
+
+Limits: two initial configuration trials failed `AGENT_NOT_AVAILABLE` before
+the second agent's delegation flag was corrected. No tools/effects occurred.
+After capture the runtime credential expired; external provisioning and an
+operator LangGraph restart restore dependencies-ready without changing Admin
+credentials or bot data. This is not unattended credential-renewal acceptance.
+Cloud content, chosen-model/token/cost attributes remain omitted; screenshots
+are structural telemetry, not model-quality, tool-finality or security proof.
+Published dev images, original V1.4 distributed/recovery/security qualification
+and the Windows gate remain outstanding. **0/100 remains earned**; no phase,
+scope, weight or denominator changes.
+
 ## LangChain SDK package-build isolation repair — 2026-11-19
 
 Known tested base `e6d93675afbb9246d8798609c9567f956e1b6078`; changed
@@ -2463,7 +2505,7 @@ changes require a baseline revision, reason and old/new allocations totaling
 |---|---|---|---|
 | V1.0 | Contract inventory; ADRs for canonical profile, listener registration/dispatch, identity, explicit models and minimal run state; executable positive/negative scenario specification | Proposal v0.9 at `7c4d2e85a9ce09fc2bef94e3f096d326bb03bb89`; no phase acceptance claimed | Review ADR 063, reconcile endpoint/schema details during implementation and bind scenarios to executable integration harness |
 | V1.1 | One upload closes references and provisions workflow/group, agents, models, prompts/context, packages/bindings, grants and default subscription; reviewed publish/readiness and tenant/user filtering | Current DeploymentProfile v2 carries workflow/model configuration; durable immutable staging, review, package provisioning adapter, atomic publication and live dependency checks; complete property editor, dedicated workflow/group/agent screens, tenant-scoped revision discovery and workflow-level .olo transfer with referenced-data preparation implemented | Complete directory/grant/subscription provisioning, scoped workflow management/user filtering, executed readiness cases and whole-profile qualification remain |
-| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | One-agent admission/lease/step/model/MCP transport; live supervisor inference and agent context attempt stop at unknown outcome; per-run metadata regression coverage | Confirmed tool finality and agent completion, message admission, two-agent execution and complete runtime authorization qualification |
+| V1.2 | Workflow ID plus message completes using configured supervisor and two agents, their models/context/distinct tools; current authorization, secret isolation, PREPARE/ASK/BLOCK respected | One-agent admission/lease/step/model/MCP transport; live supervisor inference and agent context attempt stop at unknown outcome; per-run metadata regression coverage | Confirmed tool finality and agent completion, message admission, two-agent execution and complete runtime authorization qualification The two-agent incident/cloud media checkpoint is bounded integration, not complete V1.2 acceptance. |
 | V1.3 | Authenticated external listener registers, event selects bound default workflow and executes; durable admission/dedupe, disable/revocation/forgery denials and governed write-back | Listener plus Control binding/admission/queue path; real trigger and duplicate receipt retain admission/run IDs; worker records FAILED on unknown tool outcome | Qualify successful trigger-to-result, live disable/revocation/forgery denials and governed write-back |
 | V1.4 | Fresh supported store, ready infrastructure/secrets, one-upload profiles; two unrelated profiles use identical external code/dependency lock; message and trigger paths pass applicable checks with recorded revisions | 16-scenario controller, one-agent live fixture, and standalone runtime image/release evidence gate; local image tests/scan pass, live context attempt fails conservatively | Resolve native finality, complete fresh provisioning and two-profile live scenario coverage with independent server evidence and applicable full gates; execute registry publication through an authorized release |
 

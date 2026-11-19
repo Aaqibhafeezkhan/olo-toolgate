@@ -17,6 +17,24 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class ProfileTests(unittest.TestCase):
+    def test_multiagent_incident_handoff_keeps_entry_and_delegation_eligibility(self):
+        folder=ROOT/'bot/configurations/multiagent-incident'
+        profile=json.loads((folder/'bot.json').read_text(encoding='utf-8'))
+        workflow=profile['workflows']['workflows'][0]
+        first,second=workflow['agents']
+        self.assertTrue(first['entryEligible'])
+        self.assertFalse(second['entryEligible'])
+        self.assertTrue(second['delegationAllowed'])
+        graph=workflow['graph']['config']
+        self.assertEqual([first['agentId'],second['agentId']],[n['agentId'] for n in graph['nodes']])
+        self.assertEqual(['agent','agent'],[n['kind'] for n in graph['nodes']])
+        self.assertEqual({'$path':'/values/triage'},graph['nodes'][1]['input']['triage'])
+        self.assertEqual([(['START'],'triage'),(['triage'],'handover'),(['handover'],'END')],
+            [(e['from'],e['to']) for e in graph['edges']])
+        scoped=builder.scope(profile,workflow,[])
+        self.assertEqual({first['agentId'],second['agentId']},{a['agentId'] for a in scoped['workflows']['agentDefinitions']})
+        self.assertEqual([],scoped['packages'])
+
     def test_same_release_different_configurations_cannot_alias_immutable_workflow_versions(self):
         for identity in ('hotswap-demo','a'*128):
             a=builder.workflow_version_id(identity,'hotswap-demo-a','1.0.0-demo.local')
