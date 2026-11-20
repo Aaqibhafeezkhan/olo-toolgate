@@ -65,9 +65,12 @@ private cloud settings. Deployment/testing remains an explicit operator action.
 | Device | `ololab/olo-toolgate-device:dev` | Persistent enrolled device, tools and trigger reconciliation |
 
 Use a matching release for all three, or explicit digests in `.env`. Development
-tags are mutable; inspect **About** after startup. Existing local images are
-reused; missing images are pulled. To refresh a tag, pull it explicitly before
-starting a fresh installation. Unsupported stores are preserved and refused,
+tags are mutable; inspect **About** after startup. Startup refreshes `:dev` and
+`:dev-*` aliases from their registry even if cached locally. Cached versioned
+tags and digest pins are reused; missing images are pulled. Use explicit matching
+versions/digests for repeatability or offline reuse. An unavailable registry or
+failed capability check stops startup; there is no stale-image/build fallback.
+Unsupported stores are preserved and refused,
 not migrated. Image updates are separate from hot-swapping bot configurations.
 
 Ollama plus its private TLS bridge and the observability collector are optional.

@@ -87,7 +87,9 @@ def images(*,validate_only=False):
         for image in selected.values():
             if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9./_:@-]{0,511}',image) or (':' not in image and '@sha256:' not in image):
                 raise ValueError('Set explicit application image tags or digests')
-            if not validate_only and not image_exists(image):run(['docker','pull',image])
+            tag=image.rsplit(':',1)[-1]
+            mutable='@' not in image and (tag=='dev' or tag.startswith('dev-'))
+            if not validate_only and (mutable or not image_exists(image)):run(['docker','pull',image])
         return selected
     selected={module:image_tag(module) for module in ('quickstart','device','runtime')}
     if validate_only:return selected

@@ -1,6 +1,20 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Refresh mutable published dev images — 2026-11-20
+
+Known base `04b9ae60`. The deployment reused a November 17 cached Quickstart
+`1.0.0-dev.74`, which lacks `workflow_installation.py`, while pulling a newer
+runtime. Read-only registry metadata shows a different current Quickstart dev
+digest. Published-mode startup now refreshes mutable `:dev`/`:dev-*` aliases
+before capability probes; cached versioned tags/digests remain reusable. The
+probe retains fail-closed behavior and reports the image/required capability
+instead of a bare assertion traceback. No application build or old-image
+fallback is added. Regression expectations and deployment guidance are updated.
+At the user's request no tests, pulls, deployment or push were performed for
+this change; registry/local-image inspection only. User deployment and pipeline
+verification remain next. **0/100 remains earned**; no baseline/phase changes.
+
 ## Docker Hub dev settings handoff — 2026-11-20
 
 Known source base `76a8bb0e`. Copied the local debug installation's portable
