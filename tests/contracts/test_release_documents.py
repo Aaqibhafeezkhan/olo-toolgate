@@ -3,6 +3,7 @@
 """Verify release documents are reproducible and travel inside deliverables."""
 import io
 import json
+from contextlib import redirect_stderr, redirect_stdout
 import tarfile
 import tempfile
 import unittest
@@ -11,10 +12,34 @@ from pathlib import Path
 from unittest.mock import patch
 from tools.client import package
 from tools.contracts import version
+from tools.docs import check_links
 from tools.release import bundle
 
 
 class ReleaseDocumentsTests(unittest.TestCase):
+    def test_fresh_notes_links_resolve_from_root_and_every_contract_package(self):
+        notes=version.release_notes()
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            # Root-relative changelog links exist in the checkout but must also
+            # work after CI copies the same rendered notes into each package.
+            for relative in ('docs/security/zero-trust-boundaries.md','docs/development/how-to-release.md'):
+                target=root/relative
+                target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_bytes((version.ROOT/relative).read_bytes())
+            files=[]
+            for relative in ('RELEASE-NOTES.md',*(f'packages/contracts/{language}/RELEASE-NOTES.md'
+                              for language in ('java','rust','typescript','php'))):
+                target=root/relative
+                target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_text(notes,encoding='utf-8')
+                files.append(target)
+            errors=io.StringIO()
+            with patch.object(check_links,'ROOT',root),patch.object(check_links,'markdown_files',return_value=files), \
+                    redirect_stdout(io.StringIO()),redirect_stderr(errors):
+                result=check_links.main()
+            self.assertEqual(0,result,errors.getvalue())
+
     def test_notes_match_versions_and_changelog(self):
         # Release notes are rendered only for release output; ordinary changes keep the tracked snapshot unchanged.
         self.assertNotIn(version.ROOT/'RELEASE-NOTES.md', version.expected())

@@ -19,6 +19,6 @@
   fresh release. Keep only unfinished work in docs/plans, with two root README
   slideshows and separate media, performance and monitoring references.
 
-See [current security scope](docs/security/zero-trust-boundaries.md) and
-[release preparation](docs/development/how-to-release.md) before deployment.
+See [current security scope](https://github.com/olo-labs/olo-toolgate/blob/main/docs/security/zero-trust-boundaries.md) and
+[release preparation](https://github.com/olo-labs/olo-toolgate/blob/main/docs/development/how-to-release.md) before deployment.
 These notes do not claim complete production or roadmap qualification.

@@ -14,6 +14,9 @@ Keep one maintained guide per topic and link it from the [documentation home](..
 - Preserve license notices, generated release snapshots and immutable fixtures
   consumed by tooling. Git history retains earlier designs and release changes.
 - Keep secrets out of examples. Use relative links and current executable commands.
+- Use absolute documentation URLs in the changelog: release tooling embeds it
+  unchanged in both root and language-package release notes. Check freshly
+  rendered notes at each destination, not just the tracked release snapshots.
 - Record actual checks in PRs/CI artifacts; keep generated evidence under ignored
   build output. A local demo or structural check is not production qualification.
 - Run `make docs` or its documented Python checks after changing documentation.
