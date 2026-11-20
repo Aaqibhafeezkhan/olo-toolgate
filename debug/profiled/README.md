@@ -34,6 +34,16 @@ to remain loaded. Startup merges
 the real pinned OLO PEFT adapter with its pinned Qwen2.5 base, converts to F16
 GGUF in an isolated CPU builder and imports it. First preparation needs Internet,
 several GB disk and up to 8 GB builder RAM. Restarts reuse prepared weights.
+After import, startup prints `Preloading local model ...` for each model, then
+`Model preloaded: ...` and `Ollama ready: ...`. Preloading uses Ollama's
+[empty-request API](https://docs.ollama.com/faq#how-can-i-preload-a-model-into-ollama-to-get-faster-response-times)
+with streaming disabled and a 180-second request timeout. It runs in a temporary
+Python client container sharing only Ollama's network namespace, with stdin
+closed and a 195-second process deadline. It opens no host model port.
+
+If an older startup is waiting after the model import's `success` line, press
+**Ctrl+C** in that terminal, then run `start.bat` again with the updated scripts.
+The imported models are reused; startup proceeds to the collector after preload.
 File agents use QLoRA first, lightweight Ollama on inference failure; other agents
 use lightweight Ollama. Premium OpenRouter is unattached standby and is never
 called automatically. No model failure retries a tool effect.

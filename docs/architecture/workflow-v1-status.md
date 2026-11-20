@@ -1,6 +1,25 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Non-interactive local model preload — 2026-11-20
+
+Known tested base `30eddaae`. Windows startup retained a blank `ollama run`
+invocation as an interactive stdin reader after successful QLoRA import, blocking
+the second preload and collector step. Replace those CLI invocations with a
+mounted Python helper using Ollama's empty non-streaming API request in the
+selected container's network namespace. Stdin is closed, each request/process
+has a deadline, completion is validated, and progress is printed. Installed
+models remain reusable; no host port or permanent service is added.
+
+Executed: all six Ollama custody/preload tests pass, covering request shape,
+completion/refusal, response bound, closed stdin and process timeout. A local
+preload run returns for both existing models; `ollama ps` reports both resident
+at 100% GPU. This does not claim complete launcher/collector or workflow-run
+acceptance: the old running invocation still uses its previously loaded script;
+the user will cancel/retest startup. Admin/device/trigger/workflow authority and
+package/schema formats are unchanged. **0/100 remains earned**; no baseline,
+phase weight or security qualification change. Full startup retest remains next.
+
 ## Runtime credential API CI regression — 2026-11-20
 
 Known tested revision `63172c1400e16668bca9bfc0cade982093703373`. Hosted run

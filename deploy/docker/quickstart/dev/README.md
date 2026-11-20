@@ -65,6 +65,11 @@ sh start.sh --without-ollama --without-monitoring
 
 ## Ports, credentials and blank installation
 
+Local Ollama setup uses the shared non-interactive preload helper: each model
+reports loading/completion and has a bounded timeout. Existing imported weights
+are reused. If a prior script is waiting after Ollama's `success` line, cancel
+that invocation with Ctrl+C and rerun the updated launcher.
+
 First startup copies `.env.example` to ignored `.env`. Default ports bind only
 to loopback: Admin UI `http://127.0.0.1:18090/console/`, HTTPS API `18450`, package
 registry `18552`. Edit `HTTP_PORT`, `TLS_PORT`, `REGISTRY_PORT` **before first
