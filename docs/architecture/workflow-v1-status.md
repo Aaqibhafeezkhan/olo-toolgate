@@ -1,6 +1,43 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+PR #320 merge checkpoint — 2026-11-20: integrated target revision `f046a09b`
+with Ollama revision `92963208`, retaining both the Gradle-cache and CPU-startup
+progress entries. All 31 profiled companion, profile-builder and composition
+tests pass on the merged tree. Metadata/binding preflight, Markdown links
+(391 files) and whitespace checks pass. Earlier full-suite Windows symlink
+limitations and live acceptance work remain outstanding. No baseline or phase
+weight changes.
+
+## Profile builder Gradle cache isolation — 2026-11-20
+
+Known builder source SHA-256
+`1d07f0b2a918a6efcb4fe0c9e5c7bd94f229d17fb3d092f0186b8e17c5a7a0b0`.
+Containerized profile builds now use a private writable Gradle home for each
+invocation. The previous shared `olo-profile-gradle` volume caused journal-lock
+timeouts across independent container PID namespaces. SDK and package tasks use
+single-use Gradle daemons. SDK publication selects `:publishJavaSdkLocally`
+with configure-on-demand and the existing SDK application-plugin isolation
+guard. Docker image/CLI layers remain cached; Gradle dependencies download
+independently for each builder invocation.
+
+Validation: all 14 profile tests pass, including private builder mounts and
+SDK isolation regressions. The actual builder mounts only source/output paths
+and completes SDK publication (62 tasks) using its own Gradle journal. The
+actual Docker entry point built all 10 profiles, including HotFolder,
+HotFolder Watch and Log Watch package conformance/packaging. Independent bundle
+verification checked all 10 archives, embedded packages, inventory hashes and
+`SHA256SUMS`. Markdown links (391 files) and
+whitespace checks pass. Full repository verification passed metadata/binding
+preflight and release-note checks, then stopped in 567 CI tests on the existing
+Windows symlink-privilege error, with 11 skips. A full repository pass is not
+claimed.
+
+This is packaging evidence. Runnable profiles, runtime security and native
+business finality still require their original acceptance. No phase weight,
+baseline scope or denominator changes. Keep umbrella #297 draft. Next, finish
+live workflow and native qualification acceptance after packaging verification.
+
 ## Ollama CPU startup on hosts without NVIDIA — 2026-11-20
 
 Known tested base `ec6d9329`. The launcher probes `nvidia-smi -L` in the

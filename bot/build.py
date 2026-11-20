@@ -61,7 +61,7 @@ def source_package(recipe,folder,cache,prebuilt):
         project=inside(ROOT,recipe['project']);task=recipe['task']
         if not re.fullmatch(r':[A-Za-z0-9-]+:toolgatePackage',task):raise ValueError('Unsupported Gradle package task')
         wrapper=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
-        subprocess.run([str(wrapper),'-p',str(project),'-PtoolgateSdkRepo='+str(ROOT/'build/sdk-repo'),task],cwd=ROOT,check=True)
+        subprocess.run([str(wrapper),'--no-daemon','-p',str(project),'-PtoolgateSdkRepo='+str(ROOT/'build/sdk-repo'),task],cwd=ROOT,check=True)
         candidates=sorted((project/task.split(':')[1]/'build/toolgate').glob('*.olotool'))
     matches=[]
     for path in candidates:
@@ -167,7 +167,9 @@ def main():
                 if not path.is_file():continue
                 if path.is_symlink() or not path.resolve().is_relative_to(ROOT):raise ValueError('Linked build source')
                 target=source/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(path,target)
-            command=['docker','run','--rm','-v',source.as_posix()+':/workspace','-v',output.as_posix()+':/output','-v','olo-profile-gradle:/root/.gradle',
+            # Gradle's writable home belongs to this container. Sharing it across
+            # PID namespaces leaves daemons and journal locks that peers cannot use.
+            command=['docker','run','--rm','-v',source.as_posix()+':/workspace','-v',output.as_posix()+':/output',
                      '-e','TOOLGATE_BUILD='+os.environ.get('TOOLGATE_BUILD','local'),'olo-profile-builder:local',
                      '--output','/output','--version',args.version,'--source-commit',commit]
             for name in args.configuration or []:command+=['--configuration',name]
@@ -177,7 +179,9 @@ def main():
         if not os.environ.get('TOOLGATE_CLI'):
             subprocess.run(['cargo','build','--locked','-p','toolgate-cli'],cwd=ROOT,check=True)
             os.environ['TOOLGATE_CLI']=str(ROOT/'target/debug'/('toolgate.exe' if os.name=='nt' else 'toolgate'))
-        subprocess.run([str(ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')),'publishJavaSdkLocally'],cwd=ROOT,check=True)
+        subprocess.run([str(ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')),
+            '--no-daemon','--configure-on-demand','-I','tools/ci/sdk-isolation.init.gradle',
+            '-PprebuiltAdminUi=true',':publishJavaSdkLocally'],cwd=ROOT,check=True)
     args.output.mkdir(parents=True,exist_ok=True);rows=[];cache={}
     for folder in folders:rows+=build(folder,args.output,args.version,commit,os.environ.get('TOOLGATE_BUILD','local'),cache,args.packages_dir)
     inventory=dict(format='olo-profiles',version=args.version,sourceCommit=commit,profiles=rows)

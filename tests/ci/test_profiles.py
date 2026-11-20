@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import zipfile
+from unittest.mock import patch
 
 from bot import bundle
 from bot import build as builder
@@ -17,6 +18,35 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class ProfileTests(unittest.TestCase):
+    def test_docker_builder_does_not_share_gradle_state(self):
+        with tempfile.TemporaryDirectory(prefix='.profile-build-test-',dir=ROOT) as output:
+            with patch.object(builder.sys,'argv',['build.py','--configuration','text-summary','--output',output]), \
+                    patch.object(builder.shutil,'which',side_effect=lambda name: '/docker' if name=='docker' else None), \
+                    patch.dict(builder.os.environ,{'TOOLGATE_CLI':''}), \
+                    patch.object(builder.subprocess,'check_output',side_effect=['a'*40,b'bot/build.py\0']), \
+                    patch.object(builder.subprocess,'run') as run:
+                builder.main()
+            command=run.call_args.args[0]
+            self.assertEqual(['docker','run','--rm'],command[:3])
+            mounts=[command[i+1] for i,argument in enumerate(command) if argument=='-v']
+            self.assertEqual(2,len(mounts))
+            self.assertTrue(mounts[0].endswith(':/workspace'))
+            self.assertTrue(mounts[1].endswith(':/output'))
+            self.assertFalse(any('gradle' in mount for mount in mounts))
+
+    def test_sdk_publication_is_root_qualified_and_isolated(self):
+        with tempfile.TemporaryDirectory() as output:
+            with patch.object(builder.sys,'argv',['build.py','--configuration','text-summary','--output',output,'--source-commit','a'*40]), \
+                    patch.dict(builder.os.environ,{'TOOLGATE_CLI':'/toolgate'}), \
+                    patch.object(builder.subprocess,'run') as run, \
+                    patch.object(builder,'build',return_value=[]):
+                builder.main()
+            command=run.call_args.args[0]
+            self.assertIn('--no-daemon',command)
+            self.assertIn('--configure-on-demand',command)
+            self.assertIn('tools/ci/sdk-isolation.init.gradle',command)
+            self.assertEqual(':publishJavaSdkLocally',command[-1])
+
     def test_multiagent_incident_handoff_keeps_entry_and_delegation_eligibility(self):
         folder=ROOT/'bot/configurations/multiagent-incident'
         profile=json.loads((folder/'bot.json').read_text(encoding='utf-8'))
