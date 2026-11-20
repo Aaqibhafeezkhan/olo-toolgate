@@ -1,6 +1,31 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Ollama CPU startup on hosts without NVIDIA — 2026-11-20
+
+Known tested base `ec6d9329`. The launcher probes `nvidia-smi -L` in the
+configured Ollama image through Docker before selecting the NVIDIA Compose
+overlay. Successful GPU discovery exposes all NVIDIA adapters. A failed probe
+or empty inventory selects the CPU base composition with an explicit message.
+The previous unconditional GPU reservation prevented startup on this Intel UHD
+host with `WSL environment detected but no adapters were found`.
+
+Executed validation: 15 profiled companion/credential tests, two composition
+tests and Markdown links (391 files) pass. Actual CPU startup recreated Ollama
+with no GPU DeviceRequests, and both Ollama/TLS services became healthy.
+`qwen3:0.6b` downloaded successfully. The pinned QLoRA builder completed its
+CPU merge, GGUF conversion and Ollama import. The normal launcher returned
+success with both models ready. CPU and NVIDIA Compose configurations validate.
+GPU success selection is unit-tested; real NVIDIA execution is unavailable on
+this machine. Full repository checking with UTF-8 enabled passed preflight and
+release-note checks, then stopped in 565 CI tests with one existing Windows
+symlink-privilege error and 11 skips. A full repository pass is not claimed. No runtime security, native file finality, phase weight,
+baseline scope or denominator change is claimed. Original workflow and native
+qualification acceptance remains outstanding; keep umbrella #297 draft.
+
+Known launcher SHA-256
+`82ac83e82c8ce474afdb3cf9df8ef6e9af5ecc74787c89d1bbba1a5aff2e31ef`.
+
 ## LangChain device failure outcome repair — 2026-11-19
 
 Known tested base `aea889e5c379be24e27c87763a2e2f992914f5b5`.

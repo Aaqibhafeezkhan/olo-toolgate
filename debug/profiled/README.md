@@ -7,8 +7,9 @@ reference later is for deterministic transport acceptance.
 
 ## Real local-model bots: start here
 
-Run in PowerShell from the repository root. Docker Desktop's Linux engine and
-a functioning NVIDIA driver/Docker GPU integration are operator prerequisites.
+Run in PowerShell from the repository root. Docker Desktop's Linux engine
+is required. Startup probes Docker NVIDIA GPU access and uses CPU execution
+when NVIDIA acceleration is unavailable.
 Host Node, JDK, Rust, pip, Torch and Transformers are unnecessary. Startup
 bootstraps private Python if needed; builds and model preparation use Docker.
 
@@ -28,7 +29,8 @@ data or device files. Existing credentials/storage are reused. Read the password
 privately at `debug/profiled/credentials/admin/password.txt`; it is never exported.
 
 Ollama serves **both** `olo-qlora-hotfolder:e376fb40` and `qwen3:0.6b`, with all
-four GPUs exposed and two models permitted to remain loaded. Startup merges
+available NVIDIA GPUs exposed after a successful probe, and two models permitted
+to remain loaded. Startup merges
 the real pinned OLO PEFT adapter with its pinned Qwen2.5 base, converts to F16
 GGUF in an isolated CPU builder and imports it. First preparation needs Internet,
 several GB disk and up to 8 GB builder RAM. Restarts reuse prepared weights.
@@ -357,12 +359,13 @@ JSON `summary`. No input/output folders are needed. Thinking is performed by the
 model; private reasoning is not included in progress. This lightweight model's
 wording varies and is not a production quality benchmark.
 
-The composition requests **all NVIDIA GPUs** with `gpus: all` and
-`OLLAMA_SCHED_SPREAD=1`. Docker Desktop must use WSL2 with working NVIDIA GPU
-passthrough ([Ollama GPU guide](https://github.com/ollama/ollama/blob/main/docs/gpu.mdx)).
-No driver is installed or modified by this script. On this workstation, host and
-Docker inventory report **four Quadro P4000 cards, 8 GB each**. Check actual model
-placement rather than assuming GPU discovery means accelerated inference:
+Startup probes `nvidia-smi -L` inside the Ollama image with Docker GPU access.
+After a successful probe, it adds `ollama.gpu.compose.yaml`, requesting all NVIDIA
+GPUs with `gpus: all` and `OLLAMA_SCHED_SPREAD=1`. Otherwise it starts the base
+CPU composition and prints the selected mode. CPU inference may be slower.
+NVIDIA acceleration requires Docker GPU passthrough
+([Ollama GPU guide](https://github.com/ollama/ollama/blob/main/docs/gpu.mdx)).
+Check actual model placement:
 
 ```powershell
 nvidia-smi --query-gpu=index,name,memory.total,utilization.gpu,memory.used --format=csv
