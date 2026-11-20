@@ -27,6 +27,8 @@ devices and runtime access. Start with the guide for the task you are doing.
 - [Performance and capacity](operations/performance.md): configuration, measurements and their limits
 - [Monitoring](help/observability.md): workflow collectors and ToolGate metrics/traces
 - [Images, slideshows and videos](media/README.md): demonstration media and capture scope
+- [Illustrated capabilities](../README.md#what-olo-supports): direct links to the
+  screenshot-rich bot, device, access, audit, administration and monitoring guides
 
 Use [unfinished plans](plans/README.md) for remaining work. Current instructions
 and supported behavior belong in component guides, not delivery logs.

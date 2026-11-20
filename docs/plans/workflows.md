@@ -18,6 +18,11 @@ runs drain. Never destroy installation data as a side effect of bot import/switc
 
 ## Advanced graph and conversation execution
 
+Implement [external application workflow execution](workflow-application-integration.md):
+ordinary users with explicit bot/resource grants, authorized result access,
+resumable live events and durable signed webhook subscriptions. Current manual
+run endpoints are Super Admin only; these integrations are not delivered.
+
 Qualify durable native checkpoints and restart/replica resume, interrupt/approval
 races, concurrent protected steps and replay behavior before enabling them.
 Unknown effects must remain unknown without implicit resubmission. Untrusted

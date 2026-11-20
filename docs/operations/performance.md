@@ -44,3 +44,37 @@ Use [monitoring](../help/observability.md) for workflow collectors and ToolGate
 metrics/traces. Monitor database contention, queue depth, resource bounds,
 credential readiness and collector drops alongside latency. A trace or green
 container alone is not proof of a completed business effect.
+
+## Screenshots
+
+### Tenant analytics and evidence
+
+The configured debug console separates tool activity from Control-derived
+operation evidence. This saved view explicitly has Insights collection disabled:
+its evidence table is not a populated latency chart or a benchmark result.
+
+![Tenant analytics and outcome evidence](../media/olo-2026-11/console/analytics.jpg)
+
+The [capture inventory](../media/screenshots.json) records this view's source.
+To obtain activity metrics, configure [Operator Insights](../control-plane/insights.md)
+and inspect the actual workload and collection interval in your installation.
+
+### Reading populated activity charts
+
+This earlier Operator Insights capture illustrates calls by outcome, execution
+duration buckets and busiest tools. The numbers belong to that saved evaluation
+installation; they are not a current throughput or p95 guarantee.
+
+![Operator call outcomes and duration charts](../media/screenshots/operator-usage-charts.jpg)
+
+Use the session timeline to examine the sequence of recorded calls alongside
+aggregate charts. Neither a timeline nor a histogram establishes exactly-once
+effects or independent target finality.
+
+![Operator session timeline](../media/screenshots/operator-session-timeline.jpg)
+
+For collector dashboards, vendor trace views and setup, continue to
+[monitoring screenshots](../help/observability.md#screenshots). Keep the
+measurement procedure above alongside any real benchmark report.
+
+[All illustrated capabilities](../media/README.md) · [Back to OLO](../../README.md#what-olo-supports)

@@ -19,6 +19,12 @@ routing/retention, coarse information-flow enforcement and socket subscriptions.
 Require tenant/owner negatives, forged/revoked reports, durable cursor/ACK ordering,
 bounded retention, overload/backpressure and reconnect cases.
 
+Qualify third-party observation of permitted trigger events and in-progress status
+under the [external application integration requirements](workflow-application-integration.md).
+Require an existing authenticated OLO user and user-bound token, current role and
+resource checks, filtered subscriptions and revocation during delivery. Trigger
+observation must not grant workflow execution or access to another user's results.
+
 Implement remaining schedules, authorized actions, composite MCP and field-level
 information-flow enforcement. Scheduling must define timezone/DST, misfire,
 overlap and catch-up semantics. Event content cannot select a more privileged

@@ -82,16 +82,24 @@ Read the [component map](docs/architecture/component-map.md),
 
 ## What OLO supports
 
-- Portable bot import/export, JSON graph authoring, configured agents and model routing.
-- Manual bot runs and managed-file triggers, with progress and result inspection.
-- Governed MCP tools, signed packages and enrolled execution devices.
-- Group-based access, current runtime authorization, human review and audit evidence.
-- Optional workflow tracing and ToolGate metrics through installation-owned collectors.
+Select a capability to open its screenshot-rich explanation and operating guides.
 
-See [performance and capacity](docs/operations/performance.md) for tuning and
-measurement limits, and [monitoring](docs/help/observability.md) for supported
-collectors, metrics, traces and destination setup. Capability scope and security
-limits still apply; this list does not claim every proposed integration is available.
+| Capability | What it supports |
+|---|---|
+| [Bot authoring and portable bundles](docs/media/bots-and-models.md#author-and-transfer-a-bot) | Import/export `.olo` bundles, configure graph/agent references, prepare and publish |
+| [Manual and multi-agent runs](docs/media/bots-and-models.md#follow-a-run-from-input-to-result) | Submit input and inspect queued, running and terminal results |
+| [Models and agent configuration](docs/media/bots-and-models.md#configure-models-and-agents) | Model groups, agent prompts, routing and workflow mappings |
+| [Devices and package delivery](docs/media/devices-and-packages.md#enroll-and-configure-a-device) | Review enrollment, assign device groups and reconcile signed packages |
+| [Managed-file triggers](docs/media/devices-and-packages.md#connect-a-trigger-to-a-bot) | Configure package-backed watchers and authorized workflow bindings |
+| [Tools, packages and MCP servers](docs/media/tools-and-access.md#register-and-prepare-tools) | Tool catalog, Tool Builder, server packages and governed upstream MCP servers |
+| [Group grants and runtime access](docs/media/tools-and-access.md#bind-complete-runtime-access) | Agent/workload identities, execution bindings, resource scopes and policy |
+| [Review, approvals and audit](docs/media/audit-and-approvals.md) | Configuration review, pending operations, outcome evidence and audit inspection |
+| [Workspace administration](docs/media/administration.md) | Users, teams, roles, identity/delegation, installation settings and custody |
+| [Monitoring and tracing](docs/help/observability.md#screenshots) | Workflow traces, Operator Insights and optional collector destinations |
+| [Performance and analytics](docs/operations/performance.md#screenshots) | Inspect tool activity and evidence; configure and measure deployment performance |
+
+These guides describe current scope and setup requirements. A screenshot or
+demonstration does not qualify every runtime, integration or production topology.
 
 ## See it work
 

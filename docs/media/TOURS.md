@@ -5,7 +5,7 @@ Existing debug/profiled installation at port 18090, with real local Ollama infer
 
 Slides are navigation aids, not continuous screen recordings. Empty queues remain empty; no approval or outcome was invented.
 
-[Capture manifest](screenshots.json) · [Run and cloud evidence](olo-2026-11/evidence.json) · [Historical captures](README.md)
+[Capture manifest](screenshots.json) · [Run and cloud evidence](olo-2026-11/evidence.json) · [Illustrated capability guides](README.md#illustrated-capability-guides)
 
 ## Audit, approvals and effect evidence
 

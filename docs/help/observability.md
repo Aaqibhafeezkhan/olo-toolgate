@@ -55,3 +55,72 @@ Use [performance guidance](../operations/performance.md) to measure overhead and
 [the collector guide](../../deploy/insights/collector/README.md) for ToolGate fan-out,
 network isolation and vendor credential configuration.
 Demonstration images and videos are in [the media guide](../media/README.md).
+
+## Screenshots
+
+### One bot run across three workflow destinations
+
+These saved cloud views show the same successful two-agent incident example from
+the configured debug installation. The [capture record](../media/olo-2026-11/README.md)
+identifies its run and trace. They illustrate structural spans, not exported
+private prompts, measured inference costs or a production SLO.
+
+Langfuse's tree shows the two agents and their model calls.
+
+![Langfuse two-agent trace tree](../media/olo-2026-11/monitoring/langfuse-tree.jpg)
+
+The timeline exposes the recorded sequence of agent/model work.
+
+![Langfuse agent and model timeline](../media/olo-2026-11/monitoring/langfuse-timeline.jpg)
+
+LangSmith displays the matching workflow trace and expanded execution structure.
+
+![LangSmith matching trace](../media/olo-2026-11/monitoring/langsmith-tree.jpg)
+
+![LangSmith expanded agent execution](../media/olo-2026-11/monitoring/langsmith-expanded.jpg)
+
+Phoenix displays the matching trace and the handover agent's structural details.
+
+![Phoenix matching successful trace](../media/olo-2026-11/monitoring/phoenix-trace.jpg)
+
+![Phoenix handover agent details](../media/olo-2026-11/monitoring/phoenix-agent.jpg)
+
+Absent content/token/cost fields are intentional in this capture. A displayed
+`$0` is not a measurement of inference cost.
+
+![Animated workflow monitoring walkthrough](../media/monitoring-flow.gif)
+
+### Collector and vendor integration examples
+
+The following captures belong to earlier, separate evaluation installations.
+They are not the two-agent trace above and may show different branding/settings.
+Use the linked deployment guides to configure and verify your own destination.
+
+The Grafana and Prometheus captures use explicitly synthetic
+`monitoring-smoke-test` / `smoke.*` samples. They illustrate dashboard rendering,
+scraping and metric queries, not real-workload capacity or production latency.
+
+![Grafana synthetic monitoring dashboard](../media/screenshots/grafana-toolgate-full.jpg)
+
+![Prometheus synthetic metric queries](../media/screenshots/prometheus-toolgate-full.jpg)
+
+See [Prometheus/Grafana/Tempo setup](../../deploy/prometheus/README.md).
+
+New Relic's separate ToolGate example shows trace search, a call waterfall and
+recorded execution attributes. Trace presence alone does not prove a target's
+business commit or universal instrumentation coverage.
+
+![New Relic trace search](../media/screenshots/newrelic-traces-overview-full.jpg)
+
+![New Relic call waterfall](../media/screenshots/newrelic-call-waterfall-full.jpg)
+
+![New Relic execution attributes](../media/screenshots/newrelic-execution-attributes-full.jpg)
+
+![New Relic trace walkthrough](../media/newrelic-traces.gif)
+
+See [New Relic setup](../../deploy/newrelic/README.md) and
+[Datadog setup](../../deploy/datadog/README.md). No Datadog screenshot is supplied
+here; a collector configuration is not proof of vendor delivery.
+
+[Performance and analytics screenshots](../operations/performance.md#screenshots) ·
+[All illustrated capabilities](../media/README.md) · [Back to OLO](../../README.md#what-olo-supports)
