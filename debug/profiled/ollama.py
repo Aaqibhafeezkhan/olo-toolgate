@@ -14,6 +14,19 @@ QLORA_MODEL='olo-qlora-hotfolder:e376fb40'
 QLORA_REVISION='e376fb40c313a8827c4d5ce6ca2abe2b6fe7a4c6'
 
 
+def select_acceleration(run, compose, source):
+    """Probe the daemon's GPU access before adding the NVIDIA reservation."""
+    configuration=json.loads(run(compose+['config','--format','json'],capture_output=True,text=True).stdout)
+    image=configuration['services']['ollama']['image']
+    probe=run(['docker','run','--rm','--network','none','--gpus','all',
+        '--entrypoint','nvidia-smi',image,'-L'],check=False,capture_output=True,text=True)
+    if probe.returncode==0 and 'GPU ' in probe.stdout:
+        print('Docker NVIDIA GPU access verified; exposing all NVIDIA GPUs to Ollama.')
+        return compose+['-f',str(source/'ollama.gpu.compose.yaml')]
+    print('Docker NVIDIA GPU access unavailable; starting Ollama on CPU. Inference may be slower.')
+    return compose
+
+
 def installed_models(run, compose):
     result=run(compose+['exec','-T','ollama','ollama','list'],capture_output=True,text=True)
     return {line.split()[0] for line in result.stdout.splitlines()[1:] if line.split()}
@@ -97,9 +110,12 @@ def main():
     env={**os.environ,'TOOLGATE_PROFILED_ROOT':str(here),'TOOLGATE_PROFILED_CUSTODY':document['volumes']['custody']['name'],
         'TOOLGATE_PROFILED_OLLAMA_STORAGE':document['volumes']['files']['name']+'-ollama-models'}
     compose=['docker','compose','-p',stack.PROJECT+'-model','-f',str(source/'ollama.compose.yaml')]
-    def run(command,**kwargs):return subprocess.run(command,cwd=root,env=env,check=True,**kwargs)
+    def run(command,**kwargs):
+        kwargs.setdefault('check',True)
+        return subprocess.run(command,cwd=root,env=env,**kwargs)
     if args.operation=='stop':run(compose+['stop']);return
     if args.operation=='start':
+        compose=select_acceleration(run,compose,source)
         run(['docker','run','--rm','--network','none','--user','0:0','--mount',
             'type=volume,source='+env['TOOLGATE_PROFILED_CUSTODY']+',target=/custody',
             '-v',str(source/'ollama.py')+':/ollama.py:ro','--entrypoint','/opt/quickstart-python/bin/python',

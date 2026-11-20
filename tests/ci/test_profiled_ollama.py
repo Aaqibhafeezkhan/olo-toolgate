@@ -11,6 +11,25 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class OllamaCustodyTests(unittest.TestCase):
+    def test_acceleration_requires_a_successful_docker_gpu_probe(self):
+        spec=importlib.util.spec_from_file_location('profiled_ollama',ROOT/'debug/profiled/ollama.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        compose=['docker','compose','-f','ollama.compose.yaml']
+        source=ROOT/'debug/profiled'
+        for code, output, accelerated in [(0,'GPU 0: NVIDIA fixture',True),
+                                         (1,'',False),(0,'No devices were found',False)]:
+            calls=[]
+            def run(command,**kwargs):
+                calls.append((command,kwargs))
+                if command[:2]==['docker','compose']:
+                    return SimpleNamespace(stdout='{"services":{"ollama":{"image":"ollama/ollama:latest"}}}')
+                return SimpleNamespace(returncode=code,stdout=output)
+            selected=module.select_acceleration(run,compose,source)
+            self.assertEqual(compose+['-f',str(source/'ollama.gpu.compose.yaml')] if accelerated else compose,selected)
+            self.assertIn('--gpus',calls[1][0])
+            self.assertIn('ollama/ollama:latest',calls[1][0])
+            self.assertFalse(calls[1][1]['check'])
+
     def test_source_qualified_model_is_reused_and_missing_model_is_prepared_in_docker(self):
         spec=importlib.util.spec_from_file_location('profiled_ollama',ROOT/'debug/profiled/ollama.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

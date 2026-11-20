@@ -1,0 +1,8 @@
+# Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+# Applied only after Docker successfully probes NVIDIA GPU access.
+services:
+  ollama:
+    gpus: all
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
