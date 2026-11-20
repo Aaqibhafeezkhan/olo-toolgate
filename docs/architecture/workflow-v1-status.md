@@ -1,6 +1,21 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Docker Hub dev settings handoff — 2026-11-20
+
+Known source base `76a8bb0e`. Copied the local debug installation's portable
+provider settings and private observability inputs/generated files into the
+ignored Docker Quickstart dev configuration paths. Its ignored `.env` selects
+the three `ololab/...:dev` application images. Updated the committed installation
+example and deployment guide with the matching Ollama settings, credential file
+map, explicit stop/start commands and separate installation custody/bot import
+requirements. Real keys, Admin/device identities and generated storage remain
+outside Git; no database, model weights or ownership state are copied.
+At the user's request no deployment or tests were run for this handoff. Their
+Docker Hub image deployment/acceptance remains next. This configuration/docs-only
+change adds no runtime or security qualification. **0/100 remains earned**;
+no phase, baseline or weight changes.
+
 ## Non-interactive local model preload — 2026-11-20
 
 Known tested base `30eddaae`. Windows startup retained a blank `ollama run`

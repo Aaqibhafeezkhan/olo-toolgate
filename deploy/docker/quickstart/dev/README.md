@@ -12,6 +12,50 @@ images, build missing applications, or claim an unavailable image is runnable.
 Compatibility probes fail before starting the installation if required service
 entrypoints are absent. The root README screenshots come from the debug stack.
 
+## Copied local debug settings
+
+The local deployment folder can use the same portable settings as
+`debug/profiled` with Docker Hub dev application images. Its ignored `.env`
+selects the three images listed below; no debug image tags are copied.
+
+| Local deployment file | Configuration |
+|---|---|
+| `installation.env` | Copied model provider origins/trust settings; runtime credential lifetime defaults to seven days |
+| `credentials/observability.json` | Copied Langfuse, LangSmith and Phoenix endpoints/project settings and private keys |
+| `credentials/collector.json` | Copied collector configuration; regenerated when configuring monitoring |
+| `credentials/monitoring.env` | Copied private exporter authentication; regenerated from observability settings |
+| `credentials/runtime-observability.env` | Copied runtime collector endpoint and environment |
+
+These actual local settings/keys stay ignored by Git. The committed
+`installation.env.example` describes the matching local Ollama configuration;
+the shared [monitoring credential template](../../../../debug/profiled/observability/credentials.example.json)
+describes the provider fields without real keys. On another checkout, create the
+private files there before starting. Keep existing settings when adding the TTL
+line or changing providers.
+
+Admin credentials, gateway/device identity, ownership markers, database/volumes
+and model weights are installation-owned and are not filesystem configuration
+copies. This deployment creates its own Admin identity and private custody.
+Import exported `.olo` bundles to transfer bots and their referenced packages;
+configure its own devices and model vault secret. The Ollama model cache belongs
+to this deployment, so first-time setup may download/prepare the weights.
+
+Before deploying on the default ports, stop the debug stack from
+`D:\git\olo-toolgate\debug\profiled`:
+
+```bat
+stop.bat -WithOllama -WithMonitoring
+```
+
+Then from `D:\git\olo-toolgate\deploy\docker\quickstart\dev`:
+
+```bat
+start.bat -WithOllama -WithMonitoring
+```
+
+This selects the same optional model/collector services and uses the copied
+private cloud settings. Deployment/testing remains an explicit operator action.
+
 ## Application images
 
 | Service | Default image | Responsibility |
