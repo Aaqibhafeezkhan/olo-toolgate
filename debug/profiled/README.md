@@ -246,17 +246,77 @@ startup, restart or the demo. No renewal sidecar/background renewal loop exists.
 LangGraph mounts only its private installation subtree read-only; it receives no
 Admin token, backend database or signing key.
 
-The local service credential expires after 15 minutes. Before/after expiry,
-explicitly run this command from the repository root to replace it:
+The demo runtime service credential defaults to **seven days**. To change it,
+copy `installation.env.example` to `installation.env` in this folder before
+startup and edit:
+
+```dotenv
+TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS=604800
+```
+
+If `installation.env` already exists, add/edit that line in the existing file;
+retain its model, trust and other installation settings.
+
+The range is 1..2592000 seconds (30 days). This installation setting is not bot
+configuration and does not extend Admin sessions, run leases or step grants.
+Changing it requires applying the Quickstart container environment, then issuing
+a new runtime credential; existing token expiry is unchanged. An explicit
+software/environment deployment may recreate a container once. Subsequent
+credential replacement needs no container restart. Preserve all existing volumes.
+
+Before or after expiry, run this external helper from this folder (it bootstraps
+private Python if needed and never changes Admin credentials):
+
+```bat
+renew-runtime.bat
+```
+
+Or from the repository root:
 
 ```powershell
 & $debugPython debug/profiled/stack.py provision-runtime
 ```
 
-Running workers reload the token file on backend requests. If expiry has already
-stopped a required process, Docker restarts the LangGraph service; it does not
-retry uncertain tool effects. Service tokens are not printed. Certificate rotation
+Running workers reload the token file on backend requests. Expiry/refusal reports
+`AUTH_REQUIRED`; a dependency outage reports `BACKOFF`. They stop new admissions,
+retain the graph API and reconnect with jittered backoff capped at 30 seconds.
+A valid replacement automatically restores worker presence. No token is minted
+inside LangGraph and no host renewal task is installed; schedule the external
+helper yourself if unattended renewal is needed. A replacement does not revoke
+an older signed credential before its expiry.
+
+Inspect status without revealing credentials:
+
+```powershell
+docker exec toolgate-profiled-langgraph-1 /opt/toolgate-runtime/bin/python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:19461/health/live').read().decode())"
+docker inspect toolgate-profiled-langgraph-1 --format '{{.RestartCount}} {{.State.StartedAt}}'
+```
+
+Docker checks `/health/live`; execution `/health/ready` returns 503 until graph
+serving and fresh authenticated worker presence are available. Admission stays
+unavailable when Gateway's readiness probe fails, even if Control
+remains reachable. Quickstart forwards the fixed read-only `/v1/health/ready`
+path over its existing TLS port; this needs no new host port or folder permission.
+Worker state is ephemeral diagnostics, never cached authorization. Unexpected child-process
+failure restarts that child internally, preserving healthy siblings. A real
+main-process or host failure may still require Docker restart. Cache eviction
+rebuilds from pinned configuration; it does not grant execution authority.
+An interrupted/uncertain execution is never replayed by reconnecting.
+Service tokens are not printed. Certificate rotation
 is an explicit operator operation; it is separate from service-token issuance.
+
+For an existing installation upgrading from the restart-on-expiry code, apply
+the newly built application images once. From this folder:
+
+```powershell
+.\start.bat -WithoutOllama -WithoutMonitoring
+docker compose -p toolgate-profiled -f .\state\compose.json up -d --no-deps quickstart langgraph
+.\renew-runtime.bat
+```
+
+This is an explicit software deployment, retaining volumes and Admin identity;
+it does not remove files or reinstall the device. Credential renewals and bot
+changes after that deployment do not require this command or recreation.
 
 ## 3. Build the portable workflow bundles
 

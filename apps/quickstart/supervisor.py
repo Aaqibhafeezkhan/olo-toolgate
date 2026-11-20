@@ -254,11 +254,36 @@ def key(name):
     return serialization.load_pem_private_key(path.read_bytes(), password=None)
 
 
-def jwt(groups, subject='admin', generation=None, directory_bound=True):
+def runtime_credential_ttl():
+    value=os.environ.get('TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS','604800')
+    if not value.isascii() or not value.isdecimal() or not 1<=int(value)<=2592000:
+        raise ValueError('Runtime credential lifetime must be 1..2592000 seconds')
+    return int(value)
+
+
+def runtime_credential_settings():
+    ttl=runtime_credential_ttl()
+    return dict(TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS=str(ttl),
+        MP_JWT_VERIFY_TOKEN_AGE=str(max(900,ttl)),SMALLRYE_JWT_TIME_TO_LIVE=str(max(900,ttl)))
+
+
+def runtime_credential():
+    ttl=runtime_credential_ttl()
+    token=jwt(['toolgate-workflow-runtime'],'langgraph-service',directory_bound=False,lifetime_seconds=ttl)
+    # Derive expiry from the signed token, not a second clock read.
+    claims=strict(base64.urlsafe_b64decode(token.split('.')[1]+'='*(-len(token.split('.')[1])%4)))
+    return dict(accessToken=token,tenantId=TENANT,expiresAtUnixMs=claims['exp']*1000)
+
+
+def jwt(groups, subject='admin', generation=None, directory_bound=True, lifetime_seconds=900):
     global TENANT
     if TENANT is None: TENANT=tenant_identity()
     now = int(time.time())
-    claims = {'iss': ISSUER, 'aud': 'toolgate-control', 'sub': subject, 'user_id': subject, 'tenant_id': TENANT, 'groups': groups, 'iat': now, 'exp': now+900}
+    if type(lifetime_seconds) is not int or not 1<=lifetime_seconds<=2592000:
+        raise ValueError('Invalid credential lifetime')
+    if lifetime_seconds!=900 and (groups!=['toolgate-workflow-runtime'] or directory_bound or subject!='langgraph-service'):
+        raise ValueError('Only runtime service credentials may use an installation lifetime')
+    claims = {'iss': ISSUER, 'aud': 'toolgate-control', 'sub': subject, 'user_id': subject, 'tenant_id': TENANT, 'groups': groups, 'iat': now, 'exp': now+lifetime_seconds}
     if not directory_bound: claims.pop('user_id')
     elif subject in local_users():
         with Database() as db:
@@ -716,6 +741,8 @@ def configure():
             QUARKUS_DATASOURCE_ACTIVE='true', QUARKUS_DATASOURCE_HEALTH_ENABLED='true', QUARKUS_FLYWAY_MIGRATE_AT_START='true')
     # Initialize-file server settings seed Control; an explicit container value always wins.
     settings.update({name: value for name, value in installation()['environment'].items() if not env.get(name)})
+    if os.environ.get('TOOLGATE_QUICKSTART_WORKFLOW_STACK')=='true':
+        settings.update(runtime_credential_settings())
     env.update(settings)
     return env
 
@@ -918,8 +945,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 token_=self.headers['Authorization'][7:]
                 authority=control('/api/control/v1/admin-session',token_)
                 if authority.get('role')!='SUPER_ADMIN':raise PermissionError()
-                credential=jwt(['toolgate-workflow-runtime'],'langgraph-service',directory_bound=False)
-                return self.reply(200,dict(accessToken=credential,tenantId=TENANT,expiresAtUnixMs=(int(time.time())+900)*1000))
+                return self.reply(200,runtime_credential())
             workload = re.fullmatch(r'/api/quickstart/v1/workloads/([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/reauthorize', path)
             if workload and self.command=='POST':
                 return self.reply(200, {'token': reauthorize(workload.group(1), self.headers['Authorization'][7:], self.server.signal_gateway)})

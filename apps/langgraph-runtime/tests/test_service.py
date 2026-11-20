@@ -1,5 +1,5 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
-"""Required component failure and termination stop the whole stateless runtime."""
+"""Dependency/component failures do not terminate the stateless runtime service."""
 import json
 import subprocess
 import sys
@@ -19,16 +19,25 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn('listener',rendered);self.assertNotIn('result-directory',rendered)
         with self.assertRaises(ValueError):commands({**value,'adminToken':'forbidden'})
 
-    def test_component_failure_terminates_a_real_sibling(self):
-        children=[];start=subprocess.Popen
+    def test_component_failure_restarts_only_that_child_and_preserves_real_sibling(self):
+        children=[];start=subprocess.Popen;restarted=threading.Event();stop=threading.Event()
         def spawn(*args,**kwargs):
-            child=start(*args,**kwargs);children.append(child);return child
-        ready=threading.Event()
+            child=start(*args,**kwargs);children.append(child)
+            if len(children)>=3:restarted.set()
+            return child
+        ready=threading.Event();failures=[]
+        def run():
+            try:supervise([[sys.executable,'-c','import time;time.sleep(60)'],
+                [sys.executable,'-c','raise SystemExit(2)']],stop,ready)
+            except BaseException as failure:failures.append(failure)
         with patch('toolgate_runtime.service.subprocess.Popen',side_effect=spawn):
-            with self.assertRaises(RuntimeError):
-                supervise([[sys.executable,'-c','import time;time.sleep(60)'],
-                    [sys.executable,'-c','import time;time.sleep(1)']],threading.Event(),ready)
-        self.assertEqual(2,len(children));self.assertTrue(all(child.poll() is not None for child in children))
+            thread=threading.Thread(target=run);thread.start()
+            try:
+                self.assertTrue(restarted.wait(8))
+                self.assertIsNone(children[0].poll(),'graph API sibling must stay alive')
+                self.assertTrue(thread.is_alive())
+            finally:stop.set();thread.join(8)
+        self.assertEqual([],failures);self.assertTrue(all(child.poll() is not None for child in children))
         self.assertFalse(ready.is_set())
 
     def test_requested_shutdown_clears_readiness_and_reaps_children(self):

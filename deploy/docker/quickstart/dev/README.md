@@ -203,7 +203,21 @@ never reconfigure exporters. Keep backups of private configuration separately.
 select which companions to stop; omitted companions are left alone. Restart and
 start use external backend APIs to refresh scoped runtime service credentials,
 without rotating Admin. Refresh an expired runtime credential explicitly with
-`./manage.ps1 provision-runtime`; keep service renewal outside containers.
+`renew-runtime.bat` (Windows) or `python manage.py provision-runtime`; keep service
+renewal outside containers. LangGraph remains live during expiry (`AUTH_REQUIRED`)
+or dependency outages (`BACKOFF`) and reconnects after replacement without a
+container restart. Docker checks process liveness; execution readiness can be
+unavailable independently. Interrupted tool effects are never automatically replayed.
+
+Runtime service credentials default to seven days. Copy
+`installation.env.example` to this folder's `installation.env` before startup
+and set `TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS=604800` (1..2592000 seconds).
+If the file already exists, edit it in place and retain its other settings.
+This does not extend Admin sessions, execution leases or step grants. Applying a
+changed container environment is an explicit deployment; it affects newly issued
+credentials only. Subsequent credential replacements need no recreation.
+Private credentials, device identity, data and volumes remain unchanged. No
+automatic host renewal task is installed; schedule the external helper if desired.
 
 **Factory reset** in Admin clears bot/workflow data while retaining the Admin
 login. For a destructive removal of this core installation's storage, first

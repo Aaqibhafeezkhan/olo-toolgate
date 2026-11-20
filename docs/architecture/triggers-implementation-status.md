@@ -1,6 +1,21 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Triggers implementation status
 
+## Runtime availability integration — 2026-11-20
+
+Known base `aaf109fc`; exact inventory and executed checks are in the workflow
+recovery checkpoint and [acceptance record](runtime-availability-acceptance.json).
+This changes worker availability, installation credential lifetime and a fixed
+Quickstart readiness proxy, not device-trigger wire formats, subscription
+ownership or module interfaces. All 129 Linux runtime tests (including the
+existing HTTPS/WSS trigger cases), 32 launcher/issuance checks and eight Java
+identity/proxy checks pass. Live credential expiry/replacement and both
+Gateway-only/whole-Quickstart outages recover with unchanged runtime container
+ID/start time and zero restarts. Full CI retains the Windows symlink failure;
+the owned PostgreSQL Java run encounters a Windows POSIX limitation and is not
+accepted. Full module/M12 qualification remains outstanding. **27% remains
+earned**; no module scope, Done-when, weight or denominator changes.
+
 ## Multi-agent media integration — 2026-11-19
 
 Known base `41891b9e`; exact source inventory and checks are in the workflow
