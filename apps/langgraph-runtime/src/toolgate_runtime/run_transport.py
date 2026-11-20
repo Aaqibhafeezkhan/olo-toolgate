@@ -18,8 +18,9 @@ from .compiler_identity import COMPILER_DIGEST
 
 class RunTransportError(Exception):
     """A bounded error that carries no response body or credential."""
-    def __init__(self,message,stage=None):
+    def __init__(self,message,stage=None,*,auth_required=False):
         super().__init__(message)
+        self.auth_required=auth_required
         self.stage=stage if stage in ('transport','headers','json','identity','result') else None
 
 
@@ -99,6 +100,8 @@ class ControlRuns(ControlTriggers):
                 return value
         except HTTPError as failure:
             with failure:
+                if failure.code in (401,403) and path in ('claim','workers:heartbeat'):
+                    raise RunTransportError('Runtime service authentication required',auth_required=True) from None
                 if failure.code in (401, 403, 409) and not allow_empty:
                     if path.endswith("/finish"):
                         raise OwnershipLost("Run lease is unavailable") from None
@@ -167,6 +170,15 @@ class GatewayRuntime(ControlTriggers):
 
     def __init__(self, origin, *, ca_file=None, timeout_seconds=30):
         super().__init__(origin, lambda: "", ca_file=ca_file, timeout_seconds=timeout_seconds)
+
+    def probe(self):
+        """Read-only readiness; never inference, discovery, authorization or an effect."""
+        try:
+            request=Request(self.origin+'/v1/health/ready',headers={'Accept':'application/json'})
+            with self._opener.open(request,timeout=min(5,self.timeout)) as response:
+                if response.status!=200:raise ValueError('Gateway not ready')
+        except Exception:
+            raise RunTransportError('Gateway is unavailable') from None
 
     def infer(self, lease, grant, *, system_prompt, messages, tools, candidates, timeout_seconds):
         decisions = ['{"kind":"finish","result":{...}}']

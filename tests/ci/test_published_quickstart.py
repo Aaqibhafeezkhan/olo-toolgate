@@ -31,7 +31,17 @@ class PublishedQuickstartTests(unittest.TestCase):
             with patch.object(stack,'run') as run:
                 self.assertEqual(selected,stack.images(validate_only=True));run.assert_not_called()
             with patch.object(stack,'image_exists',return_value=True),patch.object(stack,'run') as run:
-                self.assertEqual(selected,stack.images());run.assert_not_called()
+                self.assertEqual(selected,stack.images())
+                self.assertEqual({tuple(['docker','pull',v]) for v in selected.values()},{tuple(call.args[0]) for call in run.call_args_list})
+
+    def test_cached_versioned_images_and_digests_are_reused_but_branch_dev_aliases_refresh(self):
+        for tag,refresh in [('1.0.0-dev.77',False),('dev-feature-example',True),('@sha256:'+'a'*64,False)]:
+            reference='publisher/image'+(tag if tag.startswith('@') else ':'+tag)
+            env={'OLO_STACK_IMAGE_MODE':'published',**{'OLO_STACK_'+k+'_IMAGE':reference for k in ('QUICKSTART','DEVICE','RUNTIME')}}
+            with patch.dict(os.environ,env):
+                stack=self.stack()
+                with patch.object(stack,'image_exists',return_value=True),patch.object(stack,'run') as run:
+                    stack.images();self.assertEqual(3 if refresh else 0,run.call_count)
 
     def test_pull_failure_and_invalid_reference_never_fall_back_to_build(self):
         env={'OLO_STACK_IMAGE_MODE':'published',**{'OLO_STACK_'+k+'_IMAGE':'publisher/'+k.lower()+':dev' for k in ('QUICKSTART','DEVICE','RUNTIME')}}

@@ -63,4 +63,7 @@ public class QuickstartProxy {
     public Response mcp(String document){return relay("/mcp","POST",document,8081);}
     @POST @Path("v1/chat/completions") @Consumes("application/json")
     public Response workflowInference(String document){return relay("/v1/chat/completions","POST",document,8081);}
+    /** One-bit dependency readiness only; no other Gateway management route is exposed. */
+    @GET @Path("v1/health/ready")
+    public Response workflowGatewayReadiness(){return relay("/v1/health/ready","GET",null,9091);}
 }

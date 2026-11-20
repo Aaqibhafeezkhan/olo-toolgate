@@ -8,6 +8,40 @@ operator-installed immutable directory. Graph-less bot/leases are refused;
 there is no fallback or migration. Existing `agentStages` belongs to the installed
 supervisor package, not to the generic native graph loader.
 
+## Availability and credential replacement
+
+Authentication expiry/refusal and Control/Gateway outages pause admission; they
+do not terminate the service. The worker reports `CONNECTING`, `READY`,
+`AUTH_REQUIRED` or `BACKOFF` and rereads its externally installed token on every
+request. Retries use exponential backoff with jitter capped at 30 seconds.
+The loop reconnects admission/presence only: it never replays or resumes a claimed
+execution. Failed presence blocks further model/tool sends; live authorization
+and existing unknown-outcome/reconciliation rules remain in force.
+
+The supervisor restarts failed children independently. Docker checks
+`http://127.0.0.1:19461/health/live`; execution readiness at `/health/ready` additionally
+requires fresh worker presence and a listening graph API. Diagnostic state is
+ephemeral and is never an authorization cache. Graph eviction/rebuild uses the
+existing pinned reviewed configuration and cannot bypass Control.
+Gateway readiness is probed before admission and on presence heartbeats. The
+Gateway TLS origin must route `/v1/health/ready` to its existing management
+readiness handler. Quickstart provides this fixed read-only proxy on the existing
+TLS port; no extra host port or other management endpoint is exposed. Production
+reverse proxies must route that path explicitly. An unavailable/404 probe pauses
+admission rather than draining queued runs into a failed Gateway.
+
+The Quickstart workflow demo defaults runtime service credentials to seven days,
+configurable in its `installation.env` with
+`TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS` (1..2592000 seconds). Its external
+`renew-runtime.bat`/`provision-runtime` helper replaces them atomically without
+restarting this container or changing Admin. No credential minting, renewal
+sidecar or automatic host task runs here. Production Control retains its
+900-second default; operators selecting a longer runtime credential must set
+that installation variable, `MP_JWT_VERIFY_TOKEN_AGE` and
+`SMALLRYE_JWT_TIME_TO_LIVE` to compatible parser ceilings. Only the workflow-runtime role receives the longer application limit;
+human/other-service limits and run/step leases stay unchanged. See
+[ADR 080](../../docs/adr/080-runtime-availability-and-service-credentials.md).
+
 Graph factories import `RunContext` from `toolgate_runtime.graph_api`, return an
 uncompiled `StateGraph(..., context_schema=RunContext)` and receive only a private
 static JSON snapshot. Native async nodes call `runtime.context.agents.invoke`,

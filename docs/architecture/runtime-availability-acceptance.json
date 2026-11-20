@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-20",
+  "scope": "Local debug/profiled availability acceptance; not full workflow/security qualification",
+  "knownTestedBase": "aaf109fcd7203ecaaa834520756280917dbcd39e",
+  "sourceInventorySha256": "af9e4f1686ea332467ea0663b26dcb2e4b080e050222b4c3e07ff149796a995c",
+  "sourceFiles": [
+    {
+      "path": "apps/control-plane/src/main/java/io/ololabs/toolgate/control/adapter/QuickstartProxy.java",
+      "sha256": "3266609950658459a9752049190168d4948d4f5d1ee5cf714fc893234bc98b63"
+    },
+    {
+      "path": "apps/control-plane/src/main/java/io/ololabs/toolgate/control/adapter/VerifiedActors.java",
+      "sha256": "6294ba95c5a63ced7487df0da8abd9995b17d9c9940a45bfa861b51df2149e33"
+    },
+    {
+      "path": "apps/control-plane/src/main/resources/application.properties",
+      "sha256": "829e93729371f87b03a92c9f801c8ab72757919143fc6261df287a2bd480bc82"
+    },
+    {
+      "path": "apps/control-plane/src/test/java/io/ololabs/toolgate/control/adapter/QuickstartReadinessProxyTest.java",
+      "sha256": "a650db34f72893638a278b912be4399f1f723751dcd1337bb793ebfc7112bfa6"
+    },
+    {
+      "path": "apps/control-plane/src/test/java/io/ololabs/toolgate/control/adapter/RuntimeCredentialLifetimeTest.java",
+      "sha256": "3cb4c17d648013b5ef128a3f021c6c750df7da64b3a7329a9fa7562e1419fbf2"
+    },
+    {
+      "path": "apps/langgraph-runtime/Dockerfile",
+      "sha256": "35d0ce81c8819fa7a53b5e520c0885dc414d6615f6ab10f162e9ee9fa5a9ac0e"
+    },
+    {
+      "path": "apps/langgraph-runtime/src/toolgate_runtime/availability.py",
+      "sha256": "2e855a249831d3329fc5003ac6ad652625634577b077994d2f2316992a0b682f"
+    },
+    {
+      "path": "apps/langgraph-runtime/src/toolgate_runtime/run_transport.py",
+      "sha256": "f81437853968d6d945eb08d2c0ea879cc99dc5faae4447ea63cc5c46a030e845"
+    },
+    {
+      "path": "apps/langgraph-runtime/src/toolgate_runtime/service.py",
+      "sha256": "bd55e0c097d8598f15f2a87c4f18bda8854da249ce495b35afd88d43006a8661"
+    },
+    {
+      "path": "apps/langgraph-runtime/src/toolgate_runtime/worker.py",
+      "sha256": "30d1de025bfbb805d1f4bc29f0ba05901da8792955b9bd04524dec50f3dcd14e"
+    },
+    {
+      "path": "apps/langgraph-runtime/tests/test_availability.py",
+      "sha256": "51c6899f0a13caf17ef9f2aa6597529ac062487523636756eb8aa7e4fabafd7f"
+    },
+    {
+      "path": "apps/langgraph-runtime/tests/test_service.py",
+      "sha256": "5d600110a5e074cae96537252f5cba26d53776ebd5d46d47d2bb5db189fcc4b3"
+    },
+    {
+      "path": "apps/langgraph-runtime/tests/test_worker_recovery_wire.py",
+      "sha256": "6d7d6e384ae7c3ed33f0293f0ee7481870c46efaa6952d54c5802e6c9b8603a8"
+    },
+    {
+      "path": "apps/quickstart/supervisor.py",
+      "sha256": "c8f8bba1b5b470fa3be7559abfac695f376a9dd9776ac9a553fd7f97b282471d"
+    },
+    {
+      "path": "debug/profiled/installation.env.example",
+      "sha256": "43498dbfbb4c4f5be92e2aa6ee2b9155fd6e444018d7fd274f3fadccb4f233ee"
+    },
+    {
+      "path": "debug/profiled/manage.ps1",
+      "sha256": "efb7b9a63ebaab85f9067637a6c7edd902991fb8f82c0613e72504cd8e196374"
+    },
+    {
+      "path": "debug/profiled/renew-runtime.bat",
+      "sha256": "71bf2311cfe7538a959e01c937963797868fc144c99f4fbd1756899fa1724abe"
+    },
+    {
+      "path": "deploy/docker/quickstart/dev/installation.env.example",
+      "sha256": "41d38a8957b7934642b04f4991d51507d9c8ee86bd3f0fa873b9e2f508bf07ed"
+    },
+    {
+      "path": "deploy/docker/quickstart/dev/renew-runtime.bat",
+      "sha256": "c2e6b6bd108652d33f2d7000cd46ae76e840396c83cf411f6792e881d3e7f03e"
+    },
+    {
+      "path": "tests/ci/test_runtime_credential_ttl.py",
+      "sha256": "e8b1cdc1d3e33cc3af6f0a3209c4cf9342a86f7745e86e220e333327c875c33a"
+    }
+  ],
+  "runtimeCredentialRemainingSeconds": 604783,
+  "signedExpiredCredential": {
+    "live": {
+      "status": 200,
+      "workerState": "AUTH_REQUIRED"
+    },
+    "ready": {
+      "status": 503,
+      "workerState": "AUTH_REQUIRED"
+    }
+  },
+  "afterExternalReplacement": {
+    "live": {
+      "status": 200,
+      "workerState": "READY"
+    },
+    "ready": {
+      "status": 200,
+      "workerState": "READY"
+    }
+  },
+  "gatewayOnlyOutage": {
+    "live": {
+      "status": 200,
+      "workerState": "BACKOFF"
+    },
+    "ready": {
+      "status": 503,
+      "workerState": "BACKOFF"
+    }
+  },
+  "controlHealthyDuringGatewayOutage": true,
+  "afterGatewayRecovery": {
+    "live": {
+      "status": 200,
+      "workerState": "READY"
+    },
+    "ready": {
+      "status": 200,
+      "workerState": "READY"
+    }
+  },
+  "wholeQuickstartOutage": {
+    "live": {
+      "status": 200,
+      "workerState": "BACKOFF"
+    },
+    "ready": {
+      "status": 503,
+      "workerState": "BACKOFF"
+    }
+  },
+  "afterRecovery": {
+    "live": {
+      "status": 200,
+      "workerState": "READY"
+    },
+    "ready": {
+      "status": 200,
+      "workerState": "READY"
+    }
+  },
+  "secondReplacement": {
+    "live": {
+      "status": 200,
+      "workerState": "READY"
+    },
+    "ready": {
+      "status": 200,
+      "workerState": "READY"
+    }
+  },
+  "sameContainerId": true,
+  "sameStartTime": true,
+  "restartCount": 0,
+  "adminPasswordPreserved": true,
+  "images": {
+    "quickstart": "olo-toolgate-quickstart:profiled-6f468dd3283f8796822c",
+    "device": "olo-toolgate-device:profiled-6da5fc387825de3f3765",
+    "runtime": "olo-toolgate-runtime:profiled-d2ebb1948031cc74207a"
+  },
+  "tests": {
+    "linuxRuntime": {
+      "cases": 129,
+      "failures": 0,
+      "skipped": 0
+    },
+    "focusedPython": {
+      "cases": 32,
+      "failures": 0
+    },
+    "focusedJava": {
+      "cases": 8,
+      "failures": 0
+    },
+    "repositoryCheck": {
+      "cases": 569,
+      "errors": 1,
+      "skipped": 11,
+      "limitation": "Windows symlink creation privilege, WinError 1314"
+    },
+    "javaCheck": "Initial no-database run fails fixture requirements. Owned PostgreSQL rerun encounters existing Windows POSIX limitation in KillSwitchTest; remaining broad workers stopped after that failure. Full gate not accepted."
+  },
+  "limitations": [
+    "No active interrupted write replay or independent effect-finality acceptance.",
+    "Gateway readiness requires the documented existing TLS origin/proxy route.",
+    "External replacement does not revoke earlier signed credentials before expiry.",
+    "No automatic external renewal task is installed.",
+    "Main-process or host failure can still require restart."
+  ]
+}

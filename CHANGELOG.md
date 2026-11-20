@@ -6,6 +6,12 @@ The project follows semantic versioning once stable versioning begins.
 
 ## 0.10.0-dev
 
+- Keep LangGraph live through expired service credentials and dependency outages;
+  reconnect without replaying executions or restarting the container. Separate
+  liveness/readiness, recover failed child processes independently, and default
+  demo runtime credentials to a configurable seven days with external replacement.
+  Admin sessions, other service roles and execution/step lease limits stay unchanged.
+
 - Add a local two-agent incident bot with triage-to-handover configuration and
   exact demo input. Refresh OLO console screenshots and the four existing tours;
   add multi-agent and same-run Langfuse/LangSmith/Phoenix views, restore overview

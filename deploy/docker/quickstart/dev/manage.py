@@ -61,15 +61,20 @@ def main():
     import stack
     if args.operation=='start':
         selected=stack.images()
-        probes=[(selected['quickstart'],'/opt/quickstart-python/bin/python',
+        probes=[('quickstart',selected['quickstart'],'/opt/quickstart-python/bin/python',
+                 '/opt/quickstart/workflow_installation.py',
                  "from pathlib import Path; assert Path('/opt/quickstart/workflow_installation.py').is_file()"),
-                (selected['device'],'python3',
+                ('device',selected['device'],'python3','/opt/toolgate/installation_device.py',
                  "from pathlib import Path; assert Path('/opt/toolgate/installation_device.py').is_file()"),
-                (selected['runtime'],'/opt/toolgate-runtime/bin/python',
+                ('runtime',selected['runtime'],'/opt/toolgate-runtime/bin/python','toolgate_runtime.service',
                  'import toolgate_runtime.service')]
-        for image,python,probe in probes:
-            subprocess.run(['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL',
-                '--security-opt','no-new-privileges:true','--entrypoint',python,image,'-c',probe],check=True)
+        for role,image,python,required,probe in probes:
+            result=subprocess.run(['docker','run','--rm','--network','none','--read-only','--cap-drop','ALL',
+                '--security-opt','no-new-privileges:true','--entrypoint',python,image,'-c',probe],capture_output=True,text=True)
+            if result.returncode:
+                raise ValueError(f'Cannot validate published {role} image {image}: requires {required}. '
+                    'Check Docker access and select matching WorkflowStack-capable image versions in .env. '
+                    'Mutable dev tags were refreshed; an incompatible publication cannot be used.')
     # No application build path is used: published mode only reuses/pulls explicit images.
     sys.argv=[str(SOURCE/'stack.py'),args.operation];stack.main()
     if args.operation in ('start','stop'):

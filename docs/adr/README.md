@@ -143,3 +143,4 @@ Use `000-template.md`.
 
 - [ADR 078: OLO bot publication diagnostics](078-bot-publication-diagnostics.md)
 - [ADR 079: Profile-selected model fallback](079-profile-model-fallback.md)
+- [ADR 080: Runtime availability and service credentials](080-runtime-availability-and-service-credentials.md)

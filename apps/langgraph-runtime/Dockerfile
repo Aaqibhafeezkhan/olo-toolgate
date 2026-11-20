@@ -24,7 +24,7 @@ COPY --from=dependencies /opt/toolgate-runtime /opt/toolgate-runtime
 COPY src/ ./src/
 ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER 65532:65532
-HEALTHCHECK --interval=10s --timeout=3s --start-period=180s --retries=3 CMD ["/opt/toolgate-runtime/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:19461/health/ready',timeout=2).read()"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=180s --retries=3 CMD ["/opt/toolgate-runtime/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:19461/health/live',timeout=2).read()"]
 ENTRYPOINT ["/opt/toolgate-runtime/bin/python", "-m", "toolgate_runtime.service"]
 
 # TLS test certificates require the CLI; it is excluded from the published image.

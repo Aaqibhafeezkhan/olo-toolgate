@@ -1,6 +1,6 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 param(
-    [ValidateSet('start','stop','restart')][string]$Operation='start',
+    [ValidateSet('start','stop','restart','provision-runtime')][string]$Operation='start',
     [switch]$ValidateOnly,
     [switch]$WithOllama,
     [switch]$WithoutOllama,
