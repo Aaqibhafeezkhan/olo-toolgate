@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Real local identity primitives and offline custody/integrity tests; run in Linux image."""
 import importlib.util
+import base64
 import http.cookiejar
 import io
 import json
@@ -48,19 +49,25 @@ class SecurityTests(unittest.TestCase):
             request=urllib.request.Request(endpoint,b'{}',{'Content-Type':'application/json','Authorization':'Bearer '+token})
             with urllib.request.urlopen(request) as response:return json.load(response)
         try:
-            with patch.dict(os.environ,{'TOOLGATE_QUICKSTART_WORKFLOW_STACK':'true'}):
+            with patch.dict(os.environ,{'TOOLGATE_QUICKSTART_WORKFLOW_STACK':'true'},clear=True):
                 with patch.object(quickstart,'control',return_value={'role':'BASIC'}):
                     with self.assertRaises(urllib.error.HTTPError) as denied:issue()
                     self.assertIn(denied.exception.code,(401,403))
                 with patch.object(quickstart,'control',return_value={'role':'SUPER_ADMIN'}):
-                    value=issue()
-                    self.assertEqual(quickstart.TENANT,value['tenantId'])
-                    import base64
-                    body=value['accessToken'].split('.')[1]
-                    claims=json.loads(base64.urlsafe_b64decode(body+'='*(-len(body)%4)))
-                    self.assertEqual(['toolgate-workflow-runtime'],claims['groups'])
-                    self.assertNotIn('user_id',claims);self.assertEqual('langgraph-service',claims['sub'])
-                    self.assertEqual(900,claims['exp']-claims['iat'])
+                    for lifetime in (604800,3600):
+                        with self.subTest(lifetime=lifetime):
+                            settings={} if lifetime==604800 else {'TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS':str(lifetime)}
+                            with patch.dict(os.environ,settings):value=issue()
+                            self.assertEqual(quickstart.TENANT,value['tenantId'])
+                            body=value['accessToken'].split('.')[1]
+                            claims=json.loads(base64.urlsafe_b64decode(body+'='*(-len(body)%4)))
+                            self.assertEqual(['toolgate-workflow-runtime'],claims['groups'])
+                            self.assertNotIn('user_id',claims);self.assertEqual('langgraph-service',claims['sub'])
+                            self.assertEqual(lifetime,claims['exp']-claims['iat'])
+                            self.assertEqual(claims['exp']*1000,value['expiresAtUnixMs'])
+                            with self.assertRaises(PermissionError):quickstart.session('Bearer '+value['accessToken'])
+                    admin=quickstart.session('Bearer '+token)
+                    self.assertEqual(900,admin['exp']-admin['iat'])
             self.assertEqual(before,(quickstart.DATA/'identity.json').read_bytes())
         finally:server.shutdown();thread.join();server.server_close()
 

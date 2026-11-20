@@ -1,6 +1,21 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Runtime credential API CI regression — 2026-11-20
+
+Known tested revision `63172c1400e16668bca9bfc0cade982093703373`. Hosted run
+44746987891/job 136325473022 reaches the Quickstart API security suite and fails
+because its runtime-credential assertion still expects 900 seconds instead of
+the adopted 604800-second demo default. The old assertion is reproduced in Linux.
+The API test now isolates installation settings, checks both the seven-day
+default and an explicit 3600-second override, matches returned expiry to the
+signed claim, rejects runtime credentials as human sessions and retains the
+live Super Admin/password-preservation checks. Admin sessions still assert 900
+seconds. All 56 Quickstart tests pass in the Linux container. Production code,
+credential policy, package/wire formats and schemas are unchanged; hosted
+foundation reevaluation remains pending. **0/100 remains earned**; no baseline,
+weight or phase acceptance change.
+
 ## Stateless runtime recovery and configurable demo credentials — 2026-11-20
 
 Known tested base `aaf109fcd7203ecaaa834520756280917dbcd39e`; 20-path source

@@ -1,6 +1,18 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Zero Trust Execution implementation status
 
+## Runtime credential API assertion repair — 2026-11-20
+
+Known revision `63172c14`; hosted Python job 136325473022 retained a stale
+15-minute runtime-token assertion after ADR 080 adopted a configurable seven-day
+demo lifetime. Linux reproduces the exact assertion failure. The repaired API
+regression checks default/explicit runtime lifetime and exact signed expiry,
+retains Super Admin/password checks, rejects machine tokens as human sessions
+and asserts the unchanged 900-second Admin session lifetime. All 56 Quickstart
+tests pass in Linux. This is test-only repair, not changed authority or new
+security qualification; overall phases, first slice and C2/C3b/C8 remain partial.
+No S01–S33 scope, weight or denominator changes. Hosted reevaluation is pending.
+
 ## Runtime availability and service-role lifetime — 2026-11-20
 
 Known base `aaf109fc`; source inventory SHA-256
