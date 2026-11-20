@@ -21,14 +21,21 @@ public class VerifiedActors {
     @Inject DirectoryService directory;
     @Inject TenantRequest request;
     @Inject io.quarkus.security.identity.SecurityIdentity security;
+    @Inject org.eclipse.microprofile.config.Config config;
+    long runtimeCredentialTtl=900;
+    @jakarta.annotation.PostConstruct void configure() {
+        runtimeCredentialTtl=config.getOptionalValue("toolgate.control.runtime.credential-ttl-seconds",Long.class).orElse(900L);
+        if(runtimeCredentialTtl<1||runtimeCredentialTtl>2592000)throw new IllegalArgumentException("Invalid runtime credential lifetime");
+    }
     private DirectoryService.Actor human; private long sessionEpoch;
 
-    private DirectoryService.Actor principal() {
+    private DirectoryService.Actor principal() {return principal(900);}
+    private DirectoryService.Actor principal(long lifetime) {
         if(security.isAnonymous())throw unauthorized();
         Object tenant=jwt.getClaim("tenant_id");long now=System.currentTimeMillis()/1000;
         if(!(tenant instanceof String value)||jwt.getIssuer()==null||jwt.getSubject()==null||jwt.getSubject().isBlank()
-            ||jwt.getIssuedAtTime()>now||jwt.getIssuedAtTime()<now-900||jwt.getExpirationTime()<=now
-            ||jwt.getExpirationTime()<=jwt.getIssuedAtTime()||jwt.getExpirationTime()-jwt.getIssuedAtTime()>900)throw unauthorized();
+            ||jwt.getIssuedAtTime()>now||jwt.getIssuedAtTime()<now-lifetime||jwt.getExpirationTime()<=now
+            ||jwt.getExpirationTime()<=jwt.getIssuedAtTime()||jwt.getExpirationTime()-jwt.getIssuedAtTime()>lifetime)throw unauthorized();
         TenantRequestResolver.principal(request.context(),value);
         try {return new DirectoryService.Actor(new Ids.TenantId(value),DirectoryService.digest(jwt.getIssuer()+"\n"+jwt.getSubject()),false);}
         catch(IllegalArgumentException invalid) {throw unauthorized();}
@@ -51,7 +58,12 @@ public class VerifiedActors {
         var actor=human();directory.requirePortal(actor,actor.userId());return actor;
     }
     public DirectoryService.Actor service(String role) {
-        var actor=principal();
+        long lifetime=900;
+        if(role.equals("toolgate-workflow-runtime")) {
+            if(runtimeCredentialTtl<1||runtimeCredentialTtl>2592000)throw unauthorized();
+            lifetime=runtimeCredentialTtl;
+        }
+        var actor=principal(lifetime);
         if(!security.hasRole(role))throw new Failure(ErrorCode.FORBIDDEN,403,"Service identity required");
         // Authentication roles are accepted only by explicit machine endpoints, never CRUD adapters.
         return actor;

@@ -1,6 +1,119 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Workflow execution v1 — live delivery status
 
+## Refresh mutable published dev images — 2026-11-20
+
+Known base `04b9ae60`. The deployment reused a November 17 cached Quickstart
+`1.0.0-dev.74`, which lacks `workflow_installation.py`, while pulling a newer
+runtime. Read-only registry metadata shows a different current Quickstart dev
+digest. Published-mode startup now refreshes mutable `:dev`/`:dev-*` aliases
+before capability probes; cached versioned tags/digests remain reusable. The
+probe retains fail-closed behavior and reports the image/required capability
+instead of a bare assertion traceback. No application build or old-image
+fallback is added. Regression expectations and deployment guidance are updated.
+At the user's request no tests, pulls, deployment or push were performed for
+this change; registry/local-image inspection only. User deployment and pipeline
+verification remain next. **0/100 remains earned**; no baseline/phase changes.
+
+## Docker Hub dev settings handoff — 2026-11-20
+
+Known source base `76a8bb0e`. Copied the local debug installation's portable
+provider settings and private observability inputs/generated files into the
+ignored Docker Quickstart dev configuration paths. Its ignored `.env` selects
+the three `ololab/...:dev` application images. Updated the committed installation
+example and deployment guide with the matching Ollama settings, credential file
+map, explicit stop/start commands and separate installation custody/bot import
+requirements. Real keys, Admin/device identities and generated storage remain
+outside Git; no database, model weights or ownership state are copied.
+At the user's request no deployment or tests were run for this handoff. Their
+Docker Hub image deployment/acceptance remains next. This configuration/docs-only
+change adds no runtime or security qualification. **0/100 remains earned**;
+no phase, baseline or weight changes.
+
+## Non-interactive local model preload — 2026-11-20
+
+Known tested base `30eddaae`. Windows startup retained a blank `ollama run`
+invocation as an interactive stdin reader after successful QLoRA import, blocking
+the second preload and collector step. Replace those CLI invocations with a
+mounted Python helper using Ollama's empty non-streaming API request in the
+selected container's network namespace. Stdin is closed, each request/process
+has a deadline, completion is validated, and progress is printed. Installed
+models remain reusable; no host port or permanent service is added.
+
+Executed: all six Ollama custody/preload tests pass, covering request shape,
+completion/refusal, response bound, closed stdin and process timeout. A local
+preload run returns for both existing models; `ollama ps` reports both resident
+at 100% GPU. This does not claim complete launcher/collector or workflow-run
+acceptance: the old running invocation still uses its previously loaded script;
+the user will cancel/retest startup. Admin/device/trigger/workflow authority and
+package/schema formats are unchanged. **0/100 remains earned**; no baseline,
+phase weight or security qualification change. Full startup retest remains next.
+
+## Runtime credential API CI regression — 2026-11-20
+
+Known tested revision `63172c1400e16668bca9bfc0cade982093703373`. Hosted run
+44746987891/job 136325473022 reaches the Quickstart API security suite and fails
+because its runtime-credential assertion still expects 900 seconds instead of
+the adopted 604800-second demo default. The old assertion is reproduced in Linux.
+The API test now isolates installation settings, checks both the seven-day
+default and an explicit 3600-second override, matches returned expiry to the
+signed claim, rejects runtime credentials as human sessions and retains the
+live Super Admin/password-preservation checks. Admin sessions still assert 900
+seconds. All 56 Quickstart tests pass in the Linux container. Production code,
+credential policy, package/wire formats and schemas are unchanged; hosted
+foundation reevaluation remains pending. **0/100 remains earned**; no baseline,
+weight or phase acceptance change.
+
+## Stateless runtime recovery and configurable demo credentials — 2026-11-20
+
+Known tested base `aaf109fcd7203ecaaa834520756280917dbcd39e`; 20-path source
+inventory SHA-256 `af9e4f1686ea332467ea0663b26dcb2e4b080e050222b4c3e07ff149796a995c`.
+[Acceptance record](runtime-availability-acceptance.json) and
+[ADR 080](../adr/080-runtime-availability-and-service-credentials.md) retain the
+scope, source hashes, images, observations and limits.
+
+Delivered: worker admission/presence reconnects through expired/rejected
+credentials and dependency outages, with capped jittered backoff and externally
+reloaded credentials. Gateway readiness is checked before claims and during
+heartbeats; Control alone being reachable cannot drain work into an unavailable
+Gateway. Quickstart proxies only the existing read-only Gateway readiness path.
+Lost presence blocks further model/tool sends. The supervisor preserves healthy
+children and restarts a failed child independently. Process liveness remains
+healthy while execution readiness reports CONNECTING/AUTH_REQUIRED/BACKOFF.
+No run/effect is resumed or replayed by reconnecting, and diagnostic/cache state
+never authorizes execution.
+
+Demo runtime-only service credentials default to seven days and are configurable
+through installation settings (1..2592000 seconds). Both JWT parser ceilings and
+the dedicated Control runtime-role boundary enforce that lifetime. Human/other
+service identities retain 900-second limits; run leases, step grants and Admin
+custody are unchanged. External renewal wrappers use the existing protected API
+and atomic file delivery. No renewal container or automatic host task is added.
+
+Executed: all 129 Linux runtime tests pass without skips, including HTTPS
+401/403, atomic replacement, outage recovery, independent child recovery and
+authenticated cache eviction/rebuild coverage. Thirty-two focused launcher/
+issuance tests and eight Java identity/proxy tests pass. Actual updated-image
+acceptance exercises a signed expired credential, external replacement,
+Gateway-only suspension with Control healthy, whole Quickstart pause/recovery,
+and a second replacement: the LangGraph container ID/start time remain identical
+and restart count stays zero. Its replacement has 604796 seconds remaining at
+the recorded check. Admin password bytes remain unchanged. The Windows renewal
+wrapper also succeeds without recreation. Required software upgrades themselves
+were applied explicitly with existing volumes; they are not counted as recovery.
+
+Limits/checks: Markdown links and whitespace pass. `python tools/check.py`,
+rerun without inherited harness Git-config overrides, reaches 569 CI cases and
+stops on the existing Windows symlink-privilege error (11 skips). Initial bare
+`javaCheck` lacks its database fixture; a proper owned-PostgreSQL rerun reaches
+the existing Windows POSIX failure in KillSwitchTest. Remaining broad workers
+were stopped after that recorded failure; full Java acceptance is not claimed.
+No active interrupted-write, HA, complete distributed/security matrix or old-token
+revocation qualification is added. Production proxies must route the documented
+Gateway readiness path, and external renewal must be scheduled by the operator
+if required. Main-process/host failures may still restart Docker. No migrations
+or compatibility aliases. **0/100 remains earned**; no baseline/weight changes.
+
 PR #320 merge checkpoint — 2026-11-20: integrated target revision `f046a09b`
 with Ollama revision `92963208`, retaining both the Gradle-cache and CPU-startup
 progress entries. All 31 profiled companion, profile-builder and composition

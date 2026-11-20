@@ -12,6 +12,50 @@ images, build missing applications, or claim an unavailable image is runnable.
 Compatibility probes fail before starting the installation if required service
 entrypoints are absent. The root README screenshots come from the debug stack.
 
+## Copied local debug settings
+
+The local deployment folder can use the same portable settings as
+`debug/profiled` with Docker Hub dev application images. Its ignored `.env`
+selects the three images listed below; no debug image tags are copied.
+
+| Local deployment file | Configuration |
+|---|---|
+| `installation.env` | Copied model provider origins/trust settings; runtime credential lifetime defaults to seven days |
+| `credentials/observability.json` | Copied Langfuse, LangSmith and Phoenix endpoints/project settings and private keys |
+| `credentials/collector.json` | Copied collector configuration; regenerated when configuring monitoring |
+| `credentials/monitoring.env` | Copied private exporter authentication; regenerated from observability settings |
+| `credentials/runtime-observability.env` | Copied runtime collector endpoint and environment |
+
+These actual local settings/keys stay ignored by Git. The committed
+`installation.env.example` describes the matching local Ollama configuration;
+the shared [monitoring credential template](../../../../debug/profiled/observability/credentials.example.json)
+describes the provider fields without real keys. On another checkout, create the
+private files there before starting. Keep existing settings when adding the TTL
+line or changing providers.
+
+Admin credentials, gateway/device identity, ownership markers, database/volumes
+and model weights are installation-owned and are not filesystem configuration
+copies. This deployment creates its own Admin identity and private custody.
+Import exported `.olo` bundles to transfer bots and their referenced packages;
+configure its own devices and model vault secret. The Ollama model cache belongs
+to this deployment, so first-time setup may download/prepare the weights.
+
+Before deploying on the default ports, stop the debug stack from
+`D:\git\olo-toolgate\debug\profiled`:
+
+```bat
+stop.bat -WithOllama -WithMonitoring
+```
+
+Then from `D:\git\olo-toolgate\deploy\docker\quickstart\dev`:
+
+```bat
+start.bat -WithOllama -WithMonitoring
+```
+
+This selects the same optional model/collector services and uses the copied
+private cloud settings. Deployment/testing remains an explicit operator action.
+
 ## Application images
 
 | Service | Default image | Responsibility |
@@ -21,9 +65,12 @@ entrypoints are absent. The root README screenshots come from the debug stack.
 | Device | `ololab/olo-toolgate-device:dev` | Persistent enrolled device, tools and trigger reconciliation |
 
 Use a matching release for all three, or explicit digests in `.env`. Development
-tags are mutable; inspect **About** after startup. Existing local images are
-reused; missing images are pulled. To refresh a tag, pull it explicitly before
-starting a fresh installation. Unsupported stores are preserved and refused,
+tags are mutable; inspect **About** after startup. Startup refreshes `:dev` and
+`:dev-*` aliases from their registry even if cached locally. Cached versioned
+tags and digest pins are reused; missing images are pulled. Use explicit matching
+versions/digests for repeatability or offline reuse. An unavailable registry or
+failed capability check stops startup; there is no stale-image/build fallback.
+Unsupported stores are preserved and refused,
 not migrated. Image updates are separate from hot-swapping bot configurations.
 
 Ollama plus its private TLS bridge and the observability collector are optional.
@@ -64,6 +111,11 @@ sh start.sh --without-ollama --without-monitoring
 ```
 
 ## Ports, credentials and blank installation
+
+Local Ollama setup uses the shared non-interactive preload helper: each model
+reports loading/completion and has a bounded timeout. Existing imported weights
+are reused. If a prior script is waiting after Ollama's `success` line, cancel
+that invocation with Ctrl+C and rerun the updated launcher.
 
 First startup copies `.env.example` to ignored `.env`. Default ports bind only
 to loopback: Admin UI `http://127.0.0.1:18090/console/`, HTTPS API `18450`, package
@@ -203,7 +255,21 @@ never reconfigure exporters. Keep backups of private configuration separately.
 select which companions to stop; omitted companions are left alone. Restart and
 start use external backend APIs to refresh scoped runtime service credentials,
 without rotating Admin. Refresh an expired runtime credential explicitly with
-`./manage.ps1 provision-runtime`; keep service renewal outside containers.
+`renew-runtime.bat` (Windows) or `python manage.py provision-runtime`; keep service
+renewal outside containers. LangGraph remains live during expiry (`AUTH_REQUIRED`)
+or dependency outages (`BACKOFF`) and reconnects after replacement without a
+container restart. Docker checks process liveness; execution readiness can be
+unavailable independently. Interrupted tool effects are never automatically replayed.
+
+Runtime service credentials default to seven days. Copy
+`installation.env.example` to this folder's `installation.env` before startup
+and set `TOOLGATE_RUNTIME_CREDENTIAL_TTL_SECONDS=604800` (1..2592000 seconds).
+If the file already exists, edit it in place and retain its other settings.
+This does not extend Admin sessions, execution leases or step grants. Applying a
+changed container environment is an explicit deployment; it affects newly issued
+credentials only. Subsequent credential replacements need no recreation.
+Private credentials, device identity, data and volumes remain unchanged. No
+automatic host renewal task is installed; schedule the external helper if desired.
 
 **Factory reset** in Admin clears bot/workflow data while retaining the Admin
 login. For a destructive removal of this core installation's storage, first

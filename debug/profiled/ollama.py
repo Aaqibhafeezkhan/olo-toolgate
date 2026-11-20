@@ -48,6 +48,21 @@ def prepare_qlora(run, root, storage, compose):
     run(compose+['exec','-T','ollama','ollama','create',QLORA_MODEL,'-f','/root/.ollama/olo-import/Modelfile'])
 
 
+def warm_models(run,compose,source,image,timeout=180):
+    """Use the installed Python image in Ollama's network namespace, with stdin closed."""
+    import re
+    container=run(compose+['ps','-q','ollama'],capture_output=True,text=True).stdout.strip()
+    if not re.fullmatch('[a-f0-9]{64}',container):raise ValueError('One running Ollama container is required')
+    for model in (QLORA_MODEL,MODEL):
+        print(f'Preloading local model {model} (timeout {timeout}s)...',flush=True)
+        run(['docker','run','--rm','--network','container:'+container,'--read-only',
+            '--cap-drop','ALL','--security-opt','no-new-privileges:true','--user','65532:65532',
+            '-v',str(source/'ollama-warmup.py')+':/warmup.py:ro',
+            '--entrypoint','/opt/quickstart-python/bin/python',image,
+            '/warmup.py','--model',model,'--timeout',str(timeout)],
+            stdin=subprocess.DEVNULL,timeout=timeout+15)
+
+
 def initialize():
     # Executed with the existing Quickstart image's Python, never host pip.
     from cryptography import x509
@@ -125,8 +140,7 @@ def main():
             run(compose+['exec','-T','ollama','ollama','pull',MODEL])
         else:print('Reusing local model: '+MODEL)
         prepare_qlora(run,root,env['TOOLGATE_PROFILED_OLLAMA_STORAGE'],compose)
-        run(compose+['exec','-T','ollama','ollama','run',QLORA_MODEL,'--keepalive','24h',''])
-        run(compose+['exec','-T','ollama','ollama','run',MODEL,'--keepalive','24h',''])
+        warm_models(run,compose,source,document['services']['quickstart']['image'])
         core=['docker','compose','-p',stack.PROJECT,'-f',str(here/'state/compose.json')]
         ids=run(core+['ps','-q','quickstart'],capture_output=True,text=True).stdout.strip()
         actual=json.loads(run(['docker','inspect',ids],capture_output=True,text=True).stdout)[0]
