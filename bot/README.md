@@ -33,9 +33,12 @@ On Linux/macOS:
 Python 3 and JDK 21 plus the pinned Rust toolchain build the package CLI and SDK.
 If native Rust is absent, Docker builds and runs the supplied toolchain image.
 Docker Desktop must be running for that path. The builder receives workspace
-sources and a Gradle cache, with no Docker socket or host credential directory.
-First builds need network access for pinned tooling/dependencies. Subsequent
-builds reuse caches. Output is always in the ignored `bot/bin/` directory
+sources and a private container-local Gradle home. Each invocation downloads
+its Gradle dependencies independently and uses single-use Gradle daemons.
+The builder image and CLI build layers remain cached. SDK publication selects
+the root SDK task with the application-plugin isolation guard.
+Builds need network access for pinned tooling/dependencies.
+Output is always in the ignored `bot/bin/` directory
 unless `--output` is supplied. `--packages-dir` selects an existing collection
 of exact verified `.olotool` tool archives instead of compiling recipes.
 
