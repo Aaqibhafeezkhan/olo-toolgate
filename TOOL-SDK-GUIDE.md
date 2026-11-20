@@ -221,7 +221,7 @@ In development, point a destination at a local mock in `toolgate.dev.json`; a lo
 
 ### Files on a device
 
-A `@ClientTool` runs on the device the caller selects, inside a sandbox with no host files. To read or write files there, declare it with `@DeviceFileAccess` and use `context.files()`: the device performs each operation for the tool, inside its one confined **files area** ([ADR 027](docs/adr/027-one-tool-protocol-device-files.md)).
+A `@ClientTool` runs on the device the caller selects, inside a sandbox with no host files. To read or write files there, declare it with `@DeviceFileAccess` and use `context.files()`: the device performs each operation for the tool, inside its one confined **files area** ([Device files area and the HotFolder package](docs/client/hotfolder.md)).
 
 ```java
 @ClientTool(name = "read_text", title = "Read a text file", description = "Reads a text file from the device.",

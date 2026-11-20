@@ -8,7 +8,7 @@ OLO ToolGate is maintained under the `olo-labs` GitHub organization.
 - security boundaries require explicit review
 - public APIs and schemas are treated as contracts
 - maintainers should prefer reversible decisions
-- project direction should be visible through issues, discussions, ADRs and roadmap
+- project direction should be visible through issues, discussions and current architecture guides
 
 ## Maintainer Responsibilities
 
@@ -25,11 +25,9 @@ Maintainers:
 
 ## Architecture Decisions
 
-Major decisions require an ADR under:
-
-```text
-docs/adr/
-```
+Review major decisions in an issue. Keep the adopted behavior in the owning
+[architecture guide](docs/architecture/README.md). Only unfinished work belongs
+in [plans](docs/plans/README.md); Git history retains superseded designs.
 
 ## Becoming a Maintainer
 

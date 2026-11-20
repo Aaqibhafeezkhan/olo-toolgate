@@ -41,7 +41,7 @@ Rules that hold in every language:
 ### A1 Protocol core
 
 **Used where:** the Java SDK uses the ToolGate core. Python follows that core's
-observable behavior under [ADR 028](../../docs/adr/028-python-sdk-java-parity.md).
+observable behavior under [ToolGate Python SDK](../python-sdk/README.md).
 The historical official-SDK compatibility record is separate evidence.
 
 - Implements `server/discover`, `tools/list`, `tools/call` (with `resultType`), per-request `_meta` validation, errors -32020, -32021 and -32022, and `subscriptions/listen` for `toolsListChanged`.
@@ -63,7 +63,7 @@ The historical official-SDK compatibility record is separate evidence.
 
 **Used in:** all four languages.
 
-- A compact JWS, HS256, with a per-process random key (at least 256 bits) in standalone mode. In governed mode the SDK never mints or verifies `requestState`: Control mints it with the ASK outcome and verifies it on the retry, and the Gateway holds no key (ADR 013, decision 9).
+- A compact JWS, HS256, with a per-process random key (at least 256 bits) in standalone mode. In governed mode the SDK never mints or verifies `requestState`: Control mints it with the ASK outcome and verifies it on the retry, and the Gateway holds no key ([Tool Host](../../apps/tool-host/README.md)).
 - Payload `{toolId, argsHash, identity, scope, approvalId?, exp, nonce, responses}`; `argsHash` is the `sha256:` digest of the JCS canonical arguments; `exp` at most 10 minutes after issue; `responses` is the object of input responses from earlier rounds, so a retry sends only the new answers. The client supplied every response, so the payload is signed, not encrypted.
 - Verified before any re-dispatch: signature, `exp`, same `toolId`, same `argsHash`, same identity and scope. Each `nonce` is accepted once within its lifetime. Every refusal is the same `-32602` and reveals nothing about the original call.
 - The layer mints the state on every `InputRequiredResult`, and refuses with `-32021` an input request whose method needs a client capability the request did not declare (`elicitation`, `sampling` or `roots`). Input responses sent without a state are the client's own answers and are used as they are.

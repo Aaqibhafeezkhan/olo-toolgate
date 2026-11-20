@@ -153,7 +153,7 @@ published profile. A PUBLISHED status is historical activation, and may report
 runtime authorization. No runnable API, grants, model proxy, lease or trigger
 admission is created by this lifecycle alone. Complete one-upload directory and
 grant provisioning, readiness-case execution, runtime authorization and the
-real two-profile demo remain tracked in the [workflow status](../architecture/workflow-v1-status.md).
+real two-profile demo remain tracked in the [workflow architecture](../architecture/workflows.md).
 
 ## How Control applies a profile
 
@@ -183,7 +183,7 @@ separate reviewed records: a READY profile has installed tools, not given anyone
 
 ## Client-tool images
 
-Packages whose exports run on client devices are released as OCI images (ADR 026). Configure the registry Control
+Packages whose exports run on client devices are released as OCI images ([Deployment profiles](profiles.md)). Configure the registry Control
 pushes to and the approved JRE base mirrored there:
 
 | Variable | Meaning |
@@ -232,7 +232,7 @@ DeploymentProfile contract remains unchanged until version-2 orchestration,
 management authorization, catalog persistence and readiness are delivered. Do
 not add these fields to a deployed version-1 profile or interpret successful
 structural validation as READY or execution permission. See the
-[live workflow status](../architecture/workflow-v1-status.md) for remaining work.
+[live workflow status](../architecture/workflows.md) for remaining work.
 
 ## Published workflows in the console
 

@@ -3,8 +3,8 @@
 
 This matrix is for Linux x86_64 Python server artifacts on the rootless
 OCI_SANDBOX tier. It combines actual isolated processes with production component
-and native-process checks. The authoritative delivery/claim status remains
-[zero-trust-execution-status.md](zero-trust-execution-status.md).
+and native-process checks. Use [current execution scope](zero-trust-boundaries.md) for the trust boundary;
+execute the matrix for the exact source, image and deployment before claiming it.
 
 | Boundary | Required observations | Scope limit |
 |---|---|---|

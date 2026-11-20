@@ -1,19 +1,31 @@
-# Component map
+# Component ownership and repository layout
 
-| Component | Stack | Owns | Boundary |
+| Component | Source | Owns | Boundary |
 |---|---|---|---|
-| Gateway | Rust | Caller authentication, MCP routing, current-authority requests and runtime observations | No database, local policy authority, effect signer or arbitrary tool execution |
-| Control Plane | Java | Tenant graph, authorization, review, permit signing, device registry, deployment and durable state | Arbitrary tool code executes elsewhere |
-| Admin UI | React/TypeScript | Human administration and impact/review presentation | Backend owns validation and security decisions |
-| Endpoint Client | Rust | Device identity, signed package tools in a sandbox, the brokered files area | Current Control authorization and runtime confinement remain required |
-| Tool Host | Rust | Server Java tool admission, verified content, broker and execution | Container/network isolation and result outbox remain unfinished ([#230](https://github.com/olo-labs/olo-toolgate/issues/230)) |
-| Quickstart | Combined services | Single-node evaluation with local state/custody | No HA guarantee |
+| Gateway | `apps/gateway/`, Rust | Caller authentication, MCP routing and observations | No database or independent authorization/permit signer |
+| Control Plane | `apps/control-plane/`, Java | Tenant configuration, current authorization, review, permits and durable state | Does not execute arbitrary tool code |
+| Console | `apps/admin-ui/`, React/TypeScript | Human authoring, administration and evidence presentation | Backend owns validation and security decisions |
+| LangGraph runtime | `apps/langgraph-runtime/`, Python | Governed external graph/agent execution | No independent grant or effect authority |
+| Endpoint Client | `apps/endpoint-client/`, Rust | Device identity, managed packages and brokered capabilities | Execution confinement depends on the declared runtime |
+| Tool Host | `apps/tool-host/`, Rust | Server admission, verified content, broker and execution | Native and qualified OCI tiers have different boundaries |
+| Quickstart | `apps/quickstart/` | Local composition, console and installation custody | Single-node evaluation; no HA guarantee |
 
-Control already supports importing from a configured external OLO Orgs registry;
-see [Marketplace integration](../control-plane/marketplace-integration.md).
-The Marketplace itself lives in a separate private repository and is hosted at
-[olo-labs.org](https://olo-labs.org).
+| Directory | Contents |
+|---|---|
+| `crates/` | Shared Rust libraries |
+| `backend-libs/` | Shared Java libraries |
+| `packages/contracts/` | Canonical schemas/OpenAPI and generated language bindings |
+| `tool-sdk/` | CLI, SDKs, canonical specifications and conformance fixtures |
+| `bot/` | Editable bot sources and bundle build support |
+| `examples/` | Tool and agent examples |
+| `deploy/` | Launchers, Compose, Helm and deployment assets |
+| `debug/` | Source-built persistent development installation |
+| `config/initial/` | Initial group/configuration presets |
+| `tools/`, `tests/` | Build/release/verification tooling and fixtures |
+| `docs/` | Maintained user, developer, operator and security guides |
+| `docs/plans/` | Genuinely unfinished work only |
 
-Read [trust boundaries](trust-boundaries.md) and
-[device controls](../control-plane/device-registry.md). Create an
-[ADR](../adr/README.md) before moving responsibility between components.
+The external Marketplace is outside runtime authorization; see
+[registry integration](../control-plane/marketplace-integration.md).
+Keep credentials and generated output ignored. Cross-component changes start in
+[canonical contracts](../development/schema-workflow.md).

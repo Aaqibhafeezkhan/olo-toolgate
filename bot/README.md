@@ -14,7 +14,7 @@ static joins and bounded loops. Compilation does not provision devices or make a
 bot runnable. Start with [community help](../docs/help/README.md), especially
 [device updates](../docs/help/device.md) and [model updates](../docs/help/models.md).
 Actual execution acceptance and remaining work are recorded in
-the [live workflow status](../docs/architecture/workflow-v1-status.md).
+the [live workflow status](../docs/architecture/workflows.md).
 
 From any directory on Windows:
 

@@ -6,8 +6,8 @@ and [schemas](../../packages/contracts/schemas/README.md) for exact fields and p
 - [HTTP and MCP API reference](api-reference.md) — every Gateway and Control route with examples
 - [Gateway API](gateway-api.md)
 - [Control Plane API](control-plane-api.md)
-- [Client API](client-api.md)
-- [Errors and idempotency](errors-and-idempotency.md)
+- [Client API](../control-plane/device-registry.md)
+- [Errors and idempotency](api-reference.md)
 - [Compatibility](../architecture/compatibility.md)
 - [External Marketplace API contract](marketplace-api.md) — used by the Control import client
 

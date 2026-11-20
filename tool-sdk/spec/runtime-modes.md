@@ -91,7 +91,7 @@ a `BROKER_REQUEST` frame on stdout (`ROUTE_CALL` and `SECRET_REDEEM` on a Tool
 Host, the `FILES_*` operations on a device) answered by one `BROKER_RESPONSE` line
 on stdin. This is the only protocol and the only channel; an executor refuses an
 operation it does not provide with `BROKER_REFUSED`
-([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)). Standalone mode
+([Device files area and the HotFolder package](../../docs/client/hotfolder.md)). Standalone mode
 has no broker: routes go to the network through the SDK client, and device files
 are an in-memory area that starts empty.
 

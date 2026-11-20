@@ -10,7 +10,7 @@ Java SDK images on an approved JRE base, in a sandbox on a system-accessible Lin
 OCI engine. It has no built-in tools, and host interpreters are never a fallback.
 Tools speak the one tool protocol, v2 over stdio; a device brokers only its
 confined [files area](../../docs/client/hotfolder.md) to tools whose signed
-registration grants it ([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)).
+registration grants it ([Device files area and the HotFolder package](../../docs/client/hotfolder.md)).
 
 Download the Windows, macOS or Linux archive from the Control home page without
 signing in. Check its SHA-256 against the displayed manifest before extracting.
@@ -28,7 +28,7 @@ Network loss, revoked identity and missing authorization block tool execution.
 
 Build with `cargo build -p olo-toolgate-client --locked`; test with
 `cargo test -p olo-toolgate-client --locked`. The service uses the shared
-canonical contracts. Read [the enrollment decision](../../docs/adr/007-endpoint-enrollment.md).
+canonical contracts. Read [the enrollment decision](../../docs/control-plane/device-registry.md).
 
 An administrator runs `olo-toolgate-client install --server https://control.example.com`.
 The installer registers systemd on Linux, launchd on macOS, or a LocalSystem

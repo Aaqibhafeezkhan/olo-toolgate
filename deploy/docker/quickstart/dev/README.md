@@ -6,55 +6,24 @@ It pulls/reuses application images instead of compiling OLO. Both entry points
 share provisioning, Admin custody, device setup and optional model/collector logic;
 this installation has its own project, volumes, settings and credentials.
 
-**Publication:** the new matching development images are not published yet.
-This launcher is prepared for their publication; it does not substitute older
-images, build missing applications, or claim an unavailable image is runnable.
-Compatibility probes fail before starting the installation if required service
-entrypoints are absent. The root README screenshots come from the debug stack.
+Startup refreshes mutable development image tags and checks required
+Quickstart/device entrypoints and runtime modules before initializing the
+installation. A registry tag alone does not establish a working deployment.
+Select matching reviewed image versions/digests in `.env`; use the
+[source-built installation](../../../../debug/profiled/README.md) when developing
+the applications. This launcher does not silently build or substitute old images.
 
-## Copied local debug settings
+Private configuration belongs to this installation. `.env` selects application
+images and ports; `installation.env` configures runtime/model settings, and
+`credentials/observability.json` holds optional monitoring destinations. Start
+from their checked-in examples and the shared
+[observability template](../../../../debug/profiled/observability/credentials.example.json).
+Do not copy Admin/device identity, generated tokens, ownership markers or another
+installation's database. Transfer bots with `.olo` and configure destination
+secrets, devices and providers independently.
 
-The local deployment folder can use the same portable settings as
-`debug/profiled` with Docker Hub dev application images. Its ignored `.env`
-selects the three images listed below; no debug image tags are copied.
-
-| Local deployment file | Configuration |
-|---|---|
-| `installation.env` | Copied model provider origins/trust settings; runtime credential lifetime defaults to seven days |
-| `credentials/observability.json` | Copied Langfuse, LangSmith and Phoenix endpoints/project settings and private keys |
-| `credentials/collector.json` | Copied collector configuration; regenerated when configuring monitoring |
-| `credentials/monitoring.env` | Copied private exporter authentication; regenerated from observability settings |
-| `credentials/runtime-observability.env` | Copied runtime collector endpoint and environment |
-
-These actual local settings/keys stay ignored by Git. The committed
-`installation.env.example` describes the matching local Ollama configuration;
-the shared [monitoring credential template](../../../../debug/profiled/observability/credentials.example.json)
-describes the provider fields without real keys. On another checkout, create the
-private files there before starting. Keep existing settings when adding the TTL
-line or changing providers.
-
-Admin credentials, gateway/device identity, ownership markers, database/volumes
-and model weights are installation-owned and are not filesystem configuration
-copies. This deployment creates its own Admin identity and private custody.
-Import exported `.olo` bundles to transfer bots and their referenced packages;
-configure its own devices and model vault secret. The Ollama model cache belongs
-to this deployment, so first-time setup may download/prepare the weights.
-
-Before deploying on the default ports, stop the debug stack from
-`D:\git\olo-toolgate\debug\profiled`:
-
-```bat
-stop.bat -WithOllama -WithMonitoring
-```
-
-Then from `D:\git\olo-toolgate\deploy\docker\quickstart\dev`:
-
-```bat
-start.bat -WithOllama -WithMonitoring
-```
-
-This selects the same optional model/collector services and uses the copied
-private cloud settings. Deployment/testing remains an explicit operator action.
+The debug and published-image installations have separate storage but share
+default ports. Stop the other installation or change ports before starting.
 
 ## Application images
 
@@ -114,9 +83,7 @@ sh start.sh --without-ollama --without-monitoring
 
 Local Ollama setup uses the shared non-interactive preload helper: each model
 reports loading/completion and has a bounded timeout. Existing imported weights
-are reused. If a prior script is waiting after Ollama's `success` line, cancel
-that invocation with Ctrl+C and rerun the updated launcher.
-
+are reused.
 First startup copies `.env.example` to ignored `.env`. Default ports bind only
 to loopback: Admin UI `http://127.0.0.1:18090/console/`, HTTPS API `18450`, package
 registry `18552`. Edit `HTTP_PORT`, `TLS_PORT`, `REGISTRY_PORT` **before first
@@ -293,5 +260,5 @@ The launcher shares scripts under `debug/profiled` and `tools`; keep the reposit
 layout intact. It is not a separate single-folder download. No host build toolchain
 is required for published application startup. Maintainers can override image refs
 in ignored `.env` for local verification; such tests are not evidence that those
-images were published. See [live workflow status](../../../../docs/architecture/workflow-v1-status.md)
+images were published. See [workflow architecture](../../../../docs/architecture/workflows.md)
 for tested scope, actual checks and remaining qualification.

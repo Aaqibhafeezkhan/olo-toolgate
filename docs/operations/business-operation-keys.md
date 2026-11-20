@@ -31,9 +31,8 @@ Native admission changes the ID namespace from legacy `inv-...` to `op-...`.
 Use a coordinated Gateway cutover: finish or reconcile existing legacy operations
 through their original IDs before retrying those logical steps on the new path.
 Do not mix old/new Gateway admission replicas for one workflow or assume a
-pre-upgrade Idempotency-Key has been imported into the business-key table. This
-slice does not backfill historical key bindings because Control never stored the
-raw keys. Start new workflows after cutover with new workflow-scoped keys.
+pre-upgrade Idempotency-Key has been imported into the business-key table. Use explicit current key bindings. Unsupported existing formats are refused
+without conversion; absent history is not evidence for retry.
 
 Upgrade Control and its contracts before rolling out the new Gateway. An older
 Control rejects the new closed-schema request field; Gateway does not silently
@@ -141,12 +140,12 @@ including a tombstoned one, only with the exact immutable history and resolution
 proof. History cannot be updated or deleted by the runtime role.
 
 Key-row retention does not purge independent task/result/dispatch payloads.
-Cross-agent result reuse and complete effect-aware operation finalization remain
-outstanding; proof-bound recovery does not establish verified success. Calls without a declared window and without a
+Cross-agent result reuse is not implied. Proof-bound recovery does not establish
+verified success; use current operation finalization for aggregate outcomes. Calls without a declared window and without a
 key retain request-ID replay lookup. None of these paths can reopen consumed
 unknown attempts through legacy retry; see
-[the live progress document](../security/zero-trust-execution-status.md) and
-[ADR 034](../adr/034-durable-business-operation-binding.md).
+[current security scope](../security/zero-trust-boundaries.md) and
+[Explicit business operation keys](business-operation-keys.md).
 
 ## Proof-bound recovery
 

@@ -48,21 +48,14 @@ Monitor disk capacity and `result evidence could not be persisted`,
 diagnostics. Never delete a pending spool or outbox to make a tool retry. Missing
 host files are not proof that a downstream effect did not occur.
 
-## Compatibility and scope
+## Current deployment scope
 
-Control database migration V2 adds leases and immutable execution evidence for
-both PostgreSQL and SQLite. Upgrade Control before Tool Hosts: new hosts require
-the heartbeat endpoint and fail closed if it is unavailable. Older Tool Hosts do
-not provide healthy-host renewal supervision; do not claim the bound for them.
+Use matching current Control/Tool Host artifacts and fresh PostgreSQL/SQLite
+schemas. A host requires the heartbeat/lease contract and fails closed when
+current authority is unavailable. Unsupported stores are rejected intact.
 
-The [preserved issue #230 plan](../plans/zero-trust-tool-execution.md) describes
-the complete roadmap. This lease/evidence increment does not implement the full
-roadmap: business-key operation binding, the per-effect ledger and exact effect
-consent, cooperating-target fencing, operation
-finalization across attempts, externally anchored audit verification,
-sender-constrained run credentials, provenance and broker OAuth remain separate
-work. Third-party target outcomes are not proven by dispatch or permit consumption.
-
-Python workers can additionally use the [qualified rootless OCI tier](rootless-tool-host.md)
-to contain filesystem, network and process authority. Its cgroup teardown covers
-the worker container; native hosts retain the direct-process limitation above.
+Leases bound declared supervision behavior; they do not prove third-party
+target completion or independent target-side revocation. Native hosts retain
+their direct-process trust boundary. Python workers can use the
+[qualified rootless OCI tier](rootless-tool-host.md); apply its exact host,
+image, resource and teardown prerequisites.

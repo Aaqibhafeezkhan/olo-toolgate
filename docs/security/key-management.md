@@ -11,7 +11,7 @@ cannot authorize from an old signed snapshot.
 | Control snapshot signing | Sign group metadata with monotonic publication state; snapshots never authorize offline effects. |
 | Fleet/release signing | Bind immutable packages and generations to assigned devices. |
 | Device identity/CA | Bind the enrolled owner and exact key; renewal/recovery cannot extend approval or resurrect revocation. |
-| Audit anchor signing | Sign per-tenant audit-chain heads for external anchoring only ([ADR 062](../adr/062-signed-audit-anchors.md)); verified against a pinned keyring kept outside Control's database. Startup refuses a key that shares any other domain's modulus. |
+| Audit anchor signing | Sign per-tenant audit-chain heads for external anchoring only ([Control Plane configuration and operations](../control-plane/configuration.md)); verified against a pinned keyring kept outside Control's database. Startup refuses a key that shares any other domain's modulus. |
 
 Provision private custody outside source control and chart values. Mount it only
 in the owning service and preserve restrictive ownership/permissions. Use
@@ -28,8 +28,8 @@ permits or restored credentials. Use [reviewed recovery](../enterprise-access-co
 for compromise or restore, and verify revocation before reopening traffic.
 
 Server-tool request-state and emergency operator keys are specified in
-[ADR 013](../adr/013-tool-host-egress-broker-secrets.md) and
-[ADR 017](../adr/017-kill-switch.md). Check the executor guides for current
+[Tool Host](../../apps/tool-host/README.md) and
+[Emergency kill switch](../control-plane/kill-switch.md). Check the executor guides for current
 runtime support; specifications alone do not establish deployment support.
 
 
@@ -41,5 +41,5 @@ Lease expiry cannot constrain root controlling the supervisor or revoke already
 delivered credentials at unfenced targets. Current qualified Python OCI and OLO
 fenced-write guarantees do not imply generalized route/consent enforcement,
 sender-constrained agent credentials, externally anchored audit or production SLOs.
-Signed audit anchors with a local append-only sink exist (S25, unweighted); offline
-verification (S26) and customer-bucket/transparency-log sinks remain outstanding.
+Signed audit anchors with a local append-only sink exist within their declared scope; independent offline
+verification and customer-bucket/transparency-log sinks remain outstanding.

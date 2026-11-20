@@ -1,34 +1,32 @@
-# Current contracts and fresh builds
+# Current contracts and fresh schemas
 
-This feature ships fresh breaking builds. Deploy matching current Control,
-Gateway, Tool Host, console, Quickstart, client, SDK and contract artifacts.
-There is no backward compatibility, mixed-version fallback, legacy runtime
-adapter, database migration, backfill or conversion path.
+Deploy matching current Control, Gateway, Tool Host, console, Quickstart, client,
+SDK and contract artifacts. There is no mixed-version fallback, legacy runtime
+adapter, database migration, upgrade/backfill or format-conversion path.
 
-Use the root VERSION for product artifacts and packages/contracts/VERSION for
-the generated contract set. Version identifiers select the matching current
-artifacts; they do not promise support for earlier formats.
+## Initialize storage
+
+Start PostgreSQL with an empty database or Quickstart with empty storage.
+PostgreSQL initializes the current V1 schema and validates its checksum.
+SQLite atomically initializes its current schema and records identity/checksum.
+Unsupported stores, missing identity and mismatching checksums are rejected
+without conversion or deletion. Use separate initialization and runtime roles;
+runtime credentials must not mutate schema or immutable evidence.
+
+Recovery within the current schema, durable journals and late evidence remain
+required. They do not imply support for historical formats. Application rollback
+does not rewind authority epochs, spent nonces, identity or database history.
+Use [reviewed recovery](../enterprise-access-control/operations.md), not an old
+database or evaluator copied over a running installation.
 
 ## Prepare a deployment
 
-- Initialize an empty PostgreSQL database or empty Quickstart data directory
-  using the current fresh schema. See [fresh database initialization](../control-plane/upgrades.md).
-- Verify the current package format, descriptor generation, runtime and
-  OS/architecture for every assigned tool. Unsupported inputs fail closed.
-- Preserve existing stores and evidence separately. An unsupported store is
-  rejected without conversion or deletion; application rollback cannot restore
-  authority or reset spent nonces.
-- Verify fresh initialization, current-schema recovery and obsolete-format
-  refusal on SQLite and PostgreSQL when changing persistence.
-- Keep canonical schemas, generated bindings and first-party callers aligned
-  through the [schema workflow](../development/schema-workflow.md).
+Pin matching reviewed images/artifacts, validate credentials/custody and render
+deployment configuration. Check readiness, authenticated discovery, one permitted
+effect and one denied/revoked effect in the intended topology. An authority outage
+must not create offline permission. See [production setup](../deployment/production.md).
 
-Preserved proposals and archived fixtures are historical evidence. Earlier
-migration or compatibility decisions are superseded by the fresh-build rule.
-Archives do not define current acceptance or supply runtime fallback behavior.
-
-Use [SDK conformance evidence](../../tool-sdk/spec/sdk-compat/README.md),
-[package deployment](../client/package-deployment.md) and
-[installer limitations](../client/installers.md) for their declared current
-runtime boundaries. Pinned conformance does not establish N/N-1 or all-platform
-support.
+Immutable protocol/compatibility fixtures are verification evidence consumed by
+tooling; they are not an advertised runtime compatibility or migration window.
+The [canonical contracts](../../packages/contracts/README.md) and current
+[schema workflow](../development/schema-workflow.md) define source ownership.

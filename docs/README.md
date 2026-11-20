@@ -1,40 +1,33 @@
 # OLO documentation
 
-OLO is in Beta Release. See [production and security status](../README.md#production-and-security-status)
-for current limitations and their open enhancement tickets.
+OLO Orchestration runs configured bots; OLO ToolGate governs their tools,
+devices and runtime access. Start with the guide for the task you are doing.
 
-For this branch's version series and channel, see [version.json](../version.json).
-For available build versions and artifacts, see the [published releases](https://github.com/olo-labs/olo-toolgate/releases).
+| Audience | Start here |
+|---|---|
+| New users | [Published-image Quickstart](../deploy/docker/quickstart/dev/README.md), [first login](getting-started/first-login.md) |
+| Bot authors | [Community help](help/README.md), [examples](../bot/README.md) |
+| Tool authors | [Tool SDK guide](../TOOL-SDK-GUIDE.md), [SDK specifications](../tool-sdk/README.md) |
+| Contributors | [Contributing](../CONTRIBUTING.md), [development setup](development/README.md), [verification](testing/README.md) |
+| Operators | [Deployment](deployment/README.md), [operations](operations/README.md), [recovery](enterprise-access-control/operations.md) |
+| Security reviewers | [Security model](security/README.md), [enterprise evaluation](enterprise-access-control/README.md) |
 
-Start with [OLO community help](help/README.md) for bots, device/model updates
-and observability. OLO Orchestration runs bots; OLO ToolGate governs execution.
+## Current architecture and APIs
 
-Choose the guide for the task you are doing. Current operating instructions live
-with their component, including its supported behavior and current limitations.
-
-| Audience | Start here | Continue with |
-|---|---|---|
-| Users evaluating ToolGate | [Quickstart](getting-started/one-minute-quickstart.md) | [First login](getting-started/first-login.md), [first tool](getting-started/first-tool.md) |
-| Tool authors | [Tool SDK guide](../TOOL-SDK-GUIDE.md) | [Java SDK](../tool-sdk/java-sdk/README.md), [CLI](../tool-sdk/cli/README.md), [examples](../examples/README.md) |
-| Contributors | [Contributing](../CONTRIBUTING.md) | [Development](development/README.md), [testing](testing/README.md) |
-| Enterprise evaluators | [Scope and readiness](enterprise-access-control/README.md) | [Security](security/README.md), [verification](testing/README.md) |
-| Operators | [Deployment](deployment/README.md) | [Operations](operations/README.md), [recovery](enterprise-access-control/operations.md) |
-
-## Component guides
-
-- [Architecture and trust boundaries](architecture/README.md)
-- [Gateway](gateway/README.md)
-- [Control Plane and console](control-plane/README.md)
-- [Endpoint clients](client/README.md)
-- [Tool Host](../apps/tool-host/README.md)
-- [Tool SDK and specification](../tool-sdk/README.md)
-- [APIs and contracts](api/README.md)
-- [Marketplace status](marketplace/README.md)
-
-## Project references
-
-- [Repository layout](architecture/monorepo-layout.md)
-- [Architecture decisions](adr/README.md)
-- [Release process](development/release-process.md)
-- [Documentation contributions](contributors/documentation-guide.md)
+- [Component ownership and repository layout](architecture/component-map.md)
+- [Architecture overview](architecture/overview.md), [data flows](architecture/data-flows.md) and [trust boundaries](architecture/trust-boundaries.md)
+- [Workflow execution](architecture/workflows.md) and [triggers](architecture/triggers.md)
+- [Current contracts and fresh stores](architecture/compatibility.md)
+- [HTTP/MCP API](api/api-reference.md) and [canonical contracts](../packages/contracts/README.md)
+- [Gateway](gateway/README.md), [Control Plane](control-plane/README.md), [devices](client/README.md) and [Tool Host](../apps/tool-host/README.md)
 - [Glossary](GLOSSARY.md)
+
+## Performance, monitoring and demonstrations
+
+- [Performance and capacity](operations/performance.md): configuration, measurements and their limits
+- [Monitoring](help/observability.md): workflow collectors and ToolGate metrics/traces
+- [Images, slideshows and videos](media/README.md): demonstration media and capture scope
+
+Use [unfinished plans](plans/README.md) for remaining work. Current instructions
+and supported behavior belong in component guides, not delivery logs.
+See the [documentation policy](contributors/documentation-guide.md).

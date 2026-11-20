@@ -81,10 +81,10 @@ def package(binary, target, output):
         files[host.name]=host_bytes
     # Ship maintained operator guides; retired runtime stubs and internal module
     # completion reports are not part of the release documentation.
-    for document in ['client/connect.md','client/installers.md','client/server-mcp.md','adr/012-client-mcp-polling-relay.md',
-                     'client/tool-builder.md','adr/011-designated-client-tool-authoring.md','client/package-deployment.md',
-                     'adr/010-signed-fleet-reconciliation.md','client/hotfolder.md','client/local-runtimes.md',
-                     'adr/009-managed-local-runtime-sandbox.md','adr/007-endpoint-enrollment.md','adr/008-hotfolder-builtins.md',
+    for document in ['client/connect.md','client/installers.md','client/server-mcp.md',
+                     'client/tool-builder.md','client/package-deployment.md',
+                     'client/hotfolder.md','client/local-runtimes.md',
+                     'control-plane/device-registry.md','architecture/compatibility.md','security/zero-trust-boundaries.md',
                      'operations/execution-guide.md','operations/debugging.md']:
         files['docs/'+document]=(ROOT/'docs'/document).read_bytes()
     files['packaging/runtime-seccomp.json']=(ROOT/'apps/endpoint-client/packaging/runtime-seccomp.json').read_bytes()

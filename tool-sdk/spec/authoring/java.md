@@ -85,8 +85,8 @@ Generated, typed accessors (from the annotation processor) are added per tool: `
 
 ## Triggers (POLL)
 
-A trigger observes a source and reports events ([ADR 058](../../../docs/adr/058-triggers.md), plan
-[section 5](../../../docs/architecture/device-triggers-plan.md)). This SDK version builds POLL triggers; PUSH mode
+A trigger observes a source and reports events ([Trigger architecture](../../../docs/architecture/triggers.md), plan
+[section 5](../../../docs/plans/triggers.md)). This SDK version builds POLL triggers; PUSH mode
 (`PushTrigger`, the emitter and `SnapshotState`) is refused by the processor until it exists.
 
 ```java

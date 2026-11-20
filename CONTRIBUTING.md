@@ -20,8 +20,8 @@ Discuss large changes in an issue before implementation.
 ## Design and implementation
 
 - Keep authorization, administration and execution responsibilities within the
-  [documented boundaries](ARCHITECTURE.md). Create an [ADR](docs/adr/README.md)
-  before changing trust, cryptography, package formats, persistence or public compatibility.
+  [documented boundaries](ARCHITECTURE.md). Review the design in an issue before changing trust, cryptography, package
+  formats, persistence or public contracts; update the owning current architecture guide.
 - Put cross-component contracts in `packages/contracts/schemas/` and OpenAPI in
   `packages/contracts/openapi/`. Regenerate bindings through the
   [schema workflow](docs/development/schema-workflow.md).

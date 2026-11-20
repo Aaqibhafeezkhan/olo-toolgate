@@ -2,7 +2,7 @@
 
 A device can offer tools one confined folder, its **files area**. The client knows
 nothing about the tools that use it: any signed package tool that declares file
-access goes through the same checks ([ADR 027](../adr/027-one-tool-protocol-device-files.md)).
+access goes through the same checks ([Device files area and the HotFolder package](hotfolder.md)).
 The HotFolder file tools are such a package, `examples.hotfolder`
 ([source](../../examples/java-tools/hotfolder/README.md)), installed like any other
 Marketplace package. There are no built-in tools in the client.

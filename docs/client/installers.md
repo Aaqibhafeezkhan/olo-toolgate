@@ -113,27 +113,4 @@ branding and license information. The interactive Windows installer displays the
 bundled Apache-2.0 license and requires acceptance before installation. Native
 installer silent mode retains the existing administrator automation behavior.
 
-## Windows status, activity and licensing
-
-The tray **Show status** opens a live OLO-branded window. While a tool call, runtime
-preparation or builder test executes, it shows its tool/command name and elapsed
-time. A measured percentage is shown when supplied; commands without measured
-progress use an animated bar. When idle, it shows the last completed, failed or
-interrupted command. Health/catalog polling does not replace that command.
-
-The **Activity log** tab shows the latest 100 device events. The service persists
-these bounded records and last-command state in `activity.json` inside its
-protected state directory (`C:\ProgramData\OLO\ToolGate` on Windows). Events cover
-command start/completion/interruption, service lifecycle, connection transitions
-and check-in failures. Arguments, results, credentials and secrets are excluded.
-The tray reads activity through authenticated local IPC even while execution is
-busy; it does not read the protected file or acquire credentials. A service
-restart marks unfinished commands interrupted, never successful. This local
-rolling diagnostic history supplements the server authorization audit.
-
-**About OLO ToolGate** displays the version returned by the installed client,
-branding and license information. The interactive Windows installer displays the
-bundled Apache-2.0 license and requires acceptance before installation. Native
-installer silent mode retains the existing administrator automation behavior.
-
 Setup verifies discovery v2 over HTTPS before saving the canonical tenant UUID (`tenantId`) and Control origin. A separate signed tenant device CA authenticates enrollment; it is independent of the local TLS bootstrap root. Existing development journal formats are unsupported and are never converted or silently rebound.

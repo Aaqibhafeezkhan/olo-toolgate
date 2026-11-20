@@ -60,7 +60,7 @@ argument that isn't a required string. Grants then use exact actions and a `PREF
 `olo://<tenant>/conversation`; ownership, membership and sharing of each object stay with the memory or RAG service. Tools
 that declare nothing keep `invoke` on `tool://<toolId>`.
 
-## Replays, unknown outcomes and approvals (M5.3–M5.5)
+## Replays, unknown outcomes and approvals
 
 - **Dedup key.** The Gateway names an invocation by tenant, mode, subject, agent and delegation chain plus the caller's key
   (the JSON-RPC `id`, or `Idempotency-Key`). Renewing or rotating a credential keeps the key; Control refreshes the stored

@@ -545,7 +545,7 @@ new enrollments reaching the installation; review/change it afterwards under
 **Configuration > Device**. Profile data cannot grant device authority.
 
 Live Super Admin qualification acknowledges an operator-vetted Linux filesystem
-owner and **unfenced** effects (ADR 075); it is not OS attestation or exactly-once
+owner and **unfenced** effects ([Device files area and the HotFolder package](../../docs/client/hotfolder.md)); it is not OS attestation or exactly-once
 execution. Native intent, durable content evidence and protected scope closure
 are required. Missing/conflicting evidence stays UNKNOWN or needs reconciliation;
 SDK success alone is insufficient. Uncertain effects are never automatically

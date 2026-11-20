@@ -1,11 +1,10 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Emergency kill switch
 
-S22 is in implementation under [ADR 059](../adr/059-scoped-revocation-and-dispatch.md).
-The [live progress record](../security/zero-trust-execution-status.md) distinguishes
-executed checks from remaining joined execution, conformance and timing gates.
-This guide describes the current contracts; it does not accept S22 or phase 3.
-ADR 017 and the preserved execution plan remain the requirements baseline.
+This guide describes the current kill/recovery contracts. Connectivity-class
+timing bounds and full joined crash/partition qualification require the
+[remaining execution-security acceptance](../plans/zero-trust-tool-execution.md).
+A local delivery check does not establish every executor or deployment bound.
 
 Current public contracts are [kill schemas](../../packages/contracts/schemas/v2/kill.schema.json),
 [tenant Control API](../../packages/contracts/openapi/control-v1.yaml) and the

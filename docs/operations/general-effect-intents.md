@@ -1,10 +1,10 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Reviewed route intents and fresh generic effect grants
 
-S18 is in progress. The working implementation covers generic HTTP routes;
-native MCP integration, legacy write migration and complete stage qualification
-are still outstanding. Consult the [authoritative status](../security/zero-trust-execution-status.md)
-before treating this as a delivered stage or an accepted security claim.
+Generic HTTP routes require reviewed request intents and fresh effect grants.
+Use the current [security boundary](../security/zero-trust-boundaries.md) and
+[target-fencing contract](generalized-target-fencing.md) for the declared scope;
+an executor observation is not independent target finality.
 
 In **Server packages → Deploy a version**, review every generic route's effect
 classification and exact request intent. The deployment API accepts the same
@@ -15,8 +15,8 @@ stamps. Reviews are pinned into the immutable service-profile digest. A change
 of the active profile prevents new grants or dispatch under an old profile.
 
 A financial or destructive route requires an explicit acknowledgment that the
-target is unfenced. Exact-consent-required policies fail closed until S19
-provides the exact consent authority. An invocation approval is not exact effect
+target is unfenced. Exact-consent-required policies need the current, independently reviewed
+[effect consent](../control-plane/approvals.md). An invocation approval is not exact effect
 consent. Generic targets cannot be declared as olo-memory or olo-rag; these
 retain the independently verified service-permit and target-consumption path.
 
@@ -25,7 +25,7 @@ For example, a declared POST /send route can be reviewed with:
     {
       "routeId": "send",
       "classification": "FINANCIAL",
-      "consentRequired": false,
+      "consentRequired": true,
       "acknowledgedUnfencedRisk": true,
       "intent": {
         "path": "/send",
@@ -58,9 +58,9 @@ A valid generic request requires original signed admission, a live lease,
 current device/identity/session/grants/authorization epoch, the current pinned
 deployment, and independent intent reconstruction. Control retains the exact
 request manifest and reserves an immutable effect/generation/owner before
-issuing a separately typed signed grant. One operation/route has one effect in
-this stage; duplicates and ambiguous or already sent effects cannot obtain
-another send. S19/S20 provide later deliberate slots and qualified resend.
+issuing a separately typed signed grant. Effect slots and deliberate resend use the current
+[per-effect key and recovery contract](target-deduplicated-recovery.md).
+Duplicates, ambiguous sends and missing target proof never create retry authority.
 
 Immediately before transport the owner must win a fresh AUTHORIZED → SENDING
 transition. A denied, false, malformed, unavailable or lost decision does not
@@ -77,17 +77,10 @@ A generic HTTP success is a broker observation, not a target-owned commit
 receipt or target deduplication guarantee. Lost replies and uncertain effects
 remain subject to the existing conservative operation/reconciliation rules.
 
-## Upgrade boundary
+## Current schema and transport
 
-New profiles may include effectReviews; old profiles parse but supply no
-generic effect authority. Coordinate closed-schema reader upgrades before using
-these fields. Missing review/admission or unsupported transport fails closed.
-The declared bounded generic transport requires Unix sockets. Development
-loopback HTTP remains a fixture transport; actual Control generic grants require
-HTTPS. Configured CA trust or leaf pins preserve HTTPS even when development
-loopback support is enabled.
-
-Flyway/SQLite V8 adds immutable tenant-scoped control_effect_intents with
-capacity accounting; V1–V7 remain unchanged. The unimplemented kill-switch
-specifications move byte-identically from prospective V8 to V9. This renumbering
-does not deliver the kill switch.
+Use matching current profiles, contracts and fresh schemas. Missing review,
+admission or supported transport fails closed; old formats are not converted.
+The bounded generic transport requires the declared private IPC capability and
+verified HTTPS. Development loopback transport is a fixture, not production trust.
+Configured CA roots or verified leaf pins remain mandatory at the protected boundary.

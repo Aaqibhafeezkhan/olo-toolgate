@@ -167,7 +167,7 @@ permit consumption or path custody. A Gateway restart begins with EMPTY in bundl
 mode; it does not load a trusted disk cache. A Helm rollback does not rewind
 database history or policy sequence. Use the
 [bundle recovery procedures](../control-plane/policy-bundles.md) and
-[database upgrade/recovery guide](../control-plane/upgrades.md).
+[database upgrade/recovery guide](../architecture/compatibility.md).
 
 ## Verify a fix
 

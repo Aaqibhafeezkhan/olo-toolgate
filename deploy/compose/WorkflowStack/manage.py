@@ -369,7 +369,7 @@ def deploy(settings,state,compose,build):
         try:verify_deployment(operator,state)
         except ValueError:
             raise ValueError('Saved deployment credentials do not match the current Gateway. '
-                'Run stop.bat --configuration '+settings['id']+' to remove its generated storage, '
+                'Run destroy.bat --configuration '+settings['id']+' to remove its generated storage, '
                 'then start.bat --configuration '+settings['id']+'. This deletes that configuration state/data.') from None
     else:
         provision(operator,settings,state)

@@ -15,15 +15,14 @@ PREFIX = 'TOOLGATE_CONTROL_CACHE_'
 class SharedCacheConfigurationTests(unittest.TestCase):
     def test_quickstart_forwards_all_cache_settings_with_local_default(self):
         properties = (ROOT/'apps/control-plane/src/main/resources/application.properties').read_text()
-        for folder in ('QuickStart', 'QuickStart-WO-Password'):
-            path = ROOT/'deploy/compose'/folder
-            environment = yaml.safe_load((path/'compose.yaml').read_text())['services']['quickstart']['environment']
-            self.assertEqual(environment[PREFIX+'MODE'], '${TOOLGATE_CONTROL_CACHE_MODE:-local}')
-            for name in ('HOST', 'PORT', 'TLS', 'USERNAME', 'NAMESPACE', 'PASSWORD_PATH',
-                         'ENCRYPTION_KEY_PATH', 'CA_PATH', 'TIMEOUT_MS', 'TTL_SECONDS'):
-                self.assertTrue(environment[PREFIX+name].startswith('${'+PREFIX+name+':-'))
-                self.assertIn(PREFIX+name, properties)
-                self.assertIn(PREFIX+name+'=', (path/'.env.example').read_text())
+        path = ROOT/'deploy/compose/QuickStart'
+        environment = yaml.safe_load((path/'compose.yaml').read_text())['services']['quickstart']['environment']
+        self.assertEqual(environment[PREFIX+'MODE'], '${TOOLGATE_CONTROL_CACHE_MODE:-local}')
+        for name in ('HOST', 'PORT', 'TLS', 'USERNAME', 'NAMESPACE', 'PASSWORD_PATH',
+                     'ENCRYPTION_KEY_PATH', 'CA_PATH', 'TIMEOUT_MS', 'TTL_SECONDS'):
+            self.assertTrue(environment[PREFIX+name].startswith('${'+PREFIX+name+':-'))
+            self.assertIn(PREFIX+name, properties)
+            self.assertIn(PREFIX+name+'=', (path/'.env.example').read_text())
 
     def test_production_compose_loads_optional_file_and_reuses_protected_mount(self):
         folder = ROOT/'deploy/compose/GatewayControl'

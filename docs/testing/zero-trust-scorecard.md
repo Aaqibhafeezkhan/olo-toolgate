@@ -62,4 +62,4 @@ revision/deployment-bound case and claim evidence; that integration remains
 outstanding. Hosted workflow execution has not been established by a local run.
 
 See the [adopted security model](../security/zero-trust-boundaries.md) and
-[live stage/claim inventory](../security/zero-trust-execution-status.md).
+[live stage/claim inventory](../security/zero-trust-boundaries.md).

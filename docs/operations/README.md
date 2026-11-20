@@ -13,7 +13,7 @@ permission to execute.
 | Prepare external services and TLS | [Production deployment](../deployment/production.md) |
 | Monitor authority, decisions and device adoption | [Enterprise operations](../enterprise-access-control/operations.md) |
 | Back up and recover current-format state | [Reviewed recovery](../enterprise-access-control/operations.md) and [Quickstart persistence](../deployment/quickstart.md) |
-| Deploy matching current Control and Gateway | [Fresh Control initialization](../control-plane/upgrades.md), [Gateway upgrades](../gateway/upgrades.md) |
+| Deploy matching current Control and Gateway | [Fresh Control initialization](../architecture/compatibility.md), [Gateway upgrades](../architecture/compatibility.md) |
 | Deploy or roll back client packages | [Package lifecycle](../client/package-deployment.md) |
 | Manage key custody | [Keys and credentials](../security/key-management.md) |
 

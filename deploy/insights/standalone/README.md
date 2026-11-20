@@ -17,16 +17,7 @@ The root request, authorization, dispatch, and execution spans constitute the
 instrumented call path. Method-level, database, or external-call spans require
 corresponding instrumentation and a use case that makes those calls.
 
-Validation on 29 October 2026:
-
-- All three resolved Compose configurations passed and contained no external network.
-- New Relic and Prometheus started with their own fresh QuickStart/device volumes.
-- Their devices enrolled and reached ACTIVE with accepted check-ins.
-- Real success cases returned 200 and invalid-token cases returned the expected 401.
-- Repeated bootstrap and credential renewal passed after existing data was retained.
-- New Relic UI displayed four-span Hello World call traces; captures are in
-  `docs/media/screenshots/newrelic-*-full.jpg`.
-- Prometheus ingested real `toolgate_insights_calls` metrics for its own service.
-- Grafana's provisioned Tempo data source returned real stored call traces.
-- Datadog's shared runtime configuration passed validation; vendor delivery was
-  not tested because no Datadog API key is configured locally.
+Validate the resolved vendor stack, enroll its device and run its allowed and
+denied Hello World cases. Verify delivery at the actual monitoring destination.
+A shared Compose definition or previous smoke test is not qualification of the
+images and credentials selected for a new deployment.

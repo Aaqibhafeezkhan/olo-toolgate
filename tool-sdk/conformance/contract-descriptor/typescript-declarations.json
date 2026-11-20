@@ -4,7 +4,7 @@
   "area": "typescript-declarations",
   "title": "TypeScript declaration analysis",
   "sources": [
-    "tool-sdk/spec/authoring/typescript.md",
+    "docs/plans/sdk-typescript.md",
     "tool-sdk/spec/descriptor/README.md §5"
   ],
   "cases": [

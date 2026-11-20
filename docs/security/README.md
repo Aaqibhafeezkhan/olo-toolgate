@@ -12,7 +12,7 @@ consent are still pending; admission is not permission for arbitrary later effec
 ## Review the model
 
 - [Zero Trust Execution boundaries, A1–A9 threats and C1–C8 claims](zero-trust-boundaries.md)
-- [Live implementation and qualification scope](zero-trust-execution-status.md)
+- [Live implementation and qualification scope](zero-trust-boundaries.md)
 - [Zero Trust diagnostic scorecard](../testing/zero-trust-scorecard.md)
 - [Security invariants](security-invariants.md)
 - [Enterprise access control](enterprise-access-control.md) and [user roles](user-roles.md)
@@ -33,7 +33,7 @@ private custody. Preserve audit, nonce and retirement history during recovery.
 Quickstart has local encrypted custody. Production requires separately provisioned
 identity and keys; a planned vault adapter is not an available integration.
 See [production setup](../deployment/production.md),
-[release supply-chain checks](../development/release-process.md) and
+[release supply-chain checks](../development/how-to-release.md) and
 [incident/recovery guides](../operations/README.md).
 
 Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md).

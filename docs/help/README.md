@@ -7,7 +7,7 @@ repository, image and API names still use `olo-toolgate`.
 
 | Task | Guide |
 |---|---|
-| Start from published images, once available | [Docker Quickstart dev](../../deploy/docker/quickstart/dev/README.md) |
+| Start from published images | [Docker Quickstart dev](../../deploy/docker/quickstart/dev/README.md) |
 | Start the local installation | [Profiled Quickstart](../../debug/profiled/README.md) |
 | Import, publish, run or switch | [Run bots](run-bots.md) |
 | Approve a device, change folders or install packages | [Device setup and updates](device.md) |
@@ -20,5 +20,5 @@ repository, image and API names still use `olo-toolgate`.
 Start blank, prepare the installation's model/device, then import one `.olo`.
 Credentials, real device membership, model weights and filesystem permissions
 belong to that installation. Importing a bot never creates, removes or moves
-input files. See [implementation evidence and limits](../architecture/workflow-v1-status.md);
+input files. See [workflow architecture and limits](../architecture/workflows.md);
 a successful bundle build alone does not demonstrate an executable deployment.

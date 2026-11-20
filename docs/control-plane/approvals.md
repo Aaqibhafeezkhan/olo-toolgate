@@ -15,7 +15,7 @@ it does not sign permits or authorize from a policy snapshot.
 3. Review authority comes from current enabled directory membership, Management
    Roles and the policy's reviewer Teams. Scoped reviewers cannot approve their
    own operation. Super Admin has the explicit audited
-   [self-review exception](../adr/022-super-administrator-review-exception.md).
+   [self-review exception](../security/user-roles.md).
 4. Approval does not freeze permission. Control rechecks authority before permit
    reservation, online single-use consumption, protected effects and result access.
 5. The executor verifies the exact permit binding and current execution gates.

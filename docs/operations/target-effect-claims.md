@@ -51,8 +51,8 @@ publication. It returns HTTP 409 status for duplicates without a mutation.
 Fresh schema initialization, forced tenant RLS, immutable-binding/transition guards and
 restricted runtime privileges are required; missing or unsafe schema fails
 target startup. Follow the target component's deployment guide. See
-[ADR 042](../adr/042-shared-target-claims.md) and the
-[live status](../security/zero-trust-execution-status.md).
+[Shared target effect claims](target-effect-claims.md) and the
+[current scope](../security/zero-trust-boundaries.md).
 
 
 ## Recovery and delivery

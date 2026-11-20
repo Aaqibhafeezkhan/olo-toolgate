@@ -62,6 +62,10 @@ class ReleaseDocumentsTests(unittest.TestCase):
                     archive=zipfile.ZipFile(path) if path.suffix=='.zip' else tarfile.open(path)
                     with archive:
                         for name in ('LICENSE','NOTICE.md','RELEASE-NOTES.md',
-                                     'docs/client/local-runtimes.md','docs/client/installers.md'):
+                                     'docs/client/local-runtimes.md','docs/client/installers.md',
+                                     'docs/control-plane/device-registry.md','docs/architecture/compatibility.md',
+                                     'docs/security/zero-trust-boundaries.md'):
                             data=archive.read(name) if path.suffix=='.zip' else archive.extractfile(name).read()
                             self.assertEqual(data,(package.ROOT/name).read_bytes())
+                        names=archive.namelist() if path.suffix=='.zip' else archive.getnames()
+                        self.assertFalse(any(name.startswith('docs/adr/') for name in names))

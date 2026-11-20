@@ -11,7 +11,7 @@ HTTP, verified identity and persistence adapters provide the runtime integration
 
 First initialization applies the complete V1 schema once (PostgreSQL Flyway or
 Quickstart SQLite). Pre-release database histories are unsupported; initialize a
-new empty database or data directory. See the [database initialization guide](../../docs/control-plane/upgrades.md).
+new empty database or data directory. See the [database initialization guide](../../docs/architecture/compatibility.md).
 
 Run `python tools/control/check.py` for module verification and
 `python tools/control/container.py` for the production-image checks.
@@ -19,7 +19,7 @@ Run `python tools/control/check.py` for module verification and
 - [Configuration](../../docs/control-plane/configuration.md)
 - [API](../../docs/api/control-plane-api.md)
 - [Administration and approvals](../../docs/control-plane/README.md)
-- [Upgrade and recovery](../../docs/control-plane/upgrades.md)
+- [Upgrade and recovery](../../docs/architecture/compatibility.md)
 - [Managed package deployment](../../docs/client/package-deployment.md)
 - [Designated-client tool builder](../../docs/client/tool-builder.md)
 - [Server Tool Host](../tool-host/README.md)

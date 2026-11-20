@@ -1,18 +1,24 @@
 # First login
 
-Quickstart provisions separate local `admin`, `reviewer-1` and `reviewer-2`
-management identities. Retrieve their generated passwords privately from the
-container's `/data/credentials.json` or `/data/bootstrap-password*` files.
-There is no universal default password, and passwords are not service-log output.
+The [community Quickstart](../../deploy/docker/quickstart/dev/README.md) starts
+with one human `admin` account and no imported bot. Open
+http://127.0.0.1:18090/console/ and read its private generated login files under
+`deploy/docker/quickstart/dev/credentials/admin/`:
 
-Sign in at the configured console URL. A first-login password change is not
-mandatory; eligible accounts may change their password at login. Demo accounts
-explicitly shown on the login page follow the configured demo policy.
+```powershell
+Get-Content .\credentials\admin\username.txt
+Get-Content .\credentials\admin\password.txt
+```
 
-Management access does not grant tool execution. Fresh Tools and the local Agent
-start disabled; protected default groups grant no runtime access. Configure
-enablement, complete grants and execution bindings before trying a tool.
+Run those commands from the launcher directory. There is no universal password.
+Do not attach credentials to issues or logs. Normal restarts preserve the account;
+follow the deployment's credential-reconciliation instructions after a password change.
 
-See [Quickstart configuration](../deployment/quickstart.md) for initialization,
-the protected setup administrator, demo accounts and credential rotation, or
-[production preparation](../deployment/production.md) for external identity.
+Import a bot and configure its model credentials, owned device enrollment and
+group requirements. Management access does not grant tool execution. Review
+fingerprints, enable intended identities, and configure complete grants and
+execution bindings before invoking tools.
+
+The separate [ToolGate-only Quickstart](../../deploy/compose/QuickStart/README.md)
+can create multiple local management identities; its credential paths and login
+options differ. Production uses [external identity](../deployment/production.md).

@@ -42,4 +42,4 @@ Application source must import the same public package identity it would use aft
 
 All language artifacts for one contract set share the same SemVer.
 
-Read [[shared-contracts](../../docs/architecture/shared-contracts.md)](../../docs/architecture/shared-contracts.md).
+Read [[shared-contracts](../../docs/development/schema-workflow.md)](../../docs/architecture/shared-contracts.md).

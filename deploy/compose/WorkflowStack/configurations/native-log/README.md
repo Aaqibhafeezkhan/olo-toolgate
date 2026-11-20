@@ -1,5 +1,5 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Native graph: managed-log summary (Phase 1)
+# Native graph: managed-log summary
 
 This configuration uses the independent `examples.native-summary` Python graph
 installed read-only under `graphs/`. The JSON graph config selects `log-diagnoser`.
@@ -29,6 +29,7 @@ controls the selected native factory. Model/prompt/tool authority remains in the
 published workflow/agent configuration and current ToolGate grants.
 
 Stop this stack before switching to `native-hotfolder` if running one model at
-a time. `stop.bat` removes the selected stack and storage. Native checkpoints,
-interrupt resume, arbitrary tenant code upload and automatic effect retry belong
-to Phase 2; this demo does not implement or claim those capabilities.
+a time. `stop.bat --configuration native-log` preserves storage; use
+`destroy.bat --configuration native-log` to remove this stack and its storage.
+Native checkpoints,
+interrupt resume, arbitrary tenant code upload and automatic effect retry are not implemented by this example; see the current runtime guide.

@@ -38,4 +38,4 @@ Runtime binds loopback unless `trustedTlsProxy=true`. This flag asserts a deploy
 
 Ingress capacity limits are independent of durable group execution budgets. Control evaluates current authority immediately before protected effects. Permits last at most ten seconds, have zero clock grace, are purpose-bound and single-use. Cached discovery creates no execution right. Readiness polls authenticated current Core authority every five seconds; an outage removes readiness and blocks new effects.
 
-See the [operator runbook](../enterprise-access-control/operations.md), [MCP API](../api/gateway-api.md), and [deployment guide](deployment.md).
+See the [operator runbook](../enterprise-access-control/operations.md), [MCP API](../api/gateway-api.md), and [deployment guide](../deployment/production.md).

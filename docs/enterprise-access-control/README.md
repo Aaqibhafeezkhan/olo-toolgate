@@ -13,7 +13,7 @@ execution, availability and recovery requirements before adopting it.
 - Device enrollment binds a reviewed identity/key. Connection approval,
   enablement, runtime grants and resource checks are separate prerequisites.
 - Scoped administrators use independent review. Super Admin has an explicit,
-  audited [management and self-review exception](../adr/022-super-administrator-review-exception.md);
+  audited [management and self-review exception](../security/user-roles.md);
   it does not bypass runtime grants or policy obligations.
 - Permits are short-lived and consumed once. Unknown external outcomes are fenced;
   this is not an exactly-once guarantee for downstream effects.

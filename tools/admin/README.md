@@ -101,7 +101,7 @@ review, live device readiness and runtime capability checks.
 This generic client **does not yet orchestrate `.olo` import to activation** or
 automatically apply referenced configuration/restore connections. It does not
 accept `.olo` as an `.olotool` package. That durable orchestration remains open
-in the [hot-swap plan](../../docs/plans/workflow-profile-hot-swap.md). No script
+in the [hot-swap plan](../../docs/plans/workflows.md). No script
 success should be interpreted as a runnable workflow or end-to-end acceptance.
 
 ## Automated device policy and allocation

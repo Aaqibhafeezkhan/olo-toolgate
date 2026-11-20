@@ -115,4 +115,4 @@ E2E, and collects asset checksums and a production npm CycloneDX SBOM. Existing
 GHCR Control and OCI chart naming apply. Quickstart packaging reuses these
 assets and origin and supplies local identity bootstrap and routing. See
 [developer commands](../../apps/admin-ui/README.md)
-and [ADR 004](../adr/004-embedded-admin-console.md).
+and [Admin UI](admin-ui.md).

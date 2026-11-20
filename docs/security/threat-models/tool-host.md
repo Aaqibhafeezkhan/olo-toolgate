@@ -4,7 +4,7 @@
 
 The [A1–A9 attacker matrix and C1–C8 requirements](../zero-trust-boundaries.md)
 extend this model; E1–E7 identifiers below are preserved. The
-[live inventory](../zero-trust-execution-status.md#security-claim-inventory)
+[current security scope](../zero-trust-boundaries.md)
 records available scope and executed evidence. The architecture diagram and
 mitigation tables below describe the required design, not a passing release
 scorecard. A named D3 case is not evidence that it has executed.
@@ -21,7 +21,7 @@ target deduplication or production revocation SLOs.
 
 This is the reviewed threat model behind design gate D2. It covers the server-side execution path of platform-requirements.md §11 and §13: the Tool Host supervisor, its sandboxes, the request broker, the egress proxy, the release-1 transport matrix, the Tool Host's workload identity, and secret delivery to server tools.
 
-It extends the platform [threat model](../threat-model.md) and does not repeat it. Client tools keep their existing model in [endpoint enforcement](../endpoint-enforcement.md). Decisions made here are recorded in ADR 013. Each threat names required D3 coverage in its last column; consult the live inventory for executed cases and remaining work.
+It extends the platform [threat model](../threat-model.md) and does not repeat it. Client tools keep their existing model in [endpoint enforcement](../endpoint-enforcement.md). Decisions made here are recorded in [Tool Host](../../../apps/tool-host/README.md). Each threat names required D3 coverage in its last column; use current component checks and the unfinished security plan for qualification.
 
 ## 1. System and trust boundaries
 
@@ -50,7 +50,7 @@ It extends the platform [threat model](../threat-model.md) and does not repeat i
 | B1 | Gateway → Tool Host | Permit, canonical arguments, progress, results | Both are ToolGate components. Neither trusts the other's authority: the Tool Host trusts only Control's signature on the permit. |
 | B2 | Supervisor → sandbox | stdin `ToolInput` v2 and `BROKER_RESPONSE` lines, frames on stdout | The sandbox runs **untrusted** code: the published package, and anything it was tricked into running. |
 | B3 | Tool Host → Control | Nonce consumption, lease, secrets, results | Control is the authority. The Tool Host is trusted to enforce what Control decides, nothing more. |
-| B4 | Sandbox → broker | `BROKER_REQUEST` frames on the invocation's stdout: `ROUTE_CALL` (route-selected HTTP requests) and `SECRET_REDEEM` (handle redemption, only for `CREDENTIALS_IN_SANDBOX` tools) | The broker trusts the invocation whose process it reads, never request content ([ADR 027](../../adr/027-one-tool-protocol-device-files.md)). |
+| B4 | Sandbox → broker | `BROKER_REQUEST` frames on the invocation's stdout: `ROUTE_CALL` (route-selected HTTP requests) and `SECRET_REDEEM` (handle redemption, only for `CREDENTIALS_IN_SANDBOX` tools) | The broker trusts the invocation whose process it reads, never request content ([Device files area and the HotFolder package](../../client/hotfolder.md)). |
 | B6 | Broker or proxy → upstream | TLS to an approved destination | The upstream is outside ToolGate. It may be malicious or compromised. |
 
 ## 2. Assets
@@ -83,7 +83,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 
 | Id | Threat (adversary) | Mitigation | Residual risk | D3 case |
 |---|---|---|---|---|
-| T-AD-1 | Forged or altered permit (E5, E4) | Control signs every permit (RS256, `typ: toolgate-invocation-permit+jws`, pinned `kid` set; ADR 013). The Tool Host verifies the signature, `aud` = its own host id, the window, and every digest against what it will execute (platform-requirements.md §11.3). | Theft of Control's effect key, which is out of scope here and covered in [key management](../key-management.md) | `admission/forged-permit`, `admission/wrong-aud` |
+| T-AD-1 | Forged or altered permit (E5, E4) | Control signs every permit (RS256, `typ: toolgate-invocation-permit+jws`, pinned `kid` set; [Tool Host](../../../apps/tool-host/README.md)). The Tool Host verifies the signature, `aud` = its own host id, the window, and every digest against what it will execute (platform-requirements.md §11.3). | Theft of Control's effect key, which is out of scope here and covered in [key management](../key-management.md) | `admission/forged-permit`, `admission/wrong-aud` |
 | T-AD-2 | Replay of a valid permit on the same or another host (E5) | Per-host `jti` cache; `aud` binding; Control consumes the single-use nonce in `RESERVED → EXECUTING` ([invocation-state-v2.md](../../control-plane/invocation-state-v2.md) T5). The `exp` window is seconds long. | Single-use admission is not external-effect deduplication. Ambiguous operations/effects remain fenced; generalized target-deduplicated resend is pending. | `admission/replay-same-host`, `admission/replay-other-host` |
 | T-AD-3 | Gateway swaps the arguments or the package after the permit (E5) | The permit binds the canonical arguments digest, `toolDescriptorDigest`, package, artifact, runtime, globals, service profile and deployment binding digests. The host recomputes the arguments digest and refuses a mismatch. | None | `admission/args-swap`, `admission/digest-swap` |
 | T-AD-4 | Double execution of a non-idempotent tool after an ambiguous dispatch (E4 drops packets) | Ledger CAS before `ADMITTED`. The Gateway never retries elsewhere after a send without an answer, and asks Control instead (platform-requirements.md §11.4). | External effect duplication by the upstream itself. That is out of ToolGate's control and stated in platform-requirements.md §11.7. | `ledger/ambiguous-dispatch`, `ledger/crash-after-admitted` |
@@ -94,7 +94,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 
 | Id | Threat | Mitigation | Residual risk | D3 case |
 |---|---|---|---|---|
-| T-SB-1 | Sandbox escape to the node (E1) | `OCI_SANDBOX` tier: the ADR 009 boundary (user namespace, no capabilities, seccomp default-deny, read-only root, no host mounts, invocation-owned stdio broker channel), plus cgroup limits from §13.5. There is never a fallback to a weaker tier (platform-requirements.md §13.4). | Kernel zero-days. Operators may choose a VM-backed runtime class for sensitive pools. | `sandbox/escape-probes` (the existing ADR 009 suite run on the Tool Host) |
+| T-SB-1 | Sandbox escape to the node (E1) | `OCI_SANDBOX` tier: the [Managed local tool runtimes](../../client/local-runtimes.md) boundary (user namespace, no capabilities, seccomp default-deny, read-only root, no host mounts, invocation-owned stdio broker channel), plus cgroup limits from §13.5. There is never a fallback to a weaker tier (platform-requirements.md §13.4). | Kernel zero-days. Operators may choose a VM-backed runtime class for sensitive pools. | `sandbox/escape-probes` (the existing [Managed local tool runtimes](../../client/local-runtimes.md) suite run on the Tool Host) |
 | T-SB-2 | Cross-invocation leakage through a reused sandbox (E1) | Single-use by default. Reuse only for `stateless` tools, within one tenant and identity class, capped by count and age. Secrets are never cached, and scratch space is wiped (platform-requirements.md §11.5). | Side channels within a reuse pool of the same identity, which is accepted | `sandbox/reuse-isolation` |
 | T-SB-3 | Cross-tenant pool sharing (E7) | Pools are keyed by tenant and never shared. The supervisor refuses a permit whose tenant isn't the pool's. | None | `sandbox/cross-tenant-permit` |
 | T-SB-4 | Malformed or oversized frames crash or confuse the supervisor (E1) | Strict frame schema (`protocol.schema.json`), byte and count caps, and unknown fields rejected. The supervisor is Rust and parses before acting. | Supervisor parser bugs, covered by fuzzing in M2 | `protocol/frame-fuzz`, `protocol/oversize` |
@@ -124,7 +124,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 
 ### 4.5 Tool Host workload identity (B1, B3)
 
-**Design (ADR 013):**
+**Design ([Tool Host](../../../apps/tool-host/README.md)):**
 - **Certificate:** each Tool Host has an X.509 workload certificate from the operator's workload CA (for example cert-manager or SPIFFE), lifetime at most 24 hours, with URI SAN `spiffe://<trust-domain>/toolgate/tool-host/<tenantId>/<poolId>/<hostId>`. The Gateway's certificate uses `…/toolgate/gateway/<id>`.
 - **Pinning:** Control pins the workload CA bundle and trust domain in configuration, separately from the device enrollment CA. A device certificate can never act as a Tool Host, and a Tool Host certificate can never act as a device.
 - **Registration:** `POST tool-hosts/registrations` binds `hostId` and `poolId` to the certificate's SAN. Control refuses a pool that doesn't exist, belongs to another tenant, or isn't a `TOOL_HOST` executor pool.
@@ -138,7 +138,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 
 ### 4.6 Secret delivery (B3, B5)
 
-**Design (ADR 013):**
+**Design ([Tool Host](../../../apps/tool-host/README.md)):**
 - **Handles:** `ToolInput.secrets[]` carries handles, never values. A handle is opaque and bound by Control to `(tenant, invocationId, secret name, tool group, pool)`.
 - **Redemption:** the extended `POST access/secrets/deliver` with the Tool Host certificate and the fencing token. Control checks `EXECUTING`, the token, the lease holder, the current epoch and grants, as it does for devices today (`EnterpriseOperations.secretAuthority`).
 - **Brokered credentials** are redeemed by the broker and held only in its memory for that invocation.
@@ -155,7 +155,7 @@ Each row gives the mitigation as designed (with the plan section), what remains,
 
 ## 5. Decisions this model forces
 
-All recorded in ADR 013:
+All recorded in [Tool Host](../../../apps/tool-host/README.md):
 1. Control, not the Gateway, signs permits. A compromised Gateway (E5) holds no key that authorises execution.
 2. The Gateway holds no signing or MAC key at all. In governed mode, `requestState` is minted and verified by Control.
 3. Tool Host and Gateway identities come from a workload CA pinned separately from device enrollment.
@@ -179,4 +179,4 @@ All recorded in ADR 013:
   those components invalidates their corresponding guarantees. Audit durability
   does not yet detect rewriting by the Control database owner.
 - A Gateway has no signing key but still has the OLO HUMAN-context residual
-  documented in the [OLO integration model](olo-integration.md#5-gaps-against-current-code).
+  documented in the [OLO integration model](olo-integration.md#5-integration-boundaries).

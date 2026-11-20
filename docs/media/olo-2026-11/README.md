@@ -35,7 +35,7 @@ successful configuration explicitly enables it.
 and [refreshed old-path aliases](aliases.json) provide provenance. The manifest
 uses each saved file's UTC capture-write time. GIF captions/scaling are generated;
 linked JPEG originals remain unchanged. Earlier PNG and retired approval/native
-client/Operator views are [historical](../HISTORICAL.md).
+additional client/Operator views are indexed in the [media guide](../README.md).
 
 To repeat: build/import this bot, configure local models using its README,
 publish, paste its exact incident input and follow both agents in Run. Capture

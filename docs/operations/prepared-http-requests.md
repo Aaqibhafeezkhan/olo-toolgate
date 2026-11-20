@@ -43,8 +43,8 @@ part of the full phase-3 acceptance suite, not established by that TCP test.
 Existing routes that let tools set broker-owned headers must remove those
 allowances. Content-type parameter normalization may change cosmetic header
 formatting; target semantics such as boundary case are preserved. See
-[ADR 037](../adr/037-prepared-http-request-binding.md) and the
-[live progress document](../security/zero-trust-execution-status.md).
+[Prepared broker HTTP requests](prepared-http-requests.md) and the
+[current security scope](../security/zero-trust-boundaries.md).
 
 The qualified broker transport explicitly uses HTTP/1.1. HTTP/2 targets must
 also support HTTP/1.1; an HTTP/2-only target is unsupported. This prevents a

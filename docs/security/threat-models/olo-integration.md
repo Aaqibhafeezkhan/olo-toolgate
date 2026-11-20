@@ -3,9 +3,9 @@
 **Status: adopted threat model; scoped implementation, full acceptance pending.** This model describes ToolGate's side of the OLO integration
 contracts (olo-labs/olo-mono `docs/toolgate-integration/m2`). User credentials, the reserved service principal,
 wildcard refusal and the executor principal are implemented (see
-[OLO user credentials](../../control-plane/olo-user-credentials.md)). Section 5 retains historical integration evidence and remaining gaps.
+[OLO user credentials](../../control-plane/olo-user-credentials.md)). Section 5 states the current integration boundaries and residual risk.
 The [A1–A9 matrix and C1–C8 requirements](../zero-trust-boundaries.md) apply.
-The [live inventory](../zero-trust-execution-status.md#security-claim-inventory)
+The [current security scope](../zero-trust-boundaries.md)
 controls current qualification. Mitigation rows below are requirements, not
 blanket claims of available deployment guarantees.
 
@@ -111,27 +111,22 @@ This model extends the platform [threat model](../threat-model.md) and the
 |---|---|---|---|---|
 | T-OA-1 | An effect can't be attributed to a user and actor | Audit records hold subject, actor, workload, resource, operation, decision, policy version and invocation correlation as separate fields | None once implemented | `olo/audit-fields` |
 
-## 5. Gaps against current code
+## 5. Integration boundaries
 
-Each item is evidence from the source, and none is a design claim. Details are in olo-mono
-`docs/toolgate-integration/m2/gap-matrix.md`.
+Control-issued user credentials, scoped token exchange, protected service agents,
+resource extraction and current group grants constrain OLO requests. The Gateway
+and downstream service must each verify the authenticated context appropriate to
+their boundary. See [user credentials](../../control-plane/olo-user-credentials.md)
+and [downstream permits](../../control-plane/olo-service-permits.md).
 
-| Needed by | Gap | Current code |
-|---|---|---|
-| T-OI-1, T-OI-3 | ~~No user-bound Gateway credential~~ **Closed** | The Gateway verifies Control-issued `toolgate-user-credential+jws` (pinned kid, RS256, at most 300 s) as a `HUMAN` `JWT` context (`apps/gateway/src/user_credential.rs`). Control accepts `HUMAN` submissions only with that issuer and a credential digest, then checks the identity binding's session epoch. |
-| T-OI-2 | ~~No token-issuance endpoint for OLO~~ **Closed** | `POST /api/control/v1/oauth/token-exchange` (RFC 8693) and `/oauth/sessions/revoke`, role `toolgate-olo-token-exchange` (`UserCredentialResource`). The worker has no such role. |
-| T-OI-4 | ~~No reserved, non-delegable service principal~~ **Closed** | `toolgate.control.olo.reserved-agents`: such agents have only `SERVICE` workload bindings, and `DELEGATED` submissions naming them as agent or chain hop are refused (`OloProtections`). |
-| T-OR-1 | ~~Resource extraction for package tools~~ **Closed** | Package tools declare an action and locator templates; Control builds `olo://{verified tenant}/…` resources from opaque-id arguments, so a substituted id stays in its tenant and kind, and the service checks ownership. |
-| T-OR-3 | ~~Wildcard grants~~ **Closed** | `toolgate.control.olo.protected-tool-groups` refuses `allActions` and `match: ANY` in grants and delegations reaching those groups, including through the tool-group wildcard. |
-| T-OS-1 – T-OS-5 | **Implemented and locally qualified (M4.5–M4.6)** | Control-derived downstream permits, Tool Host key-bound mTLS, service request verification, single-use online write consumption, authenticated tenant epoch snapshots, and credential-deadline caps. See [service bridge qualification](../../control-plane/olo-service-permits.md). Actual memory/RAG TLS/vector/PostgreSQL qualification now includes shared claims, JVM replica/crash cases and real Control/Gateway development-stack outcome settlement. These results do not establish production network policy, full stack crash/partition handling or the general roadmap. |
-| T-OE-1, T-OE-2 | ~~Conflict on a fingerprint mismatch, and atomic create~~ **Closed** | The dedup key is tenant, mode, subject, agent and chain plus the caller's key; credential digests, epochs and expiry are not part of it, nor of the request fingerprint, so renewal and rotation replay the same invocation, with the current epochs rechecked. A changed fingerprint is a 409 and never runs; concurrent submissions insert one invocation and the others get it. Invocations are never purged, which exceeds the 37-day minimum; a future purge must keep tombstones. |
-| T-OA-1 | ~~Audit fields~~ **Closed** | Invocation audit rows carry `ControlAuditEvidence` (subject, actor, chain, workload, tool, operation, resources, decision, state, authorization epoch, policy revision), and the Tool Host admission record the same identity facts. |
-| Executor context | ~~The SDK `Invocation` has no tenant or resource~~ **Closed** | The Tool Host passes the permit's principal as the reserved `toolgate` claim. The Java and Python SDKs expose tenant, user, agent, chain, operation and resources, and `requireUser()` / `require_user()` refuse without a verified user, including standalone runs. The session epoch stays with Control. |
-| Delegated users | ~~Fixed-user delegated bindings~~ **Closed** | On-behalf-of bindings: the user credential plus the agent's workload token (`X-ToolGate-Actor-Credential`) form a `DELEGATED` context, accepted only from the trusted issuer, and still need both the user's and the agent's grants. |
+Bound writes additionally use independently reviewed route manifests, exact HTTP
+facts, online consumption and target-owned claims/outcomes. A component or local
+stack pass does not qualify production network policy, complete crash/partition
+behavior or arbitrary target finality.
 
-Residual risk added by user credentials: a compromised Gateway can present any `HUMAN` context for its tenant.
-Control still requires the configured issuer, an enabled user, a current identity binding and team grants. A
-registry of issued credential digests would remove the residual and is a follow-up.
+A compromised Gateway's HUMAN-context trust residual is not removed merely by
+permit signing. Sender-constrained credentials and stronger issuance binding
+belong to the [remaining security work](../../plans/zero-trust-tool-execution.md).
 
 ## 6. Conformance
 
@@ -139,7 +134,7 @@ The `olo/*` names above identify required integration coverage, not a
 passing scorecard. Existing bridge tests, actual memory/RAG component TLS/vector
 tests and the owned real Control/Gateway development fixture cover different
 scopes. See [verification](../../testing/README.md#actual-knowledge-target-qualification)
-and the live inventory for source-bound evidence. Complete partition/crash
+and the declared qualification scope. Complete partition/crash
 qualification, production connectivity-class SLOs and deployment network policy
 remain outstanding.
 

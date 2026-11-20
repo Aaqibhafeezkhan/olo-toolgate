@@ -3,7 +3,7 @@
 This compact index connects stable requirement IDs in conformance fixtures to the
 maintained specifications. It replaces the obsolete SDK planning narrative; the
 IDs remain stable so test intent stays traceable. The referenced specification,
-its current ADR amendments and the case's explicit assertions define the behavior.
+the owning current implementation and the case's explicit assertions define the behavior.
 An ID or an authored case does not establish implementation or a passing test.
 
 Use the [component guides](../README.md) for supported behavior, limitations and
@@ -14,8 +14,9 @@ inferred available from the requirement descriptions below.
 Source citations use this file name and the numeric IDs below. Multiple-ID
 citations resolve each ID independently; broader IDs such as §12 refer to the
 corresponding family's maintained sources.
-Historical database migrations retain their original `plan.md` citations to
-preserve migration checksums; those numeric IDs resolve through this index too.
+Immutable schema source comments can retain numeric requirement citations to
+preserve checksums. These IDs resolve through this current index; they do not
+define a migration or older-store support path.
 
 ## Requirement index
 
@@ -32,30 +33,30 @@ preserve migration checksums; those numeric IDs resolve through this index too.
 | §5.8 | [Mode equivalence and capability matrix](../../tool-sdk/spec/runtime-modes.md) |
 | §5.9 | [Verified standalone identity](../../tool-sdk/spec/runtime-modes.md) |
 | §5.10 | [Official SDK adapters A1–A5; pinned compatibility evidence](../../tool-sdk/spec/protocol-layer.md) |
-| §7 | [Package format and release trust](../adr/014-tool-package-format-v2.md) |
+| §7 | [Package format and release trust](../../tool-sdk/spec/descriptor/README.md) |
 | §7.2 | [Descriptor/artifact/package identity](../../tool-sdk/spec/descriptor/README.md) |
 | §7.3 | [Semantic descriptor format](../../tool-sdk/spec/descriptor/README.md) |
 | §7.4 | [Runtime artifact and launcher boundary](../../apps/tool-host/README.md) |
 | §7.6 | [Archive validation and packing rules](../../tool-sdk/cli/README.md) |
 | §7.7 | [Library composition and narrowing mappings](../../tool-sdk/spec/composition.md) |
-| §8.1 | [Upload, review and enable lifecycle](../adr/014-tool-package-format-v2.md) |
-| §8.3 | [API/security delta, including service-profile changes](../adr/014-tool-package-format-v2.md) |
-| §8.4 | [Version lifecycle and rollout requirements](../adr/014-tool-package-format-v2.md) |
-| §8.5 | [Deployment binding and configuration precedence](../adr/020-deployment-binding.md) |
-| §9.1 | [Identity and authorization separation](../adr/015-credentials-catalog-scope-routes.md) |
-| §9.2 | [Credential classification; exactly one validator](../adr/015-credentials-catalog-scope-routes.md) |
-| §9.3 | [Verified claims and bounded delegation](../adr/015-credentials-catalog-scope-routes.md) |
-| §9.4 | [Catalog scope can narrow, never widen access](../adr/015-credentials-catalog-scope-routes.md) |
-| §10.1 | [Current MCP version requirements](../adr/018-mcp-versions-legacy-adapter.md) |
-| §10.2 | [Legacy adapter withdrawal; read the ADR amendment](../adr/018-mcp-versions-legacy-adapter.md) |
-| §10.3 | [Tool names and compatibility aliases](../adr/018-mcp-versions-legacy-adapter.md) |
-| §10.4 | [Scoped MCP routes](../adr/015-credentials-catalog-scope-routes.md) |
-| §11 | [Tool Host trust domain](../adr/013-tool-host-egress-broker-secrets.md) |
-| §11.2 | [Control-issued permits and pinned admission inputs](../adr/013-tool-host-egress-broker-secrets.md) |
+| §8.1 | [Upload, review and enable lifecycle](../../tool-sdk/spec/descriptor/README.md) |
+| §8.3 | [API/security delta, including service-profile changes](../../tool-sdk/spec/descriptor/README.md) |
+| §8.4 | [Version lifecycle and rollout requirements](../../tool-sdk/spec/descriptor/README.md) |
+| §8.5 | [Deployment binding and configuration precedence](../../tool-sdk/spec/runtime-modes.md) |
+| §9.1 | [Identity and authorization separation](../control-plane/olo-user-credentials.md) |
+| §9.2 | [Credential classification; exactly one validator](../control-plane/olo-user-credentials.md) |
+| §9.3 | [Verified claims and bounded delegation](../control-plane/olo-user-credentials.md) |
+| §9.4 | [Catalog scope can narrow, never widen access](../control-plane/olo-user-credentials.md) |
+| §10.1 | [Current MCP version requirements](../gateway/configuration.md) |
+| §10.2 | [Current MCP protocol and transport contract](../gateway/configuration.md) |
+| §10.3 | [Tool names and compatibility aliases](../gateway/configuration.md) |
+| §10.4 | [Scoped MCP routes](../control-plane/olo-user-credentials.md) |
+| §11 | [Tool Host trust domain](../../apps/tool-host/README.md) |
+| §11.2 | [Control-issued permits and pinned admission inputs](../../apps/tool-host/README.md) |
 | §11.3 | [Single-use consumption, ledger and fencing](../control-plane/invocation-state-v2.md) |
 | §11.4 | [Admission responses and recovery requirements](../../tool-sdk/conformance/security/admission.json) |
 | §11.5 | [Isolation tiers; see backlog for unimplemented enforcement](../security/threat-models/tool-host.md) |
-| §11.6 | [Brokered versus tunnel egress requirements](../adr/013-tool-host-egress-broker-secrets.md) |
+| §11.6 | [Brokered versus tunnel egress requirements](../../apps/tool-host/README.md) |
 | §11.7 | [Effect safety, business-key namespaces, reservations and retention](../control-plane/invocation-state-v2.md) |
 | §11.8 | [Invocation-bound broker, route constraints and secret custody](../../tool-sdk/conformance/security/broker.json) |
 | §11.9 | [Transport matrix and explicit TCP proxy support](../../tool-sdk/spec/authoring/http.md) |
@@ -80,14 +81,14 @@ preserve migration checksums; those numeric IDs resolve through this index too.
 | §15.4 | [Break-glass scope and threshold operator keys](../control-plane/kill-switch.md) |
 | §15.5 | [Running-work termination and control loss](../control-plane/kill-switch.md) |
 | §15.6 | [Reviewed recovery and retention](../control-plane/kill-switch.md) |
-| §16 | [Catalog revision and package-version lifecycle](../adr/014-tool-package-format-v2.md) |
+| §16 | [Catalog revision and package-version lifecycle](../../tool-sdk/spec/descriptor/README.md) |
 | §17 | [Client check-in settings](../control-plane/configuration.md) |
 | §17.1 | [Environment-owned client timing fields](../control-plane/configuration.md) |
 | §17.2 | [Server-directed polling and bounds](../control-plane/configuration.md) |
-| §17.3 | [Fleet reconciliation and delivery](../adr/010-signed-fleet-reconciliation.md) |
+| §17.3 | [Fleet reconciliation and delivery](../client/package-deployment.md) |
 | §17.4 | [Desired and reported state](../architecture/desired-vs-reported-state.md) |
 | §18 | [Implemented Administration menu and settings ownership](../control-plane/configuration-menu.md) |
-| §20 | [Contract-set generation and component integration](../contracts/v2-generation.md) |
+| §20 | [Contract-set generation and component integration](../development/schema-workflow.md) |
 | §21 | [Suite definitions and evidence rules](../../tool-sdk/conformance/README.md) |
 | §22.1 | [Verification and acceptance evidence](../testing/README.md) |
 | §22.2 | [Release qualification](../development/how-to-release.md) |

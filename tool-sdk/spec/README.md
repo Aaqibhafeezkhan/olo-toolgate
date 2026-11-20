@@ -7,7 +7,7 @@ This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, i
 ## Rules
 
 - Key words **must**, **must not**, **should** and **may** are normative.
-- A file here changes only through an amendment to [ADR 019](../../docs/adr/019-tool-sdk-authoring-contract.md).
+- A file here changes only through an amendment to [Authoring contract (language-neutral)](authoring/README.md).
 - Examples are illustrative; tables and grammar blocks are normative.
 
 ## Contents
@@ -15,7 +15,7 @@ This is the normative authoring contract for the ToolGate Tool SDK. Every SDK, i
 | File | Defines | Requirement reference |
 |---|---|---|
 | [authoring/README.md](authoring/README.md) | Language-neutral contract: declarations, `ToolContext`, value types | §5, §6 |
-| [authoring/java.md](authoring/java.md), [python.md](authoring/python.md), [typescript.md](authoring/typescript.md), [dotnet.md](authoring/dotnet.md) | Exact API surface per language | §5.3 |
+| [authoring/java.md](authoring/java.md), [python.md](authoring/python.md), [typescript.md](../../docs/plans/sdk-typescript.md), [dotnet.md](../../docs/plans/sdk-dotnet.md) | Exact API surface per language | §5.3 |
 | [authoring/http.md](authoring/http.md) | Named routes, destinations, TCP, convenience-form proof rules | §5.4, §11.8, §11.9 |
 | [authoring/errors.md](authoring/errors.md) | Error hierarchy, codes, MCP mapping | §5.7 |
 | [authoring/execution.md](authoring/execution.md) | Execution semantics, tasks, cancellation, effects | §5.7, §11.7, §12 |

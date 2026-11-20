@@ -73,7 +73,7 @@ management actions. Super Admin directory changes apply immediately and are
 audited; they may also manage and approve any existing configuration request,
 including their own, without a second reviewer. Other Management Roles retain
 scoped ceilings and independent review. Runtime authorization still requires
-all current grants, policies and device checks. See [ADR 022](../../docs/adr/022-super-administrator-review-exception.md).
+all current grants, policies and device checks. See [Users, Teams and roles](../../docs/security/user-roles.md).
 
 Deletion removes an active entity completely. Required default groups, internal
 Quickstart executors, valid references and the last active Super Admin remain
@@ -137,8 +137,8 @@ runtime notices. `python tools/ui/package.py` produces a reproducible asset tar
 and checksums in `build/ui/`. `make check` includes unit, drift and browser gates.
 
 See [authentication and operations](../../docs/control-plane/admin-ui.md),
-[ADR 004](../../docs/adr/004-embedded-admin-console.md) and
-[approval architecture](../../docs/adr/006-ask-approvals.md).
+[Admin UI](../../docs/control-plane/admin-ui.md) and
+[approval architecture](../../docs/control-plane/approvals.md).
 ## Workflow profile management
 
 Current Super Admin users open **Workflows > Workflows** or **Workflows > Workflow
