@@ -1,6 +1,14 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # OLO community Quickstart — published development images
 
+For nontechnical exploration, use the [beginner release-download walkthrough](../../../../bot/README.md#beginner-setup-install-deploy-and-sign-in).
+It starts this folder's released development containers, selects matching image
+versions, locates login credentials and imports a downloaded `.olo` from GitHub
+Release Assets. Tools/bots do not need to be compiled. Standalone `.olotool`
+assets are listed in each release's tool inventory. After a successful run, use
+[configuration tuning with monitoring](../../../../docs/help/tune-bots.md)
+to adapt the bot to your domain and compare results.
+
 This is the Docker-image equivalent of [debug/profiled](../../../../debug/profiled/README.md).
 It pulls/reuses application images instead of compiling OLO. Both entry points
 share provisioning, Admin custody, device setup and optional model/collector logic;
@@ -117,8 +125,10 @@ when a newly selected installation provides valid initial custody.
 1. Open the console, sign in as Admin and import a built/released `.olo` in **Bots**.
    The bundle carries referenced configuration and exact tool/trigger packages.
 2. Review the owned device enrollment fingerprint, approve/enable it, and assign
-   every device group declared by the bot. Configure the allowed file root and
-   extensions in **Administration > Device**. No device approval/group membership
+   every device group declared by the bot. The fresh device launcher configures
+   `/var/lib/olo-toolgate/files` with `txt`, `md`, `json`, `csv` and `log` extensions;
+   other installations need their operator's device file configuration.
+   **Administration > Device** manages approval/check-in. No device approval/group membership
    is imported implicitly. API scripts are in [tools/admin](../../../../tools/admin/README.md).
 3. Supply destination model credentials and approve its endpoint. Local Ollama
    users run `./manage.ps1 ollama-vault` after importing the referenced groups.

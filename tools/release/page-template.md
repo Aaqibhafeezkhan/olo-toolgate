@@ -32,10 +32,21 @@ Versioned workflow `.olo` assets include their referenced configuration and exac
 required tool/trigger `.olotool` archives. The attached `olo-profiles-<artifact-version>.json`
 records each workflow, product/profile version, source commit, package versions,
 digests and byte sizes. Use its filenames to select the matching release assets.
-Import a workflow on the console Workflows page, then import/deploy its embedded
-packages under the existing Control policy. Model services, vault secrets,
+Every bot configuration is included, including both hotswap revisions. Download
+the desired `.olo` from **Assets**; users do not need to compile tools or bots.
+Use the published development containers through `deploy/docker/quickstart/dev`,
+selecting matching image versions from this release. In **OLO Orchestration > Bots > Bots**,
+choose **Bot .olo file**, then click **Import bot .olo**. Embedded packages are
+verified/imported with the bot under Control policy. Model services, vault secrets,
 approved devices and trusted native graph factories require destination setup.
-See [profile build and import instructions]($repo/blob/$tag/profiles/README.md).
+See the [beginner download and import instructions]($repo/blob/$tag/bot/README.md#beginner-setup-install-deploy-and-sign-in).
+
+Standalone `.olotool` assets are also attached for the core packages, Java
+tool/mock examples and every exact package embedded in these bots. Use
+`olo-tools-<artifact-version>.json` to select by package ID/version and exact
+filename; verify against `SHA256SUMS`. Shared identical archives appear once.
+For an ordinary bot import, the `.olo` already supplies its required packages.
+See [adapting a bot with monitoring]($repo/blob/$tag/docs/help/tune-bots.md).
 
 ### Java contracts
 

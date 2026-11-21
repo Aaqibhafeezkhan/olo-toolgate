@@ -5,8 +5,39 @@ profile gate. Versioned `.olo` files and `olo-profiles-<version>.json` are retai
 as `foundation-stage-profiles`, revalidated into foundation release assets, and
 collected unchanged by development/tagged/product publication. Manual development
 builds use the same builder and validator. `tools/release/profiles.py` refuses
-source/version/hash mismatches and checks every embedded tool archive. Release
+source/version/hash mismatches, incomplete or duplicate configuration/workflow
+inventories, and mismatched embedded workflow IDs, and checks every embedded tool archive. Release
 promotion does not rebuild profile packages. See [profiles](../../bot/README.md).
+All configurations are mandatory release assets, including both hotswap variants
+even though they share a workflow ID. Users download their selected `.olo` from
+GitHub Release Assets and explore with the published containers launched from
+`deploy/docker/quickstart/dev`; local bot/tool builds are an authoring option.
+
+## Standalone tool and trigger release assets
+
+Development and production releases also publish `.olotool` archives separately:
+all Java tool/mock example projects, all configured `core-mcp` packages, and
+every exact archive embedded in a released bot. Immutable test/conformance
+fixtures are not release packages. Foundation retains the example build outputs
+as `foundation-stage-tool-packages`; the collector uses those and the checked
+core lock without rebuilding them. Manual development builds compile the same
+projects with core Java tests explicitly disabled; packaging is not qualification.
+
+`tools/release/tool_packages.py` produces `olo-tools-<release-version>.json`.
+Its `format` is `olo-tools`; `version` and `sourceCommit` identify the product
+release. Each `packages` entry records the existing package metadata
+(`packageId`, package-owned `version`, `packageDigest`, archive `sha256`, `bytes`
+and embedded `path`), its standalone `filename`, and originating `projects`.
+The package-owned version can differ from the product release version.
+Filenames use safe package ID/version labels and the full archive SHA-256.
+Identical bytes shared by projects/bots are published once; different archive
+bytes retain separate assets even at the same package ID/version.
+
+The collector refuses missing/ambiguous project output, an incomplete core lock,
+tampered packages, missing embedded counterparts and unlisted standalone archives.
+Promotion checks the inventory and preserves bytes. The release `SHA256SUMS`
+covers the tool inventory and every `.olo`/`.olotool` alongside other assets.
+These checks establish packaging/integrity, not runtime support, safety or grants.
 
 Release branches are long-lived major lines such as `release/1.x`. Compatible
 patch and minor releases share the line; breaking changes start a new major

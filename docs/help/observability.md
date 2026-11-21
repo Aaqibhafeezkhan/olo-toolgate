@@ -4,6 +4,8 @@
 OLO exposes workflow progress and ToolGate execution observations. Monitoring is
 installation configuration, outside portable bots. Exporter credentials stay in
 private installation custody; never put them in `.olo`, bot JSON or issue logs.
+For a beginner's baseline, prompt change and before/after comparison, follow
+[Adapt a bot to your use case with monitoring](tune-bots.md).
 
 ## Supported paths
 

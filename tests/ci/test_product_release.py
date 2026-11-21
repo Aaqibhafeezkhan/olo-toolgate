@@ -321,11 +321,13 @@ class PackageVersionTests(unittest.TestCase):
             for agent in config['agentDefinitions']:agent['contextSources']=[]
             data,manifest=pack(dict(profileVersion=2,profileId='test',packages=[],workflows=config),{},[],[],dict(version=version,sourceCommit=PREPARED,build='42'))
             (assets/'test-profile.olo').write_bytes(data)
-            prepare.write_json(assets/f'olo-profiles-{version}.json',dict(format='olo-profiles',version=version,sourceCommit=PREPARED,profiles=[dict(filename='test-profile.olo',sha256=digest(data),bytes=len(data),packages=manifest['packages'])]))
-            pipeline.verify_packages(dict(release(),commit=PREPARED), assets)
-            jar(f'toolgate-sdk-api-{version}.jar','0.10.0-dev')
-            with self.assertRaisesRegex(ValueError,'JAR embedded version'):
+            identity=('test',config['workflows'][0]['id'])
+            prepare.write_json(assets/f'olo-profiles-{version}.json',dict(format='olo-profiles',version=version,sourceCommit=PREPARED,profiles=[dict(configuration=identity[0],workflowId=identity[1],filename='test-profile.olo',sha256=digest(data),bytes=len(data),packages=manifest['packages'])]))
+            with patch('tools.release.profiles.expected_profiles',return_value={identity}), patch('tools.release.tool_packages.validate'):
                 pipeline.verify_packages(dict(release(),commit=PREPARED), assets)
+                jar(f'toolgate-sdk-api-{version}.jar','0.10.0-dev')
+                with self.assertRaisesRegex(ValueError,'JAR embedded version'):
+                    pipeline.verify_packages(dict(release(),commit=PREPARED), assets)
 
 
 class OriginalBuildGateTests(unittest.TestCase):

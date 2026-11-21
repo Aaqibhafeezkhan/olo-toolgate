@@ -169,7 +169,7 @@ same build; dispatch a fresh run with no reuse ID for a new release number.
 | `@olo-labs/toolgate-contracts` | GitHub npm Packages |
 | Control, Gateway, Quickstart, device, secured device, LangGraph runtime (`olo-toolgate-langgraph-runtime`) | `ghcr.io/olo-labs/<image>:1.0.0-beta.42` and `docker.io/<namespace>/<image>:1.0.0-beta.42` |
 | Helm chart | `oci://ghcr.io/olo-labs/charts/olo-toolgate:1.0.0-beta.42` |
-| Installers, distributions, SDK JARs, SBOMs and manifests | GitHub Release `v1.0.0-beta.42` |
+| Installers, distributions, SDK JARs, all bot `.olo` bundles, standalone `.olotool` packages, bot/tool inventories, SBOMs and manifests | GitHub Release `v1.0.0-beta.42` |
 
 The owner follows the repository owner if this repository is forked. Public npm, crates.io,
 Packagist and Java SDK registry publication are not configured by this pipeline; their checked

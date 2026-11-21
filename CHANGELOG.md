@@ -2,6 +2,11 @@
 
 ## 1.0.0-dev.1
 
+- Require complete bot release inventories and publish standalone core, Java
+  example and bot-embedded tool/trigger archives in development and production
+  releases. Add release-download walkthroughs and a shared guide for adapting
+  bots with monitoring while keeping execution grants and secrets installation-owned.
+
 - Add tenant-bound password login for external workflow callers, explicit human
   execution/resource grants, resumable structural events and verified signed HTTPS
   callbacks. Include Postman/receiver examples and an all-bot permission matrix.

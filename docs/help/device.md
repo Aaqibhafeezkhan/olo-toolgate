@@ -30,10 +30,11 @@ provision, publish and run; runtime grants remain separate.
    approve and enable it, then add all groups referenced by the bot's packages
    and execution bindings. The A/B examples use `hotswap-ReadAndWriteDeviceGroup` and
    `hotswap-langchain-linux-devices`; the other cases use prefixed equivalents.
-3. In **Administration > Device**, permit the intended file root/extensions.
-   The local root is `/var/lib/olo-toolgate/files`; include `.txt`, `.json` and
-   `.log` for these cases. Restrict access to the intended deployment. Supported
-   live settings apply on device sync.
+3. Check the device's installation-owned file configuration. The fresh local
+   launcher's root is `/var/lib/olo-toolgate/files`, with `txt`, `md`, `json`,
+   `csv` and `log` extensions. For another installation, configure the intended
+   root/extensions through its [device settings](../client/hotfolder.md).
+   **Administration > Device** manages approval/check-in, not editable file roots.
 4. Provision reviewed packages. Native files also require explicit
    owner/confinement qualification and current capability/service grants.
    Approval alone does not authorize effects. Read the persistent red bot

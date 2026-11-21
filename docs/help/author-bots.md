@@ -1,6 +1,9 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Author an OLO bot
 
+For guided prompt/configuration experiments on an imported bot, use
+[Adapt a bot to your use case with monitoring](tune-bots.md).
+
 Copy a folder under `bot/configurations/`. Its sources are:
 
 | File | Purpose |

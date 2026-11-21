@@ -12,6 +12,9 @@ and resources. The console provides authoring, access review and execution histo
 
 ## Quickstart
 
+**New to Docker or Git?** Use the [beginner bot walkthroughs](bot/README.md#first-time-users-choose-a-bot)
+for download links, installation, first login and instructions for each bot.
+
 Use the published-image launcher in
 [deploy/docker/quickstart/dev](deploy/docker/quickstart/dev/README.md).
 You need Git and Docker with its Linux engine and current Compose support.

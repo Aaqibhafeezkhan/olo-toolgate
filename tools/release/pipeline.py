@@ -162,6 +162,8 @@ def verify_packages(info, assets):
     # Verify the collected profile archive bytes, not a rebuild from publication sources.
     with tempfile.TemporaryDirectory() as temporary:
         collect_profiles(assets,Path(temporary),version=version,commit=info['commit'])
+    from tools.release.tool_packages import validate
+    validate(assets,version,info['commit'])
     pom = ET.parse(assets/f'toolgate-contracts-{version}.pom').getroot()
     ns = {'m':'http://maven.apache.org/POM/4.0.0'}
     if [pom.findtext('m:'+key, namespaces=ns) for key in ('groupId', 'artifactId', 'version')] != ['io.github.olo-labs', 'toolgate-contracts', version]:

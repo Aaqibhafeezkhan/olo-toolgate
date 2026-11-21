@@ -73,6 +73,7 @@ def main():
     parser.add_argument("--inventory", type=Path, default=CORE / "core-packages.build.json")
     parser.add_argument("--cli", type=Path, required=True, help="Verified ToolGate CLI binary")
     parser.add_argument("--output", type=Path, default=ROOT / "build/core-mcp")
+    parser.add_argument("--without-tests", action="store_true", help="Manual development packaging only; no Java test qualification")
     args = parser.parse_args()
     packages = list(inventory(args.inventory))  # Validate every entry before any build.
     cli = args.cli.resolve(strict=True)
@@ -93,7 +94,7 @@ def main():
     for package, project in packages:
         if package["sdk"] == "java-gradle":
             run([gradle, "-p", project, "--console=plain", "-PtoolgateSdkRepository=" + (ROOT / "build/sdk-repo").as_uri(),
-                 "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", "check", "toolgatePackage"], env)
+                 "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", *([] if args.without_tests else ["check"]), "toolgatePackage"], env)
         elif package["sdk"] == "json":
             sdk = ROOT / "tool-sdk/json-sdk/build/install/toolgate-json-sdk/bin" / ("toolgate-json-sdk.bat" if os.name == "nt" else "toolgate-json-sdk")
             project = pinned_json_project(project, output / "projects" / package["project"], lock["sdkVersion"])

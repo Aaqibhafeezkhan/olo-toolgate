@@ -21,6 +21,11 @@ To build and verify every configured package:
 python core-mcp/build.py --cli /absolute/path/to/toolgate
 ```
 
+Manual development packaging may add `--without-tests` to omit Java `check`;
+this retains CLI/package integrity validation but is not test qualification.
+Development and production releases publish the exact configured archives as
+standalone `.olotool` assets with the [tool release inventory](../tools/release/README.md#standalone-tool-and-trigger-release-assets).
+
 The orchestrator publishes SDK dependencies to `build/sdk-repo`, builds and
 checks independent projects, invokes the SDK's package command, verifies the
 result with the canonical CLI, then writes packages and
