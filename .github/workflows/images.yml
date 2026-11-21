@@ -529,10 +529,12 @@ jobs:
     - name: Build containers and library packages
       env:
         RELEASE_SHA: ${{ inputs.source_sha || github.sha }}
+        TOOLGATE_CLI: ${{ github.workspace }}/target/debug/toolgate
         DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       run: |
         npm ci --ignore-scripts --no-audit
+        cargo build --locked -p toolgate-cli
         python tools/release/manual_development.py build
       if: ${{ !inputs.run_tests }}
     - name: Save built container images
