@@ -54,6 +54,16 @@ Install Java 21, Python 3.12+, Node 22, PHP 8.2+, Rust (the repository pins a st
 toolchain with fmt/clippy), Helm 3.17.3 and GNU Make. Gradle bootstraps its pinned,
 SHA-256-verified distribution; a global Gradle installation is unnecessary.
 
+Hosted Java jobs select the Ubuntu runner's installed JDK 21 using
+`python3 tools/ci/select_java.py`. The selector verifies both Java and javac
+before exporting `JAVA_HOME` and adding its `bin` directory to `GITHUB_PATH`.
+It uses `JAVA_HOME_21_X64`, or `JAVA_HOME` in local replay images, and fails
+if the installation is missing, unusable or reports a different major version.
+The JDK patch version follows the runner image. No setup action or JDK is
+downloaded for this selection, avoiding `actions/setup-java` archive timeouts
+during job preparation. Other action downloads still depend on GitHub availability;
+timeouts there happen before repository steps and require rerunning the job.
+
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
