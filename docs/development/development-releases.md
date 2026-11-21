@@ -33,6 +33,10 @@ security scans or installer signing. Compilation, package integrity checks and
 source/version checks still apply. Use it for development evaluation; product
 releases retain their full validation and provenance gates.
 
+The container/library build step compiles the ToolGate CLI and sets `TOOLGATE_CLI`
+to its absolute workspace path for that step. Bot and Java example packaging
+inherit this build-only setting; no repository variable or secret is required.
+
 ## One version and isolated aliases
 
 Every generated first-party binary/package uses one SemVer. Its base comes from the
