@@ -3,7 +3,7 @@
 // GENERATED FILE — DO NOT EDIT DIRECTLY; tools/contracts/generate.py
 package io.ololabs.toolgate.contracts;
 
-/** One complete path; Team and Agent Group identifiers cannot be mixed between witnesses.
+/** One complete tenant-scoped path; Team and Agent Group identifiers cannot be mixed between witnesses. A super-admin- prefixed grant identifier can denote a Control-derived live Super Admin entitlement rather than a persisted grant; its Team and current directory revision remain authoritative.
  *
  * @param teamId canonical teamId value
  * @param grantId canonical grantId value

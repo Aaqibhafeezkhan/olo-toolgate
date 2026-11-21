@@ -52,6 +52,7 @@ final class JdbcApplicationEventStore implements ApplicationEventStore {
         catch(SQLException failure){throw Failure.unavailable();}
     }
     public List<Subscription> owned(String user,String after,int limit){return list("SELECT * FROM control_application_subscriptions WHERE tenant_id=? AND user_id=? AND subscription_id>? ORDER BY subscription_id LIMIT ?",user,after,limit);}
+    public List<Subscription> subscriptions(String after,int limit){return list("SELECT * FROM control_application_subscriptions WHERE tenant_id=? AND subscription_id>? ORDER BY subscription_id LIMIT ?",after,limit);}
     public void insert(Subscription sub) {
         try(var count=query("SELECT count(*) FROM control_application_subscriptions WHERE tenant_id=?");var r=count.executeQuery()) {
             r.next();if(r.getInt(1)>=1000)throw Failure.unavailable();

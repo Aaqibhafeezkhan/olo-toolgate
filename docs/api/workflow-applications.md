@@ -13,7 +13,10 @@ An installation operator reviews, prepares and publishes the bot and configures
 its model custody, packages, devices, bindings and runtime service grants. Choose
 the actual OLO users allowed to execute it. An enabled BASIC user can call these
 APIs through enabled Team membership and explicit HUMAN grants, directly or
-through a HUMAN runtime role. Super Admin is not an execution bypass.
+through a HUMAN runtime role. A current enabled tenant Super Admin receives
+tenant-wide human runtime authority from Control without per-bot HUMAN grants.
+Token role claims cannot confer it, and independent runtime service/effect
+authority and policy obligations remain required.
 
 The [all-bot permission matrix](../../bot/PERMISSIONS.md) lists exact workflow,
 agent and model IDs, declared tool/device groups, packages and file requirements
@@ -26,7 +29,8 @@ evidence conditions. Runtime service checks and effect policy remain independent
 
 Observation requires `workflow.progress.read` and/or `workflow.result.read` on
 the workflow and current resource grants. Add `workflow.subscribe` for live
-streams and callbacks. Manual run reads are owner-scoped. A user's new login may
+streams and callbacks. Ordinary manual run reads are owner-scoped; a current
+tenant Super Admin may inspect any run in that tenant. A user's new login may
 read their older run with current observation/resource grants; it does not revive
 the execution identity invalidated by a session or password revocation.
 
@@ -136,7 +140,12 @@ there is no exactly-once business effect guarantee. Current source grants,
 identity state and expiry are checked before outbound delivery.
 
 `GET /api/control/v1/application-webhooks` lists the caller's subscriptions;
-`GET /{id}` reads state/cursor; `DELETE /{id}` revokes. For renewal or key recovery,
+current tenant Super Admins can list, inspect, verify and revoke any registration
+in their tenant. Metadata never returns another registration's signing key.
+Administrative verification still requires the recipient's proof and the original
+subscriber's current source authority, identity and expiry; it cannot resurrect
+a revoked session or subscription. `GET /{id}` reads state/cursor;
+`DELETE /{id}` revokes. For renewal or key recovery,
 login again, create/verify a replacement using the last acknowledged cursor,
 then revoke the old registration. Retention gaps require reconciliation. Password
 changes and `POST /api/control/v1/application-session/revoke` with `{}` invalidate

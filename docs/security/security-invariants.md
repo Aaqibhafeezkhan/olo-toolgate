@@ -5,8 +5,10 @@ Managed device execution requires a registered device, current owner/device enab
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
 External workflow callers need an existing enabled tenant user and current
-explicit human workflow/resource grants. Administrator flags, token possession
-and bot imports do not supply execution authority. Captured human authority
+human workflow/resource authority. Control derives tenant-wide HUMAN and SECRET
+entitlements from live enabled Super Admin Team/Management Role membership;
+other users require explicit grants. Token role flags, token possession and bot
+imports do not supply that authority. Captured human authority
 never substitutes for runtime service grants. Structural event delivery rechecks
 source permissions; callback signatures authenticate notification origin, not
 permission to perform or replay an effect. See the
@@ -18,10 +20,12 @@ Default deny; policy error never ALLOW; ASK never bypasses approval; secrets nev
 
 Super Admin management authority is resolved from current enabled directory
 membership, never a token role or cached actor flag. It permits all tenant
-management actions, immediate audited directory changes, and self approval of
+management and human runtime actions, immediate audited directory changes, and self approval of
 configuration, operation and reconciliation requests. Scoped roles retain
-independent review and management ceilings. The exception does not supply
-runtime grants, skip policy obligations, authorize stale/expired requests,
+independent review and management ceilings. Runtime entitlements are derived
+and rechecked by Control in the current tenant, never persisted as copied user
+grants or transferred to a service identity. The exception does not skip policy
+obligations, device/execution bindings or agent service/delegation ceilings, authorize stale/expired requests,
 restore retired credentials, remove required default groups, or disable the
 last active Super Admin. See [Users, Teams and roles](user-roles.md).
 

@@ -32,8 +32,9 @@ See [Tool Host limitations](../../apps/tool-host/README.md#not-yet).
 ## Administrative authority
 
 Scoped management uses independent review. Super Admin has an audited
-[review exception](../security/user-roles.md), but still
-needs runtime grants and cannot override effect authorization or retired identity.
+[review exception and tenant-wide human entitlement](../security/user-roles.md)
+resolved by Control from live directory membership. It cannot override another
+tenant's boundary, independent service/effect authority or retired identity.
 
 ## Planned distribution boundary
 

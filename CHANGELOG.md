@@ -2,6 +2,11 @@
 
 ## 1.0.0-dev.1
 
+- Add optional multi-bot Quickstart setup with a blank default, private credential
+  reuse, per-bot configurators and readiness-gated activation of standard demos.
+- Give current tenant Super Admins tenant-wide human runtime authority and run
+  observation while retaining tenant isolation, policy and independent execution checks.
+
 - Require complete bot release inventories and publish standalone core, Java
   example and bot-embedded tool/trigger archives in development and production
   releases. Add release-download walkthroughs and a shared guide for adapting

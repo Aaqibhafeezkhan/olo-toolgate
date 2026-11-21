@@ -1068,7 +1068,7 @@ export interface EnterpriseEffectiveAccess {
   readonly bindings: ReadonlyArray<ControlExecutionBinding>;
   readonly managementRoles: ReadonlyArray<ControlRole>;
 }
-/** Current group membership provenance with intact grants; candidate grants still require the complete request evaluation. */
+/** Current group membership provenance with intact persisted grants and Control-derived super-admin- entitlements for live tenant Super Admins. Derived entitlements are not stored directory grants. Candidate grants still require the complete request evaluation. */
 export interface EnterpriseEffectiveMembership {
   readonly groupType: EnterpriseGroupType;
   readonly groupId: string;
@@ -1381,7 +1381,7 @@ export interface EnterpriseVaultWrite {
   readonly toolGroupId: string;
   readonly deviceGroupId: string;
 }
-/** One complete path; Team and Agent Group identifiers cannot be mixed between witnesses. */
+/** One complete tenant-scoped path; Team and Agent Group identifiers cannot be mixed between witnesses. A super-admin- prefixed grant identifier can denote a Control-derived live Super Admin entitlement rather than a persisted grant; its Team and current directory revision remain authoritative. */
 export interface EnterpriseWitness {
   readonly teamId?: string;
   readonly grantId?: string;

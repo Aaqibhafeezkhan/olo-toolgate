@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts;
 
-/** One complete path; Team and Agent Group identifiers cannot be mixed between witnesses. */
+/** One complete tenant-scoped path; Team and Agent Group identifiers cannot be mixed between witnesses. A super-admin- prefixed grant identifier can denote a Control-derived live Super Admin entitlement rather than a persisted grant; its Team and current directory revision remain authoritative. */
 final readonly class EnterpriseWitness implements \JsonSerializable {
     public function __construct(
         public string $bindingId,

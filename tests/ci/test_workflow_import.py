@@ -13,6 +13,26 @@ from tools.admin import provision_devices as provision
 
 
 class WorkflowImportTests(unittest.TestCase):
+    def test_operator_setup_runs_after_references_and_before_provision_and_denial_stops(self):
+        files={'workflow.json':b'{"workflows":{},"profileId":"demo"}', 'referenced-data.json':b'{}'}
+        for refused in (False,True):
+            events=[]
+            def call(_client,path,body=None,**kwargs):
+                if path.endswith('/config/export'):return {**self.snapshot(),'revision':1}
+                if path=='/api/control/v1/workflow-profiles':
+                    self.assertEqual(['bindings','operator-setup'],events)
+                    raise Refused('stage reached')
+                return {}
+            def setup(profile):
+                events.append('operator-setup')
+                self.assertEqual('demo',profile['profileId'])
+                if refused:raise Refused('operator denied')
+            with self.subTest(refused=refused),patch.object(importer,'verify',return_value={'packages':[]}),\
+                    patch.object(importer,'inventory',return_value=files),patch.object(importer,'call',side_effect=call),\
+                    patch.object(importer,'service_bindings',side_effect=lambda *_:events.append('bindings')):
+                with self.assertRaisesRegex(Refused,'operator denied' if refused else 'stage reached'):
+                    importer.deploy(object(),b'bundle',after_references=setup)
+
     def test_preflight_precedes_upload_and_confirmed_registration_refreshes_import_revision(self):
         metadata=dict(packageId='example.files',version='1.0.0',packageDigest='sha256:'+'a'*64,path='packages/files.olotool')
         manifest={'packages':[metadata]};files={'workflow.json':b'{}','referenced-data.json':json.dumps({'policies':[{'id':'new-policy'}]}).encode(),metadata['path']:b'fixture'}

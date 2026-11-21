@@ -47,6 +47,40 @@ final class WorkflowUserAccessTest {
             scope(List.of("workflow.execute", "workflow.progress.read", "workflow.result.read", "workflow.subscribe", "agent.execute", "model.infer"),
                 "workflow:investigate", "workflow-group:support", "agent:investigator", "model-group:models")));
     }
+    private void superuser(String user) {
+        put(Ids.Kind.ROLE, new ControlRole("tenant-super", "Tenant superuser", true, 1L,
+            UserRole.SUPER_ADMIN, EnterpriseRoleType.MANAGEMENT, List.of()));
+        put(Ids.Kind.TEAM, new ControlTeam("tenant-owners", "Tenant owners", true, 1L,
+            List.of(user), List.of("tenant-super"), null));
+    }
+    @Test void liveSuperuserRunsWithoutHumanGrantsButStillNeedsServiceAuthority() throws Exception {
+        seed(); entries.remove(Ids.Kind.GRANT.id("human")); superuser("alice");
+        var config = config(); var workflow = config.workflows().getFirst();
+        var authority = access.capture(graph(), actor("alice"), config, workflow, 1000);
+        assertTrue(authority.humanScopes().getFirst().allActions());
+        assertDoesNotThrow(() -> access.require(graph(), authority, config, workflow, "workflow.execute", 1001));
+        entries.remove(Ids.Kind.GRANT.id("service"));
+        assertEquals(403, assertThrows(Failure.class, () -> access.require(graph(), authority, config, workflow, "workflow.execute", 1002)).status());
+    }
+    @Test void roleRevocationAndCachedSuperuserFlagsCannotPreserveAuthority() throws Exception {
+        seed(); entries.remove(Ids.Kind.GRANT.id("human")); superuser("alice");
+        var config = config(); var workflow = config.workflows().getFirst();
+        var authority = access.capture(graph(), actor("alice"), config, workflow, 1000);
+        entries.remove(Ids.Kind.ROLE.id("tenant-super"));
+        assertEquals(403, assertThrows(Failure.class, () -> access.require(graph(), authority, config, workflow, "workflow.execute", 1001)).status());
+        var forged = new DirectoryService.Actor(actor("alice").tenant(), actor("alice").id(), true, true, "alice");
+        assertEquals(403, assertThrows(Failure.class, () -> access.capture(graph(), forged, config, workflow, 1001)).status());
+    }
+    @Test void currentSuperuserCanReadAnotherUsersRunOnlyWhileRoleIsLive() throws Exception {
+        seed(); var config = config(); var workflow = config.workflows().getFirst();
+        var authority = access.capture(graph(), actor("bob"), config, workflow, 1000);
+        var run = new WorkflowRunStore.QueuedRun("run-1", "support", "sha256:"+"a".repeat(64), "investigate", "revision-1",
+            "investigator", "support-agents", "PREPARE", 1000, 1, "sealed", "sha256:"+"b".repeat(64), "sha256:"+"c".repeat(64), codec.json(authority));
+        superuser("alice");
+        assertDoesNotThrow(() -> access.observe(graph(), actor("alice"), run, "workflow.result.read", 1001));
+        entries.remove(Ids.Kind.TEAM.id("tenant-owners"));
+        assertEquals(403, assertThrows(Failure.class, () -> access.observe(graph(), actor("alice"), run, "workflow.result.read", 1002)).status());
+    }
     @Test void basicUserCanAdmitAndObserveOnlyTheirOwnRun() throws Exception {
         seed(); var config = config(); var workflow = config.workflows().getFirst();
         var authority = access.capture(graph(), actor("alice"), config, workflow, 1000);

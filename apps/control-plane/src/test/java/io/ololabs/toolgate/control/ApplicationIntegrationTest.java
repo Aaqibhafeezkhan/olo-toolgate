@@ -97,6 +97,54 @@ final class ApplicationIntegrationTest {
         assertEquals(403,assertThrows(Failure.class,()->rig.webhooks().get(rig.bob(),id)).status());
         return id;
     }
+    @Test void tenantSuperuserCanAdmitAndObserveOtherUsersRunWithoutHumanGrantOnBothStores()throws Exception {
+        for(boolean postgres:List.of(false,true)) {
+            var rig=rig(postgres);String run=start(rig);
+            assertDoesNotThrow(()->rig.events().page(rig.admin(),ApplicationEventSource.WORKFLOW,run,0,Set.of(ApplicationEventKind.PROGRESS)));
+            var body=codec.json(Map.of("profileDigest",rig.digest(),"expectedGeneration",1,"entryAgentId","investigator","message","Superuser demo input"));
+            assertEquals(201,rig.manual().start(rig.admin(),"support","investigate",body,"superuser-run","request").status());
+            var effective=codec.model(new EffectiveAccess(rig.store(),codec).get(rig.admin(),Ids.Kind.USER,"root").body(),EnterpriseEffectiveAccess.class);
+            assertTrue(effective.memberships().stream().flatMap(m->m.grants().stream()).anyMatch(g->g.id().startsWith("super-admin-")&&g.scope().allActions()));
+            rig.store().transaction(Tenants.id("other"),false,tx->{assertNull(tx.workflowRuns().get(run));return null;});
+        }
+    }
+    @Test void triggerStatusSuperuserAuthorityIsRecheckedOnBothStores()throws Exception {
+        for(boolean postgres:List.of(false,true)) {
+            var rig=rig(postgres);
+            var path=Path.of(System.getProperty("toolgate.fixtures")).getParent().resolve("../v2/valid.json");
+            var assignment=json.readTree(Files.readString(path)).path("TriggerAssignment");
+            String name=assignment.path("metadata").path("name").asText();
+            rig.store().transaction(rig.tenant(),true,tx->{
+                tx.triggers().save(TriggerStore.Kind.ASSIGNMENT,new TriggerStore.Row(name,1,codec.json(Map.of("assignment",assignment,"removed",false))),0);
+                var before=tx.load();var entries=new HashMap<>(before.entries());
+                TestSupport.put(entries,codec,Ids.Kind.ROLE,new ControlRole("temporary-super","Temporary superuser",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()));
+                TestSupport.put(entries,codec,Ids.Kind.TEAM,new ControlTeam("temporary-owners","Temporary owners",true,1L,List.of("alice"),List.of("temporary-super"),null));
+                tx.save(before,new Directory(before.revision()+1,entries));return null;
+            });
+            assertEquals(200,rig.events().triggerStatus(rig.alice(),name).status());
+            rig.store().transaction(rig.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.TEAM.id("temporary-owners"));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+            assertEquals(403,assertThrows(Failure.class,()->rig.events().triggerStatus(rig.alice(),name)).status());
+        }
+    }
+    @Test void tenantSuperuserCanManageCallbacksWithoutReceivingSigningSecretsOnBothStores()throws Exception {
+        for(boolean postgres:List.of(false,true)) {
+            var rig=rig(postgres);String id=subscribe(rig,start(rig));
+            assertFalse(rig.webhooks().get(rig.admin(),id).body().contains("signingSecret"));
+            assertEquals(1,json.readTree(rig.webhooks().list(rig.admin(),null).body()).path("items").size());
+            assertEquals(204,rig.webhooks().verify(rig.admin(),id).status());
+            assertEquals("ACTIVE",rig.store().transaction(rig.tenant(),false,tx->tx.applicationEvents().get(id).state()));
+            rig.store().transaction(Tenants.id("other"),false,tx->{assertTrue(tx.applicationEvents().subscriptions("",50).isEmpty());assertNull(tx.applicationEvents().get(id));return null;});
+            rig.store().transaction(rig.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.GRANT.id("human"));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+            assertEquals(204,rig.webhooks().revoke(rig.admin(),id).status());
+            assertEquals("REVOKED",rig.store().transaction(rig.tenant(),false,tx->tx.applicationEvents().get(id).state()));
+        }
+    }
+    @Test void superuserCannotVerifyARegistrationAfterItsSubscriberLosesAuthority()throws Exception {
+        var rig=rig(false);String id=subscribe(rig,start(rig));
+        rig.store().transaction(rig.tenant(),true,tx->{var before=tx.load();var entries=new HashMap<>(before.entries());entries.remove(Ids.Kind.GRANT.id("human"));tx.save(before,new Directory(before.revision()+1,entries));return null;});
+        assertEquals(403,assertThrows(Failure.class,()->rig.webhooks().verify(rig.admin(),id)).status());
+        assertEquals("PENDING",rig.store().transaction(rig.tenant(),false,tx->tx.applicationEvents().get(id).state()));
+    }
     @Test void sqliteUserRunAndDurableDelivery()throws Exception{runAndDelivery(false);}
     @Test void postgresUserRunAndDurableDelivery()throws Exception{runAndDelivery(true);}
     private void runAndDelivery(boolean postgres)throws Exception {

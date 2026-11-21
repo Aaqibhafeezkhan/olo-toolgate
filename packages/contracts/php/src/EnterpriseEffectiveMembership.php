@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts;
 
-/** Current group membership provenance with intact grants; candidate grants still require the complete request evaluation. */
+/** Current group membership provenance with intact persisted grants and Control-derived super-admin- entitlements for live tenant Super Admins. Derived entitlements are not stored directory grants. Candidate grants still require the complete request evaluation. */
 final readonly class EnterpriseEffectiveMembership implements \JsonSerializable {
     public function __construct(
         public EnterpriseGroupType $groupType,

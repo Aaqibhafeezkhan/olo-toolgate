@@ -3175,7 +3175,7 @@ export interface WorkflowToolDecision {
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
 }
-/** Control-owned manual-run user and admitted resource ceiling; current grants and identity must still be checked. Never accepted from an external caller. */
+/** Control-owned manual-run user and admitted resource ceiling, including a universal human/secret scope when admitted under live tenant Super Admin membership. Current grants or Super Admin membership and identity must still be checked. Never accepted from an external caller. */
 export interface WorkflowUserAuthority {
   readonly userId: string;
   readonly principalId: string;

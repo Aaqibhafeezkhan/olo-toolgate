@@ -67,6 +67,43 @@ class EnterpriseConformanceTest {
     EnterpriseDecision decide(EnterpriseContext context) {return new EnterpriseEvaluator(codec).evaluate(TENANT,directory(),input(context,List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt"))));}
     void policy(String id,Decision decision) {add(Kind.POLICY,new ControlPolicy(id,id,true,1L,decision,scope("tools-a","devices-a"),new GroupSelection(List.of(),true),new GroupSelection(List.of(),true),new GroupSelection(List.of("team-b"),false)));}
 
+    void superuser() {
+        add(Kind.ROLE,new ControlRole("tenant-super","Tenant superuser",true,1L,UserRole.SUPER_ADMIN,EnterpriseRoleType.MANAGEMENT,List.of()));
+        add(Kind.TEAM,new ControlTeam("team-a","Team A",true,2L,List.of("alice"),List.of("tenant-super"),null));
+        remove(Kind.GRANT,"human");
+    }
+    @Test void superuserHasTenantWideHumanAuthorityFromLiveMembership() {
+        superuser(); var decision=decide(context(RequestMode.HUMAN,"binding-a"));
+        assertEquals(Decision.ALLOW,decision.decision());
+        assertTrue(decision.witnesses().getFirst().grantId().startsWith("super-admin-"));
+        assertEquals("team-a",decision.witnesses().getFirst().teamId());
+        assertEquals(2,TenantSuperuser.grants(directory(),codec,"alice").size());
+        remove(Kind.ROLE,"tenant-super");
+        assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.HUMAN,"binding-a")).reason());
+    }
+    @Test void superuserCannotCrossTenantOrUseDisabledIdentityOrInvalidBinding() {
+        superuser(); var input=input(context(RequestMode.HUMAN,"binding-a"),List.of(new ResourceDescriptor(ResourceKind.FILE,"data/report.txt")));
+        assertEquals(EnterpriseDecisionReason.INVALID_CONTEXT,new EnterpriseEvaluator(codec).evaluate(
+            io.ololabs.toolgate.control.fixtures.Tenants.id("other-enterprise"),directory(),input).reason());
+        remove(Kind.BINDING,"binding-a");
+        assertEquals(EnterpriseDecisionReason.NO_BINDING,decide(context(RequestMode.HUMAN,"binding-a")).reason());
+        graph(); superuser();
+        add(Kind.USER,new ControlUser("alice","Alice",false,2L,null,null,null));
+        assertEquals(EnterpriseDecisionReason.IDENTITY_DISABLED,decide(context(RequestMode.HUMAN,"binding-a")).reason());
+    }
+    @Test void superuserRetainsPolicyObligationsAndIndependentDelegatedCapabilities() {
+        superuser();
+        assertEquals(Decision.ALLOW,decide(context(RequestMode.DELEGATED,"binding-a")).decision());
+        remove(Kind.GRANT,"capability");
+        assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.DELEGATED,"binding-a")).reason());
+        policy("review",Decision.ASK);
+        assertEquals(Decision.ASK,decide(context(RequestMode.HUMAN,"binding-a")).decision());
+        policy("deny",Decision.BLOCK);
+        assertEquals(Decision.BLOCK,decide(context(RequestMode.HUMAN,"binding-a")).decision());
+        remove(Kind.POLICY,"review");remove(Kind.POLICY,"deny");
+        workload("workload","agent",RequestMode.SERVICE,null,null);
+        assertEquals(EnterpriseDecisionReason.NO_GRANT,decide(context(RequestMode.SERVICE,"binding-a")).reason());
+    }
     @Test void completeDelegatedPathAllowsWithoutOwnerEquality() {var decision=decide(context(RequestMode.DELEGATED,"binding-a"));assertEquals(Decision.ALLOW,decision.decision());assertEquals("team-a",decision.witnesses().getFirst().teamId());assertEquals("group-a",decision.witnesses().getFirst().agentGroupId());}
     @Test void humanExecutionRequiresOnlyHumanGrantAndBinding() {remove(Kind.DELEGATION,"delegation");remove(Kind.GRANT,"capability");assertEquals(Decision.ALLOW,decide(context(RequestMode.HUMAN,"binding-a")).decision());}
     /** M3.6: a person's own call is decided by their teams and HUMAN grants alone; no agent record is consulted. */

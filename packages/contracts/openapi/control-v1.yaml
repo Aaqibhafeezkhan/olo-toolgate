@@ -246,7 +246,7 @@ paths:
           type: string
       responses:
         '200':
-          description: Up to 50 caller-owned registrations without secrets
+          description: Up to 50 caller-owned registrations without secrets; current tenant Super Admins see tenant registrations
           content:
             application/json:
               schema:
@@ -272,7 +272,7 @@ paths:
               schema:
                 $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationWebhook
         '403':
-          description: Not the authenticated owner
+          description: Not the authenticated owner or a current tenant Super Admin
         '404':
           description: Registration unavailable
     delete:
@@ -285,7 +285,7 @@ paths:
         '204':
           description: Registration revoked
         '403':
-          description: Not the authenticated owner
+          description: Not the authenticated owner or a current tenant Super Admin
   /api/control/v1/application-webhooks/{id}/verify:
     parameters:
     - name: id
@@ -300,8 +300,8 @@ paths:
       - userAccessToken: []
       description: 'Send a signed ApplicationWebhookChallenge to the destination.
         Recipient returns ApplicationWebhookVerificationProof: HMAC-SHA256(secret,
-        verify.<subscriptionId>.<challenge>). Current authorized owner may activate
-        only PENDING registrations. TLS certificates, names and DNS-pinned public
+        verify.<subscriptionId>.<challenge>). The owner or a current tenant Super Admin may activate
+        only PENDING registrations whose original subscriber identity and source authority remain current. TLS certificates, names and DNS-pinned public
         addresses are checked; redirects are refused.'
       requestBody:
         required: true
@@ -535,7 +535,7 @@ paths:
       security:
       - userAccessToken: []
       operationId: startWorkflowRun
-      description: An enabled OLO user with explicit HUMAN workflow, agent, model and resource grants runs a published bot. Administration never grants execution. User authority is pinned and rechecked before idempotency replay and protected steps. Requires exact publication, configured entry agent, live service grants and Idempotency-Key. Does not create a trigger event or write device input files.
+      description: An enabled tenant user runs a published bot using explicit HUMAN grants or Control-derived live tenant Super Admin authority. User authority is pinned and rechecked before idempotency replay and protected steps. Requires exact publication, configured entry agent, independent live service grants and Idempotency-Key. Does not create a trigger event or write device input files.
       parameters:
       - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
       requestBody:
@@ -559,7 +559,7 @@ paths:
       security:
       - userAccessToken: []
       operationId: getWorkflowRunProgress
-      description: The admitted user reads their own manual-run progress under current resource/observation grants; automatic service-run inspection retains current Super Admin checks. Runtime observations are distinguished from Control decisions and do not prove effect finality.
+      description: A current tenant Super Admin may inspect any tenant run. Other admitted users read their own manual-run progress under current resource/observation grants. Runtime observations are distinguished from Control decisions and do not prove effect finality.
       responses:
         '200':
           description: Bounded ordered progress page
@@ -591,7 +591,7 @@ paths:
       security:
       - userAccessToken: []
       operationId: getWorkflowRunResult
-      description: Private run metadata and terminal outcome. Manual runs require the admitted user and current result/resource grants; automatic service-run inspection retains current Super Admin checks. Results remain encrypted at rest; unavailable custody fails closed.
+      description: Private run metadata and terminal outcome. Current tenant Super Admins may inspect any tenant run; other manual-run readers must be the admitted user with current result/resource grants. Results remain encrypted at rest; unavailable custody fails closed.
       responses:
         '200':
           description: Pinned workflow identity, run state and terminal outcome, or null outcome while unfinished

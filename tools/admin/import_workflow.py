@@ -87,7 +87,7 @@ def service_bindings(client,profile):
             credentialEpoch=1,expiresAtUnixMs=int(time.time()*1000)+86400000))
 
 
-def deploy(client,bundle,*,timeout=360,after_provision=None):
+def deploy(client,bundle,*,timeout=360,after_references=None,after_provision=None):
     manifest=verify(bundle);files=inventory(bundle,MAX_BUNDLE,256*1024*1024)
     profile=json.loads(files['workflow.json']);references=json.loads(files['referenced-data.json'])
     snapshot=call(client,'/api/control/v1/config/export')
@@ -108,6 +108,7 @@ def deploy(client,bundle,*,timeout=360,after_provision=None):
     if merged!=snapshot:
         call(client,'/api/control/v1/config/import',dict(snapshot=merged,mode='MERGE',dryRun=False),revision=snapshot['revision'])
     service_bindings(client,profile)
+    if after_references is not None:after_references(profile)
     pending=deepcopy(profile);pending['workflows']['dispatchBindings']=[]
     base='/api/control/v1/workflow-profiles';identity=profile['profileId']
     def stage(document):

@@ -1,7 +1,8 @@
 # Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
 param(
     [ValidateSet('start','stop','restart','validate','provision-runtime','ollama-vault')][string]$Operation='start',
-    [switch]$ValidateOnly,[switch]$WithOllama,[switch]$WithoutOllama,[switch]$WithMonitoring,[switch]$WithoutMonitoring
+    [switch]$ValidateOnly,[switch]$WithOllama,[switch]$WithoutOllama,[switch]$WithMonitoring,[switch]$WithoutMonitoring,
+    [string]$Bots,[string]$BundlesDir
 )
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/../../../../debug/profiled/python.ps1"
@@ -12,5 +13,7 @@ if ($WithOllama) {$arguments+='--with-ollama'}
 if ($WithoutOllama) {$arguments+='--without-ollama'}
 if ($WithMonitoring) {$arguments+='--with-monitoring'}
 if ($WithoutMonitoring) {$arguments+='--without-monitoring'}
+if ($PSBoundParameters.ContainsKey('Bots')) {$arguments+=@('--bots',$Bots)}
+if ($BundlesDir) {$arguments+=@('--bundles-dir',$BundlesDir)}
 & $python "$PSScriptRoot/manage.py" @arguments
 exit $LASTEXITCODE

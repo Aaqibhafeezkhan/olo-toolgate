@@ -32,6 +32,8 @@ public final class ApplicationEvents {
         }
         if(!kinds.equals(Set.of(ApplicationEventKind.TRIGGER_STATUS)))throw Failure.validation();
         var assignment=triggers.observable(tx,id);
+        if(new ManagementAccess(codec).superAdministrator(directory,actor.userId()))
+            return new Source(assignment.uid(),users.identities(directory,actor.userId()));
         var groups=GroupGraph.memberships(directory,codec,Ids.Kind.USER,actor.userId(),true);
         var scopes=directory.entries().values().stream().filter(e->e.enabled()&&e.id().kind()==Ids.Kind.GRANT)
             .map(e->codec.model(e.document(),ControlAccessGrant.class)).filter(g->g.purpose()==EnterpriseGrantPurpose.HUMAN)

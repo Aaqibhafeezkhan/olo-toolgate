@@ -13,6 +13,7 @@ public interface ApplicationEventStore {
                         String state, long cursor, int attempts, long nextAttempt, String leaseId, long leaseUntil, String requestDigest) {}
     Subscription get(String id);
     List<Subscription> owned(String userId, String after, int limit);
+    List<Subscription> subscriptions(String after, int limit);
     void insert(Subscription subscription);
     void prune(long before);
     void state(String id, String state);

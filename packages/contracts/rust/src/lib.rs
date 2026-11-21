@@ -1828,7 +1828,7 @@ pub struct EnterpriseEffectiveAccess {
     pub bindings: Vec<ControlExecutionBinding>,
     pub management_roles: Vec<ControlRole>,
 }
-/// Current group membership provenance with intact grants; candidate grants still require the complete request evaluation.
+/// Current group membership provenance with intact persisted grants and Control-derived super-admin- entitlements for live tenant Super Admins. Derived entitlements are not stored directory grants. Candidate grants still require the complete request evaluation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseEffectiveMembership {
@@ -2411,7 +2411,7 @@ pub struct EnterpriseVaultWrite {
     pub tool_group_id: String,
     pub device_group_id: String,
 }
-/// One complete path; Team and Agent Group identifiers cannot be mixed between witnesses.
+/// One complete tenant-scoped path; Team and Agent Group identifiers cannot be mixed between witnesses. A super-admin- prefixed grant identifier can denote a Control-derived live Super Admin entitlement rather than a persisted grant; its Team and current directory revision remain authoritative.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EnterpriseWitness {

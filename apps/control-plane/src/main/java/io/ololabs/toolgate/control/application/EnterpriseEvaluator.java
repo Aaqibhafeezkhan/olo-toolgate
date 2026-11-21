@@ -87,7 +87,8 @@ public final class EnterpriseEvaluator {
             evidence=records(Kind.DEVICE_EVIDENCE,ControlDeviceEvidence.class).stream().filter(e->e.deviceId().equals(device.id())&&e.verifiedAtUnixMs()<=request.nowUnixMs()&&e.expiresAtUnixMs()>request.nowUnixMs()).max(Comparator.comparing(ControlDeviceEvidence::verifiedAtUnixMs)).orElse(null);
             if(evidence!=null)validUntil=Math.min(validUntil,evidence.expiresAtUnixMs());
             identity();
-            var grants=records(Kind.GRANT,ControlAccessGrant.class);
+            var grants=new ArrayList<>(records(Kind.GRANT,ControlAccessGrant.class));
+            if(context.mode()!=RequestMode.SERVICE)grants.addAll(TenantSuperuser.grants(directory,codec,context.userId()));
             var witnesses=new ArrayList<EnterpriseWitness>();
             if(context.mode()==RequestMode.HUMAN) {
                 for(var team:teams)for(var grant:grants)if(grant.purpose()==EnterpriseGrantPurpose.HUMAN&&source(grant,Kind.TEAM,team)&&matches(grant.scope(),false,"GRANT:"+grant.id())&&secret(grants,Kind.TEAM,team))
