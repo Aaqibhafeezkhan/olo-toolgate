@@ -73,10 +73,25 @@ class DevelopmentReleaseTests(unittest.TestCase):
             output=root/'build/manual-development'
             assets=output/'assets';assets.mkdir(parents=True)
             (assets/'RELEASE-NOTES.md').write_text('release notes',encoding='utf-8')
-            info={'commit':sha,'dockerTag':'dev-fixture','libraryVersion':'1.0.0-dev.fixture','releaseTag':'dev-fixture','sourceBranch':'main','branchKey':'main-fixture'}
+            version='1.0.0-dev.42'
+            info={'commit':sha,'binaryVersion':version,'dockerTag':version,'libraryVersion':version,'releaseTag':'v'+version,'sourceBranch':'main','branchKey':'main-fixture'}
             (assets/'development-release.json').write_text(json.dumps(info),encoding='utf-8')
             (assets/'compatibility.json').write_text('{}',encoding='utf-8')
-            pom=assets/'toolgate-contracts-1.0.0-dev.fixture.pom';pom.write_bytes(b'prepared pom')
+            pom=assets/('toolgate-contracts-'+version+'.pom');pom.write_bytes(b'prepared pom')
+            # A fresh publisher receives validated archives and their inventory,
+            # not the build checkout. Exercise the real validator with sealed bytes.
+            from bot.bundle import package
+            from tools.release import tool_packages
+            repository=Path(__file__).resolve().parents[2]
+            raw=(repository/'tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()
+            metadata,_=package(raw)
+            name=tool_packages.asset_name(metadata)
+            (assets/name).write_bytes(raw)
+            examples,core=tool_packages.projects(repository)
+            projects=sorted(examples|{'core-mcp/'+item['project'] for item in core})
+            inventory=assets/('olo-tools-'+version+'.json')
+            inventory.write_text(json.dumps(dict(format='olo-tools',version=version,sourceCommit=sha,
+                packages=[dict(metadata,filename=name,projects=projects)])),encoding='utf-8')
             def command(*args,**kwargs):
                 stdout=''
                 if args[:2]==('gh','api'):stdout=json.dumps({'object':{'sha':sha}})
@@ -92,6 +107,9 @@ class DevelopmentReleaseTests(unittest.TestCase):
             self.assertFalse((root/'packages/contracts/java/build').exists())
             self.assertEqual(pom.read_bytes(),b'prepared pom')
             self.assertIn(pom.name,(assets/'SHA256SUMS').read_text())
+            self.assertIn(name,(assets/'SHA256SUMS').read_text())
+            self.assertIn(inventory.name,(assets/'SHA256SUMS').read_text())
+            self.assertEqual(raw,(assets/name).read_bytes())
             self.assertEqual(publish_release.call_args.args[4],assets)
             self.assertEqual(publish_release.call_args.args[2],info['releaseTag'])
 
