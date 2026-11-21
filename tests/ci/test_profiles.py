@@ -181,12 +181,13 @@ class ProfileTests(unittest.TestCase):
             for name,value in entries.items():archive.writestr(name,value)
         with self.assertRaises((ValueError,zipfile.BadZipFile)):bundle.verify(output.getvalue())
 
-    def test_release_collection_checks_version_source_hashes_and_embedded_inventory(self):
+    @patch('tools.release.profiles.expected_profiles',return_value={('release','one')})
+    def test_release_collection_checks_version_source_hashes_and_embedded_inventory(self,_expected):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);source=root/'bin';source.mkdir();output=root/'assets'
             data,manifest=bundle.pack(dict(profileVersion=2,profileId='release',packages=[],workflows={'workflows':[{'id':'one'}]}),{},[],[],dict(version='1.2.3',sourceCommit='a'*40,build='1'))
             (source/'one-1.2.3.olo').write_bytes(data)
-            inventory=dict(format='olo-profiles',version='1.2.3',sourceCommit='a'*40,profiles=[dict(filename='one-1.2.3.olo',sha256=bundle.digest(data),bytes=len(data),packages=[])])
+            inventory=dict(format='olo-profiles',version='1.2.3',sourceCommit='a'*40,profiles=[dict(configuration='release',workflowId='one',filename='one-1.2.3.olo',sha256=bundle.digest(data),bytes=len(data),packages=[])])
             (source/'olo-profiles-1.2.3.json').write_text(json.dumps(inventory))
             self.assertEqual(2,len(collect(source,output,'1.2.3','a'*40)))
             self.assertEqual(data,(output/'one-1.2.3.olo').read_bytes())
@@ -194,6 +195,40 @@ class ProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'source/version'):collect(source,output,commit='b'*40)
             (source/'one-1.2.3.olo').write_bytes(data+b'changed')
             with self.assertRaises(ValueError):collect(source,output)
+
+    def test_release_requires_all_configurations_even_when_workflow_ids_are_shared(self):
+        from tools.release.profiles import expected_profiles
+        expected=expected_profiles()
+        self.assertIn(('hotswap-demo-a','hotswap-demo'),expected)
+        self.assertIn(('hotswap-demo-b','hotswap-demo'),expected)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source=root/'bin';source.mkdir();output=root/'assets'
+            rows=[]
+            for configuration,workflow in sorted(expected):
+                data,_=bundle.pack(dict(profileVersion=2,profileId=configuration,packages=[],workflows={'workflows':[{'id':workflow}]}),{},[],[],dict(version='1.2.3',sourceCommit='a'*40,build='test'))
+                name=configuration+'-1.2.3.olo';(source/name).write_bytes(data)
+                rows.append(dict(configuration=configuration,workflowId=workflow,filename=name,sha256=bundle.digest(data),bytes=len(data),packages=[]))
+            index=source/'olo-profiles-1.2.3.json'
+            def write(items):index.write_text(json.dumps(dict(format='olo-profiles',version='1.2.3',sourceCommit='a'*40,profiles=items)),encoding='utf-8')
+            write(rows)
+            self.assertEqual(len(expected)+1,len(collect(source,output)))
+            for incomplete in (rows[:-1],rows+[rows[0]],rows[:-1]+[dict(rows[-1],configuration='unknown')]):
+                write(incomplete)
+                with self.assertRaisesRegex(ValueError,'every bot'):collect(source,root/'refused')
+                self.assertFalse((root/'refused').exists())
+            write(rows)
+            (source/rows[0]['filename']).unlink()
+            with self.assertRaises(FileNotFoundError):collect(source,root/'missing')
+            self.assertFalse((root/'missing').exists())
+
+    @patch('tools.release.profiles.expected_profiles',return_value={('release','expected')})
+    def test_release_inventory_cannot_relabel_another_workflow(self,_expected):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            data,_=bundle.pack(dict(profileVersion=2,profileId='release',packages=[],workflows={'workflows':[{'id':'other'}]}),{},[],[],dict(version='1.2.3',sourceCommit='a'*40,build='test'))
+            (root/'bot.olo').write_bytes(data)
+            (root/'olo-profiles-1.2.3.json').write_text(json.dumps(dict(format='olo-profiles',version='1.2.3',sourceCommit='a'*40,profiles=[dict(configuration='release',workflowId='expected',filename='bot.olo',sha256=bundle.digest(data),bytes=len(data),packages=[])])),encoding='utf-8')
+            with self.assertRaisesRegex(ValueError,'evidence mismatch'):collect(root,root/'refused')
 
     def test_source_configurations_are_complete_and_only_new_archive_extension_is_used(self):
         for folder in (ROOT/'bot/configurations').iterdir():

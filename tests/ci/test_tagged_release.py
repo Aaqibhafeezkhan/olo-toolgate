@@ -53,6 +53,7 @@ class TaggedReleaseTests(unittest.TestCase):
             'GITHUB_ACTOR':'actor','MAVEN_REPOSITORY_URL':'https://maven.example.invalid',
             'GITHUB_OUTPUT':str(self.root/'outputs.txt')},clear=True)
         environment.start();self.addCleanup(environment.stop)
+        tools=patch('tools.release.tool_packages.validate');tools.start();self.addCleanup(tools.stop)
         tagged.prepare_assets(dict.fromkeys(shared.WORKFLOWS,123))
         for component in shared.IMAGES:
             folder=self.output/component;folder.mkdir()

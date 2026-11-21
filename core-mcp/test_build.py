@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("core_build", Path(__file__).with_name("build.py"))
 build = importlib.util.module_from_spec(spec)
@@ -12,6 +13,31 @@ spec.loader.exec_module(build)
 
 
 class InventoryTest(unittest.TestCase):
+    def test_manual_packaging_can_omit_tests_but_retains_cli_validation_and_lock(self):
+        raw=(build.ROOT/'tests/fixtures/packages/cases/valid-deflated.olotool').read_bytes()
+        import io
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            manifest=json.loads(archive.read('toolgate-package.json'))
+        for flags in ([],['--without-tests']):
+            with self.subTest(flags=flags),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);project=root/'project';artifacts=project/'build/toolgate';artifacts.mkdir(parents=True)
+                (artifacts/'test.olotool').write_bytes(raw)
+                (root/'VERSION').write_text(manifest['sdk']['version'],encoding='utf-8')
+                cli=root/'toolgate';cli.write_bytes(b'fixture')
+                output=root/'output'
+                entry=dict(project='project',sdk='java-gradle',id=manifest['id'],version=manifest['version'])
+                with patch.object(build,'ROOT',root),patch.object(build,'inventory',return_value=[(entry,project)]), \
+                        patch.object(build.sys,'argv',['build.py','--cli',str(cli),'--output',str(output),*flags]),patch.object(build,'run') as run:
+                    build.main()
+                commands=[list(call.args[0]) for call in run.call_args_list]
+                java=next(command for command in commands if 'toolgatePackage' in command)
+                self.assertEqual(not flags,'check' in java)
+                self.assertTrue(any('validate' in command for command in commands))
+                lock=json.loads((output/'core-packages.lock.json').read_text(encoding='utf-8'))
+                self.assertEqual(manifest['id'],lock['packages'][0]['id'])
+                self.assertEqual(raw,(output/lock['packages'][0]['artifact']).read_bytes())
+
     def read(self, document):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "inventory.json"

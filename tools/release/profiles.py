@@ -12,6 +12,12 @@ sys.path.insert(0,str(ROOT))
 from bot.bundle import digest,verify
 
 
+def expected_profiles():
+    return {(folder.name,workflow['id'])
+            for folder in (ROOT/'bot/configurations').iterdir() if folder.is_dir()
+            for workflow in json.loads((folder/'bot.json').read_text(encoding='utf-8'))['workflows']['workflows']}
+
+
 def collect(source,output,version=None,commit=None):
     indexes=list(source.glob('olo-profiles-*.json'))
     if len(indexes)>1 and version:indexes=[path for path in indexes if json.loads(path.read_text(encoding='utf-8')).get('version')==version]
@@ -19,6 +25,9 @@ def collect(source,output,version=None,commit=None):
     inventory=json.loads(indexes[0].read_text(encoding='utf-8'))
     if inventory['format']!='olo-profiles' or not inventory['profiles']:raise ValueError('Invalid profile inventory')
     if version and inventory['version']!=version or commit and inventory['sourceCommit']!=commit:raise ValueError('Profile source/version differs from publication')
+    identities=[(item.get('configuration'),item.get('workflowId')) for item in inventory['profiles']]
+    if len(set(identities))!=len(identities) or set(identities)!=expected_profiles():
+        raise ValueError('Release must include every bot configuration/workflow exactly once')
     files=[indexes[0]];seen=set()
     for item in inventory['profiles']:
         name=item['filename']
@@ -26,7 +35,7 @@ def collect(source,output,version=None,commit=None):
         path=source/name
         if path.is_symlink():raise ValueError('Linked profile artifact')
         data=path.read_bytes();manifest=verify(data)
-        if (digest(data)!=item['sha256'] or len(data)!=item['bytes'] or manifest['packages']!=item['packages']
+        if (manifest['workflowId']!=item['workflowId'] or digest(data)!=item['sha256'] or len(data)!=item['bytes'] or manifest['packages']!=item['packages']
                 or manifest['build']['version']!=inventory['version'] or manifest['build']['sourceCommit']!=inventory['sourceCommit']):raise ValueError('Profile evidence mismatch')
         seen.add(name);files.append(path)
     output.mkdir(parents=True,exist_ok=True)

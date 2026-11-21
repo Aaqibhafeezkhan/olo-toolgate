@@ -70,6 +70,8 @@ def verified_foundation(folder):
     required.update(f'toolgate-contracts-{version}{classifier}.jar' for classifier in ('','-sources','-javadoc'))
     required.update(f'toolgate-contracts-{version}.{extension}' for extension in ('pom','module'))
     if not required<=files:raise ValueError('Tagged release is missing required foundation artifacts')
+    from tools.release.tool_packages import validate
+    validate(folder,product,os.environ['RELEASE_SHA'],shared.ROOT)
     return files
 
 

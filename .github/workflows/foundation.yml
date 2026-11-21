@@ -236,6 +236,14 @@ jobs:
     - name: Java SDK plugins and Java example tools end to end
       run: |
         python tools/check.py --ci-common --ci-part examples
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: foundation-stage-tool-packages
+        path: |
+          examples/java-tools/*/build/toolgate/*.olotool
+          examples/mocked-tools/*/build/toolgate/*.olotool
+        retention-days: 1
+        if-no-files-found: error
   trigger-package-sdk:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -648,9 +656,14 @@ jobs:
       with:
         name: foundation-stage-profiles
         path: bot/bin
+    - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      with:
+        name: foundation-stage-tool-packages
+        path: examples
     - name: Create raw contract release smoke assets
       run: |
         python tools/release/profiles.py --source bot/bin --output build/release --version "$(cat VERSION)" --commit "$(git rev-parse HEAD)"
+        python tools/release/tool_packages.py --output build/release --version "$(cat VERSION)" --commit "$(git rev-parse HEAD)"
         python tools/release/bundle.py
         contracts_version="$(cat packages/contracts/VERSION)"
         for classifier in "" "-sources" "-javadoc"; do

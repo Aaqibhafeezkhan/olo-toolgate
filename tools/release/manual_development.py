@@ -116,6 +116,13 @@ def build():
     run(sys.executable, 'bot/build.py', '--version', version)
     run(sys.executable, 'tools/release/profiles.py', '--source', 'bot/bin', '--output', str(ASSETS),
         '--version', version, '--commit', info['commit'])
+    wrapper=str(ROOT/'gradlew')
+    for group in ('java-tools','mocked-tools'):
+        run(wrapper,'--no-daemon','-p',str(ROOT/'examples'/group),
+            '-PtoolgateSdkRepo='+str(ROOT/'build/sdk-repo'),'clean','toolgatePackage')
+    run(sys.executable,'core-mcp/build.py','--cli','target/debug/toolgate','--without-tests')
+    run(sys.executable,'tools/release/tool_packages.py','--output',str(ASSETS),
+        '--version',version,'--commit',info['commit'])
     for document in ('RELEASE-NOTES.md', 'RELEASE-NOTES.generated.md', 'contributors.json'):
         shutil.copyfile(ROOT/'release-notes'/document, ASSETS/document)
     chart = OUTPUT/'chart'
@@ -134,6 +141,8 @@ def build():
 def publish():
     info = json.loads((ASSETS/'development-release.json').read_text(encoding='utf-8'))
     development_source.verify(info)
+    from tools.release.tool_packages import validate
+    validate(ASSETS,info['binaryVersion'],info['commit'])
     repo = os.environ['GITHUB_REPOSITORY']
     namespace = os.environ.get('DOCKERHUB_NAMESPACE') or os.environ['DOCKERHUB_USERNAME']
     images = image_publication.publish(run, repo, info['commit'], namespace,

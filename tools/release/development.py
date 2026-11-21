@@ -168,6 +168,13 @@ def prepare(run_id=None):
         shutil.copyfile(path,assets/path.name)
     from tools.release.profiles import collect as collect_profiles
     collect_profiles(OUTPUT/'foundation/build/release',assets,commit=sha)
+    from tools.release.tool_packages import validate as validate_tools
+    foundation=OUTPUT/'foundation/build/release'
+    indexes=list(foundation.glob('olo-tools-*.json'))
+    if len(indexes)!=1:raise ValueError('Exactly one complete tool release inventory is required')
+    tool_version=json.loads(indexes[0].read_text(encoding='utf-8'))['version']
+    tool_names=validate_tools(foundation,tool_version,sha)
+    for name in tool_names|{indexes[0].name}:shutil.copyfile(foundation/name,assets/name)
     if tagged:
         from tools.release.tagged import prepare_assets
         prepare_assets(selected)

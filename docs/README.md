@@ -5,8 +5,9 @@ devices and runtime access. Start with the guide for the task you are doing.
 
 | Audience | Start here |
 |---|---|
-| New users | [Published-image Quickstart](../deploy/docker/quickstart/dev/README.md), [first login](getting-started/first-login.md) |
+| New users | [Beginner bot walkthroughs](../bot/README.md#first-time-users-choose-a-bot), [Published-image Quickstart](../deploy/docker/quickstart/dev/README.md), [first login](getting-started/first-login.md) |
 | Bot authors | [Community help](help/README.md), [examples](../bot/README.md) |
+| Domain users adapting a bot | [Tune prompts/configuration with monitoring](help/tune-bots.md) |
 | Tool authors | [Tool SDK guide](../TOOL-SDK-GUIDE.md), [SDK specifications](../tool-sdk/README.md) |
 | Contributors | [Contributing](../CONTRIBUTING.md), [development setup](development/README.md), [verification](testing/README.md) |
 | Operators | [Deployment](deployment/README.md), [operations](operations/README.md), [recovery](enterprise-access-control/operations.md) |

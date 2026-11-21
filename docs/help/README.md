@@ -7,6 +7,7 @@ repository, image and API names still use `olo-toolgate`.
 
 | Task | Guide |
 |---|---|
+| Start without programming experience and choose a bot | [Beginner bot walkthroughs](../../bot/README.md#first-time-users-choose-a-bot) |
 | Start from published images | [Docker Quickstart dev](../../deploy/docker/quickstart/dev/README.md) |
 | Start the local installation | [Profiled Quickstart](../../debug/profiled/README.md) |
 | Import, publish, run or switch | [Run bots](run-bots.md) |
@@ -14,6 +15,7 @@ repository, image and API names still use `olo-toolgate`.
 | Set QLoRA, Ollama, fallback order or OpenRouter | [Model setup and updates](models.md) |
 | Write JSON graphs and build bundles | [Author bots](author-bots.md) |
 | Configure Langfuse, LangSmith and Phoenix | [Observability](observability.md) |
+| Adapt a bot to your domain and compare changes with monitoring | [Tune bots for your use case](tune-bots.md) |
 | Resolve readiness errors or failed runs | [Troubleshooting](troubleshooting.md) |
 | Pick an example and its exact input/output | [Bot sources](../../bot/README.md) |
 
