@@ -6,6 +6,9 @@ profile: workflow/agent/model JSON, referenced directory definitions, logical
 trigger connections and exact tool-package source recipes. Each folder has its
 own README and, for a file use case, an input example. Secrets are never sources.
 
+Use the [bot user, permission and resource matrix](PERMISSIONS.md) to see which
+human/runtime grants, models, tools, Device Groups and paths each bot requires.
+
 The supplied configurations now declare execution order in `workflow.graph.config`
 using the installed `olo.json-graph` factory. Edit its nodes, edges and output
 expressions to change the topology; agent definitions supply the governed model
@@ -13,8 +16,8 @@ and tool capabilities. The compiler supports value, agent, model, tool, branchin
 static joins and bounded loops. Compilation does not provision devices or make a
 bot runnable. Start with [community help](../docs/help/README.md), especially
 [device updates](../docs/help/device.md) and [model updates](../docs/help/models.md).
-Actual execution acceptance and remaining work are recorded in
-the [live workflow status](../docs/architecture/workflows.md).
+Execution boundaries and limitations are described in the
+[workflow architecture](../docs/architecture/workflows.md).
 
 From any directory on Windows:
 
@@ -22,6 +25,22 @@ From any directory on Windows:
 D:\git\olo-toolgate\bot\build.bat
 D:\git\olo-toolgate\bot\build.bat --configuration text-summary
 ```
+
+With no arguments, `build.bat` builds **all ten configurations locally** into
+`D:\git\olo-toolgate\bot\bin` (or this checkout's `bot/bin` when cloned elsewhere).
+Upload each resulting `.olo` through **Bots → Import workflow .olo** on a fresh
+setup supporting the current bundle/package contracts. Bundles carry their exact
+required packages and configuration, without a source tenant's login, private
+keys or device identity. The source commit records provenance, not a target
+installation restriction. Copy the `.olo` files; the inventory and `SHA256SUMS`
+help verify the transfer and are not separate bot uploads.
+
+On the destination, configure its own user grants, model endpoints/vault secrets,
+approved devices and directories before review, preparation and publication.
+See [every bot's permission/resource requirements](PERMISSIONS.md). Importability
+does not make these installation-owned resources available automatically. Hotswap
+A/B share one workflow ID: import/publish the intended revision rather than
+expecting both to appear as independent bots.
 
 On Linux/macOS:
 
@@ -53,7 +72,7 @@ Each output `<configuration>-<workflow>-<version>.olo` is a ZIP containing:
 
 - `manifest.json`: current format version, workflow ID, configuration hashes,
   exact package inventory, product version, source commit and build identifier;
-- `workflow.json` and `referenced-config.json`;
+- `workflow.json` and `referenced-data.json`;
 - `packages/<package-digest>.olotool`: the exact required tool/trigger archives.
 
 Tool archives use **`.olotool`**; workflow/profile archives use **`.olo`**.

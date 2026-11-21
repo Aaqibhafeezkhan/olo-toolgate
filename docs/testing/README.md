@@ -10,9 +10,12 @@ so a stalled test can fail with its name and stack trace. The Java workflow step
 also has a 35-minute cap for stalls outside JUnit.
 
 The production Gateway image smoke test (`python tools/gateway/container.py`)
-also qualifies offline SQLite backup and restore. The backup check inspects
-containers listed for the source volume to confirm they have stopped. Docker
-can briefly list a stopped container as running.
+checks that password replacement invalidates a captured delegated session even
+after grants and delegation are approved. It then reloads a credential with the
+current human session epoch and checks discovery, execution and delegation
+revocation. It also qualifies offline SQLite backup and restore. The backup
+check inspects containers listed for the source volume to confirm they have
+stopped. Docker can briefly list a stopped container as running.
 
 | Scope | Entry point |
 |---|---|

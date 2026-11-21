@@ -16,6 +16,94 @@ export interface AdmissionResponse {
   readonly reason?: RefusalReason;
 }
 export type ApiChange = "NONE" | "PATCH" | "MINOR" | "MAJOR";
+/** Short-lived signed user/tenant access token. Obtain a new token through password login after expiry. */
+export interface ApplicationAccessToken {
+  readonly accessToken: string;
+  readonly tokenType: string;
+  readonly expiresIn: number;
+}
+/** Durable structural notification. RESULT announces an available result; read the separately authorized result endpoint for private output. */
+export interface ApplicationEvent {
+  readonly eventId: string;
+  readonly tenantId: string;
+  readonly sourceType: ApplicationEventSource;
+  readonly sourceId: string;
+  readonly sequence: number;
+  readonly kind: ApplicationEventKind;
+  readonly createdAtUnixMs: number;
+  readonly data: Record<string, unknown>;
+}
+export type ApplicationEventKind = "PROGRESS" | "RESULT" | "TRIGGER_STATUS";
+/** Bounded durable source events in sequence order. Cursors are scoped to one authorized source. */
+export interface ApplicationEventPage {
+  readonly items: ReadonlyArray<ApplicationEvent>;
+  readonly nextCursor: number;
+}
+export type ApplicationEventSource = "WORKFLOW" | "TRIGGER";
+/** V1 existing-user password login. Tenant is required in Toolgate-Tenant-ID; OAuth is not required. */
+export interface ApplicationPasswordLoginRequest {
+  readonly username: string;
+  readonly password: string;
+}
+/** Structural status for one readable trigger assignment, without configuration or source event payloads. */
+export interface ApplicationTriggerStatus {
+  readonly assignmentId: string;
+  readonly status: TriggerAssignmentStatus;
+}
+/** Caller-owned registration metadata; no signing key or user token is exposed. */
+export interface ApplicationWebhook {
+  readonly id: string;
+  readonly sourceType: ApplicationEventSource;
+  readonly sourceId: string;
+  readonly eventKinds: ReadonlyArray<ApplicationEventKind>;
+  readonly callbackUrl: string;
+  readonly expiresAtUnixMs: number;
+  readonly state: ApplicationWebhookState;
+  readonly nextCursor: number;
+  readonly attempts: number;
+}
+/** Signed destination-ownership challenge. Return HMAC-SHA256(secret, verify.subscriptionId.challenge) using the supplied subscription ID and challenge as proof. */
+export interface ApplicationWebhookChallenge {
+  readonly type: string;
+  readonly subscriptionId: string;
+  readonly challenge: string;
+}
+/** Caller-owned HTTPS notification subscription. Source ID is a run ID or trigger assignment name. Verification and current source permissions are required before delivery. */
+export interface ApplicationWebhookCreate {
+  readonly sourceType: ApplicationEventSource;
+  readonly sourceId: string;
+  readonly eventKinds: ReadonlyArray<ApplicationEventKind>;
+  readonly callbackUrl: string;
+  readonly expiresAtUnixMs: number;
+  readonly after: number;
+}
+/** Signed webhook delivery envelope. Use subscriptionId to select the signing key, verify timestamp and raw-body signature, then deduplicate by event.eventId. */
+export interface ApplicationWebhookDelivery {
+  readonly subscriptionId: string;
+  readonly event: ApplicationEvent;
+}
+/** V1 external application ApplicationWebhookPage contract; current tenant and user authorization remain required. */
+export interface ApplicationWebhookPage {
+  readonly items: ReadonlyArray<ApplicationWebhook>;
+}
+/** Registration response, including a private per-subscription signing secret. Exact authenticated retries may recover the same secret; it is encrypted at rest and absent from list/read responses. */
+export interface ApplicationWebhookRegistration {
+  readonly id: string;
+  readonly sourceType: ApplicationEventSource;
+  readonly sourceId: string;
+  readonly eventKinds: ReadonlyArray<ApplicationEventKind>;
+  readonly callbackUrl: string;
+  readonly expiresAtUnixMs: number;
+  readonly state: ApplicationWebhookState;
+  readonly nextCursor: number;
+  readonly attempts: number;
+  readonly signingSecret: string;
+}
+export type ApplicationWebhookState = "PENDING" | "ACTIVE" | "REVOKED" | "FAILED" | "EXPIRED";
+/** V1 external application ApplicationWebhookVerificationProof contract; current tenant and user authorization remain required. */
+export interface ApplicationWebhookVerificationProof {
+  readonly proof: string;
+}
 export type AuthType = "API_KEY" | "BASIC" | "OAUTH2_CLIENT_CREDENTIALS" | "TOKEN_EXCHANGE" | "CONNECTION" | "CUSTOM";
 /** Exact JCS offline approval payload. Issued-to-expiry window is at most ten minutes; two or three distinct current operator keys must approve identical claims. */
 export interface BreakGlassApprovalClaims {
@@ -3086,6 +3174,17 @@ export interface WorkflowToolDecision {
   readonly kind: "tool";
   readonly toolId: string;
   readonly arguments: Record<string, unknown>;
+}
+/** Control-owned manual-run user and admitted resource ceiling; current grants and identity must still be checked. Never accepted from an external caller. */
+export interface WorkflowUserAuthority {
+  readonly userId: string;
+  readonly principalId: string;
+  readonly identityDigest: string;
+  readonly humanScopes: ReadonlyArray<V1.EnterpriseScope>;
+  readonly secretScopes: ReadonlyArray<V1.EnterpriseScope>;
+  readonly agentScopes: ReadonlyArray<V1.EnterpriseScope>;
+  readonly agentSecretScopes: ReadonlyArray<V1.EnterpriseScope>;
+  readonly requiredScopes: ReadonlyArray<V1.EnterpriseScope>;
 }
 /** Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority. */
 export interface WorkflowWorkerCapabilities {

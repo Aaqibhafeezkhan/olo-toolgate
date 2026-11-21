@@ -252,13 +252,13 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             delegated_digest=hashlib.sha256(delegated_token.encode()).hexdigest()
             # Exact production Gateway, online authority on an explicit fixture-only loopback hop.
             configure_external_gateway(exec_text,info['NetworkSettings']['Ports']['8084/tcp'][0]['HostPort'])
-            exec_text('/opt/quickstart-python/bin/python','-c',
+            delegated_session_epoch=int(exec_text('/opt/quickstart-python/bin/python','-c',
                 "import sys;sys.path.insert(0,'/opt/quickstart');import supervisor as s;import json,time;"
                 "db=s.Database();identities=[json.loads(r[0]) if isinstance(r[0],str) else r[0] for r in db.execute(\"SELECT document FROM control_records WHERE kind='IDENTITY_BINDING'\").fetchall()];db.connection.close();"
                 "i=next(i for i in identities if i['subject']=='reviewer-1');values=json.loads((s.DATA/'run/credentials.json').read_text());"
                 "c={**values[0]['context'],'mode':'DELEGATED','workloadBindingId':'workload-delegated','userId':i['userId'],'sessionEpoch':i['sessionEpoch'],'credentialSha256':"+repr(delegated_digest)+"};"
                 "values.append(dict(tokenSha256="+repr(delegated_digest)+",context=c,expiresAtUnixMs=int(time.time()*1000)+3600000));"
-                "s.atomic(s.DATA/'run/external-credentials.json',json.dumps(values))")
+                "s.atomic(s.DATA/'run/external-credentials.json',json.dumps(values));print(i['sessionEpoch'])"))
             external=run(['docker','run','-d','--read-only','--cap-drop=ALL','--security-opt=no-new-privileges',
                 '--memory=256m','--cpus=1','--network','container:'+container,'-v',volume+':/data:ro',
                 '-e','TOOLGATE_GATEWAY_CONFIG=/data/run/external-gateway.json',
@@ -613,6 +613,7 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
         mark('verified package upload/deployment/Gateway permit/Java tool run from the exact package/switch to a pull-mode host/live revocation')
         if gateway_image:
             identity=next(i for i in ok(api('/api/control/v1/identity-bindings',admin))['items'] if i['subject']=='reviewer-1')
+            assert identity['sessionEpoch']>delegated_session_epoch, 'Password replacement must revoke the bootstrap session'
             reviewed('/api/control/v1/workload-bindings',dict(id='workload-delegated',name='Verified human delegation',
                 enabled=True,revision=1,agentId='agent-local',mode='DELEGATED',issuer='gateway',subject='local-workload',
                 audience='gateway',credentialSha256=delegated_digest,credentialEpoch=1,
@@ -620,14 +621,30 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
             reviewed('/api/control/v1/delegations',dict(id='human-delegation',name='Same Team and Agent Group',
                 enabled=True,revision=1,teamId='smoke-makers',agentGroupId='default-agents',scope=scope))
-            assert {t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}==hello_tools
+            # The fixture captured this credential before password replacement. Current grants
+            # and delegation cannot restore that revoked human session; install its current epoch.
+            assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
+            assert mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token)[0]==403
+            exec_text('/opt/quickstart-python/bin/python','-c',
+                "import sys,json;sys.path.insert(0,'/opt/quickstart');import supervisor as s;"
+                "p=s.DATA/'run/external-credentials.json';values=json.loads(p.read_text());"
+                "c=next(v['context'] for v in values if v['tokenSha256']==sys.argv[1]);"
+                "c['sessionEpoch']=int(sys.argv[2]);s.atomic(p,json.dumps(values))",
+                delegated_digest,str(identity['sessionEpoch']))
+            run(['docker','kill','--signal','HUP',external],capture_output=True)
+            deadline=time.monotonic()+10
+            while True:  # SIGHUP credential reload is asynchronous; poll discovery only.
+                listed={t['name'] for t in ok(mcp('tools/list',token=delegated_token))['result']['tools']}
+                if listed==hello_tools:break
+                assert not listed and time.monotonic()<deadline, ('Current delegated session discovery',listed,hello_tools)
+                time.sleep(.1)
             result=ok(mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token))
             assert result['result']['structuredContent']=={'message':'Hello Grace'},result
             delegation=ok(api('/api/control/v1/delegations/human-delegation',admin))
             reviewed('/api/control/v1/delegations/human-delegation',{**delegation,'enabled':False},'PUT',delegation['revision'])
             assert ok(mcp('tools/list',token=delegated_token))['result']['tools']==[]
             assert mcp('tools/call',{'name':hello,'arguments':{'text':'Grace'}},token=delegated_token)[0]==403
-            mark('real DELEGATED identity/same Team and Agent Group/Tool Host effect/current delegation revocation')
+            mark('real DELEGATED identity/revoked bootstrap session/current session reload/Tool Host effect/current delegation revocation')
         def invoke(arguments,key=None,tool_name=hello):
             return api('/api/control/v1/access/human/invocations',human,
                        dict(target,request=dict(toolId=tool_name,action='invoke',arguments=arguments)),'POST',key)

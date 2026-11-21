@@ -4571,6 +4571,7 @@ CREATE TABLE control_workflow_runs(
  workflow_id varchar(128) NOT NULL, workflow_version_id varchar(128) NOT NULL,
  compiler_digest varchar(71) NOT NULL CHECK(length(compiler_digest)=71 AND substr(compiler_digest,1,7)='sha256:'),
  graph_digest varchar(71) NOT NULL CHECK(length(graph_digest)=71 AND substr(graph_digest,1,7)='sha256:'),
+ user_authority text CHECK(user_authority IS NULL OR length(user_authority)<=65536),
  service_agent_id varchar(128) NOT NULL, service_agent_group_id varchar(128) NOT NULL,
  remediation_mode varchar(16) NOT NULL CHECK(remediation_mode IN('PREPARE','APPLY')),
  state varchar(24) NOT NULL CHECK(state IN('QUEUED','RUNNING','SUCCEEDED','FAILED','AWAITING_APPROVAL','CANCELLED','EXPIRED')),
@@ -4709,6 +4710,41 @@ CREATE TRIGGER native_logical_capacity AFTER INSERT ON control_native_file_inten
 
 CREATE INDEX native_file_intents_operation ON control_native_file_intents(tenant_id,operation_id,effect_id);
 
+CREATE TABLE control_application_events(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id),
+ source_type varchar(16) NOT NULL CHECK(source_type IN('WORKFLOW','TRIGGER')), source_id varchar(128) NOT NULL,
+ sequence bigint NOT NULL CHECK(sequence>0), event_key varchar(256) NOT NULL, event_id varchar(128) NOT NULL,
+ event_kind varchar(24) NOT NULL CHECK(event_kind IN('PROGRESS','RESULT','TRIGGER_STATUS')),
+ created_at bigint NOT NULL CHECK(created_at>=0), document text NOT NULL CHECK(length(document)<=16384),
+ PRIMARY KEY(tenant_id,source_type,source_id,sequence), UNIQUE(tenant_id,source_type,source_id,event_key), UNIQUE(tenant_id,event_id));
+
+CREATE TABLE control_application_subscriptions(
+ tenant_id varchar(128) NOT NULL REFERENCES control_tenants(tenant_id), subscription_id varchar(128) NOT NULL,
+ request_digest varchar(64) NOT NULL,
+ user_id varchar(128) NOT NULL, principal_id varchar(64) NOT NULL, identity_digest varchar(64) NOT NULL,
+ source_type varchar(16) NOT NULL CHECK(source_type IN('WORKFLOW','TRIGGER')),source_id varchar(128) NOT NULL,source_key varchar(128) NOT NULL,
+ event_kinds varchar(128) NOT NULL, endpoint varchar(2048) NOT NULL, expires_at bigint NOT NULL CHECK(expires_at>0),
+ key_version bigint NOT NULL, secret text NOT NULL CHECK(length(secret)<=4096),
+ state varchar(16) NOT NULL CHECK(state IN('PENDING','ACTIVE','REVOKED','FAILED')),
+ cursor bigint NOT NULL CHECK(cursor>=0), attempts integer NOT NULL CHECK(attempts>=0 AND attempts<=8),
+ next_attempt bigint NOT NULL, lease_id varchar(128), lease_until bigint NOT NULL,
+ PRIMARY KEY(tenant_id,subscription_id),
+ FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version));
+
+ALTER TABLE control_application_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_application_events FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_application_events USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_application_events AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_application_events FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE public.control_application_events TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE public.control_application_events TO toolgate_control_platform;
+ALTER TABLE control_application_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE control_application_subscriptions FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_access ON control_application_subscriptions USING(true) WITH CHECK(true);
+CREATE POLICY tenant_fence ON control_application_subscriptions AS RESTRICTIVE USING(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(false)) WITH CHECK(tenant_id::text=NULLIF(current_setting('app.tenant_id',true),'') AND public.control_tenant_access(true));
+CREATE TRIGGER tenant_immutable BEFORE UPDATE OF tenant_id ON control_application_subscriptions FOR EACH ROW EXECUTE FUNCTION public.control_tenant_identity_guard();
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE public.control_application_subscriptions TO toolgate_control_runtime;
+GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE public.control_application_subscriptions TO toolgate_control_platform;
 -- BEGIN TENANT CAPACITY
 GRANT SELECT ON control_tenant_capacity TO toolgate_control_runtime;
 
@@ -4718,6 +4754,30 @@ CREATE FUNCTION control_capacity_seed() RETURNS trigger LANGUAGE plpgsql SECURIT
 BEGIN INSERT INTO public.control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id);RETURN NEW;END;$$;
 REVOKE ALL ON FUNCTION control_capacity_seed() FROM PUBLIC;
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants FOR EACH ROW EXECUTE FUNCTION control_capacity_seed();
+
+CREATE FUNCTION control_application_events_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.source_type),0)+COALESCE(octet_length(NEW.source_id),0)+COALESCE(octet_length(NEW.event_key),0)+COALESCE(octet_length(NEW.event_id),0)+COALESCE(octet_length(NEW.document),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.source_type),0)+COALESCE(octet_length(OLD.source_id),0)+COALESCE(octet_length(OLD.event_key),0)+COALESCE(octet_length(OLD.event_id),0)+COALESCE(octet_length(OLD.document),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_application_events_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_application_events FOR EACH ROW EXECUTE FUNCTION control_application_events_capacity();
+
+CREATE FUNCTION control_application_subscriptions_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
+BEGIN
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.request_digest),0)+COALESCE(octet_length(NEW.user_id),0)+COALESCE(octet_length(NEW.principal_id),0)+COALESCE(octet_length(NEW.identity_digest),0)+COALESCE(octet_length(NEW.source_type),0)+COALESCE(octet_length(NEW.source_id),0)+COALESCE(octet_length(NEW.source_key),0)+COALESCE(octet_length(NEW.event_kinds),0)+COALESCE(octet_length(NEW.endpoint),0)+COALESCE(octet_length(NEW.secret),0));rows_delta:=1;queue_delta:=(0);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.request_digest),0)+COALESCE(octet_length(OLD.user_id),0)+COALESCE(octet_length(OLD.principal_id),0)+COALESCE(octet_length(OLD.identity_digest),0)+COALESCE(octet_length(OLD.source_type),0)+COALESCE(octet_length(OLD.source_id),0)+COALESCE(octet_length(OLD.source_key),0)+COALESCE(octet_length(OLD.event_kinds),0)+COALESCE(octet_length(OLD.endpoint),0)+COALESCE(octet_length(OLD.secret),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(0);END IF;
+ UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
+ IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;
+END;$$;
+REVOKE ALL ON FUNCTION control_application_subscriptions_capacity() FROM PUBLIC;
+CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_application_subscriptions FOR EACH ROW EXECUTE FUNCTION control_application_subscriptions_capacity();
 
 CREATE FUNCTION control_native_file_qualifications_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
@@ -4818,8 +4878,8 @@ CREATE TRIGGER capacity_account AFTER INSERT OR UPDATE OR DELETE ON control_work
 CREATE FUNCTION control_workflow_runs_capacity() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE owner text;bytes_delta bigint:=0;rows_delta bigint:=0;queue_delta bigint:=0;
 BEGIN
- IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.compiler_digest),0)+COALESCE(octet_length(NEW.graph_digest),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
- IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.compiler_digest),0)+COALESCE(octet_length(OLD.graph_digest),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'DELETE' THEN owner:=NEW.tenant_id;bytes_delta:=(COALESCE(octet_length(NEW.document),0)+COALESCE(octet_length(NEW.compiler_digest),0)+COALESCE(octet_length(NEW.graph_digest),0)+COALESCE(octet_length(NEW.user_authority),0));rows_delta:=1;queue_delta:=(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
+ IF TG_OP<>'INSERT' THEN owner:=OLD.tenant_id;bytes_delta:=bytes_delta-(COALESCE(octet_length(OLD.document),0)+COALESCE(octet_length(OLD.compiler_digest),0)+COALESCE(octet_length(OLD.graph_digest),0)+COALESCE(octet_length(OLD.user_authority),0));rows_delta:=rows_delta-1;queue_delta:=queue_delta-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END);END IF;
  UPDATE public.control_tenant_capacity SET stored_bytes=stored_bytes+bytes_delta,stored_rows=stored_rows+rows_delta,queued_rows=queued_rows+queue_delta WHERE tenant_id=owner;
  IF NOT FOUND THEN RAISE EXCEPTION 'tenant capacity missing';END IF;
  IF TG_OP='DELETE' THEN RETURN OLD;ELSE RETURN NEW;END IF;

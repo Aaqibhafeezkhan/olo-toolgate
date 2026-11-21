@@ -19,8 +19,11 @@ public final class WorkflowManualRuns {
         var request=codec.model(document,WorkflowRunStartRequest.class);
         String digest=Canonical.digest((com.fasterxml.jackson.databind.JsonNode)codec.value(codec.json(List.of(profileId,workflowId,request)))).substring(7);
         return store.transaction(actor.tenant(),true,tx->{
-            actor.requireAdmin();
-            if(!new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId()))throw ManagementAccess.denied();
+            var candidate=profiles.runConfiguration(tx,actor.tenant(),profileId,request.profileDigest());
+            var selected=candidate.workflows().workflows().stream().filter(w->w.id().equals(workflowId)).findFirst().orElseThrow(ManagementAccess::denied);
+            var authority=new WorkflowUserAccess(codec).capture(tx.load(),actor,candidate.workflows(),selected,clock.millis());
+            String userAuthority=codec.json(authority);
+            if(userAuthority.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>65536)throw Failure.validation();
             var replay=tx.replay(actor.id(),"manual-run:"+DirectoryService.digest(key),digest);if(replay!=null)return replay;
             var head=tx.workflowProfiles().publication(profileId);
             if(head==null||!head.digest().equals(request.profileDigest())||head.generation()!=request.expectedGeneration())throw Failure.conflict();
@@ -41,7 +44,7 @@ public final class WorkflowManualRuns {
             String run="run-"+UUID.randomUUID();
             var sealed=inputs.seal(tx,actor.tenant(),run,head.digest(),request.message());
             tx.workflowRuns().enqueue(new WorkflowRunStore.QueuedRun(run,profileId,head.digest(),workflowId,workflow.versionId(),entry.agentId(),entry.agentGroupId(),mode.name(),
-                clock.millis(),sealed.keyVersion(),sealed.ciphertext(),compiler,workflow.graph().digest()));
+                clock.millis(),sealed.keyVersion(),sealed.ciphertext(),compiler,workflow.graph().digest(),userAuthority));
             WorkflowProgress.control(tx,codec,actor.id(),run,"QUEUED",requestId,entry.agentId());
             var reply=new Store.Reply(201,codec.json(new WorkflowRunStartReceipt(run,profileId,head.digest(),workflowId,"QUEUED")),0);
             tx.remember(actor.id(),"manual-run:"+DirectoryService.digest(key),digest,reply);return reply;

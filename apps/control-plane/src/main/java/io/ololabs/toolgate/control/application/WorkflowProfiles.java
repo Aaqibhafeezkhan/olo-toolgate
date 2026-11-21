@@ -226,15 +226,23 @@ public final class WorkflowProfiles {
         if (limit < 1 || limit > 50) throw Failure.validation();
         if (after != null) Ids.valid(after);
         return store.transaction(actor.tenant(), false, tx -> {
-            requirePublishedRead(tx, actor);
-            var result = tx.workflowProfiles().publications(after == null ? "" : after, limit);
+            new ManagementAccess(codec).access(tx.load(),actor.userId());
+            var result = new java.util.ArrayList<WorkflowProfileStore.Publication>();
+            String cursor = after == null ? "" : after;
+            for (int scanned = 0; scanned < 1000 && result.size() < limit; scanned++) {
+                var page = tx.workflowProfiles().publications(cursor, 1);
+                if (page.isEmpty()) break;
+                var publication = page.getFirst(); cursor = publication.profileId();
+                if (publishedReadable(tx, actor, publication.profileId(), publication.digest())) result.add(publication);
+                if (scanned == 999 && result.size() < limit) throw Failure.unavailable();
+            }
             return new Store.Reply(200, codec.json(result), 0);
         });
     }
     public Store.Reply publishedConfiguration(DirectoryService.Actor actor, String id, String digest) {
         return store.transaction(actor.tenant(), false, tx -> {
-            requirePublishedRead(tx, actor);
             Ids.valid(id); digest(digest);
+            if (!publishedReadable(tx, actor, id, digest)) throw ManagementAccess.denied();
             var head = tx.workflowProfiles().publication(id);
             if (head == null || !head.digest().equals(digest))
                 throw new Failure(ErrorCode.NOT_FOUND, 404, "Published workflow profile unavailable");
@@ -257,9 +265,15 @@ public final class WorkflowProfiles {
             return new Store.Reply(200, codec.json(workflows), head.generation());
         });
     }
-    private void requirePublishedRead(Store.Session tx, DirectoryService.Actor actor) {
-        if (!new ManagementAccess(codec).canReadPublishedWorkflows(tx.load(), actor.userId(), System.currentTimeMillis()))
-            throw ManagementAccess.denied();
+    private boolean publishedReadable(Store.Session tx, DirectoryService.Actor actor, String id, String digest) {
+        var access = new ManagementAccess(codec);
+        if (access.canReadPublishedWorkflows(tx.load(), actor.userId(), System.currentTimeMillis())) return true;
+        var profile = runConfiguration(tx, actor.tenant(), id, digest);
+        try {
+            for (var workflow : profile.workflows().workflows())
+                new WorkflowUserAccess(codec).capture(tx.load(), actor, profile.workflows(), workflow, System.currentTimeMillis());
+            return true;
+        } catch (Failure denied) { if (denied.status() != 403) throw denied; return false; }
     }
     private static void redactContext(JsonNode entries) {
         for (var entry : entries) ((com.fasterxml.jackson.databind.node.ObjectNode)entry).remove("arguments");
@@ -306,6 +320,13 @@ public final class WorkflowProfiles {
                 || !java.util.Set.of("QUEUED", "RUNNING").contains(tx.workflowRuns().state(run.id())))
             throw ManagementAccess.denied();
         var revision = revision(tx, tenant, run.profileId(), run.profileDigest());
+        if (!revision.state().equals("REVIEWED")) throw ManagementAccess.denied();
+        return profile(documents.open(tx, tenant, revision));
+    }
+
+    /** Internal pinned configuration for authorization/result reads, including terminal runs. */
+    public DeploymentProfile runConfiguration(Store.Session tx, Ids.TenantId tenant, String id, String digest) {
+        var revision = revision(tx, tenant, id, digest);
         if (!revision.state().equals("REVIEWED")) throw ManagementAccess.denied();
         return profile(documents.open(tx, tenant, revision));
     }

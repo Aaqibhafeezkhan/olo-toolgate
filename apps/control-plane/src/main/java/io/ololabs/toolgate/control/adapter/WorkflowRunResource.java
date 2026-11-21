@@ -9,7 +9,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 import java.time.Clock;
 
-/** Tenant-scoped operator access to private workflow results, with current Super Admin authority. */
+/** Tenant-scoped caller access to private workflow progress and results. */
 @Path("/api/control/v1/workflow-runs") @Produces("application/json") @Blocking @io.quarkus.security.Authenticated
 public class WorkflowRunResource {
     @Inject PostgresStore store;
@@ -20,12 +20,12 @@ public class WorkflowRunResource {
 
     @GET @Path("{runId}/progress")
     public Response progress(@PathParam("runId") String run,@QueryParam("after") @DefaultValue("0") long after) {
-        var value=new WorkflowProgress(store,codec,Clock.systemUTC()).read(actors.management(),run,after);
+        var value=new WorkflowProgress(store,codec,Clock.systemUTC()).read(actors.human(),run,after);
         return Response.status(value.status()).header("Cache-Control","no-store").entity(value.body()).build();
     }
     @GET @Path("{runId}")
     public Response get(@PathParam("runId") String runId) {
-        var actor = actors.management();
+        var actor = actors.human();
         var clock = Clock.systemUTC();
         var vault = keys.required();
         var profiles = new WorkflowProfiles(store, codec, new WorkflowProfileDependencies(codec, clock,

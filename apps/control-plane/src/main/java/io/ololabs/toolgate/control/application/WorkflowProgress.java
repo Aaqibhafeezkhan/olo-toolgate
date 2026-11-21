@@ -15,13 +15,15 @@ public final class WorkflowProgress {
         if(subject!=null)evidence.put("subjectId",subject);
         String json=codec.json(evidence);
         tx.audit(actor,"WORKFLOW_PROGRESS_CONTROL","workflow-run:"+run,1,request,DirectoryService.digest(json),json);
+        if(!java.util.Set.of("SUCCEEDED","FAILED","AWAITING_APPROVAL","CANCELLED","EXPIRED").contains(kind))
+            tx.applicationEvents().append(ApplicationEventSource.WORKFLOW,run,"control:"+request+":"+kind,ApplicationEventKind.PROGRESS,System.currentTimeMillis(),json);
     }
     public Store.Reply read(DirectoryService.Actor actor,String run,long after){
         Ids.valid(run);if(after<0||after>9007199254740991L)throw Failure.validation();
         return store.transaction(actor.tenant(),false,tx->{
-            actor.requireAdmin();
-            if(!new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId()))throw ManagementAccess.denied();
-            if(tx.workflowRuns().get(run)==null)throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.NOT_FOUND,404,"Workflow run unavailable");
+            var stored=tx.workflowRuns().get(run);
+            if(stored==null)throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.NOT_FOUND,404,"Workflow run unavailable");
+            new WorkflowUserAccess(codec).observe(tx.load(),actor,stored,"workflow.progress.read",clock.millis());
             var events=tx.workflowProgress(run,after,200);
             return new Store.Reply(200,codec.json(new WorkflowRunProgressPage(events,events.isEmpty()?after:events.getLast().sequence())),0);
         });
@@ -43,6 +45,10 @@ public final class WorkflowProgress {
             if(event.toolRef()!=null)evidence.put("toolRef",event.toolRef());
             String json=codec.json(evidence);
             tx.audit(worker.id(),"WORKFLOW_PROGRESS_RUNTIME","workflow-run:"+run,1,requestId,DirectoryService.digest(json),json);
+            // External notifications carry the validated phase only. Worker-supplied identifiers
+            // are not a channel for copying arbitrary text or credentials into callbacks.
+            tx.applicationEvents().append(ApplicationEventSource.WORKFLOW,run,"runtime:"+event.eventId(),ApplicationEventKind.PROGRESS,
+                clock.millis(),codec.json(Map.of("kind",event.kind().name())));
             var reply=new Store.Reply(204,"",0);tx.remember(worker.id(),key,digest,reply);return reply;
         });
     }

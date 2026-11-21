@@ -2,6 +2,9 @@
 
 ## 1.0.0-dev.1
 
+- Add tenant-bound password login for external workflow callers, explicit human
+  execution/resource grants, resumable structural events and verified signed HTTPS
+  callbacks. Include Postman/receiver examples and an all-bot permission matrix.
 - Provide the published-image community Quickstart with separate Quickstart,
   LangGraph runtime and Device services; keep local models and monitoring optional.
 - Author, import, review and publish portable bots with referenced agents, model

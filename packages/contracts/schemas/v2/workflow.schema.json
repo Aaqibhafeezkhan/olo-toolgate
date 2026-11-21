@@ -1672,6 +1672,464 @@
         "resultSchema"
       ],
       "description": "Private Gateway response; credentials must never be forwarded to runtime workers or logged."
+    },
+    "ApplicationPasswordLoginRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ],
+      "description": "V1 existing-user password login. Tenant is required in Toolgate-Tenant-ID; OAuth is not required."
+    },
+    "ApplicationAccessToken": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
+        "tokenType": {
+          "type": "string",
+          "pattern": "^Bearer$"
+        },
+        "expiresIn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 900
+        }
+      },
+      "required": [
+        "accessToken",
+        "tokenType",
+        "expiresIn"
+      ],
+      "description": "Short-lived signed user/tenant access token. Obtain a new token through password login after expiry."
+    },
+    "WorkflowUserAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "userId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "principalId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "identityDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "humanScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "../v1/enterprise.schema.json#/$defs/EnterpriseScope"
+          },
+          "maxItems": 512
+        },
+        "secretScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "../v1/enterprise.schema.json#/$defs/EnterpriseScope"
+          },
+          "maxItems": 512
+        },
+        "agentScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "../v1/enterprise.schema.json#/$defs/EnterpriseScope"
+          },
+          "maxItems": 512
+        },
+        "agentSecretScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "../v1/enterprise.schema.json#/$defs/EnterpriseScope"
+          },
+          "maxItems": 512
+        },
+        "requiredScopes": {
+          "type": "array",
+          "items": {
+            "$ref": "../v1/enterprise.schema.json#/$defs/EnterpriseScope"
+          },
+          "maxItems": 512
+        }
+      },
+      "required": [
+        "userId",
+        "principalId",
+        "identityDigest",
+        "humanScopes",
+        "secretScopes",
+        "agentScopes",
+        "agentSecretScopes",
+        "requiredScopes"
+      ],
+      "description": "Control-owned manual-run user and admitted resource ceiling; current grants and identity must still be checked. Never accepted from an external caller."
+    },
+    "ApplicationEventSource": {
+      "type": "string",
+      "enum": [
+        "WORKFLOW",
+        "TRIGGER"
+      ],
+      "description": "V1 external application ApplicationEventSource contract; current tenant and user authorization remain required."
+    },
+    "ApplicationEventKind": {
+      "type": "string",
+      "enum": [
+        "PROGRESS",
+        "RESULT",
+        "TRIGGER_STATUS"
+      ],
+      "description": "V1 external application ApplicationEventKind contract; current tenant and user authorization remain required."
+    },
+    "ApplicationEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eventId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "tenantId": {
+          "$ref": "discovery.schema.json#/$defs/TenantUuid"
+        },
+        "sourceType": {
+          "$ref": "#/$defs/ApplicationEventSource"
+        },
+        "sourceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "$ref": "#/$defs/ApplicationEventKind"
+        },
+        "createdAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "eventId",
+        "tenantId",
+        "sourceType",
+        "sourceId",
+        "sequence",
+        "kind",
+        "createdAtUnixMs",
+        "data"
+      ],
+      "description": "Durable structural notification. RESULT announces an available result; read the separately authorized result endpoint for private output."
+    },
+    "ApplicationEventPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApplicationEvent"
+          },
+          "maxItems": 200
+        },
+        "nextCursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "description": "Bounded durable source events in sequence order. Cursors are scoped to one authorized source."
+    },
+    "ApplicationWebhookCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceType": {
+          "$ref": "#/$defs/ApplicationEventSource"
+        },
+        "sourceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "eventKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApplicationEventKind"
+          },
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "callbackUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "after": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "sourceType",
+        "sourceId",
+        "eventKinds",
+        "callbackUrl",
+        "expiresAtUnixMs",
+        "after"
+      ],
+      "description": "Caller-owned HTTPS notification subscription. Source ID is a run ID or trigger assignment name. Verification and current source permissions are required before delivery."
+    },
+    "ApplicationWebhookDelivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subscriptionId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "event": {
+          "$ref": "#/$defs/ApplicationEvent"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "event"
+      ],
+      "description": "Signed webhook delivery envelope. Use subscriptionId to select the signing key, verify timestamp and raw-body signature, then deduplicate by event.eventId."
+    },
+    "ApplicationWebhookState": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "ACTIVE",
+        "REVOKED",
+        "FAILED",
+        "EXPIRED"
+      ],
+      "description": "V1 external application ApplicationWebhookState contract; current tenant and user authorization remain required."
+    },
+    "ApplicationWebhook": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sourceType": {
+          "$ref": "#/$defs/ApplicationEventSource"
+        },
+        "sourceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "eventKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApplicationEventKind"
+          },
+          "minItems": 1,
+          "maxItems": 3
+        },
+        "callbackUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "$ref": "#/$defs/ApplicationWebhookState"
+        },
+        "nextCursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        }
+      },
+      "required": [
+        "id",
+        "sourceType",
+        "sourceId",
+        "eventKinds",
+        "callbackUrl",
+        "expiresAtUnixMs",
+        "state",
+        "nextCursor",
+        "attempts"
+      ],
+      "description": "Caller-owned registration metadata; no signing key or user token is exposed."
+    },
+    "ApplicationWebhookRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "sourceType": {
+          "$ref": "#/$defs/ApplicationEventSource"
+        },
+        "sourceId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "eventKinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ApplicationEventKind"
+          },
+          "minItems": 1,
+          "maxItems": 3
+        },
+        "callbackUrl": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "expiresAtUnixMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "$ref": "#/$defs/ApplicationWebhookState"
+        },
+        "nextCursor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "signingSecret": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      },
+      "required": [
+        "id",
+        "sourceType",
+        "sourceId",
+        "eventKinds",
+        "callbackUrl",
+        "expiresAtUnixMs",
+        "state",
+        "nextCursor",
+        "attempts",
+        "signingSecret"
+      ],
+      "description": "Registration response, including a private per-subscription signing secret. Exact authenticated retries may recover the same secret; it is encrypted at rest and absent from list/read responses."
+    },
+    "ApplicationWebhookPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/ApplicationWebhook"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "description": "V1 external application ApplicationWebhookPage contract; current tenant and user authorization remain required."
+    },
+    "ApplicationWebhookChallenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^VERIFY$"
+        },
+        "subscriptionId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "challenge": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        }
+      },
+      "required": [
+        "type",
+        "subscriptionId",
+        "challenge"
+      ],
+      "description": "Signed destination-ownership challenge. Return HMAC-SHA256(secret, verify.subscriptionId.challenge) using the supplied subscription ID and challenge as proof."
+    },
+    "ApplicationWebhookVerificationProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proof": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "proof"
+      ],
+      "description": "V1 external application ApplicationWebhookVerificationProof contract; current tenant and user authorization remain required."
+    },
+    "ApplicationTriggerStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assignmentId": {
+          "$ref": "identifiers.schema.json#/$defs/Identifier"
+        },
+        "status": {
+          "$ref": "trigger.schema.json#/$defs/TriggerAssignmentStatus"
+        }
+      },
+      "required": [
+        "assignmentId",
+        "status"
+      ],
+      "description": "Structural status for one readable trigger assignment, without configuration or source event payloads."
     }
   }
 }

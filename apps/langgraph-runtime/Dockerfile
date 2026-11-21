@@ -2,7 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 ARG PYTHON_IMAGE=python:3.12-alpine@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89
 FROM ${PYTHON_IMAGE} AS base
-RUN apk upgrade --no-cache
+# Retry transient repository/TLS outages, but require a successful verified upgrade.
+RUN set -eu; \
+    for attempt in 1 2 3; do \
+        if apk --timeout 20 upgrade --no-cache; then exit 0; fi; \
+        if [ "$attempt" -eq 3 ]; then \
+            echo "Alpine upgrade failed after 3 attempts; check Docker build network, proxy and CA trust." >&2; \
+            exit 1; \
+        fi; \
+        echo "Alpine upgrade attempt $attempt failed; retrying in 5 seconds." >&2; \
+        sleep 5; \
+    done
 
 FROM base AS dependencies
 WORKDIR /app

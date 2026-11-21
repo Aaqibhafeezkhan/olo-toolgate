@@ -37,7 +37,7 @@ public class WorkflowProfileResource {
     @POST @Path("{profileId}/workflows/{workflowId}/runs") @Consumes("application/json")
     public Response startRun(@PathParam("profileId") String profile,@PathParam("workflowId") String workflow,
             @HeaderParam("Idempotency-Key") String key,String document) {
-        var actor=actors.management();
+        var actor=actors.human();
         return reply(new WorkflowManualRuns(store,codec,Clock.systemUTC(),service(actor),keys.required())
             .start(actor,profile,workflow,body(document),key,correlation.id()));
     }
@@ -60,11 +60,11 @@ public class WorkflowProfileResource {
     }
     @GET @Path("published")
     public Response published(@QueryParam("afterProfileId") String after, @QueryParam("limit") @DefaultValue("50") int limit) {
-        var actor = actors.management(); return reply(service(actor).listPublished(actor, after, limit));
+        var actor = actors.human(); return reply(service(actor).listPublished(actor, after, limit));
     }
     @GET @Path("published/{profileId}/{digest}")
     public Response publishedConfiguration(@PathParam("profileId") String id, @PathParam("digest") String digest) {
-        var actor = actors.management(); return reply(service(actor).publishedConfiguration(actor, id, digest));
+        var actor = actors.human(); return reply(service(actor).publishedConfiguration(actor, id, digest));
     }
     @GET @Path("{profileId}/revisions/{digest}/document")
     public Response document(@PathParam("profileId") String id, @PathParam("digest") String digest) {

@@ -686,6 +686,17 @@ Private state/credentials are ignored by Git. The separate fixture container
 
 ## 6. Troubleshooting and limits
 
+- Runtime image build fails at `apk upgrade` with `TLS: unspecified error` or
+  stale/unavailable repositories: the builder could not fetch Alpine's HTTPS
+  package indexes. The upgrade tries at most three times, with a 20-second APK
+  network timeout and five seconds between attempts. If it still fails, check
+  Docker Desktop's network/proxy settings and the builder's CA trust (including
+  any organization-required HTTPS inspection CA), then rerun `start.bat`.
+  The registry pull succeeding does not prove package-repository connectivity
+  inside a build. Keep HTTPS verification and required package updates enabled;
+  do not force missing repositories. Existing storage is preserved on build
+  failure; no reset is needed.
+
 - No event: inspect **Triggers** assignment/instance health, enabled device/group,
   folder, `.txt` extension, permissions and polling interval. Path/size identity
   is a snapshot, not a filesystem journal.
