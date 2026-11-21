@@ -18,6 +18,13 @@ clients through removal of both containers, then reaps the clients. An engine
 timeout still fences the pool and retains its owned journal until managed
 restart; diagnostics preserve the attempted engine operation.
 
+The supervisor enforces the invocation deadline independently of worker output
+and broker liveness. Once that deadline expires, a simultaneous broker-channel
+closure or broker exit is reported as a timeout; broker failures observed before
+expiry remain crashes. Both containers must still be removed before the slot
+is released. Unconfirmed teardown fences the pool and retains its journal,
+including after a timeout; no uncertain effect is replayed automatically.
+
 ## Prepare the service
 
 Provision a dedicated unprivileged `toolgate` account with at least 65,536

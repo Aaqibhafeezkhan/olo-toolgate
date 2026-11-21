@@ -10,7 +10,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 out="$root/build/java-tool-examples"
 
-(cd "$root" && ./gradlew -q --configure-on-demand publishJavaSdkLocally && cargo build -q -p toolgate-cli)
+(cd "$root" && ./gradlew -q --configure-on-demand -I tools/ci/sdk-isolation.init.gradle :publishJavaSdkLocally && cargo build -q -p toolgate-cli)
 export TOOLGATE_CLI="${CARGO_TARGET_DIR:-$root/target}/debug/toolgate"
 builds=(java-tools mocked-tools)
 expected=0

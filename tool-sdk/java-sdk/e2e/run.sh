@@ -14,7 +14,7 @@ root="$(cd "$here/../../.." && pwd)"
 repo="$root/build/sdk-repo"
 out="$root/build/java-sdk-e2e"
 
-(cd "$root" && ./gradlew -q --configure-on-demand publishJavaSdkLocally && cargo build -q -p toolgate-cli)
+(cd "$root" && ./gradlew -q --configure-on-demand -I tools/ci/sdk-isolation.init.gradle :publishJavaSdkLocally && cargo build -q -p toolgate-cli)
 toolgate="${CARGO_TARGET_DIR:-$root/target}/debug/toolgate"
 rm -rf "$out"
 mkdir -p "$out"

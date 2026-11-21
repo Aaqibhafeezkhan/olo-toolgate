@@ -729,16 +729,20 @@ impl Sandbox {
                     let mut failed = connection.failed();
                     let mut command = pool.command();
                     command.args(["start", "--attach", "--interactive", &name]);
-                    if !*failed.borrow() && !broker.closed.load(Ordering::SeqCst) {
-                        ran = tokio::select! {
+                    ran = supervise_until_deadline(input.deadline_unix_ms, async {
+                        if *failed.borrow() || broker.closed.load(Ordering::SeqCst) {
+                            return Ran::Crashed("isolated broker channel failed".into());
+                        }
+                        tokio::select! {
                             biased;
                             _ = cancelled.changed() => Ran::TimedOut,
                             _ = failed.changed() => Ran::Crashed("isolated broker channel failed".into()),
                             _ = child.as_mut().expect("broker process").wait() => Ran::Crashed("isolated broker exited".into()),
                             _ = diagnostic.as_mut().expect("broker diagnostic drain") => Ran::Crashed("isolated broker diagnostics ended".into()),
                             result = crate::runner::exchange(command, &input, input.deadline_unix_ms, output, Some(&frames), &broker) => result,
-                        };
-                    }
+                        }
+                    })
+                    .await;
                 }
                 broker.closed.store(true, Ordering::SeqCst);
                 if let Some(connection) = connection {
@@ -850,6 +854,31 @@ fn sync(path: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let _ = path;
     Ok(())
+}
+
+// Broker IPC and the supervisor enforce the same absolute deadline. The broker
+// may close its channel before Tokio polls the supervisor's timer. Expiry wins
+// that race, while faults observed before expiry remain crashes. Pair cleanup
+// still runs afterwards and can override this outcome if removal is uncertain.
+async fn supervise_until_deadline(
+    deadline_unix_ms: u64,
+    execution: impl std::future::Future<Output = Ran>,
+) -> Ran {
+    let remaining = deadline_unix_ms.saturating_sub(crate::now_ms());
+    if remaining == 0 {
+        return Ran::TimedOut;
+    }
+    tokio::select! {
+        biased;
+        _ = tokio::time::sleep(Duration::from_millis(remaining)) => Ran::TimedOut,
+        result = execution => {
+            if crate::now_ms() >= deadline_unix_ms {
+                Ran::TimedOut
+            } else {
+                result
+            }
+        },
+    }
 }
 // Probes carry no workload arguments, credentials or permits. Bound startup
 // diagnostics without changing the frame deadline or accepting a failed probe.
@@ -993,6 +1022,65 @@ fn validate_probe(v: &Value, c: &Config) -> Result<(), String> {
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn deadline_expiry_does_not_poll_the_worker() {
+        let result = supervise_until_deadline(crate::now_ms(), async {
+            panic!("expired invocation must not poll the worker")
+        })
+        .await;
+        assert!(matches!(result, Ran::TimedOut), "{result:?}");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn deadline_stops_a_worker_without_any_broker_notification() {
+        let result =
+            supervise_until_deadline(crate::now_ms() + 60_000, std::future::pending()).await;
+        assert!(matches!(result, Ran::TimedOut), "{result:?}");
+    }
+
+    #[tokio::test]
+    async fn deadline_preserves_broker_failures_observed_before_expiry() {
+        for reason in [
+            "isolated broker channel failed",
+            "isolated broker exited",
+            "isolated broker diagnostics ended",
+        ] {
+            let result = supervise_until_deadline(crate::now_ms() + 60_000, async {
+                Ran::Crashed(reason.into())
+            })
+            .await;
+            assert!(
+                matches!(result, Ran::Crashed(ref actual) if actual == reason),
+                "{result:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn deadline_preserves_a_result_completed_before_expiry() {
+        let frame = serde_json::from_value(json!({
+            "kind":"RESULT", "resultType":"complete", "isError":false,
+            "content":[], "structuredContent":{"ok":true}
+        }))
+        .unwrap();
+        let result =
+            supervise_until_deadline(crate::now_ms() + 60_000, async { Ran::Frame(frame) }).await;
+        assert!(matches!(result, Ran::Frame(_)), "{result:?}");
+    }
+
+    #[tokio::test]
+    async fn deadline_wins_when_broker_exit_is_ready_before_the_timer_is_polled() {
+        let deadline = crate::now_ms() + 10;
+        let result = supervise_until_deadline(deadline, async {
+            // Hold this poll across wall-clock expiry: the broker notification
+            // is ready before the timer driver can run on this test runtime.
+            std::thread::sleep(Duration::from_millis(20));
+            Ran::Crashed("isolated broker exited".into())
+        })
+        .await;
+        assert!(matches!(result, Ran::TimedOut), "{result:?}");
+    }
+
     fn config() -> Config {
         Config {
             podman_path: "/usr/bin/podman".into(),
