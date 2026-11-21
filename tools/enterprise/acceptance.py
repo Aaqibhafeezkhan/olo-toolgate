@@ -149,7 +149,7 @@ def main():
     rows = {}
     browser = runtime_gate('build/quickstart/browser-smoke.json', 'real accessible enterprise administration browser')
     gateway = runtime_gate('build/gateway/container-smoke.json',
-        'real DELEGATED identity/same Team and Agent Group/native effect/current delegation revocation')
+        'real DELEGATED identity/revoked bootstrap session/current session reload/Tool Host effect/current delegation revocation')
     outage = runtime_gate('build/gateway/container-smoke.json',
         'Core outage fails Gateway closed/recovers without restart/graceful production Gateway shutdown/redacted logs')
     for case, names in CASES.items():
