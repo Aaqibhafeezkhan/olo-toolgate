@@ -1,8 +1,8 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Trigger supervisor
 
-The supervisor of trigger processes (issue #274, [ADR 058](../../docs/adr/058-triggers.md), plan
-[section 6](../../docs/architecture/device-triggers-plan.md)). The endpoint client (module 5) and the Tool Host
+The supervisor of trigger processes (issue #274, [Trigger architecture](../../docs/architecture/triggers.md), plan
+[section 6](../../docs/plans/triggers.md)). The endpoint client (module 5) and the Tool Host
 (module 8) link it; it is not wired into `apps/*` yet.
 
 | Module | What it does |

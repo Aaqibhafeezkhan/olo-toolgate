@@ -46,7 +46,7 @@ All members are always present unless marked optional. Optional members are **om
 | Digest | Definition |
 |---|---|
 | `toolDescriptorDigest` | `"sha256:" + lowercase hex SHA-256 of the canonical bytes of one semantic descriptor` |
-| `triggerDescriptorDigest` | The same, over the canonical bytes of one trigger descriptor (`TriggerDescriptor`, [ADR 058](../../../docs/adr/058-triggers.md)) |
+| `triggerDescriptorDigest` | The same, over the canonical bytes of one trigger descriptor (`TriggerDescriptor`, [Trigger architecture](../../../docs/architecture/triggers.md)) |
 | `descriptorSetDigest` | Same, over one array holding `{toolId, toolDescriptorDigest}` for every tool and `{triggerId, triggerDescriptorDigest}` for every trigger in the package, sorted by id. Tools and triggers share one export namespace, so no id appears twice; a package without triggers has exactly the tool set digest |
 | `artifactDigest`, `packageDigest` | Over exact bytes; defined by the package format (platform-requirements.md §7.2) and frozen at D1. They are never used to decide semantic equality. |
 

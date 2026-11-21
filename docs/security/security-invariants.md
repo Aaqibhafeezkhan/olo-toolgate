@@ -15,13 +15,13 @@ configuration, operation and reconciliation requests. Scoped roles retain
 independent review and management ceilings. The exception does not supply
 runtime grants, skip policy obligations, authorize stale/expired requests,
 restore retired credentials, remove required default groups, or disable the
-last active Super Admin. See [ADR 022](../adr/022-super-administrator-review-exception.md).
+last active Super Admin. See [Users, Teams and roles](user-roles.md).
 
 
 ## Zero Trust Execution invariants
 
 Adopt the [C1–C8 requirements and A1–A9 attacker matrix](zero-trust-boundaries.md).
-Their [live implementation inventory](zero-trust-execution-status.md#security-claim-inventory)
+Their [live implementation inventory](zero-trust-boundaries.md)
 controls availability; these invariants are requirements, not a claim that the
 entire roadmap is implemented.
 

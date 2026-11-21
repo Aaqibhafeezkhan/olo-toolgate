@@ -49,6 +49,14 @@ deployment authority or runtime permission.
 
 - [Component ownership](component-map.md)
 - [Trust boundaries](trust-boundaries.md) and [data flows](data-flows.md)
-- [Contracts](shared-contracts.md) and [compatibility](compatibility.md)
-- [Repository layout](monorepo-layout.md)
+- [Contracts](../development/schema-workflow.md) and [compatibility](compatibility.md)
+- [Repository layout](component-map.md)
 - [Enterprise evaluation](../enterprise-access-control/README.md)
+
+## Scaling boundaries
+
+Gateway and Control can use service replicas with external PostgreSQL; requests
+continue to require current Control/database checks. Size queues, deadlines,
+concurrency and executor resources against the complete path. Quickstart remains
+a single-node evaluation. No general capacity/HA claim follows from a local run.
+See [performance](../operations/performance.md) for measurement and tuning.

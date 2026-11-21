@@ -20,7 +20,7 @@ online by Control; an old signed snapshot cannot preserve revoked authority.
 Super Admin authority comes from an enabled Management Role classified as
 `SUPER_ADMIN` on an enabled Team. Token role claims or cached flags cannot supply
 this authority. It permits tenant management and audited self review under
-[ADR 022](../adr/022-super-administrator-review-exception.md), while current runtime
+[Users, Teams and roles](user-roles.md), while current runtime
 grants, policy obligations, revisions, expiry and credential retirement still apply.
 
 The initial setup administrator is separately protected from deletion/disablement.

@@ -3,7 +3,7 @@
 
 Package `examples.hotfolder-watch`. Trigger `new-file` (`examples.hotfolder-watch/new-file`), event type `examples.files.observed.v1`. Part of the [Java Tool SDK examples](../README.md).
 
-A client trigger in POLL form ([ADR 058](../../../docs/adr/058-triggers.md)). Every minute it lists one folder of the device's confined files area and reports each file version present there that it has not reported before. The package has no tools: it exports one trigger, which an administrator assigns to a device group with a config such as `{"folder": "inbox", "extension": ".pdf"}`.
+A client trigger in POLL form ([Trigger architecture](../../../docs/architecture/triggers.md)). Every minute it lists one folder of the device's confined files area and reports each file version present there that it has not reported before. The package has no tools: it exports one trigger, which an administrator assigns to a device group with a config such as `{"folder": "inbox", "extension": ".pdf"}`.
 
 ## What it promises
 

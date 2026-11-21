@@ -47,26 +47,20 @@ class ComposeManagementTests(unittest.TestCase):
             return result, log.read_text()
 
     def test_existing_local_images_deploy_without_registry_pull(self):
-        for folder in ('QuickStart', 'QuickStart-WO-Password'):
-            with self.subTest(folder=folder):
-                result, calls = self.deploy(folder, 'olo-toolgate-quickstart:cache-options')
-                self.assertEqual(0, result.returncode, result.stdout+result.stderr)
-                self.assertNotIn(' pull', calls)
-                self.assertIn('up -d --wait', calls)
+        result, calls = self.deploy('QuickStart', 'olo-toolgate-quickstart:cache-options')
+        self.assertEqual(0, result.returncode, result.stdout+result.stderr)
+        self.assertNotIn(' pull', calls)
+        self.assertIn('up -d --wait', calls)
 
     def test_published_images_still_pull_on_deploy(self):
-        for folder in ('QuickStart', 'QuickStart-WO-Password'):
-            with self.subTest(folder=folder):
-                result, calls = self.deploy(folder, 'ololab/olo-toolgate-quickstart:dev')
-                self.assertEqual(0, result.returncode, result.stdout+result.stderr)
-                self.assertTrue(any(line.startswith('pull ') and 'ololab/' in line for line in calls.splitlines()), calls)
-                self.assertNotIn('image inspect', calls)
+        result, calls = self.deploy('QuickStart', 'ololab/olo-toolgate-quickstart:dev')
+        self.assertEqual(0, result.returncode, result.stdout+result.stderr)
+        self.assertTrue(any(line.startswith('pull ') and 'ololab/' in line for line in calls.splitlines()), calls)
+        self.assertNotIn('image inspect', calls)
 
     def test_missing_local_image_stops_with_actionable_configuration(self):
-        for folder in ('QuickStart', 'QuickStart-WO-Password'):
-            with self.subTest(folder=folder):
-                result, calls = self.deploy(folder, 'olo-toolgate-quickstart:cache-options', exists=False)
-                self.assertNotEqual(0, result.returncode)
-                self.assertIn('QUICKSTART_IMAGE=ololab/olo-toolgate-quickstart:dev', result.stdout+result.stderr)
-                self.assertNotIn(' pull', calls)
-                self.assertNotIn('up -d', calls)
+        result, calls = self.deploy('QuickStart', 'olo-toolgate-quickstart:cache-options', exists=False)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('QUICKSTART_IMAGE=ololab/olo-toolgate-quickstart:dev', result.stdout+result.stderr)
+        self.assertNotIn(' pull', calls)
+        self.assertNotIn('up -d', calls)

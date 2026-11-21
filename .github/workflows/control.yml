@@ -92,7 +92,7 @@ jobs:
           cp -r build/quickstart build/control/quickstart-evidence
           docker save olo-toolgate-control:module05 -o build/control/image.tar
           cp -r build/ui build/control/ui-evidence
-          cp CHANGELOG.md docs/control-plane/upgrades.md build/control/
+          cp CHANGELOG.md docs/architecture/compatibility.md build/control/
           (cd build/control && sha256sum image.tar control-sbom.cdx.json tenant-recovery.json > SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

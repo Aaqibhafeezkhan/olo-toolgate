@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Generic ToolGate runtime â€” execution and trigger foundations
 
-Phase 1 adds required profile `graph` selection: packageId, version, canonical
+The runtime requires profile `graph` selection: packageId, version, canonical
 manifest digest, named entryPoint and JSON config. The same declaration is pinned
 in the claimed run. The worker loads a fresh native StateGraph from an
 operator-installed immutable directory. Graph-less bot/leases are refused;
@@ -40,7 +40,7 @@ sidecar or automatic host task runs here. Production Control retains its
 that installation variable, `MP_JWT_VERIFY_TOKEN_AGE` and
 `SMALLRYE_JWT_TIME_TO_LIVE` to compatible parser ceilings. Only the workflow-runtime role receives the longer application limit;
 human/other-service limits and run/step leases stay unchanged. See
-[ADR 080](../../docs/adr/080-runtime-availability-and-service-credentials.md).
+[Generic ToolGate runtime â€” execution and trigger foundations](README.md).
 
 Graph factories import `RunContext` from `toolgate_runtime.graph_api`, return an
 uncompiled `StateGraph(..., context_schema=RunContext)` and receive only a private
@@ -329,10 +329,10 @@ propagation, and model streaming remain pending.
 The [v1 qualification guide](../../docs/testing/workflow-v1-qualification.md)
 describes the repeatable scenario controller, private evidence reports and
 explicit blocked outcomes while live server integration is missing.
-See the [live status](../../docs/architecture/workflow-v1-status.md) and
-[architecture plan](../../docs/architecture/langgraph-runtime-plan.md).
+See the [current scope](../../docs/architecture/workflows.md) and
+[architecture plan](../../docs/plans/workflows.md).
 
-## V1.3 trigger subscriber
+## Trigger subscriber
 
 The default image entrypoint runs `toolgate_runtime.service`: a supervised graph
 API and execution worker. Trigger routing belongs to Gateway/backend; there is
@@ -427,7 +427,7 @@ logger cannot print ticket headers. Only the server's persisted cursor is used
 on reconnect; no local `resumeAfter` or ephemeral watch can skip work.
 
 The new canonical `WorkflowDispatchRequest` sends only `subscriptionUid` and
-`cursor` to `POST /api/control/v1/workflow-dispatches:admit` (ADR 063). The response
+`cursor` to `POST /api/control/v1/workflow-dispatches:admit` ([Workflow execution architecture](../../docs/architecture/workflows.md)). The response
 is a matching `WorkflowDispatchReceipt`: durable admission ID, disposition and,
 where admitted, run ID. Control must look up its own event, resolve the published
 default-workflow binding and current service grants, and atomically store/dedupe

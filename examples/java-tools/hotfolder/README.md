@@ -3,7 +3,7 @@
 
 Package `examples.hotfolder`. Tools (MCP name `hotfolder.<tool>`): `list`, `read_text`, `file_info`, `hash`, `search_text`, `write_text`, `append_text`, `mkdir`, `move`, `copy`. Part of the [Java Tool SDK examples](../README.md).
 
-Text files in a protected folder on an enrolled device. Every tool is a `@ClientTool`: it runs only on the device the caller selects, and it reaches files only through `ToolContext.files()`. The package holds all of the tool behaviour; the device provides one generic, confined files area (ADR 027) and nothing specific to this package.
+Text files in a protected folder on an enrolled device. Every tool is a `@ClientTool`: it runs only on the device the caller selects, and it reaches files only through `ToolContext.files()`. The package holds all of the tool behaviour; the device provides one generic, confined files area ([Device files area and the HotFolder package](../../../docs/client/hotfolder.md)) and nothing specific to this package.
 
 ## Safety
 

@@ -4,7 +4,8 @@
 The qualification command executes the [published scenarios](../architecture/workflow-v1-acceptance.json)
 through an explicitly supplied, trusted live-install driver. It records evidence;
 it does not grant phase acceptance or prove that an operator's assertions are true.
-The [live status](../architecture/workflow-v1-status.md) remains authoritative.
+The [workflow guide](../architecture/workflows.md) describes current behavior;
+[remaining work](../plans/workflows.md) records unfinished acceptance.
 
 **The current implementation cannot complete this suite against ToolGate.**
 Complete profile provisioning/readiness, run admission/leases/model transport and durable

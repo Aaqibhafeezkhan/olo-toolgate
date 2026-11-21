@@ -14,7 +14,7 @@ It requires current signed-tool discovery and an authenticated non-retryable
 OUTCOME_UNKNOWN/REPORTED result. It submits no write, retry or model call.
 This is the release gate for the unqualified native boundary, not qualification
 of native file-operation completion. Native finality remains outstanding in the
-[execution status](../../docs/security/zero-trust-execution-status.md).
+[execution status](../../docs/security/zero-trust-boundaries.md).
 Do not retry an unknown operation to make the positive smoke test pass.
 
 
@@ -199,7 +199,7 @@ Status (issue #274, draft PR #286):
     `TriggerIngestTest` and `ClientReleasesTest`.
 
   The hot-folder trigger path has been executed locally with the file-permission and
-  background WebSocket connection fixes (see the [validation record](../../docs/architecture/triggers-implementation-status.md)).
+  background WebSocket connection fixes (see the [validation record](../../docs/architecture/triggers.md)).
 - **Native HotFolder finality** (see the note at the top): until it is qualified, the Gateway reports `read_text`
   and `move` as `OUTCOME_UNKNOWN`. The agent then shows `read-unconfirmed` or `move-unconfirmed` and leaves the file
   in `inbox/`.

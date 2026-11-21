@@ -67,5 +67,5 @@ custody when that stronger boundary is required. `VaultWrappingProvider` defines
 the integration boundary for external KMS backends; none are claimed implemented.
 Validate shared-host custody and recovery using the [deployment qualification guide](../deployment/multitenant.md).
 
-Discovery continues using the development CA-signed protocol until the separate
-server/client discovery-v2 milestone.
+Discovery and tenant identity use the current [discovery contract](discovery-v2.md);
+local TLS bootstrap trust and tenant device authority remain separate.

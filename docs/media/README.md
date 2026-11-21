@@ -1,57 +1,66 @@
-<!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# OLO videos, tours and capture provenance
+# OLO images, slideshows and videos
 
-[Watch the 36-second OLO overview](toolgate-overview.mp4) ·
-[GIF preview](toolgate-overview.gif) · [Poster](toolgate-overview.png) ·
-[WebVTT captions](toolgate-overview.vtt). This silent captioned explainer is
-rendered from diagrams; it is not a live installation recording.
+These demonstrations show a configured development installation. Imported bots,
+sample grants and model settings are not fresh-install defaults. Captures and
+collector traces are illustrations, not production or security certification.
 
-The six scenes explain OLO's governed tool boundary, ToolGate/Orchestration,
-group access, ALLOW/ASK/BLOCK, the two-agent trace and community contribution.
-Filenames retain existing video links; the rendered branding/content is current.
+The root README embeds only the [bot execution](orchestration-flow.gif) and
+[device operation](device-flow.gif) slideshows. Additional media belongs here.
 
-## Current live UI slideshows
+## Illustrated capability guides
 
-The four original slideshow filenames remain in use with newly captured OLO
-console frames. Two additional sets show a successful two-agent incident bot and
-its same-run traces in Langfuse, LangSmith and Phoenix.
+Each guide pairs screenshots with an explanation and links to the maintained
+setup/API instructions.
 
-- [Audit and approvals](audit-flow.gif)
+| Capability | Screenshot-rich guide |
+|---|---|
+| Bot bundles, manual runs, models and agents | [Bots, models and execution](bots-and-models.md) |
+| Enrollment, groups, package delivery and trigger assignments | [Devices, packages and triggers](devices-and-packages.md) |
+| Tools, MCP servers, workload identities, grants and policy | [Tools and runtime access](tools-and-access.md) |
+| Requests, configuration review, outcomes and audit | [Review and audit evidence](audit-and-approvals.md) |
+| Users, teams, roles, settings, backup and vault | [Workspace administration](administration.md) |
+| Workflow/cloud traces and collector dashboards | [Monitoring screenshots](../help/observability.md#screenshots) |
+| Tenant analytics and Operator Insights charts | [Performance screenshots](../operations/performance.md#screenshots) |
+
+## Overview video
+
+[Watch the overview](toolgate-overview.mp4) · [GIF preview](toolgate-overview.gif) ·
+[Poster](toolgate-overview.png) · [Captions](toolgate-overview.vtt)
+
+This silent captioned explainer uses diagrams; it is not a live installation recording.
+
+[![Overview video poster](toolgate-overview.png)](toolgate-overview.mp4)
+
+![Animated overview preview](toolgate-overview.gif)
+
+## Console and monitoring slideshows
+
+- [Bot input, execution and result](orchestration-flow.gif)
 - [Devices and package delivery](device-flow.gif)
 - [Tools and access](console-tools-tour.gif)
+- [Audit and approvals](audit-flow.gif)
 - [Administration](console-administration.gif)
-- [Multi-agent input, execution and result](orchestration-flow.gif)
-- [Three monitoring consoles](monitoring-flow.gif)
+- [Langfuse, LangSmith and Phoenix views](monitoring-flow.gif)
 
-[Step-by-step originals](TOURS.md) · [Capture inventory](screenshots.json) ·
-[Current scope and limitations](capture-status.json) ·
-[Run/cloud evidence](olo-2026-11/evidence.json).
+Use [monitoring setup](../help/observability.md) for actual destination configuration
+and [performance guidance](../operations/performance.md) for measurement scope.
 
-These are browser captures from the November 19 debug stack, not unpublished
-Docker images. Loaded empty queues remain empty. Monitoring exports structural
-metadata only; absent content/cost fields do not indicate missing execution.
-Each tour contains 2–15 distinct frames, with no filler minimum. Scaling and
-captions appear only in generated GIFs; original screenshots remain unaltered.
+## Capture sources and rebuild
 
-## Rebuild
+[Tour steps](TOURS.md), [source inventory](screenshots.json),
+[capture scope](capture-status.json) and [source captures](olo-2026-11/README.md)
+describe the available frames. Monitoring views show structural observations;
+absence of prompt/content or cost fields does not imply missing execution.
 
-With Python 3, Pillow, imageio-ffmpeg and Windows Segoe UI or Linux DejaVu fonts:
+With Python, Pillow and imageio-ffmpeg installed:
 
 ```sh
-python -m pip install Pillow imageio-ffmpeg
 python tools/docs/render_overview.py
 python tools/docs/build_console_tours.py
 ```
 
-The tour generator validates source checksums, nonblank frames, frame counts and
-inventory coverage. `screenshots.json` owns capture provenance; `tours.json`
-owns slide order. External API credentials and local state are never media inputs.
+The generators verify their input inventories and source checksums. Keep source
+frames unmodified; captions/scaling belong in generated media. Runtime credentials
+and local user state are never media inputs.
 
-## Historical monitoring and desktop captures
-
-[Historical provenance](HISTORICAL.md) separates earlier Windows enrollment,
-independent approvals, Operator Insights, Grafana/Prometheus and New Relic
-captures from this demo. Existing monitoring guides remain at
-[Prometheus/Grafana](../../deploy/prometheus/README.md),
-[New Relic](../../deploy/newrelic/README.md) and
-[workflow observability](../help/observability.md).
+[Back to OLO capabilities](../../README.md#what-olo-supports)

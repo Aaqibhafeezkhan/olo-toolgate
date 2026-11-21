@@ -5,7 +5,7 @@ without a desktop login when the OS service and system-accessible OCI engine run
 at boot. The Module 08 Windows/macOS engine lifetime and ARM execution limits
 still apply; unsupported packages fail instead of invoking host interpreters.
 See [runtime configuration](local-runtimes.md), [service installation](install-and-enrollment.md)
-and [ADR 010](../adr/010-signed-fleet-reconciliation.md).
+and [Managed package deployment: use, operate and debug](package-deployment.md).
 
 The current [device registry](../control-plane/device-registry.md) independently
 gates owner/device enablement and installed-client connection approval. Assignment,

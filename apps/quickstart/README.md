@@ -23,7 +23,7 @@ Quickstart status exposes `tenantId` and `tenantName` and retains `tenant` for c
 Start with the [user guide](../../docs/getting-started/one-minute-quickstart.md).
 Build, configure, debug, upgrade and recover using the
 [operations guide](../../docs/deployment/quickstart.md). The accepted boundary
-and storage exception are in [ADR 012a](../../docs/adr/012a-single-node-quickstart.md).
+and storage exception are in [Quickstart deployment and recovery](../../docs/deployment/quickstart.md).
 
 `python tools/quickstart/check.py --build` exercises the real production image,
 including the browser. The SQLite store has JVM integration tests; Linux image

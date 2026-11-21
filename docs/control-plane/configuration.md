@@ -65,7 +65,7 @@ grants only. Production migrators do not need `CREATEDB`; the isolated test help
 uses it to create fresh databases for clean-install/upgrade proofs. Supply credentials
 via a secret manager/Kubernetes Secret, never the chart values or repository.
 
-Use [deployment and upgrades](upgrades.md) for HA, migration and recovery. For a 503,
+Use [deployment and upgrades](../architecture/compatibility.md) for HA, migration and recovery. For a 503,
 check database connectivity/TLS, NetworkPolicy DB/DNS peers, pool pressure and
 readiness. For a 401, check issuer/audience/key, token claims and clock synchronization.
 For a 409, refresh revisions and validate references, retired IDs and tenant quotas.
@@ -75,8 +75,8 @@ See [current ASK approval behavior](approvals.md) and the [security model](../se
 
 ## Signed audit anchors
 
-Each tenant's Control audit rows form a hash chain ([ADR 061](../adr/061-tenant-audit-hash-chains.md)).
-To sign and externally anchor chain heads ([ADR 062](../adr/062-signed-audit-anchors.md)), set
+Each tenant's Control audit rows form a hash chain ([Control Plane configuration and operations](configuration.md)).
+To sign and externally anchor chain heads ([Control Plane configuration and operations](configuration.md)), set
 `toolgate.control.audit-anchor.enabled=true` with:
 
 | Setting | Value |
@@ -102,8 +102,7 @@ caching and always checks the database before reusing entries.
 
 ## Client check-in
 
-Source: [Platform requirements §17.1 and §17.2](../contracts/platform-requirements.md). Phase A ships with
-milestone M1; Phase B below is still a specification.
+Source: [Platform requirements §17.1 and §17.2](../contracts/platform-requirements.md). The current environment-owned settings are below.
 
 Control returns the next check-in interval as `nextIntervalMs` in every check-in reply;
 there is no other unit or negotiation. The endpoint client and Tool Host accept any
@@ -126,9 +125,9 @@ must never be rescheduled to another device because of a socket drop; they go to
 `OUTCOME_UNKNOWN` at lease expiry. Only queued, not-yet-leased jobs may move, and only
 if the binding allows it.
 
-### Phase A variables (no client change)
+### Check-in configuration
 
-Phase A makes the interval configurable and works with clients already deployed.
+Set these values consistently for the matching current client and Control release.
 
 | Environment variable | Meaning | Quickstart | Enterprise default |
 |---|---|---|---|
@@ -136,7 +135,7 @@ Phase A makes the interval configurable and works with clients already deployed.
 | `TOOLGATE_CONTROL_CLIENT_CHECKIN_JITTER_PCT` | Random spread added to each interval, in percent | 0 | 20 |
 | `TOOLGATE_CONTROL_CLIENT_OFFLINE_AFTER_MS` | Time without a check-in before a device counts as offline | 120000 | max(120000, 6 × check-in) |
 
-In Phase A an idle device only learns of a job at its next check-in, so the check-in
+An idle device learns of a job at its next check-in, so the check-in
 value is the job pickup latency.
 
 Each reply picks an interval at random within check-in ± jitter. A check-in that
@@ -161,17 +160,5 @@ configuration import. `GET /api/control/v1/settings` returns them as `clientChec
 with `source` (`DEFAULT` or `ENVIRONMENT`), and the console shows them read-only under
 Configuration > Device (see [Configuration menu](configuration-menu.md)).
 
-### Phase B variables (future, needs a client release)
-
-Phase B is not part of M1. It makes a persistent WebSocket the steady state, with
-server push for jobs, permission changes and kill entries. Older clients keep Phase A
-behavior. Planned variables:
-
-- `TOOLGATE_CONTROL_CLIENT_SOCKET_MODE` (`persistent`)
-- `TOOLGATE_CONTROL_CLIENT_HEARTBEAT_MS` (enterprise 30000)
-- `TOOLGATE_CONTROL_CLIENT_FALLBACK_POLL_MS` (used only while the socket is down)
-- `TOOLGATE_CONTROL_CLIENT_JOB_PICKUP_TIMEOUT_MS`
-- `TOOLGATE_CONTROL_CLIENT_SOCKET_GRACE_MS`
-
-For scale: idle load at 10,000 devices is about 20,000 requests/s at 500 ms polling,
-5,000 at 2 s (Phase A), and about 333/s of heartbeats at 30 s (Phase B).
+Persistent socket notification and additional heartbeat/fallback controls are
+[unfinished device work](../plans/device-notifications.md), not current settings.

@@ -57,5 +57,19 @@ Do not change application import names during the split.
 
 See:
 
-- [Shared contracts](../architecture/shared-contracts.md)
+- [Shared contracts](schema-workflow.md)
 - [Release operator guide](how-to-release.md)
+
+## Published package identities
+
+| Language | Package |
+|---|---|
+| Rust | `olo-toolgate-contracts` |
+| Java | `io.github.olo-labs:toolgate-contracts` |
+| TypeScript | `@olo-labs/toolgate-contracts` |
+| PHP | `olo-labs/toolgate-contracts` |
+
+Use the checked-in schema and generator subset, not a parallel handwritten wire
+model. Product versions come from `version.json`; wire-schema versions identify
+contracts, not deployment compatibility windows. Keep canonical schemas, generated
+bindings, fixtures and language round-trip checks in the same change.

@@ -28,5 +28,5 @@ participate in current runtime authorization.
 Read the [architecture overview](docs/architecture/overview.md),
 [component map](docs/architecture/component-map.md),
 [trust boundaries](docs/architecture/trust-boundaries.md),
-[shared contracts](docs/architecture/shared-contracts.md) and
-[architecture decisions](docs/adr/README.md). Discuss proposed capabilities in GitHub issues.
+[shared contracts](docs/development/schema-workflow.md) and
+[architecture decisions](docs/architecture/README.md). Discuss proposed capabilities in GitHub issues.

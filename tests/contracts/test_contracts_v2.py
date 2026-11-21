@@ -1,10 +1,9 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Design gate D1: frozen v2 schemas, fixtures and proposed OpenAPI documents.
+"""Validate canonical v2 schemas, fixture coverage and OpenAPI references.
 
-Nothing consumes v2 yet. These checks keep the frozen artifacts valid, inside the
-structural subset the v2 generator design (docs/contracts/v2-generation.md) accepts,
-and separate from the served v1 contract until milestone M1 implements them.
+Both contract namespaces participate in the current generated bindings. These
+checks enforce the generator subset and explicit schema/fixture boundaries.
 """
 import json
 import unittest

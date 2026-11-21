@@ -75,26 +75,10 @@ Do not treat an old RESERVED snapshot as a live permit: check consumption in
 `control_enterprise_nonces` and its deadline. Do not log raw report documents or
 fencing identifiers outside authorized diagnostics.
 
-## Upgrade
+## Current storage
 
-V3 ships for PostgreSQL/Flyway and SQLite Quickstart. V1/V2 stay byte-identical.
-The migration records every retained nonce belonging to an invocation. Earlier consumed predecessors become
-unknown observations; they never inherit the latest attempt's result. Historical
-operations are marked `legacy`, because complete historical snapshots cannot be
-reconstructed. Such terminal operations do not get automatic final success or
-failure. Admission without an issued permit has an operation and no execution
-attempt yet.
-
-Upgrade Control replicas together. After V3, old code cannot issue an unjournaled
-permit: the database requires the operation record and attempt binding. Missing
-journal records fail closed; Control does not reconstruct proof from absence.
-SQLite refuses opening V3 state with older images. Take the normal database
-backup before upgrading; downgrade requires restoring that backup, rather than
-editing migration checksums or deleting history. PostgreSQL backfill temporarily
-removes FORCE RLS from its source tables inside the migration transaction, then
-restores it before committing; all three new tables enforce forced tenant RLS.
-
-The still-prospective kill-switch specification is renamed V4 without changing its
-contents, so it remains after the newly shipped V3. See
-[ADR 035](../adr/035-operation-attempt-journal.md) and the
-[live progress document](../security/zero-trust-execution-status.md).
+Use matching current artifacts and fresh PostgreSQL/SQLite schemas. Unsupported
+stores are rejected intact; there is no upgrade, backfill or conversion path.
+Current operation/attempt/effect journals and late evidence remain durable.
+Do not reconstruct safe retry permission from missing history or a timeout.
+See [storage and recovery boundaries](../architecture/compatibility.md).

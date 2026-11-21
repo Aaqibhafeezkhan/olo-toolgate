@@ -1,73 +1,80 @@
-# Container performance
+# Performance and capacity
 
-Quickstart now defaults to `TOOLGATE_CONTROL_CLIENT_CHECKIN_MS=2000` with no
-jitter. Enterprise retains its 2000 ms default with 20% jitter. Explicit environment
-values still override these defaults. Idle job pickup can take one check-in interval;
-the existing execution deadline and offline threshold checks still apply.
+OLO supports bounded service resources, directory caching, pooled local database
+connections and diagnostic telemetry. These mechanisms do not establish a
+general throughput, latency or HA guarantee. Measure the deployment you operate.
 
-## Directory cache and tenant isolation
+## Current mechanisms
 
-Each Control process populates its directory cache on first access. Entries expire
-60 minutes after loading, even when frequently accessed. The cache retains at most
-128 tenants and an estimated 16 MiB of directory data, evicting least recently used
-entries when either bound is reached. Directory records and reference collections
-are immutable. The device adoption digest is computed once for each cached version.
+| Area | Behavior | Operational boundary |
+|---|---|---|
+| Device pickup | Configurable check-in interval and jitter | Idle pickup can take an interval; deadlines and offline thresholds still apply |
+| Directory cache | Bounded process-local cache; optional Redis/Valkey | Reuse checks the current database revision/generation; a cache never authorizes offline execution |
+| SQLite | Connection pooling, WAL and durable synchronization | Single-node evaluation; not a substitute for external PostgreSQL qualification |
+| Runtime | Separate liveness/readiness and dependency reconnection | Reconnection does not authorize replay of uncertain effects |
+| Service resources | Compose/Helm CPU, memory and concurrency limits | Size against the actual workload, package executors and optional model/collector services |
+| Diagnostics | Bounded buffers and rotated container logs | Diagnostic buffering has different durability from execution journals and audit |
 
-An optional external Redis/Valkey cache can supply directory data on a local miss.
-It uses authenticated, encrypted entries keyed by deployment namespace, tenant and
-database version, and falls back to database reads on cache failure. Local caching
-remains the default. See [configuration and deployment](../deployment/shared-cache.md).
+See [Control configuration](../control-plane/configuration.md),
+[shared cache settings](../deployment/shared-cache.md),
+[runtime operation](../../apps/langgraph-runtime/README.md) and
+[deployment prerequisites](../deployment/production.md).
 
-Every load reads the tenant's current configuration revision and cache generation
-from the database before reusing an entry. The generation is maintained by database
-triggers on directory records and server settings, covering insertion, updates and
-deletion by administrators, clients and other Control replicas. This includes identity
-observations that intentionally do not advance the configuration revision. The TTL
-is an eviction policy, not a window in which stale authority is accepted. Endpoint
-state, credentials, settings, authorization epochs and execution decisions continue
-to use their existing current database checks.
+## Measure before tuning
 
-Writes clear the transaction's memoized data, so subsequent reads see their own
-changes. Shared entries are published only after a successful commit. A rollback
-cannot publish its data, and a delayed reader cannot overwrite a newer cached
-generation. Failed database checks fail closed. Both PostgreSQL and Quickstart
-SQLite include this state in their initial version 1 schemas.
+Record source/image versions, host hardware, database, network topology, model
+provider, package versions, concurrency and request mix. Measure the complete
+path: queue/pickup, current authorization, execution, target/provider latency and
+result delivery. Report p50/p95/p99, errors, denied calls and resource saturation.
 
-## SQLite connection reuse
+Use [Gateway performance verification](../gateway/performance.md) for its harness
+and [repository checks](../testing/README.md) for correctness and isolation gates.
+`SqliteReuseBenchmarkTest` measures local connection/commit overhead; it does not
+measure application capacity. Model inference timings depend on model, context,
+hardware and provider configuration and must be reported separately.
 
-The Quickstart service owns an Agroal pool with a minimum of one and maximum of
-four SQLite connections and a three-second acquisition timeout. Keeping one
-connection open avoids checkpoint cleanup caused by repeatedly closing the last
-connection. WAL and `synchronous=FULL` remain enabled.
+Never improve a benchmark by weakening current-authority checks, skipping durable
+writes, expanding access, relaxing containment or replaying unknown operations.
+Repeat the applicable denial/recovery checks after tuning. Recreate affected
+containers explicitly when changing images or creation-time resource/log settings.
 
-Each transaction explicitly sets SQLite's transaction mode and `query_only` state.
-Before returning a connection, outstanding work is rolled back, auto-commit is
-restored, `query_only` is disabled and the transaction mode is restored to IMMEDIATE.
-The service closes its own pool on shutdown. Offline migration/recovery callers of
-`SqliteState.open` retain the unpooled adapter; managed services use `openPooled`.
+## Observe the deployment
 
-Run `SqliteReuseBenchmarkTest` to compare 200 durable transactions in each mode.
-This microbenchmark measures connection/commit overhead, not application capacity.
-On the development Windows host on 2026-10-15, the final run measured 12.83 ms per
-unpooled commit and 1.69 ms per pooled commit (7.6 times faster). An earlier run
-measured 13.73 ms and 1.63 ms respectively. Both modes verified `synchronous=FULL`.
+Use [monitoring](../help/observability.md) for workflow collectors and ToolGate
+metrics/traces. Monitor database contention, queue depth, resource bounds,
+credential readiness and collector drops alongside latency. A trace or green
+container alone is not proof of a completed business effect.
 
-## Diagnostic telemetry and logging
+## Screenshots
 
-Protocol diagnostics share a buffer per protected client state directory. The newest
-100 entries, up to 64 KiB, remain available immediately to the read-log tool. The
-buffer is persisted every five seconds, after 32 new entries, and on close. A sudden
-process failure can lose buffered diagnostic packets. Execution journals, replay
-protection and database audit records retain their existing durability guarantees.
+### Tenant analytics and evidence
 
-Production Compose definitions use Docker's `local` log driver with 10 MiB files and
-three rotated files per container. Rotation applies to service logs; database audit
-retention is unchanged. Quickstart and device health checks run every 30 seconds.
-The Quickstart probe imports only the HTTP client instead of the full supervisor.
-Five probes against the existing demo measured median process times of 241 ms for
-the supervisor probe and 135 ms for the HTTP-only probe on the same host.
-The Marketplace helper's shell probe checks the HTTP status without starting a JVM.
+The configured debug console separates tool activity from Control-derived
+operation evidence. This saved view explicitly has Insights collection disabled:
+its evidence table is not a populated latency chart or a benchmark result.
 
-Rebuild the affected images and recreate containers to activate source, environment,
-logging and health-check changes. Existing running containers keep their image and
-creation-time logging configuration until recreated.
+![Tenant analytics and outcome evidence](../media/olo-2026-11/console/analytics.jpg)
+
+The [capture inventory](../media/screenshots.json) records this view's source.
+To obtain activity metrics, configure [Operator Insights](../control-plane/insights.md)
+and inspect the actual workload and collection interval in your installation.
+
+### Reading populated activity charts
+
+This earlier Operator Insights capture illustrates calls by outcome, execution
+duration buckets and busiest tools. The numbers belong to that saved evaluation
+installation; they are not a current throughput or p95 guarantee.
+
+![Operator call outcomes and duration charts](../media/screenshots/operator-usage-charts.jpg)
+
+Use the session timeline to examine the sequence of recorded calls alongside
+aggregate charts. Neither a timeline nor a histogram establishes exactly-once
+effects or independent target finality.
+
+![Operator session timeline](../media/screenshots/operator-session-timeline.jpg)
+
+For collector dashboards, vendor trace views and setup, continue to
+[monitoring screenshots](../help/observability.md#screenshots). Keep the
+measurement procedure above alongside any real benchmark report.
+
+[All illustrated capabilities](../media/README.md) · [Back to OLO](../../README.md#what-olo-supports)

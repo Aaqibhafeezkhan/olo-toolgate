@@ -65,7 +65,7 @@ and `structuredContent: {"invocationId", "state": "PENDING_APPROVAL"}`; nothing 
 Unknown methods, notifications and streaming subscriptions reject; GET/DELETE
 return 405.
 
-Only 2026-07-28 is served ([ADR 018 amendment](../adr/018-mcp-versions-legacy-adapter.md#amendment-m1-legacy-adapter-withdrawn)).
+Only 2026-07-28 is served ([Gateway configuration](../gateway/configuration.md)).
 A request with no `_meta` protocol version that calls `initialize` or names another
 version in `MCP-Protocol-Version` gets -32022 listing `2026-07-28`; a request with a
 `_meta` version is always judged by the 2026-07-28 rules.

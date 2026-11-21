@@ -50,8 +50,8 @@ history blocks recovery, including when a later attempt looks harmless.
 
 ## Deployment and investigation
 
-Apply V6 migrations using the separate migrator before deploying Control. Update
-Tool Hosts together: pull-mode refusal receipts carry the claimed permit nonce
+Use the current fresh schema, a separate initialization role and matching
+Control/Tool Host artifacts: pull-mode refusal receipts carry the claimed permit nonce
 for correlation. That field is not proof of signature validation or consumption.
 After recovery Control rejects unbound/stale admission receipts. Authenticated
 late results for known consumed predecessor nonces are retained as evidence and
@@ -65,7 +65,6 @@ roles cannot update/delete either table; PostgreSQL enforces tenant RLS. A stora
 failure rolls the transaction back with no replacement authority. Preserve the
 records when investigating an ambiguous effect; do not edit them to force a retry.
 
-This scoped no-write proof is not effect-verified success. Complete aggregate
-operation finalization and caller history remain S10 work. General routes, broker
-credential separation, production qualification/SLOs and the full security
-acceptance matrix remain tracked in the [authoritative progress document](../security/zero-trust-execution-status.md).
+This scoped no-write proof is not effect-verified success. Use [aggregate operation outcomes](operation-finalization.md) for finality.
+Production/SLO and full security qualification remain in the
+[unfinished plan](../plans/zero-trust-tool-execution.md).

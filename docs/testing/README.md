@@ -27,7 +27,7 @@ can briefly list a stopped container as running.
 | Enterprise acceptance | `python tools/enterprise/finish.py`; [scope and limits](../enterprise-access-control/README.md) |
 | SDK conformance | [Cases and runner contract](../../tool-sdk/conformance/README.md) |
 | Performance | [Gateway methodology](../gateway/performance.md) |
-| Release checks and scans | [Release process](../development/release-process.md) |
+| Release checks and scans | [Release process](../development/how-to-release.md) |
 | Zero Trust diagnostic scorecard | [Runner, nonzero results and CI publication](zero-trust-scorecard.md) |
 | Documentation | `make docs` |
 

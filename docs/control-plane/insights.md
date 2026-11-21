@@ -2,7 +2,7 @@
 
 Operator Insights shows installation operators how tools are used and how they behave across every tenant: call
 volume, outcomes, latency, retries, admission denials, and the history of any one invocation. It is not shown to
-callers. Tenant administrators with tenant-wide `audit.read` can use the narrower Admin Analytics page described below. Design: [ADR 031](../adr/031-execution-correlation-operator-insights.md).
+callers. Tenant administrators with tenant-wide `audit.read` can use the narrower Admin Analytics page described below. Design: [Operator Insights](insights.md).
 
 Insights records metadata only. Tool arguments, outputs, secrets and fencing tokens are never stored.
 
@@ -117,7 +117,7 @@ and its data requests go to the same origin, so the certificate authenticates th
 
 ## Sessions
 
-A session is the `sessionId` a caller declares on its calls (ADR 031 §1). It groups an agent's work across many
+A session is the `sessionId` a caller declares on its calls ([Operator Insights](insights.md)). It groups an agent's work across many
 requests. It is not the MCP transport session (`Mcp-Session-Id`), and it is never verified.
 
 A caller can also declare that a call is nested under an earlier one, for example a sub-agent's calls under the call
@@ -226,9 +226,9 @@ than summary retention and for tenants currently over quota, because their summa
 - An endpoint client that predates relayed trace context (it does not send `Toolgate-Client-Features:
   remote-task-context.v1`) runs relayed calls without trace or execution context and reports no client span. Insights
   does not yet mark these attempts.
-- The overhead budgets of ADR 031 §6 are not yet measured on production-like hardware
+- The overhead budgets of [Operator Insights](insights.md) are not yet measured on production-like hardware
   ([#214](https://github.com/olo-labs/olo-toolgate/issues/214)). Release-gate results are in the
-  [Stage 7 report](insights-stage7.md).
+  [Stage 7 report](insights.md).
 
 - Span decisions are kept per Control replica. A call whose spans reach two replicas may be kept on one and decided
   on the other; both apply the same rule, so they agree except under memory pressure.

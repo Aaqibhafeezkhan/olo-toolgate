@@ -24,7 +24,7 @@ Browser checks need Playwright Chromium; follow the foundation guide for setup.
 |---|---|
 | Build and verify Quickstart with disposable fixtures | `python tools/quickstart/check.py --build` |
 | Persistent Windows debug installation | `debug/profiled/start.bat`; [debug guide](../../debug/README.md) |
-| Mounted HotFolder trigger lab | `python debug/hotfolder/bringup.py start`; [HotFolder guide](../../debug/profiled/README.md) |
+| Published-image local installation | [Community Quickstart](../../deploy/docker/quickstart/dev/README.md) |
 | Run an evaluation image and retain its state | [Quickstart Compose](../../deploy/compose/QuickStart/README.md) |
 | Full repository checks | `python tools/check.py` (or `make check`) |
 | Contract checks | `python tools/check.py --contracts-only` |
@@ -39,9 +39,9 @@ images. Missing tooling is a failure, not a silently skipped check.
 
 ## Find the right guide
 
-- [Repository layout](../architecture/monorepo-layout.md) and [component ownership](../architecture/component-map.md)
+- [Repository layout](../architecture/component-map.md) and [component ownership](../architecture/component-map.md)
 - [Gradle build](gradle.md), [schema workflow](schema-workflow.md) and [release guide](how-to-release.md)
 - [Testing](../testing/README.md) and [debugging](../operations/debugging.md)
-- [How to release: two manual jobs](how-to-release.md), [release process](release-process.md) and [development releases](development-releases.md)
+- [How to release: two manual jobs](how-to-release.md), [release process](how-to-release.md) and [development releases](development-releases.md)
 - [CI ownership](ci-check-ownership.md) and [CI admission](ci-admission.md)
 - [Directory membership](../security/enterprise-access-control.md) and [managed roles](../security/user-roles.md)

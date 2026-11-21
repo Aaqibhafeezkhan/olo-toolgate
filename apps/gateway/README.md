@@ -16,7 +16,7 @@ cargo test -p olo-toolgate-gateway --locked
 ```
 
 Use `python tools/gateway/container.py` for the isolated production-image gate.
-See [deployment](../../docs/gateway/deployment.md),
+See [deployment](../../docs/deployment/production.md),
 [MCP API](../../docs/api/gateway-api.md),
 [client relay](../../docs/client/server-mcp.md) and
 [Tool Host](../tool-host/README.md) for the connected execution paths.

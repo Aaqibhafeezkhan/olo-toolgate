@@ -69,7 +69,7 @@ class ControlAssetsTests(unittest.TestCase):
         from test_foundation import validators,schemas_at
         example=json.loads((ROOT/'docs/examples/control-import.json').read_text())
         validators(schemas_at(ROOT/'packages/contracts/schemas/v1'))['ControlImportRequest'].validate(example)
-        for relative in ('apps/control-plane/README.md','docs/control-plane/README.md','docs/control-plane/configuration.md','docs/control-plane/upgrades.md','docs/api/control-plane-api.md','docs/adr/003-control-plane-transactions.md'):
+        for relative in ('apps/control-plane/README.md','docs/control-plane/README.md','docs/control-plane/configuration.md','docs/architecture/compatibility.md','docs/api/control-plane-api.md'):
             path=ROOT/relative
             for link in re.findall(r'\]\(([^)]+)\)',path.read_text()):
                 if '://' not in link and not link.startswith('#'):

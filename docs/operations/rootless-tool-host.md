@@ -168,8 +168,8 @@ private network namespace. Its only egress is the private supervisor transport
 proxy, which retains the workload TLS identity and enforces the approved target.
 The broker cannot select a general Control URL or export that identity. Other languages, VM-backed isolation, per-effect authorization,
 exact effect consent and target fencing are separate roadmap work. See
-[ADR 033](../adr/033-rootless-tool-host-containment.md) and the
-[claim inventory](../security/zero-trust-execution-status.md).
+[Rootless OCI Tool Host pools](rootless-tool-host.md) and the
+[claim inventory](../security/zero-trust-boundaries.md).
 
 
 ## Prepare the trusted broker image
@@ -212,8 +212,8 @@ It covers approved target contact, denied worker authority, broker crash,
 cancellation, lease revocation, deadline, flooding, private identities and paired
 restart cleanup. These are component containment checks, not a production
 connectivity SLO, a generalized effect grant or a compromised-kernel guarantee.
-See [ADR 049](../adr/049-isolated-invocation-brokers.md) and the
-[live status](../security/zero-trust-execution-status.md) for stage acceptance.
+See [Rootless OCI Tool Host pools](rootless-tool-host.md) and the
+[current scope](../security/zero-trust-boundaries.md) for declared security scope.
 
 
 ## Qualified worker frames and TLS pin upgrades
@@ -223,8 +223,8 @@ stdout frames must match the canonical schemas, have unique object keys, valid
 UTF-8 and at most 64 levels of nesting. The invocation accepts at most 1,000
 nonblank frames, one terminal result, no later frames and no reused broker request
 IDs. A malformed frame cannot be repaired by printing a later successful result.
-Aggregate stdout/stderr and deadline limits still apply. S13 passes the declared-tier matrix; consult the live progress document for
-executed evidence and the remaining deployment/full-catalog limitations.
+Aggregate stdout/stderr and deadline limits still apply. Run the declared-tier matrix for the exact source/image and host configuration.
+Its deployment/full-catalog limits remain explicit in the security guide.
 
 The SPKI verifier now requires ordinary certificate validation and an allowed
 verified-leaf key pin together. A private/self-signed service must supply its
@@ -232,7 +232,7 @@ public trust anchor in caBundle. Replace intermediate-only spkiPins with leaf
 pins before upgrading; the old pin-only trust path is removed. Hostname,
 validity, chain and TLS handshake signatures are checked before HTTP delivery.
 This shared TLS security correction applies to native broker clients too; it
-does not qualify native worker containment. See [ADR 051](../adr/051-verified-leaf-spki-pins.md).
+does not qualify native worker containment. See [Rootless OCI Tool Host pools](rootless-tool-host.md).
 
 
 After the current-source actual OCI gate, run python tools/security/containment.py
@@ -268,7 +268,7 @@ and namespace membership, kills the supervisor while the worker ignores TERM,
 and observes automatic restart plus journal reconciliation without a new worker.
 It requires current-source broker image evidence and at least three cycles.
 Local monotonic timing observations are not production connectivity-class SLOs.
-See ADR 052 and the authoritative status for executed evidence.
+See [Rootless OCI Tool Host pools](rootless-tool-host.md) and run its source/image-bound qualification checks.
 
 
 After freezing source and preparing the current broker image, an administrator

@@ -1,7 +1,7 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Generic HTTP target fencing
 
-S21 supports explicit generic HTTPS, HTTP/1.1, non-streaming targets using Java 21
+The current adapter supports explicit generic HTTPS, HTTP/1.1, non-streaming targets using Java 21
 and the shared JDBC claim store. Deploy matching current artifacts and fresh
 schemas. There are no upgrade chains, backfills, format conversion, compatibility
 constructors or legacy runtime paths. An unsupported store is refused intact.
@@ -101,7 +101,7 @@ Control and broker refusal, real accepted mTLS/HTTP facts, both target classes,
 SQLite/PostgreSQL runtime roles, competing owners, paused-owner takeover,
 apply/recovery races, lost replies, external-action crashes and outcome delivery
 are tracked in the authoritative
-[execution status](../security/zero-trust-execution-status.md).
+[execution status](../security/zero-trust-boundaries.md).
 
 This does not qualify arbitrary target frameworks, native MCP business finality,
 other runtime tiers, production connectivity SLOs or the full original phase-3

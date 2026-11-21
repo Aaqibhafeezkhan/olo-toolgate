@@ -72,5 +72,6 @@ file move: the source log is read-only and Control owns the workflow result.
 Missing/oversized files report degraded source health without advancing state.
 This is POLL observation, not native PUSH or a complete log history.
 
-`stop.bat --configuration log-triage` removes this configuration's owned stack
-and generated state/storage. Preserve any results needed before stopping it.
+`stop.bat --configuration log-triage` stops this configuration and preserves storage.
+`destroy.bat --configuration log-triage` removes its owned stack and generated
+state/storage. Preserve any results needed before destroying it.

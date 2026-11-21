@@ -1,5 +1,5 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
-# Native graph: hot-folder issue triage (Phase 1)
+# Native graph: hot-folder issue triage
 
 This fresh configuration pins the installed supervisor graph. Its JSON profile
 selects the hotfolder-watch trigger, issue agent, model and graph independently
@@ -27,5 +27,6 @@ also has a complete Profile JSON text box. Existing workflows remain version-pin
 
 To switch use case, stop this selected stack and start `native-log` from the same
 numbered configuration list. Both profiles use the same worker image; their
-graph selection and trigger settings differ. `stop.bat` removes the selected
-stack and its owned storage; keep any outputs you need before using it.
+graph selection and trigger settings differ. `stop.bat --configuration native-hotfolder`
+preserves storage. To remove this stack and its owned storage, use
+`destroy.bat --configuration native-hotfolder`; keep any outputs you need first.

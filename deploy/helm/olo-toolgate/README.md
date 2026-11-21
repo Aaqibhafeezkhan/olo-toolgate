@@ -37,5 +37,5 @@ python tools/enterprise/helm.py
 
 Also render your actual values file before applying. The repository gate validates
 enabled/disabled and negative configurations; it does not certify your cluster's
-availability, network trust or capacity. Follow [upgrade and recovery](../../../docs/control-plane/upgrades.md)
+availability, network trust or capacity. Follow [upgrade and recovery](../../../docs/architecture/compatibility.md)
 before rollback: application manifests do not reverse database or authority history.

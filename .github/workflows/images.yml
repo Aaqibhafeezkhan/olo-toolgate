@@ -183,7 +183,7 @@ jobs:
         cp -r build/quickstart build/control/quickstart-evidence
         docker save olo-toolgate-control:module05 -o build/control/image.tar
         cp -r build/ui build/control/ui-evidence
-        cp CHANGELOG.md docs/control-plane/upgrades.md build/control/
+        cp CHANGELOG.md docs/architecture/compatibility.md build/control/
         (cd build/control && sha256sum image.tar control-sbom.cdx.json > SHA256SUMS)
       if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -244,7 +244,7 @@ jobs:
         docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --no-progress --exit-code 1 --severity HIGH,CRITICAL olo-toolgate-gateway:module05
         docker run --rm -v "$PWD/.dev/trivy-cache:/root/.cache/trivy" -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2,mirror.gcr.io/aquasec/trivy-db:2 -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/gateway:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/gateway-sbom.cdx.json olo-toolgate-gateway:module05
         docker save olo-toolgate-gateway:module05 -o build/gateway/image.tar
-        cp CHANGELOG.md docs/gateway/upgrades.md build/gateway/
+        cp CHANGELOG.md docs/architecture/compatibility.md build/gateway/
         (cd build/gateway && sha256sum image.tar gateway-sbom.cdx.json > SHA256SUMS)
       if: ${{ inputs.run_tests }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

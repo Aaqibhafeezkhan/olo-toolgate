@@ -55,7 +55,7 @@ class GatewayAssetsTests(unittest.TestCase):
         self.assertNotIn('secrets.MAVEN',json.dumps(workflow))
 
     def test_gateway_local_documentation_links(self):
-        paths=['apps/gateway/README.md','docs/gateway/README.md','docs/gateway/configuration.md','docs/gateway/deployment.md','docs/gateway/upgrades.md','docs/gateway/performance.md','docs/adr/002-gateway-static-foundation.md']
+        paths=['apps/gateway/README.md','docs/gateway/README.md','docs/gateway/configuration.md','docs/deployment/production.md','docs/architecture/compatibility.md','docs/gateway/performance.md']
         for name in paths:
             path=ROOT/name; text=path.read_text(encoding='utf-8')
             for target in re.findall(r'\]\(([^)]+)\)',text):

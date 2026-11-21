@@ -129,7 +129,7 @@ Some Control refusals name the records you must fix, using `ControlErrorDetail`:
 
 The `error` value is one of `UNRESOLVED_IDENTITIES`, `REPLACE_CONFLICTS`,
 `ONE_DEVICE_PER_ACCOUNT`, `REQUIRED_REVIEWS_CHANGE` or `RATE_LIMITED`. See
-[errors and idempotency](errors-and-idempotency.md).
+[errors and idempotency](api-reference.md).
 
 ---
 

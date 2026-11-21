@@ -16,6 +16,6 @@
 | Missing cloud trace | Private collector/export logs and exact project. Traces do not establish effect success. |
 | Blank after storage removal | New storage is a fresh installation. `start.bat` reconciles custody; normal restarts reuse it. |
 
-Read [workflow status](../architecture/workflow-v1-status.md) for executed
-evidence, limitations and pending phases. Report run ID, profile digest, package
+Read [workflow architecture](../architecture/workflows.md) for current
+boundaries and [unfinished work](../plans/workflows.md) for remaining acceptance. Report run ID, profile digest, package
 version and sanitized errors; never attach credentials or private prompts.

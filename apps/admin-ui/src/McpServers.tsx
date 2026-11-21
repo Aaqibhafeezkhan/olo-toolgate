@@ -45,7 +45,7 @@ function useKeys() {
   return (body: string) => { if (pending.current?.body !== body) pending.current = { body, key: crypto.randomUUID() }; return pending.current.key; };
 }
 
-/** Upstream MCP servers of this tenant (docs/planning/mcp-proxy/plan.md §7): register one by URL, scan it on its pool,
+/** Upstream MCP servers of this tenant (docs/gateway/mcp-proxy.md): register one by URL, scan it on its pool,
  *  review the definitions against the approved ones, approve up to 64 tools, and follow its state. */
 export function McpServers({ client }: { client: ControlClient }) {
   const { can } = usePermissions(client), canRegister = can('mcp_server.register');

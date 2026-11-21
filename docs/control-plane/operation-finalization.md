@@ -1,9 +1,9 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # Derived operation outcomes and history
 
-The bounded S10 finalization feature is implemented and qualified under the
+The bounded finalization feature is implemented and qualified under the
 explicit stage scope amendment. See the authoritative
-[execution status](../security/zero-trust-execution-status.md) for executed checks
+[execution status](../security/zero-trust-boundaries.md) for executed checks
 and remaining delivery criteria.
 
 An invocation's state records the executor report. Its optional operationOutcome
@@ -49,14 +49,9 @@ OUTCOME_UNKNOWN and RECONCILIATION_REQUIRED are tool errors. Unavailable outcome
 OUTCOME_UNKNOWN and retryable=false, without disclosing the worker result.
 No outcome/history endpoint renews a lease or grants a replacement permit.
 
-The additive contracts retain the previous Java EnterpriseInvocation and
-RemoteToolResponse constructors. Native human/local result responses also carry
-the separate optional operationOutcome; their record state remains reported
-transport state.
-Older strict schema readers must update before consuming responses with the new
-optional projection. V7 adds immutable manifests, settlements and outcome snapshots;
-the separately staged future kill-switch specification moves to V8. Shipped
-V1–V6 migrations and the preserved revision-10 plan remain unchanged.
+Use the current closed-schema contracts and fresh initial schemas. No older
+reader, constructor, database upgrade or projection conversion is supported.
+Persist manifests, settlements and outcome snapshots within the current schema.
 
 ## Native caller metadata
 
@@ -104,8 +99,6 @@ own PostgreSQL fixture, reruns the selected Java classes and refuses missing,
 failed, skipped, duplicate or source-stale evidence. Generated XML and a digest
 report live under build/security/finalization. This does not accept the original
 distributed suites or C1–C8 claims. Their unexecuted assertions remain visible in
-the diagnostic scorecard. The authoritative status document explicitly amends
-S10's stage boundary to this finalization feature and its qualified component
-checks; full original distributed suites remain phase-1/S33 requirements. S10
-earns no weight until the amended stage acceptance criteria are met. Prospective fixed-plan/equivalence/deduplication rules have policy tests,
-but their live independent authority sources remain unavailable.
+the diagnostic scorecard. Complete distributed and target acceptance is required in addition to these
+component vectors. Policy tests alone do not qualify an independent live
+authority source. See [remaining security acceptance](../plans/zero-trust-tool-execution.md).

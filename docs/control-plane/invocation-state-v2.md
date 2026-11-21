@@ -4,7 +4,8 @@
 
 This is the reviewed state-machine specification behind design gate D2 (platform-requirements.md §12.7, §12.8). It says how the v2 task, execution-ledger, lease and business-key state described in platform-requirements.md §11.3, §11.7 and §12 lives in Control's existing invocation storage. It defines the current fresh schema that contains it.
 
-It is normative. Milestone code implements it. A change after D2 passes needs an amendment to ADR 016.
+This is the current invocation contract. Review state/authority changes with
+canonical schemas, transition tests and the owning implementation.
 
 The schema shapes are in `packages/contracts/schemas/v2/invocation.schema.json` and `permit.schema.json`. Current invocation storage is included in the V1 initial schemas. Unshipped kill-switch design fragments are in [schema-specifications/](schema-specifications/). [`tests/contracts/test_current_schema_specs.py`](../../tests/contracts/test_current_schema_specs.py) applies them to both database trees and runs the same scenarios on each.
 
@@ -44,7 +45,7 @@ Each transition is one Control transaction. It checks the expected revision, the
 | T1 | none → `PENDING_APPROVAL` / `AWAITING_APPROVAL`, or → `QUEUED` / `QUEUED` | Gateway, `POST access/invocations` with an `InvocationSubmission` body; returns `InvocationAdmission` | Policy decision as today. Business key handled first (§4). | Invocation row with v2 columns. Task columns when platform-requirements.md §12.1 requires a task. Business-key row when a key or dedupe window applies. Approval row for ASK. Budgets as today. |
 | T2 | `PENDING_APPROVAL` → `QUEUED` | Approver, existing approval decision | All obligations approved | Approval `APPROVED`; invocation `QUEUED`. One transaction (platform-requirements.md §12.7 row 3). |
 | T3 | `PENDING_APPROVAL` → `CANCELLED` / `REJECTED` | Approver, existing approval decision | Deny or revoke | Approval `DENIED`/`REVOKED`; invocation `CANCELLED`; business-key `outcome = REJECTED`. |
-| T4 | `QUEUED` → `RESERVED` / `DISPATCHED` | Gateway, `POST access/invocations/reserve` with a `PermitReservationRequest` body | Fresh authority; approval consumed once (platform-requirements.md §12.7 row 4) | Nonce row (`control_enterprise_nonces`); permit signed (ADR 013). Unchanged from today apart from the v2 claims. |
+| T4 | `QUEUED` → `RESERVED` / `DISPATCHED` | Gateway, `POST access/invocations/reserve` with a `PermitReservationRequest` body | Fresh authority; approval consumed once (platform-requirements.md §12.7 row 4) | Nonce row (`control_enterprise_nonces`); permit signed ([Tool Host](../../apps/tool-host/README.md)). Unchanged from today apart from the v2 claims. |
 | T5 | `RESERVED` → `EXECUTING` / `RUNNING` | Tool Host or device, `POST access/permits/consume` | Permit valid; `aud` is the caller's workload identity; nonce unconsumed and unexpired; digests match the row | Nonce `consumed_at`; `lease_holder`, `lease_expires_at = now + lease`. Returns `PermitConsumed {fencingToken = nonce, leaseExpiresAtUnixMs}`. |
 | T6 | `EXECUTING` → `EXECUTING` (lease renewal) | Tool Host, `POST access/invocations/{id}/heartbeat` | `state = EXECUTING`; fencing token equals the consumed nonce; caller equals `lease_holder`; no `TERMINATE` kill covers it. After T8 it still answers, with `cancelRequested = true`, but no longer extends the lease. | `lease_expires_at = min(now + lease, deadline + 5 s)`; latest `progress` into `task_document`. Returns `LeaseRenewal`, which carries `cancelRequested` and any waiting `inputResponses`. |
 | T7 | `EXECUTING` / `RUNNING` ⇄ `INPUT_REQUIRED` | Tool Host sends `inputRequest` on a heartbeat (enter); Gateway sends `POST access/tasks/{taskId}/input` (leave) | Task exists; owner digest matches (§7) | `task_input_deadline_at` set on entry and cleared on exit. The input is stored in `task_document` until the next heartbeat returns it in `LeaseRenewal.inputResponses`. |
@@ -85,7 +86,7 @@ T1 runs these steps under the tenant lock, in one transaction:
 
 ### 4.3 Outcomes for an existing row
 
-**Current implementation amendment:** [ADR 046](../adr/046-business-key-policy-retention.md)
+**Current implementation amendment:** [Explicit business operation keys](../operations/business-operation-keys.md)
 implements required keys, verified namespaces, argument derivation, retention and
 optional windows. The table below remains the broader design target. Current
 owner checks also bind the original agent in DELEGATED_USER; cross-agent result
@@ -161,7 +162,7 @@ The trigger `control_business_key_guard` allows a rebind only from outcome `EXPI
 
 - Gateway and Tool Host spools, and their full-disk behaviour: platform-requirements.md §12.7 row 11 and [the Tool Host threat model](../security/threat-models/tool-host.md).
 - Kill events: [kill-switch.md](kill-switch.md).
-- Permit format and keys: ADR 013.
+- Permit format and keys: [Tool Host](../../apps/tool-host/README.md).
 
 ## S20 current-only recovery amendment
 

@@ -68,7 +68,7 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/build/gateway:/evidence" aquasec/trivy:0.61.1 image --no-progress --format cyclonedx --output /evidence/gateway-sbom.cdx.json olo-toolgate-gateway:module05
           python tools/enterprise/helm.py
           docker save olo-toolgate-gateway:module05 -o build/gateway/image.tar
-          cp CHANGELOG.md docs/gateway/upgrades.md build/gateway/
+          cp CHANGELOG.md docs/architecture/compatibility.md build/gateway/
           (cd build/gateway && sha256sum image.tar gateway-sbom.cdx.json > SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

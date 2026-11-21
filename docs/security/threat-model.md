@@ -8,7 +8,7 @@ See [Device registry and tool-call controls](../control-plane/device-registry.md
 
 The adopted [A1–A9 attacker matrix and C1–C8 requirements](zero-trust-boundaries.md)
 extend this model. Implementation availability and executed evidence live in the
-[claim inventory](zero-trust-execution-status.md#security-claim-inventory).
+[claim inventory](zero-trust-boundaries.md).
 Design requirements do not establish all-route per-effect authorization,
 sender-constrained identity, tamper-evident audit or deployment SLO acceptance.
 Healthy-host lease bounds do not apply to a root-compromised host.

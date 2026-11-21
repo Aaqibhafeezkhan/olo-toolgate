@@ -52,17 +52,10 @@ stack/deployment conformance remains outstanding. Do not infer target deduplicat
 operation success from CONSUMED. Existing operations remain conservative UNKNOWN
 after consumed terminal attempts.
 
-## Upgrade
+## Current storage
 
-Upgrade Control replicas together. V1–V3 files stay unchanged; V4 adds the new
-ledger and SQLite refuses downgrading V4 state to older images. Historical write
-capabilities with no effect generation are refused, not granted inferred history;
-allow their existing 15-second lifetime to drain during cutover. Read permits keep
-the old epoch behavior. The background execution watchdog performs bounded
-expiry-to-ambiguity updates (100 rows per pass), and terminal invocation updates
-abandon all outstanding generations for that operation. Expired permits cannot
-consume even before a watchdog pass.
-
-The prospective kill-switch draft moves to V5 without content changes. See
-[ADR 036](../adr/036-effect-authorization-generations.md) and the
-[live progress document](../security/zero-trust-execution-status.md).
+Use matching current artifacts and fresh PostgreSQL/SQLite schemas. Unsupported
+stores are rejected intact; there is no upgrade, backfill or conversion path.
+Current operation/attempt/effect journals and late evidence remain durable.
+Do not reconstruct safe retry permission from missing history or a timeout.
+See [storage and recovery boundaries](../architecture/compatibility.md).

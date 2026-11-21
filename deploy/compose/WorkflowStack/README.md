@@ -187,7 +187,7 @@ workflow secret custody remain in their narrowly mounted private state folders.
 
 If Docker volumes have been replaced while host state remains, startup refuses
 the changed Gateway trust. Preserve needed files first, then use
-`stop.bat --configuration <selection>` and `start.bat --configuration <selection>`
+`destroy.bat --configuration <selection>` and `start.bat --configuration <selection>`
 for a fresh deployment. That reset deletes the selected generated state/data.
 Startup never silently adopts a replacement Gateway or converts old stores.
 
@@ -235,10 +235,24 @@ Stop a deployment before removing its active workflow/profile. Removing an inact
 scope does not activate or execute it. Deleting configuration does not delete data
 or historical run evidence.
 
+## Stop and resume
+
+```bat
+stop.bat --configuration text-summary
+manage.bat deploy --configuration text-summary
+```
+
+`stop.bat` stops the selected Compose deployment and preserves its containers,
+volumes, credentials and generated state/data. Without `--configuration`, it uses
+the selection in `.env`. The local administration server remains available;
+resume through its deployment action or `manage.bat deploy` as above.
+On Linux/macOS use `sh manage.sh stop --configuration text-summary` and
+`sh manage.sh deploy --configuration text-summary`.
+
 ## Remove the stack and storage
 
 ```bat
-stop.bat
+destroy.bat
 ```
 
 **Destructive:** this removes all current WorkflowStack deployments belonging to
@@ -249,9 +263,9 @@ summaries/results and archived demo state. It does not prompt for confirmation.
 Profiles, scripts, `.env`, supplied `models/`, private vendor credential inputs
 and shared Docker images remain, so the stack can be brought up fresh.
 
-Remove only one deployment with `stop.bat --configuration text-summary`.
-Use `manage.bat stop --configuration text-summary` to merely stop containers and
-retain all storage. Cleanup does not need a valid profile, model file or `.env`;
+Remove only one deployment with `destroy.bat --configuration text-summary`.
+On Linux/macOS use `sh manage.sh destroy --configuration text-summary`, or omit
+the selection to remove all owned deployments. Cleanup does not need a valid profile, model file or `.env`;
 it verifies Docker ownership and refuses foreign projects and linked storage.
 There is no global Docker prune.
 

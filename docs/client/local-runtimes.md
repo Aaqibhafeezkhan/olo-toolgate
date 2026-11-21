@@ -2,9 +2,9 @@
 
 The endpoint client runs package tools — every `@ClientTool`, and a `@ServerTool` that needs no routes, destinations,
 secrets or claims — inside a disposable OCI sandbox. It has no built-in tools and never launches an interpreter or
-untrusted program on the host. Read [ADR 009](../adr/009-managed-local-runtime-sandbox.md) for the isolation decision,
-[ADR 026](../adr/026-client-tool-images.md) for how Control builds the images, and
-[ADR 027](../adr/027-one-tool-protocol-device-files.md) for the protocol and the device files area.
+untrusted program on the host. Read [Managed local tool runtimes](local-runtimes.md) for the isolation decision,
+[Deployment profiles](../deployment/profiles.md) for how Control builds the images, and
+[Device files area and the HotFolder package](hotfolder.md) for the protocol and the device files area.
 
 Execution also follows the current [device registry](../control-plane/device-registry.md). An installed client
 requires its enabled matching owner, enabled directory device and current connection approval before any runtime

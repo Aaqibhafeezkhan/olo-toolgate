@@ -59,7 +59,7 @@ class PolicyContractsTests(unittest.TestCase):
 
     def test_bundle_documentation_and_release_gate(self):
         import re
-        for relative in ('docs/control-plane/policy-bundles.md','docs/adr/005-signed-policy-bundles.md'):
+        for relative in ('docs/control-plane/policy-bundles.md','docs/security/security-invariants.md'):
             file=ROOT/relative
             for target in re.findall(r'\]\(([^)]+)\)',file.read_text()):
                 if not target.startswith(('http:','https:','#')):self.assertTrue((file.parent/target.split('#')[0]).exists(),target)

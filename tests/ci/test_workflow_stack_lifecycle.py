@@ -119,12 +119,27 @@ class LifecycleTests(unittest.TestCase):
         scripts=self.root/'scripts with spaces'
         scripts.mkdir()
         (scripts/'manage.py').write_text('import json,sys\nprint(json.dumps(sys.argv[1:]))\nsys.exit(7)\n')
-        for name,command in [('start.bat','start'),('stop.bat','destroy')]:
+        for name,command in [('start.bat','start'),('stop.bat','stop'),('destroy.bat','destroy')]:
             shutil.copyfile(BUNDLE/name,scripts/name)
             result=subprocess.run(['cmd.exe','/d','/c','call',str(scripts/name),'--configuration','z-summary'],
                                   cwd=self.directory.name,capture_output=True,text=True)
             self.assertEqual(7,result.returncode,result.stderr)
             self.assertEqual([command,'--configuration','z-summary'],json.loads(result.stdout.strip()))
+
+    def test_stop_only_stops_compose_and_preserves_generated_storage(self):
+        spec=importlib.util.spec_from_file_location('stop_manager',BUNDLE/'manage.py')
+        manager=importlib.util.module_from_spec(spec);spec.loader.exec_module(manager)
+        sentinel=self.root/'state/a-issue/credentials/admin/password.txt'
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text('private fixture')
+        compose=['docker','compose','-p','toolgate-workflow-a-issue']
+        with patch.object(sys,'argv',['manage.py','stop','--configuration','a-issue']), \
+                patch.object(manager,'environment',return_value=({},sentinel.parents[2],compose)), \
+                patch.object(manager,'run') as run,patch.object(lifecycle,'destroy') as destroy:
+            manager.main()
+        run.assert_called_once_with(compose+['stop'])
+        destroy.assert_not_called()
+        self.assertEqual('private fixture',sentinel.read_text())
 
     def test_start_reuses_images_and_pulls_pinned_references_instead_of_building_them(self):
         spec=importlib.util.spec_from_file_location('lifecycle_manager',BUNDLE/'manage.py')

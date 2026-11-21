@@ -32,7 +32,7 @@ Canonical Control/Gateway endpoint profiles are provisioned into control_tenant_
 ## MCP proxy state
 
 `control_mcp_servers`, `control_mcp_snapshots`, `control_mcp_approvals` and `control_mcp_scans` hold MCP server
-registrations, their immutable scan snapshots, approvals and scan jobs ([ADR 030](../adr/030-mcp-proxy-packages.md)).
+registrations, their immutable scan snapshots, approvals and scan jobs ([Governing existing MCP servers](../gateway/mcp-proxy.md)).
 Each is tenant data with forced RLS, a tenant foreign key and capacity accounting; open scans count as queued work.
 Slugs, package ids `mcp.<slug>` and tool ids are unique within their tenant, and two tenants may register the same
 slug and URL. A registration names only its own tenant's execution binding and vault secret. Scans and calls run only

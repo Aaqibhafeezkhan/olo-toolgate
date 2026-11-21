@@ -6,55 +6,24 @@ It pulls/reuses application images instead of compiling OLO. Both entry points
 share provisioning, Admin custody, device setup and optional model/collector logic;
 this installation has its own project, volumes, settings and credentials.
 
-**Publication:** the new matching development images are not published yet.
-This launcher is prepared for their publication; it does not substitute older
-images, build missing applications, or claim an unavailable image is runnable.
-Compatibility probes fail before starting the installation if required service
-entrypoints are absent. The root README screenshots come from the debug stack.
+Startup refreshes mutable development image tags and checks required
+Quickstart/device entrypoints and runtime modules before initializing the
+installation. A registry tag alone does not establish a working deployment.
+Select matching reviewed image versions/digests in `.env`; use the
+[source-built installation](../../../../debug/profiled/README.md) when developing
+the applications. This launcher does not silently build or substitute old images.
 
-## Copied local debug settings
+Private configuration belongs to this installation. `.env` selects application
+images and ports; `installation.env` configures runtime/model settings, and
+`credentials/observability.json` holds optional monitoring destinations. Start
+from their checked-in examples and the shared
+[observability template](../../../../debug/profiled/observability/credentials.example.json).
+Do not copy Admin/device identity, generated tokens, ownership markers or another
+installation's database. Transfer bots with `.olo` and configure destination
+secrets, devices and providers independently.
 
-The local deployment folder can use the same portable settings as
-`debug/profiled` with Docker Hub dev application images. Its ignored `.env`
-selects the three images listed below; no debug image tags are copied.
-
-| Local deployment file | Configuration |
-|---|---|
-| `installation.env` | Copied model provider origins/trust settings; runtime credential lifetime defaults to seven days |
-| `credentials/observability.json` | Copied Langfuse, LangSmith and Phoenix endpoints/project settings and private keys |
-| `credentials/collector.json` | Copied collector configuration; regenerated when configuring monitoring |
-| `credentials/monitoring.env` | Copied private exporter authentication; regenerated from observability settings |
-| `credentials/runtime-observability.env` | Copied runtime collector endpoint and environment |
-
-These actual local settings/keys stay ignored by Git. The committed
-`installation.env.example` describes the matching local Ollama configuration;
-the shared [monitoring credential template](../../../../debug/profiled/observability/credentials.example.json)
-describes the provider fields without real keys. On another checkout, create the
-private files there before starting. Keep existing settings when adding the TTL
-line or changing providers.
-
-Admin credentials, gateway/device identity, ownership markers, database/volumes
-and model weights are installation-owned and are not filesystem configuration
-copies. This deployment creates its own Admin identity and private custody.
-Import exported `.olo` bundles to transfer bots and their referenced packages;
-configure its own devices and model vault secret. The Ollama model cache belongs
-to this deployment, so first-time setup may download/prepare the weights.
-
-Before deploying on the default ports, stop the debug stack from
-`D:\git\olo-toolgate\debug\profiled`:
-
-```bat
-stop.bat -WithOllama -WithMonitoring
-```
-
-Then from `D:\git\olo-toolgate\deploy\docker\quickstart\dev`:
-
-```bat
-start.bat -WithOllama -WithMonitoring
-```
-
-This selects the same optional model/collector services and uses the copied
-private cloud settings. Deployment/testing remains an explicit operator action.
+The debug and published-image installations have separate storage but share
+default ports. Stop the other installation or change ports before starting.
 
 ## Application images
 
@@ -114,9 +83,7 @@ sh start.sh --without-ollama --without-monitoring
 
 Local Ollama setup uses the shared non-interactive preload helper: each model
 reports loading/completion and has a bounded timeout. Existing imported weights
-are reused. If a prior script is waiting after Ollama's `success` line, cancel
-that invocation with Ctrl+C and rerun the updated launcher.
-
+are reused.
 First startup copies `.env.example` to ignored `.env`. Default ports bind only
 to loopback: Admin UI `http://127.0.0.1:18090/console/`, HTTPS API `18450`, package
 registry `18552`. Edit `HTTP_PORT`, `TLS_PORT`, `REGISTRY_PORT` **before first
@@ -182,6 +149,177 @@ Files must be owned by the device broker and use mode 0600. See the exact
 Windows/Linux host permission commands in the device guide when using bind
 mounts. Mounts, webhook ingress ports and firewall changes are never made by a
 bot import. The operator must provide the required access/network configuration.
+
+## Invoke a bot from another application
+
+Postman, a Rust HTTP client or a trusted backend can submit a message using the
+same **Control API** as the console's Run action. There is currently no Rust
+Gateway endpoint for starting a bot. Gateway's `/v1/chat/completions` performs
+model inference within an already admitted run; it is not a bot/chat entrypoint.
+
+**Current limitation:** submission, progress and result APIs require a live
+tenant Super Admin. Ordinary-user execution with explicit bot/resource grants,
+live event streams and registered webhook callbacks are **not implemented**.
+The required replacement is specified in the
+[external application integration plan](../../../../docs/plans/workflow-application-integration.md).
+Do not give external chat users an Admin token to work around this restriction.
+
+### Postman: authenticate and select a published bot
+
+Use this installation's loopback HTTP origin, `http://127.0.0.1:18090`, as the
+Postman variable `baseUrl` (adjust it if `HTTP_PORT` differs). These examples use
+the Quickstart login/proxy, not device TLS port `18450`. Remote integrations
+require reviewed ingress with verified HTTPS; keep installation credentials
+private. Store passwords/tokens in private local variables, not shared collections
+or exported environments.
+
+Create `tenantId` using the **Tenant ID** shown in this installation's console
+banner. For the installation shown in this example:
+
+```text
+tenantId = 48558ebe-a9a8-4680-8da8-129deba2e65c
+```
+
+Supply this header on the **login request**:
+
+```http
+Toolgate-Tenant-ID: {{tenantId}}
+```
+
+Use the UUID, not the tenant display name `Quickstart`. Other installations have
+their own tenant IDs. The signed access token issued after login already includes
+the installation's UUID in its `tenant_id` claim. Subsequent bot discovery,
+submission and progress/result requests use Bearer authorization; they do not
+need a separate tenant header. Control checks the verified token tenant against
+the routed tenant. An optional tenant header must match and cannot override the
+token. The planned stream/subscription APIs must use the same token-bound scope.
+
+The Quickstart-local login does not currently validate the supplied tenant header;
+it issues tokens for its own configured tenant. Mandatory tenant selection and
+validation at login remain part of the integration plan. Do not treat a supplied
+header as permission to access another installation or tenant.
+
+1. Create a `POST` request to `{{baseUrl}}/api/quickstart/v1/login`, with
+   `Toolgate-Tenant-ID: {{tenantId}}`, `Content-Type: application/json` and a
+   **raw JSON** body:
+
+   ```json
+   {"username":"{{username}}","password":"{{password}}"}
+   ```
+
+   For the initial Admin login, obtain these values from the private
+   `credentials/admin/username.txt` and `credentials/admin/password.txt` files.
+   Save the response's `accessToken` as private variable `accessToken`.
+   On subsequent requests use Postman's **Bearer Token** authorization with
+   `{{accessToken}}`. Runtime worker/device credentials cannot replace a human
+   login token. Authenticate again if the token expires.
+
+2. Send `GET {{baseUrl}}/api/control/v1/workflow-profiles/published?limit=50`.
+   The response is an array. Select the intended publication and copy its
+   `profileId`, `digest` and `generation` into variables `profileId`,
+   `profileDigest` and `expectedGeneration`. To page further, pass
+   `afterProfileId` using the last returned profile ID.
+
+3. Send
+   `GET {{baseUrl}}/api/control/v1/workflow-profiles/published/{{profileId}}/{{profileDigest}}`.
+   This returns the published workflow catalog. Choose `workflowId` from an
+   entry in `workflows[].id`, and `entryAgentId` from that workflow's `agents[]`
+   where `entryEligible` is `true`. Do not substitute the bot's display name.
+
+The bot must already be reviewed, prepared and published, with its models,
+agents, service grants, packages and devices ready. API submission does not
+provision dependencies or grant resource access.
+
+### Submit input and retrieve the response
+
+Send the following Postman request. Set `idempotencyKey` to a new UUID for a new
+logical submission and keep that value with the request until its outcome is known.
+
+```http
+POST {{baseUrl}}/api/control/v1/workflow-profiles/{{profileId}}/workflows/{{workflowId}}/runs
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}
+
+{
+  "profileDigest": "{{profileDigest}}",
+  "expectedGeneration": {{expectedGeneration}},
+  "entryAgentId": "{{entryAgentId}}",
+  "message": "Summarize this support request: explain why the device is offline."
+}
+```
+
+Postman substitutes `expectedGeneration` as a JSON **number**. `message` is bot
+input, not an instruction to upload a file; use a message suitable for the selected
+bot. If dispatch routes require disambiguation, add `dispatchBindingId` with an
+ID from this published catalog's matching `dispatchBindings[]`.
+
+HTTP `201` returns `runId`, `profileId`, `profileDigest`, `workflowId` and
+`state: "QUEUED"`. Save `runId`. This confirms admission, not successful execution.
+
+With the same tenant-bound Bearer authorization, poll these read-only endpoints:
+
+| Request | Response |
+|---|---|
+| `GET {{baseUrl}}/api/control/v1/workflow-runs/{{runId}}/progress?after=0` | `items` and `nextCursor`; pass the returned cursor as `after` on the next page |
+| `GET {{baseUrl}}/api/control/v1/workflow-runs/{{runId}}` | Run identity, `state`, input `message`, and `outcome` when available |
+
+Poll about once per second while queued/running. Read the final `outcome` when
+the run reaches `SUCCEEDED`, `FAILED`, `AWAITING_APPROVAL`, `CANCELLED` or `EXPIRED`.
+Only `SUCCEEDED` represents success. An approval state is not permission to
+resubmit and bypass review. Progress events are structural observations; the
+result endpoint supplies the response, not model-token streaming.
+
+If submission's network response is lost, retry with the **same key and identical
+body** to recover the receipt. Reusing the key with different input returns a
+conflict; using a new key can create another run. A delivery retry does not justify
+repeating an uncertain tool effect. HTTP `401` requires fresh authentication;
+`403` indicates insufficient authority/readiness; `409` can indicate a changed
+publication, conflicting key reuse or ambiguous dispatch. Resolve the cause
+before starting a new logical submission.
+
+### Third-party chat hooks and event subscriptions
+
+A trusted operator backend can currently call the HTTP flow above from Rust or
+another language. OLO does not currently provide a generic chat-provider webhook
+receiver, run SSE stream or registered run callback service.
+
+For an operator-controlled adapter, the flow is:
+
+```text
+Chat provider -> verified backend adapter -> Control run submission
+                                         -> poll progress/result
+                                         -> provider's reply API
+```
+
+Verify the provider's signature/authentication and replay rules before accepting
+an event. Map trusted caller/channel identity to allowed bot IDs on the server;
+do not let event text choose privileged profiles or resources. Persist a mapping
+from the provider event ID to a valid idempotency key, request and run ID, so a
+redelivery observes the same run. Acknowledge the hook within the provider's
+deadline and process/poll asynchronously. Keep all OLO credentials in the trusted
+backend. This operator-only pattern does not provide end-user delegated access.
+
+The required V1 community integration uses username/password authentication:
+provide the tenant ID at login, authenticate an existing enabled OLO user, acquire
+a user/tenant-bound access token, then use that token to
+submit a bot request or subscribe to permitted progress/trigger status. The user's
+current roles must allow workflow execution and every required agent, model,
+tool, device and resource in the flow. A valid token alone grants no resource
+access. Progress, results and trigger subscriptions must also be filtered by that
+user's observation/subscription permissions; trigger status access cannot grant
+workflow execution or another user's private results.
+
+OAuth integration is deferred to a later version. V1 does not require OAuth or
+a refresh-token flow: log in again to obtain a new token after expiry. Send the
+password only at login, over verified HTTPS for remote access; subsequent calls
+use the Bearer token with its signed tenant identity.
+
+Resumable live events and registered signed HTTPS callbacks must retain those
+checks, including revocation during delivery. These are requirements for the
+planned integration, not capabilities of the current operator-only recipe.
+Implementation and acceptance remain in the linked plan; there are no working
+workflow event subscription-registration URLs to configure in Postman yet.
 
 ## Models
 
@@ -293,5 +431,5 @@ The launcher shares scripts under `debug/profiled` and `tools`; keep the reposit
 layout intact. It is not a separate single-folder download. No host build toolchain
 is required for published application startup. Maintainers can override image refs
 in ignored `.env` for local verification; such tests are not evidence that those
-images were published. See [live workflow status](../../../../docs/architecture/workflow-v1-status.md)
+images were published. See [workflow architecture](../../../../docs/architecture/workflows.md)
 for tested scope, actual checks and remaining qualification.

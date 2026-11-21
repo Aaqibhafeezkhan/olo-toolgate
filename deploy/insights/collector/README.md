@@ -1,7 +1,7 @@
 # Insights export Collector
 
 Operator Insights can export DETAILED spans and per-minute metrics from Control over OTLP/HTTP JSON
-([ADR 031](../../../docs/adr/031-execution-correlation-operator-insights.md) §6, [Insights guide](../../../docs/control-plane/insights.md)).
+([Operator Insights](../../../docs/control-plane/insights.md) §6, [Insights guide](../../../docs/control-plane/insights.md)).
 Control sends to one endpoint. Point it at an OpenTelemetry Collector, which handles vendor credentials, retries and
 fan-out. Control never holds a Datadog or New Relic key.
 
@@ -81,9 +81,8 @@ that arrives after a minute was exported is visible on the Insights page but is 
 
 ## Starting queries
 
-These are starting points, not tested dashboards. Vendor-side validation is part of the integration testing stage
-(Stage 7). Delivery to either vendor is not yet verified; see the
-[Stage 7 report](../../../docs/control-plane/insights-stage7.md).
+Verify these queries and actual delivery in your own destination. Collector
+configuration validation alone does not qualify vendor ingestion or dashboards.
 
 - **Datadog.** Traces appear in APM under service `olo-toolgate`. Example metric queries:
   `sum:toolgate.insights.calls{toolgate.outcome:failed} by {gen_ai.tool.name}.as_count()` and

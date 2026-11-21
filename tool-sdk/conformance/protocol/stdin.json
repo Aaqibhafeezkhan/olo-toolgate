@@ -69,7 +69,7 @@
       "id": "stdin/v2-execution-context",
       "title": "The v2 runtime exposes executionContext for correlation only",
       "requirements": [
-        "docs/adr/031-execution-correlation-operator-insights.md"
+        "docs/control-plane/insights.md"
       ],
       "level": "component",
       "targets": [

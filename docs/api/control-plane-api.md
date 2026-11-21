@@ -61,4 +61,4 @@ require their actual certificate-bound identity. See [approvals](../control-plan
 
 Mutations use the operation's canonical revision and idempotency contract. Stale
 revisions require reloading; replay cannot broaden scope or duplicate effects.
-See [errors and idempotency](errors-and-idempotency.md).
+See [errors and idempotency](api-reference.md).

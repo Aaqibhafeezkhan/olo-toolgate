@@ -6,9 +6,9 @@ This document specifies the **Administration** menu of the administration consol
 bottom sidebar group with Server, Device, Backup/Restore and About pages, and the field-level
 settings save behind them.
 
-> **Status: implemented in milestone M1; renamed in RC.** See [ADR 022](../adr/022-super-administrator-review-exception.md) for the current administration exception and
-> [ADR 021](../adr/021-client-checkin-configuration-menu.md). Source:
-> [Platform requirements §18](../contracts/platform-requirements.md).
+See [user roles](../security/user-roles.md) for the administration exception
+and [platform requirements](../contracts/platform-requirements.md) for the
+canonical settings contract.
 
 ## Layout
 

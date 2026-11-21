@@ -1,7 +1,7 @@
 # Governing existing MCP servers
 
 ToolGate can put an MCP server you already run behind its policy, approval and audit, without changing the server.
-The trust and package boundaries are defined in [ADR 030](../adr/030-mcp-proxy-packages.md).
+The trust and package boundaries are defined in [Governing existing MCP servers](mcp-proxy.md).
 The shared [definition digest specification](../../tool-sdk/spec/mcp-proxy/README.md)
 and [v2 schemas](../../packages/contracts/schemas/v2/mcp-proxy.schema.json) define the wire contract.
 
@@ -100,7 +100,7 @@ scoped reviewers can read them; operation metadata-read access alone does not
 grant access to full preview payloads. Audit refusals retain digests and reason
 codes rather than those values.
 
-### Current per-effect keys (S20 work in progress)
+### Current per-effect keys (current effect-key contract)
 
 Each logical write requires an explicit stable effectKey (ASCII letters, digits,
 dot, underscore, colon or hyphen; 1–128 characters). The same tenant, operation,

@@ -1,11 +1,11 @@
 # Tool Host
 
-**Status:** ToolGate is in Beta Release. Admission, the content store, the broker, the Java launcher, enrollment as a device and Gateway dispatch are built (M0 parts 13 and 14). The quickstart image runs a Tool Host, and `tools/quickstart/check.py` calls a Java tool through `/mcp`. Renewable leases, admission spooling and durable result delivery are described in the [execution recovery guide](../../docs/operations/execution-leases.md). Python OCI containment is available on qualified pools; per-effect authorization and the later roadmap remain tracked in [#230](https://github.com/olo-labs/olo-toolgate/issues/230).
-**Primary stack:** Rust
-
-Qualified Python pools can use the [rootless OCI tier](../../docs/operations/rootless-tool-host.md),
-with a permit-bound runtime image, enforced limits and container teardown.
-`HOST_NATIVE` is the explicit unisolated execution tier and provides no container isolation.
+The Tool Host verifies signed package content, admits governed invocations and
+runs server tools outside Control. It participates in enrollment, dispatch,
+leases and durable evidence delivery. Use the declared runtime profile: native
+execution and qualified rootless Python OCI have different isolation guarantees.
+See [execution scope](../../docs/security/zero-trust-boundaries.md) and
+[rootless deployment](../../docs/operations/rootless-tool-host.md).
 
 ## Responsibility
 
@@ -60,7 +60,7 @@ Enrolled hosts persist a versioned UUID binding before creating a device key or 
 
 Preprovisioned hosts use the same v2 verification and tenant certificate rules. Mount only that tenant's certificate/key and public TLS roots; `identityTrustDirectory/authority.json` persists the owner, origin and trust floor. Startup verifies the host ID and refreshes discovery before readiness; subsequent requests refresh at least every four minutes. A changed origin, foreign certificate or retired CA fails before authenticated traffic. Protect this directory and isolate tenant processes, mounts and networks; these checks do not provide an operating-system sandbox.
 
-## Revocation delivery (S22 in implementation)
+## Revocation delivery
 
 HTTPS hosts require a current signed kill snapshot before readiness or admission.
 The host obtains organization public keys and signed snapshots directly from its
@@ -90,9 +90,9 @@ admitted attempt's status instead observes its signed execution deadline, clippe
 to the original operation expiry. This metadata never renews its live lease.
 Local component tests do not qualify the full S22 connectivity SLO or compromised
 root-host containment; see the authoritative
-[execution status](../../docs/security/zero-trust-execution-status.md).
+[execution status](../../docs/security/zero-trust-boundaries.md).
 
-## Authenticated inbound dispatch (S22 in implementation)
+## Authenticated inbound dispatch
 
 Configure dispatchTls with certificatePath, privateKeyPath, gatewayCaPath and
 gatewayCertificates (one to four exact current Gateway leaf PEM paths). Gateway
@@ -142,7 +142,7 @@ A verified package is unpacked once under `workDir/packages/<hex>/` (each artifa
 
 ## Runtime protocol
 
-The host starts the tool's runtime with a clean environment: `HOME` and the working directory are the invocation's own directory, plus `LANG`, `TOOLGATE_PROTOCOL=2` and `TOOLGATE_EXECUTION_TARGET=SERVER`. It speaks tool protocol v2 over stdio, the one protocol every executor uses ([ADR 027](../../docs/adr/027-one-tool-protocol-device-files.md)): it writes one `ToolInput` line to stdin, answers each `BROKER_REQUEST` frame on stdout with one `BROKER_RESPONSE` line on stdin, and takes the final `RESULT` frame, killing the process at the deadline. A tool runs from exactly one self-contained artifact, the one its permit pins, and a JVM tool's must be a jar, so the device needs only a JRE. The JVM launcher runs `java -Xmx<memory> -XX:+ExitOnOutOfMemoryError -cp tool.jar <entryPoint>`; the Java SDK's `Main` switches to governed mode on `TOOLGATE_PROTOCOL=2`. Another language needs a launcher in `runner.rs` and its `runtimeId` in `store::RUNTIMES`; admission, the store and the broker stay as they are.
+The host starts the tool's runtime with a clean environment: `HOME` and the working directory are the invocation's own directory, plus `LANG`, `TOOLGATE_PROTOCOL=2` and `TOOLGATE_EXECUTION_TARGET=SERVER`. It speaks tool protocol v2 over stdio, the one protocol every executor uses ([Device files area and the HotFolder package](../../docs/client/hotfolder.md)): it writes one `ToolInput` line to stdin, answers each `BROKER_REQUEST` frame on stdout with one `BROKER_RESPONSE` line on stdin, and takes the final `RESULT` frame, killing the process at the deadline. A tool runs from exactly one self-contained artifact, the one its permit pins, and a JVM tool's must be a jar, so the device needs only a JRE. The JVM launcher runs `java -Xmx<memory> -XX:+ExitOnOutOfMemoryError -cp tool.jar <entryPoint>`; the Java SDK's `Main` switches to governed mode on `TOOLGATE_PROTOCOL=2`. Another language needs a launcher in `runner.rs` and its `runtimeId` in `store::RUNTIMES`; admission, the store and the broker stay as they are.
 
 `secretHandles` are given only to tools with the `CREDENTIALS_IN_SANDBOX` permission. Other tools never see a secret: the broker adds credentials to their route calls.
 

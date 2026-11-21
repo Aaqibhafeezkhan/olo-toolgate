@@ -1,7 +1,7 @@
 # OLO downstream service authorization
 
 Fresh installations only. Initialize empty Control stores with V1. There is no schema upgrade path, old-execution
-reader, or compatibility mode. This bridge is M4; the memory/RAG application services remain M6.
+reader, or compatibility mode. Verify the bridge and actual memory/RAG target adapters as separate boundaries.
 
 ## Installation contract
 
@@ -61,7 +61,7 @@ membership and sharing independently in the service's storage transaction; ToolG
 For a write, call authorization within that transaction, perform the scoped change, call
 `authorization.checkCommitDeadline()` immediately before commit, and roll back on any refusal. Bound transaction and
 commit timeouts to the permit deadline. For reads, authorize before loading and again before releasing the result;
-expire/discard data rather than release it under stale evidence. Service ACLs and release checks are M6/M7 work.
+expire/discard data rather than release it under stale evidence. Service ACLs and release checks require their own target-side qualification.
 
 Online consumption is intentionally irreversible. If Control consumed the nonce but storage did not commit (including
 an ambiguous network response), do not mint another write capability and retry the effect. Reconcile the storage's
@@ -78,7 +78,7 @@ Freshness checks reject expired authority even when the invocation/approval life
 credential -> executor permit -> service permit lifetime chaining. Queued and approval-waiting invocations receive no
 service permit. Each dispatch/chunk is authorized anew. Epoch changes reject outstanding writes online and stop reads
 on the next snapshot; offline reads still expire within 15 seconds. Storage commit/release timeouts are required to
-stay inside the accepted 30-second bound. Production measurement remains M8.
+stay inside the accepted 30-second bound. Measure production connectivity bounds independently.
 
 Rotate the dedicated effect signing key/id through normal Control custody. Services refresh the authenticated key set;
 unknown/retired kids fail closed. Rotation invalidates outstanding write permits rather than creating a new nonce under
@@ -96,7 +96,7 @@ forged requests, wrong purpose/kid, absent mTLS, stale epochs, expiry and delaye
 cover authenticated ingress, broker isolation and package header forgery. Fresh PostgreSQL initialization and runtime
 row-security tests include the new authority and cancellation tables.
 
-M6 must run the same cases against the actual memory/RAG services and stores. M8 measures the real-stack timing and
+Run the same cases against the actual memory/RAG services and stores. Measure the real-stack timing and
 result-release behavior. Passing this protocol qualification does not claim that those application services exist.
 
 ## Deploying private application services
@@ -266,9 +266,9 @@ the SENDING gate once, and let the target independently verify accepted-request
 facts before its durable claim. Do not retry an ambiguous legacy write to
 complete the upgrade; reconcile its existing target outcome first.
 
-Legacy memory.read and rag.query calls remain compatible when no v2 lease is
-present. A v2 lease always requires its signed admission and prepared manifest,
-including for reads. This migration grants no target deduplication guarantee.
+Supported current leased calls require signed admission and the prepared
+manifest, including reads. Request binding does not by itself establish target
+deduplication; apply the declared target-claim and outcome protocol.
 
 
 ## Current-source owned stack qualification
