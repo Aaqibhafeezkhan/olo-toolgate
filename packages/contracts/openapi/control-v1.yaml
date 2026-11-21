@@ -9,6 +9,314 @@ info:
 security:
 - adminAccessToken: []
 paths:
+  /api/public/v1/auth/login:
+    post:
+      operationId: applicationPasswordLogin
+      security: []
+      description: V1 password login served by the Quickstart composition. Tenant
+        must match the installation; user and local identity must already exist and
+        be enabled. Password verification is required independently of console password-bypass
+        mode. No cookie, OAuth or refresh-token flow.
+      parameters:
+      - name: Toolgate-Tenant-ID
+        in: header
+        required: true
+        schema:
+          $ref: ../schemas/v2/discovery.schema.json#/$defs/TenantUuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationPasswordLoginRequest
+      responses:
+        '200':
+          description: Short-lived signed user token containing tenant_id; use Bearer
+            authorization thereafter
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationAccessToken
+        '400':
+          description: Invalid request or missing/malformed/duplicate tenant
+        '401':
+          description: Invalid credentials or disabled/unprovisioned user
+        '403':
+          description: Tenant mismatch
+        '429':
+          description: Login-attempt budget exhausted
+  /api/control/v1/application-session/revoke:
+    post:
+      operationId: revokeApplicationUserSessions
+      security:
+      - userAccessToken: []
+      description: Advance the verified caller identity epoch; cannot select another
+        user or tenant. Quickstart password replacement invokes this before changing
+        custody. Obtain a new token through password login.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '204':
+          description: Caller sessions revoked
+        '401':
+          description: Verified current user token required
+  /api/control/v1/application-events/{source}/{id}:
+    parameters:
+    - name: source
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationEventSource
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+    - name: after
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 9007199254740991
+        default: 0
+    - name: kinds
+      in: query
+      required: false
+      schema:
+        type: string
+        description: Comma-separated PROGRESS,RESULT for WORKFLOW; TRIGGER_STATUS
+          for TRIGGER.
+    get:
+      operationId: getApplicationEvents
+      security:
+      - userAccessToken: []
+      description: Bounded durable structural events for one currently authorized
+        source. WORKFLOW uses a run ID; TRIGGER uses an assignment name. after=0 starts
+        at retained history (4096 records); an expired nonzero cursor is rejected.
+        RESULT announces an available response, not success or private output.
+      responses:
+        '200':
+          description: Ordered authorized events and next cursor
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationEventPage
+        '403':
+          description: Current source observation/resource grants absent
+        '404':
+          description: Source unavailable
+        '409':
+          description: Resume cursor expired
+  /api/control/v1/application-events/{source}/{id}/stream:
+    parameters:
+    - name: source
+      in: path
+      required: true
+      schema:
+        $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationEventSource
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+    - name: after
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 9007199254740991
+        default: 0
+    - name: kinds
+      in: query
+      required: false
+      schema:
+        type: string
+        description: Comma-separated PROGRESS,RESULT for WORKFLOW; TRIGGER_STATUS
+          for TRIGGER.
+    - name: Last-Event-ID
+      in: header
+      required: false
+      schema:
+        type: string
+        pattern: ^[0-9]{1,16}$
+    get:
+      operationId: streamApplicationEvents
+      security:
+      - userAccessToken: []
+      description: 'Resumable SSE: id is source sequence, event is kind, JSON data
+        is ApplicationEvent. Current source grants, identity epoch and token expiry
+        are checked during delivery. Connections last at most 60 seconds or token
+        expiry; reconnect with last received sequence. Per-node limit 16, and two
+        per tenant/user. Credentials are not accepted in URLs.'
+      responses:
+        '200':
+          description: SSE records/heartbeats; closes on expiry, revocation, disconnect
+            or slow consumer
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Source observation denied
+        '409':
+          description: Cursor expired
+        '503':
+          description: Stream admission or authority unavailable
+  /api/control/v1/application-trigger-status/{name}:
+    parameters:
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      operationId: getApplicationTriggerStatus
+      security:
+      - userAccessToken: []
+      description: Structural assignment status only. Requires HUMAN trigger.read
+        on the actual assignment UID and target Device Groups. No trigger configuration/source
+        payload or private workflow result is exposed.
+      responses:
+        '200':
+          description: Permitted identity and status
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationTriggerStatus
+        '403':
+          description: Assignment/target read permission absent
+        '404':
+          description: Assignment unavailable
+  /api/control/v1/application-webhooks:
+    post:
+      operationId: createApplicationWebhook
+      security:
+      - userAccessToken: []
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+      description: Create a caller-owned PENDING subscription with exact source permissions
+        and installation-approved public HTTPS destination. Expiry cannot exceed this
+        login token. Signing key is encrypted at rest; exact authenticated retries
+        recover the same registration. Configure recipient and verify ownership before
+        delivery.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationWebhookCreate
+      responses:
+        '201':
+          description: Private receipt including signingSecret; do not share/log/export
+            it
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationWebhookRegistration
+        '403':
+          description: Current source grants absent
+        '409':
+          description: Conflicting idempotency key reuse
+        '503':
+          description: Egress, custody or capacity unavailable
+    get:
+      operationId: listApplicationWebhooks
+      security:
+      - userAccessToken: []
+      parameters:
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Up to 50 caller-owned registrations without secrets
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationWebhookPage
+  /api/control/v1/application-webhooks/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+    get:
+      operationId: getApplicationWebhook
+      security:
+      - userAccessToken: []
+      responses:
+        '200':
+          description: Owner metadata, state, attempts and last acknowledged cursor;
+            no secret
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/v2/workflow.schema.json#/$defs/ApplicationWebhook
+        '403':
+          description: Not the authenticated owner
+        '404':
+          description: Registration unavailable
+    delete:
+      operationId: revokeApplicationWebhook
+      security:
+      - userAccessToken: []
+      description: Stop future delivery and invalidate pending leases; never replays
+        or cancels workflow execution.
+      responses:
+        '204':
+          description: Registration revoked
+        '403':
+          description: Not the authenticated owner
+  /api/control/v1/application-webhooks/{id}/verify:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+    post:
+      operationId: verifyApplicationWebhook
+      security:
+      - userAccessToken: []
+      description: 'Send a signed ApplicationWebhookChallenge to the destination.
+        Recipient returns ApplicationWebhookVerificationProof: HMAC-SHA256(secret,
+        verify.<subscriptionId>.<challenge>). Current authorized owner may activate
+        only PENDING registrations. TLS certificates, names and DNS-pinned public
+        addresses are checked; redirects are refused.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '204':
+          description: Ownership verified; delivery ACTIVE
+        '403':
+          description: Owner/source authority absent
+        '409':
+          description: Proof failed or registration is not pending
   /api/control/v1/mcp/native-files/begin:
     post:
       operationId: beginNativeFileEffect
@@ -224,8 +532,10 @@ paths:
     - {name: profileId, in: path, required: true, schema: {type: string}}
     - {name: workflowId, in: path, required: true, schema: {type: string}}
     post:
+      security:
+      - userAccessToken: []
       operationId: startWorkflowRun
-      description: Current tenant Super Admin explicitly runs a published bot with text. Requires exact publication, configured entry agent, live service grants and Idempotency-Key. Does not create a trigger event or write device input files.
+      description: An enabled OLO user with explicit HUMAN workflow, agent, model and resource grants runs a published bot. Administration never grants execution. User authority is pinned and rechecked before idempotency replay and protected steps. Requires exact publication, configured entry agent, live service grants and Idempotency-Key. Does not create a trigger event or write device input files.
       parameters:
       - {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
       requestBody:
@@ -246,15 +556,17 @@ paths:
     - {name: runId, in: path, required: true, schema: {type: string}}
     - {name: after, in: query, schema: {type: integer, minimum: 0, default: 0}}
     get:
+      security:
+      - userAccessToken: []
       operationId: getWorkflowRunProgress
-      description: Current tenant Super Admin reads ordered durable progress for this run only. Runtime observations are distinguished from Control decisions and do not prove effect finality.
+      description: The admitted user reads their own manual-run progress under current resource/observation grants; automatic service-run inspection retains current Super Admin checks. Runtime observations are distinguished from Control decisions and do not prove effect finality.
       responses:
         '200':
           description: Bounded ordered progress page
           content:
             application/json:
               schema: {$ref: '../schemas/v2/workflow.schema.json#/$defs/WorkflowRunProgressPage'}
-        '403': {description: Current Super Admin authority required}
+        '403': {description: Current run/source/resource authority required}
         '404': {description: Run unavailable in this tenant}
   /internal/v1/runtime/runs/{runId}/progress:
     parameters:
@@ -276,8 +588,10 @@ paths:
     parameters:
     - {name: runId, in: path, required: true, schema: {type: string}}
     get:
+      security:
+      - userAccessToken: []
       operationId: getWorkflowRunResult
-      description: Tenant-scoped private run metadata and decrypted terminal outcome. Requires a current Super Admin. Results remain encrypted at rest; unavailable custody fails closed.
+      description: Private run metadata and terminal outcome. Manual runs require the admitted user and current result/resource grants; automatic service-run inspection retains current Super Admin checks. Results remain encrypted at rest; unavailable custody fails closed.
       responses:
         '200':
           description: Pinned workflow identity, run state and terminal outcome, or null outcome while unfinished
@@ -292,7 +606,7 @@ paths:
                   workflowId: {type: string}
                   workflowVersionId: {type: string}
                   profileDigest: {type: string}
-                  message: {type: string, description: Original admitted message, decrypted for the current tenant Super Admin only}
+                  message: {type: string, description: Original admitted message, decrypted only for the currently authorized reader}
                   state: {type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, AWAITING_APPROVAL, CANCELLED, EXPIRED]}
                   outcome:
                     type: [object, 'null']
@@ -301,10 +615,12 @@ paths:
                       code: {type: [string, 'null']}
                     additionalProperties: false
                     required: [result, code]
-        '403': {description: Current Super Admin authority required}
+        '403': {description: Current run/source/resource authority required}
         '404': {description: Run unavailable in this tenant}
   /api/control/v1/workflow-profiles/published:
     get:
+      security:
+      - userAccessToken: []
       operationId: listPublishedWorkflows
       description: Current published profile pointers for the authenticated tenant. Requires tenant-wide agent and agent-group read access.
       parameters:
@@ -335,6 +651,8 @@ paths:
     - {name: profileId, in: path, required: true, schema: {type: string}}
     - {name: digest, in: path, required: true, schema: {type: string}}
     get:
+      security:
+      - userAccessToken: []
       operationId: getPublishedWorkflow
       description: Read-only configuration of the current published revision. Private prompts, schemas, context arguments, provider origins and vault references are omitted.
       responses:
@@ -11971,6 +12289,11 @@ paths:
                 $ref: ../schemas/v2/kill.schema.json#/$defs/KillAcknowledgement
 components:
   securitySchemes:
+    userAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Verified short-lived OLO user JWT with tenant_id. Enabled identity, current roles and explicit resource grants authorize each application operation; an administrative portal role is not required.
     gatewayServiceToken:
       type: http
       scheme: bearer

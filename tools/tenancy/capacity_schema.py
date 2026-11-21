@@ -8,6 +8,8 @@ ROOT=Path(__file__).resolve().parents[2]
 START='-- BEGIN TENANT CAPACITY\n'
 END='-- END TENANT CAPACITY\n'
 TRACKED={
+ 'control_application_events':(['source_type','source_id','event_key','event_id','document'],None),
+ 'control_application_subscriptions':(['request_digest','user_id','principal_id','identity_digest','source_type','source_id','source_key','event_kinds','endpoint','secret'],None),
  'control_native_file_qualifications':(['document'],None),
  'control_native_file_scopes':(['document'],None),
  'control_native_file_intents':(['document'],None),
@@ -17,7 +19,7 @@ TRACKED={
  'control_workflow_workers':(['instance_id','owner_id','compiler_digest','graph_inventory'],None),
  'control_workflow_device_placements':(['profile_id','device_id'],None),
  'control_workflow_graph_builds':(['document'],None),
- 'control_workflow_runs':(['document','compiler_digest','graph_digest'],"{row}.state IN ('QUEUED','RUNNING')"),
+ 'control_workflow_runs':(['document','compiler_digest','graph_digest','user_authority'],"{row}.state IN ('QUEUED','RUNNING')"),
  'control_workflow_admissions':(['subscription_uid','cursor','owner_id','admission_id','disposition','run_id'],None),
  'control_workflow_profile_revisions':(['document'],None),
  'control_workflow_profile_heads':(['profile_id','digest'],None),

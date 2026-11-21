@@ -4,6 +4,16 @@ OLO stores bot definitions in Control and executes them in the external
 [LangGraph runtime](../../apps/langgraph-runtime/README.md). The console, manual
 Run action and configured trigger bindings use Control's governed run path.
 
+Manual application admissions capture the enabled human user's explicit workflow,
+agent, model and full declared resource ceiling. Control rechecks current human
+authority at claim and protected steps alongside independent service/effect
+authority. Session revocation invalidates the captured execution identity.
+Owner-scoped observation uses current grants; it cannot resume revoked work.
+Durable tenant-scoped structural events commit with run/trigger transitions.
+SSE and leased HTTPS callbacks recheck source authority and never replay workflow
+effects. See [external applications](../api/workflow-applications.md) and the
+[all-bot permission matrix](../../bot/PERMISSIONS.md) for setup and transport limits.
+
 ## Configuration and ownership
 
 A `.olo` bundle transfers one workflow and its referenced agents, models,

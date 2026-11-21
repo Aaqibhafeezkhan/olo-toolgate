@@ -645,6 +645,21 @@ final class TriggerDeliveryTest {
             assertEquals(admitted.path("runId"), duplicate.path("runId"));
 
             var manual=new WorkflowManualRuns(w.store(),codec,w.clock(),profiles,keys);
+            w.store().transaction(w.tenant(),true,tx->{
+                var before=tx.load();var entries=new HashMap<>(before.entries());
+                var all=new GroupSelection(List.of(),true);
+                var scope=new EnterpriseScope(all,all,List.of("workflow.execute","workflow.progress.read","workflow.result.read","workflow.subscribe","agent.execute","model.infer","read"),false,
+                    List.of(new EnterpriseResourceRule(ResourceKind.CUSTOM,"workflow:investigate",EnterpriseResourceMatch.EXACT),
+                        new EnterpriseResourceRule(ResourceKind.CUSTOM,"workflow-group:support",EnterpriseResourceMatch.EXACT),
+                        new EnterpriseResourceRule(ResourceKind.CUSTOM,"model-group:models",EnterpriseResourceMatch.EXACT),
+                        new EnterpriseResourceRule(ResourceKind.CUSTOM,"agent:investigator",EnterpriseResourceMatch.EXACT),
+                        new EnterpriseResourceRule(ResourceKind.CUSTOM,"agent:summarizer",EnterpriseResourceMatch.EXACT),
+                        new EnterpriseResourceRule(ResourceKind.CUSTOM,"tool://files/read",EnterpriseResourceMatch.EXACT)),
+                    new EnterpriseConditions(0L,0L,List.of(),List.of(),List.of(),List.of(),false,false,null,null));
+                TestSupport.put(entries,codec,Ids.Kind.GRANT,new ControlAccessGrant("manual-human","Explicit manual caller",true,1L,
+                    EnterpriseSourceType.TEAM,"test-recovery-team",EnterpriseGrantPurpose.HUMAN,scope));
+                tx.save(before,new Directory(before.revision()+1,entries));return null;
+            });
             var manualBody=codec.json(Map.of("profileDigest",digest,"expectedGeneration",1,"entryAgentId","investigator","message","Private manual input"));
             var manualReceipt=JSON.readTree(manual.start(w.admin(),"support","investigate",manualBody,"manual-key","manual-start").body());
             String manualId=manualReceipt.path("runId").asText();
@@ -654,7 +669,7 @@ final class TriggerDeliveryTest {
             assertEquals(403,status(()->manual.start(new DirectoryService.Actor(w.tenant(),DirectoryService.digest("not-admin"),false),"support","investigate",manualBody,"forbidden-key","manual-denied")));
             assertEquals(403,status(()->manual.start(w.admin(),"support","investigate",manualBody.replace("investigator","summarizer"),"ineligible-key","manual-ineligible")));
             var foreignWorld=world(w.store(),"tenant-b",null,List.of());
-            assertEquals(409,status(()->manual.start(foreignWorld.admin(),"support","investigate",manualBody,"foreign-key","manual-foreign")));
+            assertEquals(404,status(()->manual.start(foreignWorld.admin(),"support","investigate",manualBody,"foreign-key","manual-foreign")));
             var progress=new WorkflowProgress(w.store(),codec,w.clock());
             var queued=JSON.readTree(progress.read(w.admin(),manualId,0).body());
             assertEquals("QUEUED",queued.path("items").get(0).path("kind").asText());

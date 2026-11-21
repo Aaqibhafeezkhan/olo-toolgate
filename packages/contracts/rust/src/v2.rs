@@ -57,6 +57,147 @@ pub enum ApiChange {
     #[serde(rename = "MAJOR")]
     Major,
 }
+/// Short-lived signed user/tenant access token. Obtain a new token through password login after expiry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationAccessToken {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: u64,
+}
+/// Durable structural notification. RESULT announces an available result; read the separately authorized result endpoint for private output.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationEvent {
+    pub event_id: String,
+    pub tenant_id: String,
+    pub source_type: ApplicationEventSource,
+    pub source_id: String,
+    pub sequence: u64,
+    pub kind: ApplicationEventKind,
+    pub created_at_unix_ms: u64,
+    pub data: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Canonical ApplicationEventKind wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApplicationEventKind {
+    #[serde(rename = "PROGRESS")]
+    Progress,
+    #[serde(rename = "RESULT")]
+    Result,
+    #[serde(rename = "TRIGGER_STATUS")]
+    TriggerStatus,
+}
+/// Bounded durable source events in sequence order. Cursors are scoped to one authorized source.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationEventPage {
+    pub items: Vec<ApplicationEvent>,
+    pub next_cursor: u64,
+}
+/// Canonical ApplicationEventSource wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApplicationEventSource {
+    #[serde(rename = "WORKFLOW")]
+    Workflow,
+    #[serde(rename = "TRIGGER")]
+    Trigger,
+}
+/// V1 existing-user password login. Tenant is required in Toolgate-Tenant-ID; OAuth is not required.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationPasswordLoginRequest {
+    pub username: String,
+    pub password: String,
+}
+/// Structural status for one readable trigger assignment, without configuration or source event payloads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationTriggerStatus {
+    pub assignment_id: String,
+    pub status: TriggerAssignmentStatus,
+}
+/// Caller-owned registration metadata; no signing key or user token is exposed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhook {
+    pub id: String,
+    pub source_type: ApplicationEventSource,
+    pub source_id: String,
+    pub event_kinds: Vec<ApplicationEventKind>,
+    pub callback_url: String,
+    pub expires_at_unix_ms: u64,
+    pub state: ApplicationWebhookState,
+    pub next_cursor: u64,
+    pub attempts: u64,
+}
+/// Signed destination-ownership challenge. Return HMAC-SHA256(secret, verify.subscriptionId.challenge) using the supplied subscription ID and challenge as proof.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhookChallenge {
+    pub r#type: String,
+    pub subscription_id: String,
+    pub challenge: String,
+}
+/// Caller-owned HTTPS notification subscription. Source ID is a run ID or trigger assignment name. Verification and current source permissions are required before delivery.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhookCreate {
+    pub source_type: ApplicationEventSource,
+    pub source_id: String,
+    pub event_kinds: Vec<ApplicationEventKind>,
+    pub callback_url: String,
+    pub expires_at_unix_ms: u64,
+    pub after: u64,
+}
+/// Signed webhook delivery envelope. Use subscriptionId to select the signing key, verify timestamp and raw-body signature, then deduplicate by event.eventId.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhookDelivery {
+    pub subscription_id: String,
+    pub event: ApplicationEvent,
+}
+/// V1 external application ApplicationWebhookPage contract; current tenant and user authorization remain required.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhookPage {
+    pub items: Vec<ApplicationWebhook>,
+}
+/// Registration response, including a private per-subscription signing secret. Exact authenticated retries may recover the same secret; it is encrypted at rest and absent from list/read responses.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhookRegistration {
+    pub id: String,
+    pub source_type: ApplicationEventSource,
+    pub source_id: String,
+    pub event_kinds: Vec<ApplicationEventKind>,
+    pub callback_url: String,
+    pub expires_at_unix_ms: u64,
+    pub state: ApplicationWebhookState,
+    pub next_cursor: u64,
+    pub attempts: u64,
+    pub signing_secret: String,
+}
+/// Canonical ApplicationWebhookState wire values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApplicationWebhookState {
+    #[serde(rename = "PENDING")]
+    Pending,
+    #[serde(rename = "ACTIVE")]
+    Active,
+    #[serde(rename = "REVOKED")]
+    Revoked,
+    #[serde(rename = "FAILED")]
+    Failed,
+    #[serde(rename = "EXPIRED")]
+    Expired,
+}
+/// V1 external application ApplicationWebhookVerificationProof contract; current tenant and user authorization remain required.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ApplicationWebhookVerificationProof {
+    pub proof: String,
+}
 /// Canonical AuthType wire values.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuthType {
@@ -5635,6 +5776,19 @@ pub struct WorkflowToolDecision {
     pub kind: String,
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
+}
+/// Control-owned manual-run user and admitted resource ceiling; current grants and identity must still be checked. Never accepted from an external caller.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowUserAuthority {
+    pub user_id: String,
+    pub principal_id: String,
+    pub identity_digest: String,
+    pub human_scopes: Vec<crate::EnterpriseScope>,
+    pub secret_scopes: Vec<crate::EnterpriseScope>,
+    pub agent_scopes: Vec<crate::EnterpriseScope>,
+    pub agent_secret_scopes: Vec<crate::EnterpriseScope>,
+    pub required_scopes: Vec<crate::EnterpriseScope>,
 }
 /// Authenticated worker capabilities. Control only leases runs pinned to this compiler and an installed graph digest; this grants no model or tool authority.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

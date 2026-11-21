@@ -272,6 +272,9 @@ public final class TriggerService {
         if (stored == null || stored.removed()) throw notFound();
         return stored;
     }
+    Stored observable(Store.Session tx,String name) {
+        var stored=stored(tx,name);if(stored==null)throw notFound();return stored;
+    }
 
     public Store.Reply create(DirectoryService.Actor actor, String body, String key, boolean dryRun, String requestId) {
         tenantOf(actor);
@@ -1351,7 +1354,7 @@ public final class TriggerService {
     }
 
     /** The resource with its status computed from its instance rows (plan 9.1). */
-    private ObjectNode withStatus(Store.Session tx, Stored stored) {
+    ObjectNode withStatus(Store.Session tx, Stored stored) {
         var assignment = stored.assignment().deepCopy();
         var counts = new LinkedHashMap<String, Long>();
         for (String phase : List.of("desired", "pending", "starting", "running", "paused", "stopped", "failed", "unsupported", "stale")) counts.put(phase, 0L);

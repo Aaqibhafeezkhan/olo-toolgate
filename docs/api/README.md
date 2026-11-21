@@ -6,6 +6,7 @@ and [schemas](../../packages/contracts/schemas/README.md) for exact fields and p
 - [HTTP and MCP API reference](api-reference.md) — every Gateway and Control route with examples
 - [Gateway API](gateway-api.md)
 - [Control Plane API](control-plane-api.md)
+- [External workflow applications](workflow-applications.md) — password login, user/resource grants, live events and signed callbacks
 - [Client API](../control-plane/device-registry.md)
 - [Errors and idempotency](api-reference.md)
 - [Compatibility](../architecture/compatibility.md)

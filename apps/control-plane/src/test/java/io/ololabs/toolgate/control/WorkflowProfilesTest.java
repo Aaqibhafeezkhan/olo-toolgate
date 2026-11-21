@@ -166,7 +166,7 @@ final class WorkflowProfilesTest {
         java.util.function.Function<Store.Session, WorkflowRunStore.QueuedRun> queue = tx -> {
             var sealed = inputs.seal(tx, rig.tenant, "run-1", digest, "Private event message");
             var run = new WorkflowRunStore.QueuedRun("run-1", "support", digest, "investigate", "revision-1",
-                "automation", "automation-group", "PREPARE", 1234, sealed.keyVersion(), sealed.ciphertext(), "sha256:" + "b".repeat(64), "sha256:" + "c".repeat(64));
+                "automation", "automation-group", "PREPARE", 1234, sealed.keyVersion(), sealed.ciphertext(), "sha256:" + "b".repeat(64), "sha256:" + "c".repeat(64), null);
             tx.workflowRuns().enqueue(run);
             tx.workflowRuns().insertAdmission(admission);
             return run;
@@ -365,7 +365,7 @@ final class WorkflowProfilesTest {
             assertTrue(access.canReadPublishedWorkflows(directory, reader.userId(), now));
             return null;
         });
-        assertEquals(403, assertThrows(Failure.class, () -> service.listPublished(scopedReader, null, 50)).status());
+        assertEquals(0, node(service.listPublished(scopedReader, null, 50)).size());
         assertEquals(403, assertThrows(Failure.class, () -> service.publishedConfiguration(scopedReader, "support", digest)).status());
         var outsider = new DirectoryService.Actor(rig.tenant, DirectoryService.digest("forged"), true, true, "intruder");
         assertEquals(403, assertThrows(Failure.class, () -> service.listPublished(outsider, null, 50)).status());

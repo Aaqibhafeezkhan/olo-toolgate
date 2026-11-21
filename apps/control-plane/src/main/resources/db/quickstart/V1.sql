@@ -1613,6 +1613,7 @@ CREATE TABLE control_workflow_runs(
  workflow_id varchar(128) NOT NULL, workflow_version_id varchar(128) NOT NULL,
  compiler_digest varchar(71) NOT NULL CHECK(length(compiler_digest)=71 AND substr(compiler_digest,1,7)='sha256:'),
  graph_digest varchar(71) NOT NULL CHECK(length(graph_digest)=71 AND substr(graph_digest,1,7)='sha256:'),
+ user_authority text CHECK(user_authority IS NULL OR length(user_authority)<=65536),
  service_agent_id varchar(128) NOT NULL, service_agent_group_id varchar(128) NOT NULL,
  remediation_mode varchar(16) NOT NULL CHECK(remediation_mode IN('PREPARE','APPLY')),
  state varchar(24) NOT NULL CHECK(state IN('QUEUED','RUNNING','SUCCEEDED','FAILED','AWAITING_APPROVAL','CANCELLED','EXPIRED')),
@@ -1689,8 +1690,85 @@ CREATE TRIGGER native_logical_capacity AFTER INSERT ON control_native_file_inten
 -- statement
 CREATE INDEX native_file_intents_operation ON control_native_file_intents(tenant_id,operation_id,effect_id);
 -- statement
+CREATE TABLE control_application_events(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id),
+ source_type TEXT NOT NULL CHECK(source_type IN('WORKFLOW','TRIGGER')), source_id TEXT NOT NULL,
+ sequence INTEGER NOT NULL CHECK(sequence>0), event_key TEXT NOT NULL, event_id TEXT NOT NULL,
+ event_kind TEXT NOT NULL CHECK(event_kind IN('PROGRESS','RESULT','TRIGGER_STATUS')),
+ created_at INTEGER NOT NULL CHECK(created_at>=0), document text NOT NULL CHECK(length(document)<=16384),
+  CHECK(typeof(tenant_id)='text' AND length(CAST(tenant_id AS BLOB)) BETWEEN 1 AND 36 AND instr(tenant_id,char(0))=0),
+ CHECK(typeof(source_id)='text' AND length(CAST(source_id AS BLOB)) BETWEEN 1 AND 128 AND instr(source_id,char(0))=0),
+ CHECK(typeof(source_type)='text' AND length(CAST(source_type AS BLOB)) BETWEEN 1 AND 16 AND instr(source_type,char(0))=0),
+ CHECK(typeof(event_id)='text' AND length(CAST(event_id AS BLOB)) BETWEEN 1 AND 128 AND instr(event_id,char(0))=0),
+ CHECK(typeof(event_key)='text' AND length(CAST(event_key AS BLOB)) BETWEEN 1 AND 256 AND instr(event_key,char(0))=0),
+ CHECK(typeof(event_kind)='text' AND length(CAST(event_kind AS BLOB)) BETWEEN 1 AND 24 AND instr(event_kind,char(0))=0),
+ CHECK(typeof(document)='text' AND length(CAST(document AS BLOB)) BETWEEN 1 AND 16384 AND instr(document,char(0))=0),
+PRIMARY KEY(tenant_id,source_type,source_id,sequence), UNIQUE(tenant_id,source_type,source_id,event_key), UNIQUE(tenant_id,event_id));
+
+-- statement
+CREATE TABLE control_application_subscriptions(
+ tenant_id TEXT NOT NULL REFERENCES control_tenants(tenant_id), subscription_id TEXT NOT NULL,
+ request_digest TEXT NOT NULL,
+ user_id TEXT NOT NULL, principal_id TEXT NOT NULL, identity_digest TEXT NOT NULL,
+ source_type TEXT NOT NULL CHECK(source_type IN('WORKFLOW','TRIGGER')),source_id TEXT NOT NULL,source_key TEXT NOT NULL,
+ event_kinds TEXT NOT NULL, endpoint TEXT NOT NULL, expires_at INTEGER NOT NULL CHECK(expires_at>0),
+ key_version INTEGER NOT NULL, secret text NOT NULL CHECK(length(secret)<=4096),
+ state TEXT NOT NULL CHECK(state IN('PENDING','ACTIVE','REVOKED','FAILED')),
+ cursor INTEGER NOT NULL CHECK(cursor>=0), attempts INTEGER NOT NULL CHECK(attempts>=0 AND attempts<=8),
+ next_attempt INTEGER NOT NULL, lease_id TEXT, lease_until INTEGER NOT NULL,
+  CHECK(typeof(tenant_id)='text' AND length(CAST(tenant_id AS BLOB)) BETWEEN 1 AND 36 AND instr(tenant_id,char(0))=0),
+ CHECK(typeof(subscription_id)='text' AND length(CAST(subscription_id AS BLOB)) BETWEEN 1 AND 128 AND instr(subscription_id,char(0))=0),
+ CHECK(typeof(user_id)='text' AND length(CAST(user_id AS BLOB)) BETWEEN 1 AND 128 AND instr(user_id,char(0))=0),
+ CHECK(typeof(principal_id)='text' AND length(CAST(principal_id AS BLOB)) BETWEEN 1 AND 64 AND instr(principal_id,char(0))=0),
+ CHECK(typeof(identity_digest)='text' AND length(CAST(identity_digest AS BLOB)) BETWEEN 1 AND 64 AND instr(identity_digest,char(0))=0),
+ CHECK(typeof(source_type)='text' AND length(CAST(source_type AS BLOB)) BETWEEN 1 AND 16 AND instr(source_type,char(0))=0),
+ CHECK(typeof(source_id)='text' AND length(CAST(source_id AS BLOB)) BETWEEN 1 AND 128 AND instr(source_id,char(0))=0),
+ CHECK(typeof(source_key)='text' AND length(CAST(source_key AS BLOB)) BETWEEN 1 AND 128 AND instr(source_key,char(0))=0),
+ CHECK(typeof(event_kinds)='text' AND length(CAST(event_kinds AS BLOB)) BETWEEN 1 AND 128 AND instr(event_kinds,char(0))=0),
+ CHECK(typeof(endpoint)='text' AND length(CAST(endpoint AS BLOB)) BETWEEN 1 AND 2048 AND instr(endpoint,char(0))=0),
+ CHECK(typeof(secret)='text' AND length(CAST(secret AS BLOB)) BETWEEN 1 AND 4096 AND instr(secret,char(0))=0),
+ CHECK(typeof(state)='text' AND length(CAST(state AS BLOB)) BETWEEN 1 AND 16 AND instr(state,char(0))=0),
+ CHECK(typeof(request_digest)='text' AND length(CAST(request_digest AS BLOB)) BETWEEN 1 AND 64 AND instr(request_digest,char(0))=0),
+PRIMARY KEY(tenant_id,subscription_id),
+ FOREIGN KEY(tenant_id,key_version) REFERENCES control_tenant_vault_keys(tenant_id,version));
+
+-- statement
+CREATE TRIGGER control_application_events_tenant_immutable BEFORE UPDATE OF tenant_id ON control_application_events WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
+CREATE TRIGGER control_application_subscriptions_tenant_immutable BEFORE UPDATE OF tenant_id ON control_application_subscriptions WHEN NEW.tenant_id<>OLD.tenant_id BEGIN SELECT RAISE(ABORT,'tenant identity is immutable'); END;
+-- statement
 -- BEGIN TENANT CAPACITY
 CREATE TRIGGER control_capacity_seed AFTER INSERT ON control_tenants BEGIN INSERT INTO control_tenant_capacity(tenant_id) VALUES(NEW.tenant_id); END;
+-- statement
+CREATE TRIGGER control_application_events_capacity_insert AFTER INSERT ON control_application_events BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.source_type AS BLOB)),0)+COALESCE(length(CAST(NEW.source_id AS BLOB)),0)+COALESCE(length(CAST(NEW.event_key AS BLOB)),0)+COALESCE(length(CAST(NEW.event_id AS BLOB)),0)+COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_application_events_capacity_delete AFTER DELETE ON control_application_events BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.source_type AS BLOB)),0)+COALESCE(length(CAST(OLD.source_id AS BLOB)),0)+COALESCE(length(CAST(OLD.event_key AS BLOB)),0)+COALESCE(length(CAST(OLD.event_id AS BLOB)),0)+COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_application_events_capacity_update AFTER UPDATE ON control_application_events BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.source_type AS BLOB)),0)+COALESCE(length(CAST(NEW.source_id AS BLOB)),0)+COALESCE(length(CAST(NEW.event_key AS BLOB)),0)+COALESCE(length(CAST(NEW.event_id AS BLOB)),0)+COALESCE(length(CAST(NEW.document AS BLOB)),0))-(COALESCE(length(CAST(OLD.source_type AS BLOB)),0)+COALESCE(length(CAST(OLD.source_id AS BLOB)),0)+COALESCE(length(CAST(OLD.event_key AS BLOB)),0)+COALESCE(length(CAST(OLD.event_id AS BLOB)),0)+COALESCE(length(CAST(OLD.document AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_application_subscriptions_capacity_insert AFTER INSERT ON control_application_subscriptions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.request_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.user_id AS BLOB)),0)+COALESCE(length(CAST(NEW.principal_id AS BLOB)),0)+COALESCE(length(CAST(NEW.identity_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.source_type AS BLOB)),0)+COALESCE(length(CAST(NEW.source_id AS BLOB)),0)+COALESCE(length(CAST(NEW.source_key AS BLOB)),0)+COALESCE(length(CAST(NEW.event_kinds AS BLOB)),0)+COALESCE(length(CAST(NEW.endpoint AS BLOB)),0)+COALESCE(length(CAST(NEW.secret AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_application_subscriptions_capacity_delete AFTER DELETE ON control_application_subscriptions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.request_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.user_id AS BLOB)),0)+COALESCE(length(CAST(OLD.principal_id AS BLOB)),0)+COALESCE(length(CAST(OLD.identity_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.source_type AS BLOB)),0)+COALESCE(length(CAST(OLD.source_id AS BLOB)),0)+COALESCE(length(CAST(OLD.source_key AS BLOB)),0)+COALESCE(length(CAST(OLD.event_kinds AS BLOB)),0)+COALESCE(length(CAST(OLD.endpoint AS BLOB)),0)+COALESCE(length(CAST(OLD.secret AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(0)) WHERE tenant_id=OLD.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
+-- statement
+CREATE TRIGGER control_application_subscriptions_capacity_update AFTER UPDATE ON control_application_subscriptions BEGIN
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.request_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.user_id AS BLOB)),0)+COALESCE(length(CAST(NEW.principal_id AS BLOB)),0)+COALESCE(length(CAST(NEW.identity_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.source_type AS BLOB)),0)+COALESCE(length(CAST(NEW.source_id AS BLOB)),0)+COALESCE(length(CAST(NEW.source_key AS BLOB)),0)+COALESCE(length(CAST(NEW.event_kinds AS BLOB)),0)+COALESCE(length(CAST(NEW.endpoint AS BLOB)),0)+COALESCE(length(CAST(NEW.secret AS BLOB)),0))-(COALESCE(length(CAST(OLD.request_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.user_id AS BLOB)),0)+COALESCE(length(CAST(OLD.principal_id AS BLOB)),0)+COALESCE(length(CAST(OLD.identity_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.source_type AS BLOB)),0)+COALESCE(length(CAST(OLD.source_id AS BLOB)),0)+COALESCE(length(CAST(OLD.source_key AS BLOB)),0)+COALESCE(length(CAST(OLD.event_kinds AS BLOB)),0)+COALESCE(length(CAST(OLD.endpoint AS BLOB)),0)+COALESCE(length(CAST(OLD.secret AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
+ SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
+END;
 -- statement
 CREATE TRIGGER control_native_file_qualifications_capacity_insert AFTER INSERT ON control_native_file_qualifications BEGIN
  UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(0) WHERE tenant_id=NEW.tenant_id;
@@ -1813,17 +1891,17 @@ CREATE TRIGGER control_workflow_graph_builds_capacity_update AFTER UPDATE ON con
 END;
 -- statement
 CREATE TRIGGER control_workflow_runs_capacity_insert AFTER INSERT ON control_workflow_runs BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_digest AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.user_authority AS BLOB)),0)),stored_rows=stored_rows+(1),queued_rows=queued_rows+(CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
 CREATE TRIGGER control_workflow_runs_capacity_delete AFTER DELETE ON control_workflow_runs BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_digest AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=OLD.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+(-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.user_authority AS BLOB)),0))),stored_rows=stored_rows+(-1),queued_rows=queued_rows+(-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=OLD.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement
 CREATE TRIGGER control_workflow_runs_capacity_update AFTER UPDATE ON control_workflow_runs BEGIN
- UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_digest AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_digest AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=NEW.tenant_id;
+ UPDATE control_tenant_capacity SET stored_bytes=stored_bytes+((COALESCE(length(CAST(NEW.document AS BLOB)),0)+COALESCE(length(CAST(NEW.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.graph_digest AS BLOB)),0)+COALESCE(length(CAST(NEW.user_authority AS BLOB)),0))-(COALESCE(length(CAST(OLD.document AS BLOB)),0)+COALESCE(length(CAST(OLD.compiler_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.graph_digest AS BLOB)),0)+COALESCE(length(CAST(OLD.user_authority AS BLOB)),0))),stored_rows=stored_rows+(0),queued_rows=queued_rows+((CASE WHEN NEW.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)-(CASE WHEN OLD.state IN ('QUEUED','RUNNING') THEN 1 ELSE 0 END)) WHERE tenant_id=NEW.tenant_id;
  SELECT CASE WHEN changes()<>1 THEN RAISE(ABORT,'tenant capacity missing') END;
 END;
 -- statement

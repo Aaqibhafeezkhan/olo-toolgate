@@ -5860,5 +5860,162 @@
     "candidateIndex": 0,
     "candidateCount": 2,
     "resultSchema": {}
+  },
+  "ApplicationPasswordLoginRequest": {
+    "username": "fixture-user",
+    "password": "fixture-only-password"
+  },
+  "ApplicationAccessToken": {
+    "accessToken": "fixture-not-a-real-token",
+    "tokenType": "Bearer",
+    "expiresIn": 900
+  },
+  "WorkflowUserAuthority": {
+    "userId": "fixture-user",
+    "principalId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "identityDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "humanScopes": [],
+    "secretScopes": [],
+    "agentScopes": [],
+    "agentSecretScopes": [],
+    "requiredScopes": []
+  },
+  "ApplicationEventSource": "WORKFLOW",
+  "ApplicationEventKind": "PROGRESS",
+  "ApplicationEvent": {
+    "eventId": "evt-fixture",
+    "tenantId": "48558ebe-a9a8-4680-8da8-129deba2e65c",
+    "sourceType": "WORKFLOW",
+    "sourceId": "run-fixture",
+    "sequence": 1,
+    "kind": "PROGRESS",
+    "createdAtUnixMs": 1800000000000,
+    "data": {
+      "kind": "QUEUED"
+    }
+  },
+  "ApplicationEventPage": {
+    "items": [
+      {
+        "eventId": "evt-fixture",
+        "tenantId": "48558ebe-a9a8-4680-8da8-129deba2e65c",
+        "sourceType": "WORKFLOW",
+        "sourceId": "run-fixture",
+        "sequence": 1,
+        "kind": "PROGRESS",
+        "createdAtUnixMs": 1800000000000,
+        "data": {
+          "kind": "QUEUED"
+        }
+      }
+    ],
+    "nextCursor": 1
+  },
+  "ApplicationWebhookCreate": {
+    "sourceType": "WORKFLOW",
+    "sourceId": "run-fixture",
+    "eventKinds": [
+      "PROGRESS",
+      "RESULT"
+    ],
+    "callbackUrl": "https://hooks.example.com/events",
+    "expiresAtUnixMs": 1800000600000,
+    "after": 0
+  },
+  "ApplicationWebhookDelivery": {
+    "subscriptionId": "sub-fixture",
+    "event": {
+      "eventId": "evt-fixture",
+      "tenantId": "48558ebe-a9a8-4680-8da8-129deba2e65c",
+      "sourceType": "WORKFLOW",
+      "sourceId": "run-fixture",
+      "sequence": 1,
+      "kind": "PROGRESS",
+      "createdAtUnixMs": 1800000000000,
+      "data": {
+        "kind": "QUEUED"
+      }
+    }
+  },
+  "ApplicationWebhookState": "PENDING",
+  "ApplicationWebhook": {
+    "id": "sub-fixture",
+    "sourceType": "WORKFLOW",
+    "sourceId": "run-fixture",
+    "eventKinds": [
+      "PROGRESS",
+      "RESULT"
+    ],
+    "callbackUrl": "https://hooks.example.com/events",
+    "expiresAtUnixMs": 1800000600000,
+    "state": "PENDING",
+    "nextCursor": 0,
+    "attempts": 0
+  },
+  "ApplicationWebhookRegistration": {
+    "id": "sub-fixture",
+    "sourceType": "WORKFLOW",
+    "sourceId": "run-fixture",
+    "eventKinds": [
+      "PROGRESS",
+      "RESULT"
+    ],
+    "callbackUrl": "https://hooks.example.com/events",
+    "expiresAtUnixMs": 1800000600000,
+    "state": "PENDING",
+    "nextCursor": 0,
+    "attempts": 0,
+    "signingSecret": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ApplicationWebhookPage": {
+    "items": [
+      {
+        "id": "sub-fixture",
+        "sourceType": "WORKFLOW",
+        "sourceId": "run-fixture",
+        "eventKinds": [
+          "PROGRESS",
+          "RESULT"
+        ],
+        "callbackUrl": "https://hooks.example.com/events",
+        "expiresAtUnixMs": 1800000600000,
+        "state": "PENDING",
+        "nextCursor": 0,
+        "attempts": 0
+      }
+    ]
+  },
+  "ApplicationWebhookChallenge": {
+    "type": "VERIFY",
+    "subscriptionId": "sub-fixture",
+    "challenge": "fixture-challenge"
+  },
+  "ApplicationWebhookVerificationProof": {
+    "proof": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ApplicationTriggerStatus": {
+    "assignmentId": "fixture-assignment",
+    "status": {
+      "observedGeneration": 3,
+      "instances": {
+        "desired": 2,
+        "pending": 1,
+        "starting": 0,
+        "running": 1,
+        "paused": 0,
+        "stopped": 0,
+        "failed": 0,
+        "unsupported": 0,
+        "stale": 0
+      },
+      "conditions": [
+        {
+          "type": "Available",
+          "status": "False",
+          "reason": "InstancesPending",
+          "lastTransitionTime": "2026-10-31T10:02:11Z"
+        }
+      ]
+    }
   }
 }

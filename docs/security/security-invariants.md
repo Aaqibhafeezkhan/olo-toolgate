@@ -4,6 +4,14 @@ Managed device execution requires a registered device, current owner/device enab
 
 See [Device registry and tool-call controls](../control-plane/device-registry.md).
 
+External workflow callers need an existing enabled tenant user and current
+explicit human workflow/resource grants. Administrator flags, token possession
+and bot imports do not supply execution authority. Captured human authority
+never substitutes for runtime service grants. Structural event delivery rechecks
+source permissions; callback signatures authenticate notification origin, not
+permission to perform or replay an effect. See the
+[application integration boundary](../api/workflow-applications.md).
+
 ## Purpose
 
 Default deny; policy error never ALLOW; ASK never bypasses approval; secrets never appear in ordinary exports/logs; invalid signatures fail; client never executes unassigned package.

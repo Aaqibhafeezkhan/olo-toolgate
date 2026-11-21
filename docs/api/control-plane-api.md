@@ -1,5 +1,8 @@
 # Control Plane API
 
+Use [external workflow applications](workflow-applications.md) for tenant-bound
+password login, ordinary-user bot execution, live events and HTTPS callbacks.
+
 The console consumes this canonical API on the same origin. Generated operation
 metadata imports the shared TypeScript contracts. Device-management operations
 are defined in the canonical OpenAPI and schemas, with no browser-owned security

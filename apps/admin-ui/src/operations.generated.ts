@@ -3,6 +3,16 @@
 // GENERATED FILE — DO NOT EDIT; python tools/ui/generate.py
 import type { ControlAccessGrant, ControlAccessGrantPage, ControlAgent, ControlAgentDelegation, ControlAgentDelegationPage, ControlAgentGroup, ControlAgentGroupPage, ControlAgentPage, ControlDelegation, ControlDelegationPage, ControlDevice, ControlDeviceEvidence, ControlDeviceEvidencePage, ControlDeviceGroup, ControlDeviceGroupPage, ControlDevicePage, ControlExecutionBinding, ControlExecutionBindingPage, ControlIdentityBinding, ControlIdentityBindingPage, ControlPolicy, ControlPolicyPage, ControlResourceExtractor, ControlResourceExtractorPage, ControlRole, ControlRolePage, ControlTeam, ControlTeamPage, ControlTool, ControlToolGroup, ControlToolGroupPage, ControlToolPage, ControlUser, ControlUserPage, ControlWorkloadBinding, ControlWorkloadBindingPage } from '@olo-labs/toolgate-contracts';
 export const operations = {
+  applicationPasswordLogin: { method: 'POST', path: '/api/public/v1/auth/login' },
+  revokeApplicationUserSessions: { method: 'POST', path: '/api/control/v1/application-session/revoke' },
+  getApplicationEvents: { method: 'GET', path: '/api/control/v1/application-events/{source}/{id}' },
+  streamApplicationEvents: { method: 'GET', path: '/api/control/v1/application-events/{source}/{id}/stream' },
+  getApplicationTriggerStatus: { method: 'GET', path: '/api/control/v1/application-trigger-status/{name}' },
+  createApplicationWebhook: { method: 'POST', path: '/api/control/v1/application-webhooks' },
+  listApplicationWebhooks: { method: 'GET', path: '/api/control/v1/application-webhooks' },
+  getApplicationWebhook: { method: 'GET', path: '/api/control/v1/application-webhooks/{id}' },
+  revokeApplicationWebhook: { method: 'DELETE', path: '/api/control/v1/application-webhooks/{id}' },
+  verifyApplicationWebhook: { method: 'POST', path: '/api/control/v1/application-webhooks/{id}/verify' },
   beginNativeFileEffect: { method: 'POST', path: '/api/control/v1/mcp/native-files/begin' },
   recordNativeFileReceipt: { method: 'POST', path: '/api/control/v1/mcp/native-files/receipts' },
   closeNativeFileScope: { method: 'POST', path: '/api/control/v1/mcp/native-files/close' },

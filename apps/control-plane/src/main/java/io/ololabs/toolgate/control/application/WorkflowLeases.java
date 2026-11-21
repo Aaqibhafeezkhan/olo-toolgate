@@ -85,6 +85,7 @@ public final class WorkflowLeases {
                 workflow = config.workflows().stream().filter(candidate -> candidate.id().equals(run.workflowId())
                     && candidate.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
                 if (!workflow.graph().digest().equals(run.graphDigest())) throw Failure.unavailable();
+                new WorkflowUserAccess(codec).requireRun(tx.load(), run, config, workflow, now);
                 access.require(tx.load(), run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
             } catch (Failure denied) {
                 if (denied.status() != 403) throw denied;
@@ -143,10 +144,9 @@ public final class WorkflowLeases {
     public Store.Reply result(DirectoryService.Actor actor, String runId) {
         Ids.valid(runId);
         return store.transaction(actor.tenant(), false, tx -> {
-            actor.requireAdmin();
-            if (!new ManagementAccess(codec).superAdministrator(tx.load(), actor.userId())) throw ManagementAccess.denied();
             var run = tx.workflowRuns().get(runId);
             if (run == null) throw new Failure(io.ololabs.toolgate.contracts.ErrorCode.NOT_FOUND, 404, "Workflow run unavailable");
+            new WorkflowUserAccess(codec).observe(tx.load(), actor, run, "workflow.result.read", clock.millis());
             String state = tx.workflowRuns().state(runId);
             var response = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
             response.put("runId", run.id()).put("workflowId", run.workflowId()).put("workflowVersionId", run.workflowVersionId())
@@ -169,6 +169,7 @@ public final class WorkflowLeases {
             var config = profiles.admittedRevision(tx, worker.tenant(), run).workflows();
             var workflow = config.workflows().stream().filter(candidate -> candidate.id().equals(run.workflowId())
                 && candidate.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
+            new WorkflowUserAccess(codec).requireRun(tx.load(), run, config, workflow, now);
             if (tx.kills().effective().stream().anyMatch(kill -> "TENANT".equals(kill.scope()))) throw ManagementAccess.denied();
             access.require(tx.load(), run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
 

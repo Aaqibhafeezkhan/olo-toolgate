@@ -11,7 +11,7 @@ import java.sql.SQLException;
 final class JdbcWorkflowRunStore implements WorkflowRunStore {
     private static final String RUN = """
         SELECT run_id,profile_id,profile_digest,workflow_id,workflow_version_id,service_agent_id,service_agent_group_id,
-            remediation_mode,created_at,key_version,document,compiler_digest,graph_digest FROM control_workflow_runs
+            remediation_mode,created_at,key_version,document,compiler_digest,graph_digest,user_authority FROM control_workflow_runs
         WHERE tenant_id=?
         """;
     private final Connection connection;
@@ -83,14 +83,15 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
     @Override public void enqueue(QueuedRun run) {
         try (var statement = statement("""
                 INSERT INTO control_workflow_runs(tenant_id,run_id,profile_id,profile_digest,workflow_id,workflow_version_id,
-                    service_agent_id,service_agent_group_id,remediation_mode,state,document,created_at,key_version,compiler_digest,graph_digest)
-                VALUES(?,?,?,?,?,?,?,?,?,'QUEUED',?,?,?,?,?)
+                    service_agent_id,service_agent_group_id,remediation_mode,state,document,created_at,key_version,compiler_digest,graph_digest,user_authority)
+                VALUES(?,?,?,?,?,?,?,?,?,'QUEUED',?,?,?,?,?,?)
                 """, run.id(), run.profileId(), run.profileDigest(), run.workflowId(), run.workflowVersionId(),
                 run.serviceAgentId(), run.serviceAgentGroupId(), run.remediationMode(), run.document())) {
             statement.setLong(11, run.createdAt());
             statement.setLong(12, run.keyVersion());
             statement.setString(13, run.compilerDigest());
             statement.setString(14, run.graphDigest());
+            statement.setString(15, run.userAuthority());
             statement.executeUpdate();
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
@@ -123,7 +124,7 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
     private QueuedRun queryRun(String sql, String... values) {
         try (var statement = statement(sql, values); var rows = statement.executeQuery()) {
             return rows.next() ? new QueuedRun(rows.getString(1), rows.getString(2), rows.getString(3), rows.getString(4),
-                rows.getString(5), rows.getString(6), rows.getString(7), rows.getString(8), rows.getLong(9), rows.getLong(10), rows.getString(11), rows.getString(12), rows.getString(13)) : null;
+                rows.getString(5), rows.getString(6), rows.getString(7), rows.getString(8), rows.getLong(9), rows.getLong(10), rows.getString(11), rows.getString(12), rows.getString(13), rows.getString(14)) : null;
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 
@@ -173,6 +174,7 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
                 UPDATE control_workflow_runs SET state='CANCELLED' WHERE tenant_id=? AND run_id=? AND state='QUEUED'
                 """, runId)) {
             if (statement.executeUpdate() != 1) throw Failure.conflict();
+            terminal(runId,"CANCELLED",System.currentTimeMillis());
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 
@@ -187,17 +189,32 @@ final class JdbcWorkflowRunStore implements WorkflowRunStore {
             statement.setString(4, lease.id()); statement.setString(5, lease.ownerId()); statement.setString(6, lease.tokenDigest());
             statement.setLong(7, now);
             if (statement.executeUpdate() != 1) throw Failure.conflict();
+            terminal(lease.runId(),state,now);
         } catch (SQLException failure) { throw Failure.unavailable(); }
     }
 
     @Override public void expire(long now) {
+        var expired=new java.util.ArrayList<String>();
+        try(var query=statement("SELECT run_id FROM control_workflow_runs WHERE tenant_id=? AND state='RUNNING' AND lease_expires_at<=? ORDER BY run_id LIMIT 256")){
+            query.setLong(2,now);try(var rows=query.executeQuery()){while(rows.next())expired.add(rows.getString(1));}
+        }catch(SQLException failure){throw Failure.unavailable();}
+        for(String id:expired)expireOne(id,now);
+    }
+    private void expireOne(String id,long now) {
         try (var statement = statement("""
                 UPDATE control_workflow_runs SET state='EXPIRED',lease_id=NULL,lease_owner=NULL,lease_token_digest=NULL,lease_expires_at=NULL,
                     step_kind=NULL,step_subject=NULL,step_model_group=NULL,step_token_digest=NULL
-                WHERE tenant_id=? AND state='RUNNING' AND lease_expires_at<=?
+                WHERE tenant_id=? AND state='RUNNING' AND lease_expires_at<=? AND run_id=?
                 """)) {
             statement.setLong(2, now);
-            statement.executeUpdate();
+            statement.setString(3,id);
+            if(statement.executeUpdate()==1)terminal(id,"EXPIRED",now);
         } catch (SQLException failure) { throw Failure.unavailable(); }
+    }
+    private void terminal(String run,String state,long now) {
+        String document=com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode().put("kind",state)
+            .put("resultPath","/api/control/v1/workflow-runs/"+run).toString();
+        new JdbcApplicationEventStore(connection,tenant).append(io.ololabs.toolgate.contracts.v2.ApplicationEventSource.WORKFLOW,run,
+            "state:"+state,io.ololabs.toolgate.contracts.v2.ApplicationEventKind.RESULT,now,document);
     }
 }

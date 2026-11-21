@@ -17,8 +17,10 @@ explain missing secrets, packages, device state or graph readiness.
 
 Use a published bot's run symbol, enter its README's input and submit. The
 dialog shows queued/running/completed state, recorded agent/model/tool/node
-progress and the result or failure. Super Admin may initiate runs; current
-runtime authority still governs every tool/model call. File triggers also run
+progress and the result or failure. Manual execution requires explicit human
+workflow and resource grants; administration does not bypass these checks. See
+the [all-bot permission and resource matrix](../../bot/PERMISSIONS.md) for every
+supplied configuration. Current runtime authority governs every tool/model call. File triggers also run
 when their watcher sees a new matching file. Check run observations/results and
 the configured output files. Never resend an unknown write outcome blindly.
 

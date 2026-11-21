@@ -1,0 +1,472 @@
+{
+  "info": {
+    "name": "OLO V1 external workflow integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0. V1 tenant/password login and governed workflow calls. Use the accompanying local environment and README. Do not export populated credentials. Development source may precede published image support."
+  },
+  "item": [
+    {
+      "name": "1. Login (tenant + username/password)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Toolgate-Tenant-ID",
+            "value": "{{tenantId}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/public/v1/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{{loginRequest}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.variables.set('loginRequest', JSON.stringify({username: pm.environment.get('username'), password: pm.environment.get('password')}));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login succeeded', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.test('Bearer access token returned', function () { pm.expect(body.tokenType).to.eql('Bearer'); pm.expect(body.accessToken).to.be.a('string').and.not.empty; });",
+              "  pm.environment.set('accessToken', body.accessToken);",
+              "  pm.environment.set('tokenExpiresAt', String(Date.now() + body.expiresIn * 1000));",
+              "} else { pm.environment.unset('accessToken'); pm.environment.unset('tokenExpiresAt'); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Discover published profiles",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/workflow-profiles/published?limit=50",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "2a. Read selected published workflow catalog",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/workflow-profiles/published/{{profileId}}/{{profileDigest}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "3. Submit a bot request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/control/v1/workflow-profiles/{{profileId}}/workflows/{{workflowId}}/runs",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{{runRequest}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.environment.get('idempotencyKey')) { pm.environment.set('idempotencyKey', pm.variables.replaceIn('{{$guid}}')); }",
+              "// Keep this key for retries of the same body. Clear it only for a new logical submission.",
+              "const generation = Number(pm.environment.get('expectedGeneration'));",
+              "if (!Number.isSafeInteger(generation) || generation < 1) { throw new Error('expectedGeneration must be a positive safe integer'); }",
+              "const request = {profileDigest: pm.environment.get('profileDigest'), expectedGeneration: generation, entryAgentId: pm.environment.get('entryAgentId'), message: pm.environment.get('message')}; if (pm.environment.get('dispatchBindingId')) { request.dispatchBindingId = pm.environment.get('dispatchBindingId'); } pm.variables.set('runRequest', JSON.stringify(request));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Run admitted', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) { pm.environment.set('runId', pm.response.json().runId); pm.environment.set('progressCursor', '0'); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Read new progress",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/workflow-runs/{{runId}}/progress?after={{progressCursor}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Progress readable', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { pm.environment.set('progressCursor', String(pm.response.json().nextCursor)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Read run state and final result",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/workflow-runs/{{runId}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "6. Poll durable workflow events",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/application-events/WORKFLOW/{{runId}}?after={{eventCursor}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Events readable', function () { pm.response.to.have.status(200); });",
+              "if (pm.response.code === 200) { pm.environment.set('eventCursor', String(pm.response.json().nextCursor)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Live workflow events (SSE, reconnect after 60 seconds)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/event-stream",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/control/v1/application-events/WORKFLOW/{{runId}}/stream?after={{eventCursor}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "8. Register a private webhook (pending verification)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{webhookIdempotencyKey}}",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/control/v1/application-webhooks",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{{webhookRequest}}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.environment.get('webhookIdempotencyKey')) { pm.environment.set('webhookIdempotencyKey', pm.variables.replaceIn('{{$guid}}')); }",
+              "if (!pm.environment.get('webhookExpiresAt')) { const expires = Math.min(Date.now() + 300000, Number(pm.environment.get('tokenExpiresAt')) - 30000); if (!Number.isSafeInteger(expires) || expires <= Date.now()) { throw new Error('Log in again before registering a callback'); } pm.environment.set('webhookExpiresAt', String(expires)); }",
+              "pm.variables.set('webhookRequest', JSON.stringify({sourceType: pm.environment.get('webhookSourceType') || 'WORKFLOW', sourceId: pm.environment.get('webhookSourceId') || pm.environment.get('runId'), eventKinds: JSON.parse(pm.environment.get('webhookEventKinds') || '[\"PROGRESS\",\"RESULT\"]'), callbackUrl: pm.environment.get('callbackUrl'), expiresAtUnixMs: Number(pm.environment.get('webhookExpiresAt')), after: Number(pm.environment.get('webhookAfter') || '0')}));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Webhook registered', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) { const body = pm.response.json(); pm.environment.set('subscriptionId', body.id); pm.environment.set('signingSecret', body.signingSecret); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Verify callback ownership (configure receiver secret first)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/control/v1/application-webhooks/{{subscriptionId}}/verify",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "10. Inspect webhook metadata and last acknowledged cursor",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/application-webhooks/{{subscriptionId}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "11. Revoke webhook delivery",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/application-webhooks/{{subscriptionId}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "12. Read permitted trigger status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/control/v1/application-trigger-status/{{assignmentName}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "13. Live permitted trigger status (SSE)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/event-stream",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/control/v1/application-events/TRIGGER/{{assignmentName}}/stream?after={{triggerEventCursor}}",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "14. Revoke this user's sessions (ends current token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": "{{baseUrl}}/api/control/v1/application-session/revoke",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

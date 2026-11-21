@@ -12,6 +12,7 @@ RUNTIME = ROOT / "apps/langgraph-runtime"
 
 
 def main():
+    subprocess.run([sys.executable, "tools/workflows/bot_permissions.py", "--check"], cwd=ROOT, check=True)
     environment = ROOT / ".dev/langgraph-runtime" / sys.implementation.cache_tag
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if not python.is_file():

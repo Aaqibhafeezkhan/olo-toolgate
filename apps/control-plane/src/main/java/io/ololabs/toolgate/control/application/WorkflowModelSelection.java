@@ -10,11 +10,13 @@ import java.time.Clock;
 public final class WorkflowModelSelection {
     private final WorkflowProfiles profiles;
     private final WorkflowServiceAccess access;
+    private final WorkflowUserAccess users;
     private final Clock clock;
 
     public WorkflowModelSelection(WorkflowProfiles profiles, Codec codec, Clock clock) {
         this.profiles = profiles;
         this.access = new WorkflowServiceAccess(codec);
+        this.users = new WorkflowUserAccess(codec);
         this.clock = clock;
     }
 
@@ -55,6 +57,7 @@ public final class WorkflowModelSelection {
         var workflow = config.workflows().stream().filter(item -> item.id().equals(run.workflowId())
             && item.versionId().equals(run.workflowVersionId())).findFirst().orElseThrow(Failure::unavailable);
         var directory = tx.load();
+        users.requireRun(directory, run, config, workflow, now);
         access.require(directory, run.serviceAgentId(), run.serviceAgentGroupId(), workflow, now);
         access.requireGrant(directory, run.serviceAgentGroupId(), "model.infer", "model-group:" + step.modelGroupId(), now);
         if ("AGENT".equals(step.kind())) {

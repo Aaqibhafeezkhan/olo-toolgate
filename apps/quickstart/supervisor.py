@@ -216,7 +216,7 @@ def identity_audit(operation, generation, request_id, user='admin'):
 
 class LocalIdentity:
     """One composition-owned password writer; durable verifier/generation stay in custody."""
-    def __init__(self): self.lock=threading.Lock()
+    def __init__(self, revoke_sessions=None): self.lock=threading.Lock(); self.revoke_sessions=revoke_sessions
     def authenticate(self, value, replacement=None, user='admin'):
         with self.lock:
             record = strict(identity_path(user).read_bytes())
@@ -227,9 +227,11 @@ class LocalIdentity:
             if replacement is not None:
                 if shown_on_login(user): raise Forbidden()
                 if not password_valid(replacement) or replacement == value: raise ValueError('A different strong password is required')
-                record = password_record(replacement, True, record['generation']+1)
+                old_generation=record['generation']
+                record = password_record(replacement, True, old_generation+1)
                 request_id=secrets.token_hex(16)
                 identity_audit('PASSWORD_CHANGE_REQUESTED',record['generation'],request_id,user)
+                if self.revoke_sessions is not None: self.revoke_sessions(user,old_generation)
                 atomic(identity_path(user), json.dumps(record))
                 (DATA/('bootstrap-password' if user=='admin' else 'bootstrap-password-'+user)).unlink(missing_ok=True)
                 identity_audit('PASSWORD_CHANGED',record['generation'],request_id,user)
@@ -311,6 +313,39 @@ def session(header):
         if claims['iss'] != ISSUER or claims['aud'] != 'toolgate-control' or claims['tenant_id'] != TENANT or not claims['iat'] <= now < claims['exp'] <= claims['iat']+900 or claims.get('password_generation') != record['generation']: raise ValueError()
         return claims
     except Exception: raise PermissionError() from None
+
+
+def application_login_tenant(headers):
+    """External password login selects exactly the configured tenant before any identity work."""
+    values = headers.get_all('Toolgate-Tenant-ID', [])
+    if len(values) != 1:
+        raise ValueError('Exactly one tenant ID is required')
+    try:
+        selected = str(uuid.UUID(values[0]))
+    except (ValueError, AttributeError):
+        raise ValueError('Invalid tenant ID') from None
+    if selected != values[0]:
+        raise ValueError('Canonical tenant ID required')
+    if selected != TENANT:
+        raise Forbidden()
+
+
+def application_login_user(user):
+    """A local verifier cannot create or enable a directory user or identity binding."""
+    if not isinstance(user, str) or user not in local_users():
+        hashlib.pbkdf2_hmac('sha256', b'', bytes(16), 600000)
+        raise PermissionError()
+    with Database() as db:
+        rows = db.execute('SELECT kind,CAST(document AS TEXT) FROM control_records WHERE tenant_id=? AND '
+                          '((kind=? AND record_id=?) OR (kind=? AND record_id=?))',
+                          (TENANT, 'USER', user, 'IDENTITY_BINDING', 'installed-'+user)).fetchall()
+    records = {kind: strict(document) for kind, document in rows}
+    account, identity = records.get('USER', {}), records.get('IDENTITY_BINDING', {})
+    if (account.get('id') != user or account.get('enabled') is not True
+            or identity.get('enabled') is not True or identity.get('userId') != user
+            or identity.get('issuer') != ISSUER or identity.get('subject') != user):
+        hashlib.pbkdf2_hmac('sha256', b'', bytes(16), 600000)
+        raise PermissionError()
 
 
 def certificates():
@@ -555,6 +590,11 @@ def control(path, token, body=None):
     status, raw, _ = call(path, token, body)
     if status not in (200, 201): raise RuntimeError('Control refused the request')
     return strict(raw) if raw else {}
+
+
+def revoke_login_sessions(user, generation):
+    status, _, _ = call('/api/control/v1/application-session/revoke', jwt(GROUPS,user,generation=generation), {})
+    if status != 204: raise RuntimeError('Control refused session revocation')
 
 
 def rotate(binding_id, token, actor, execution=None):
@@ -827,7 +867,7 @@ class BoundedServer(http.server.ThreadingHTTPServer):
         super().__init__(address,handler)
         self.ready=ready
         self.capacity=threading.BoundedSemaphore(16)
-        self.identity=LocalIdentity()
+        self.identity=LocalIdentity(revoke_login_sessions)
         self.login_lock=threading.Lock()
         self.login_times=[]
         self.signal_gateway=lambda: None  # main() sends SIGHUP to the running Gateway.
@@ -923,20 +963,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return self.reply(401, {'code':'UNAUTHORIZED'}, headers={'Set-Cookie': self.session_cookie()[1]})
             if path=='/api/quickstart/v1/logout' and self.command=='POST':
                 return self.reply(200, {}, headers={'Set-Cookie': self.session_cookie()[1]})
-            if path=='/api/quickstart/v1/login' and self.command=='POST':
+            external_login = path == '/api/public/v1/auth/login'
+            if (path=='/api/quickstart/v1/login' or external_login) and self.command=='POST':
+                if external_login:
+                    application_login_tenant(self.headers)
                 with self.server.login_lock:
                     now = time.monotonic(); self.server.login_times[:] = [t for t in self.server.login_times if now-t<60]
                     if len(self.server.login_times)>=10: return self.reply(429, {'code':'RATE_LIMITED'})
                     self.server.login_times.append(now)
                 data = strict(raw)
                 if not isinstance(data, dict) or set(data)-{'username','password','newPassword'}: raise ValueError()
+                if external_login:
+                    if (set(data) != {'username', 'password'} or not isinstance(data['username'], str)
+                            or not 1<=len(data['username'])<=128 or not isinstance(data['password'], str)
+                            or not 1<=len(data['password'])<=128): raise ValueError()
+                    application_login_user(data['username'])
                 user=data.get('username','admin')
                 if user not in local_users(): raise PermissionError()
-                if password_disabled() and user=='admin':
+                if not external_login and password_disabled() and user=='admin':
                     record = strict((DATA/'identity.json').read_bytes())
                     token = jwt(GROUPS, 'admin', generation=record['generation'])
                 else:
                     token = self.server.identity.authenticate(data.get('password'), data.get('newPassword'),user)
+                if external_login:
+                    return self.reply(200, {'accessToken': token, 'tokenType': 'Bearer', 'expiresIn': 900})
                 return self.reply(200, {'accessToken': token}, headers={'Set-Cookie': self.session_cookie(token)[1]})
             protected = path.startswith(('/api/control/', '/api/quickstart/'))
             if protected: session(self.headers.get('Authorization',''))
@@ -971,11 +1021,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 secure = direct_tls(path)
                 client = http.client.HTTPSConnection('127.0.0.1',8443,context=ssl.create_default_context(cafile=str(DATA/'keys/device-ca.crt')),timeout=10) if secure else http.client.HTTPConnection('127.0.0.1',8081 if mcp_http else 8082,timeout=35 if mcp_http else 75 if path=='/api/control/v1/marketplace/imports' else 10)
                 forwarded = {'authorization','content-type','idempotency-key','if-match','x-request-id','traceparent','toolgate-tenant-id'}
+                event_stream = self.command=='GET' and re.fullmatch(r'/api/control/v1/application-events/(WORKFLOW|TRIGGER)/[A-Za-z0-9._:-]{1,128}/stream', path)
+                if event_stream: forwarded.update(('accept','last-event-id'))
                 if mcp_http: forwarded.update(('accept','mcp-protocol-version','mcp-method','mcp-name'))
                 headers = {k:v for k,v in self.headers.items() if k.lower() in forwarded}
                 try:
                     client.request(self.command, origin_target(self.path), raw or None, headers)
-                    response = client.getresponse(); limit = 131072 if mcp_http else 64*1024*1024
+                    response = client.getresponse()
+                    if event_stream and response.status==200 and response.getheader('Content-Type','').split(';',1)[0]=='text/event-stream':
+                        self.send_response(200)
+                        self.send_header('Content-Type','text/event-stream')
+                        self.send_header('Cache-Control','no-store')
+                        self.send_header('X-Accel-Buffering','no')
+                        self.send_header('Connection','close')
+                        self.end_headers(); self.close_connection=True
+                        try:
+                            while self.server.ready.is_set():
+                                session(self.headers.get('Authorization',''))
+                                chunk=response.read1(16384)
+                                if not chunk: break
+                                session(self.headers.get('Authorization',''))
+                                self.wfile.write(chunk); self.wfile.flush()
+                        except (OSError, http.client.HTTPException, PermissionError):
+                            pass
+                        return
+                    limit = 131072 if mcp_http else 64*1024*1024
                     body = response.read(limit+1)
                     if len(body)>limit: raise ValueError()
                     if path=='/api/control/v1/endpoint/devices' and self.command=='GET' and response.status==200:
