@@ -77,7 +77,7 @@ class GradleBuildTests(unittest.TestCase):
         coordinates=[('org.junit.jupiter','junit-jupiter','5.14.2'),
                      ('com.fasterxml.jackson.core','jackson-annotations','2.21'),
                      ('com.fasterxml.jackson.core','jackson-databind','2.21.7')]
-        for task in ('compileTestJava','toolgateCheck'):
+        for task in ('compileTestJava','toolgateCheck','toolgateResolveDependencies'):
             text=f'> Task :example:{task} FAILED\nCould not resolve all files for configuration\n'
             text+='\n'.join('Could not find '+':'.join(item)+'.\n'+runner.pom_url(item) for item in coordinates)
             with self.subTest(task=task):

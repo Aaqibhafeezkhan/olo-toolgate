@@ -43,7 +43,7 @@ def retry_reason(text,published=published_dependency):
     if not re.search(r'Could not resolve all (?:files|artifacts) for configuration',text):return None
     # These tasks resolve their Java classpath before running the compiler or
     # SDK examples. A failed test task or another failed action is never retried.
-    allowed={'compileJava','compileTestJava','toolgateCheck','toolgatePackage'}
+    allowed={'compileJava','compileTestJava','toolgateCheck','toolgatePackage','toolgateResolveDependencies'}
     if any(task.rsplit(':',1)[-1] not in allowed
            for task in re.findall(r'(?m)^\s*> Task (\S+) FAILED\b',text)):return None
     if 'There were failing tests' in text or re.search(r'(?mi)^\s*(?:Compilation failed|.*\berror:)',text):return None
