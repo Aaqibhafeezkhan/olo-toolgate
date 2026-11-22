@@ -74,8 +74,9 @@ is not claimed by mocked protocol tests.
 
 Run `python tools/triggers/package_tests.py --prepare-sdk` from the repository
 root to publish the shared test SDK. CI uses this command before the parallel
-package matrix. Only dependency-resolution HTTP 429 failures qualify for retries:
-three attempts total, with 5- and 15-second delays. Each attempt is retained under
-`build/trigger-package-sdk/logs/gradle-<attempt>.log`. Compilation and test failures
-stop immediately; exhausted throttling remains a failed build. The command does
+package matrix. SDK preparation and each package use the shared
+[Maven Central resolution recovery](../../docs/development/gradle.md#maven-central-resolution-recovery).
+SDK attempts are retained under `build/trigger-package-sdk/logs/gradle-<attempt>.log`;
+package attempts are under `build/trigger-package-tests/<package-id>/`.
+Compilation and test failures stop immediately; exhausted recovery remains a failed build. The command does
 not build the offline Rust package CLI; CI builds that separately afterward.

@@ -16,6 +16,8 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(ROOT))
+from tools.ci import gradle_build
 FIELDS = {'schemaVersion', 'providerMode', 'packageId', 'buildRoot', 'project', 'startConfig'}
 NAME = re.compile(r'[a-z][a-z0-9._-]{0,95}')
 
@@ -80,29 +82,8 @@ def discover(root=ROOT):
 
 
 def gradle(command, env, output, *, sleep=time.sleep):
-    """Retry Maven Central throttling during dependency resolution, never failed tests/compilation."""
-    output.mkdir(parents=True,exist_ok=True)
-    for attempt in range(3):
-        log=output/('gradle-'+str(attempt+1)+'.log')
-        with log.open('wb') as stream:
-            result=subprocess.run(command,cwd=ROOT,env=env,stdout=stream,stderr=subprocess.STDOUT)
-        with log.open('rb') as stream:
-            for chunk in iter(lambda:stream.read(65536),b''):
-                sys.stdout.write(chunk.decode('utf-8',errors='replace'))
-            stream.seek(max(0,stream.tell()-65536))
-            tail=stream.read().decode('utf-8',errors='replace')
-        if tail and not tail.endswith('\n'):print()
-        if result.returncode==0:return
-        throttled=('Could not resolve all files for configuration' in tail
-            and 'Received status code 429 from server' in tail
-            and not re.search(r'(?m)^> Task .*:[^\s]*[Tt]est[^\s]* FAILED',tail)
-            and 'There were failing tests' not in tail
-            and not re.search(r'(?m)(?:Compilation failed|\berror:)',tail))
-        if attempt==2 or not throttled:
-            raise subprocess.CalledProcessError(result.returncode,command)
-        delay=(5,15)[attempt]
-        print('Maven dependency request was throttled; retrying package build in '+str(delay)+' seconds.',flush=True)
-        sleep(delay)
+    """Use the shared bounded dependency recovery for SDK and package builds."""
+    gradle_build.build(command,output,cwd=ROOT,env=env,sleep=sleep)
 
 
 def run(entry, sdk_repo, cli, sdk_version):

@@ -19,7 +19,7 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
             command=[sys.executable,'-c',
-                "from pathlib import Path;import sys;p=Path(sys.argv[1]);n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));print('Could not resolve all files for configuration; Received status code 429 from server' if n==0 else 'BUILD SUCCESSFUL');sys.exit(1 if n==0 else 0)",str(root/'attempt')]
+                "from pathlib import Path;import sys;p=Path(sys.argv[1]);n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));print('Could not resolve all files for configuration; https://repo.maven.apache.org/maven2/example.pom Received status code 429 from server' if n==0 else 'BUILD SUCCESSFUL');sys.exit(1 if n==0 else 0)",str(root/'attempt')]
             delays=[]
             package_tests.gradle(command,{},root/'logs',sleep=delays.append)
             self.assertEqual('2',(root/'attempt').read_text())
@@ -28,7 +28,7 @@ class TriggerPackageMatrixTests(unittest.TestCase):
             self.assertIn('BUILD SUCCESSFUL',(root/'logs/gradle-2.log').read_text())
 
     def test_test_or_compilation_failures_are_not_retried_and_throttling_is_bounded(self):
-        throttle='Could not resolve all files for configuration; Received status code 429 from server'
+        throttle='Could not resolve all files for configuration; https://repo.maven.apache.org/maven2/example.pom Received status code 429 from server'
         for text,attempts in [(throttle,3),(throttle+'\n> Task :log-watch:test FAILED',1),
                 (throttle+'\nerror: compilation failed',1),('Received status code 503 from server',1)]:
             with self.subTest(text=text),tempfile.TemporaryDirectory() as temporary:

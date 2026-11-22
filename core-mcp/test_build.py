@@ -28,11 +28,16 @@ class InventoryTest(unittest.TestCase):
                 output=root/'output'
                 entry=dict(project='project',sdk='java-gradle',id=manifest['id'],version=manifest['version'])
                 with patch.object(build,'ROOT',root),patch.object(build,'inventory',return_value=[(entry,project)]), \
-                        patch.object(build.sys,'argv',['build.py','--cli',str(cli),'--output',str(output),*flags]),patch.object(build,'run') as run:
+                        patch.object(build.sys,'argv',['build.py','--cli',str(cli),'--output',str(output),*flags]), \
+                        patch.object(build.gradle_build,'build') as gradle,patch.object(build,'run') as run:
                     build.main()
                 commands=[list(call.args[0]) for call in run.call_args_list]
-                java=next(command for command in commands if 'toolgatePackage' in command)
+                self.assertEqual(2,gradle.call_count)
+                java=next(list(call.args[0]) for call in gradle.call_args_list if 'toolgatePackage' in call.args[0])
                 self.assertEqual(not flags,'check' in java)
+                for call in gradle.call_args_list:
+                    self.assertFalse(call.args[1].is_relative_to(output))
+                    self.assertEqual(root,call.kwargs['cwd'])
                 self.assertTrue(any('validate' in command for command in commands))
                 lock=json.loads((output/'core-packages.lock.json').read_text(encoding='utf-8'))
                 self.assertEqual(manifest['id'],lock['packages'][0]['id'])

@@ -58,6 +58,24 @@ not be addressed by replaying tests or changing the pinned Quarkus version.
 
 ## Workspace Contracts
 
+### Maven Central resolution recovery
+
+`tools/ci/gradle_build.py` provides the shared recovery used by image builds,
+trigger SDK/package checks and Core MCP Java builds. It permits three attempts
+total, with 5- and 15-second delays and `--refresh-dependencies` on retries.
+Only dependency-resolution HTTP 429 responses from Maven Central, or missing
+metadata whose exact coordinates are independently verified in Central POMs,
+qualify. Every reported missing coordinate must be verified (at most sixteen).
+The POM's artifact, group and version must match; unavailable or invalid metadata
+leaves the build failed. No version, lockfile or repository is changed.
+
+Classpath failures before Java compilation or SDK example execution can recover.
+Failed test tasks, compiler diagnostics, unrelated failed tasks and exhausted
+retries remain failures. Each attempt is retained as `gradle-<attempt>.log` in
+the caller's log directory. Core MCP keeps these logs beside its output directory,
+outside the packages copied into runtime images. A retry is build recovery;
+successful compilation, tests and package validation are still required.
+
 Default:
 
 ```bash
