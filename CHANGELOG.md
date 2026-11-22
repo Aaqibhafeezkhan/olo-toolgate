@@ -2,6 +2,14 @@
 
 ## 1.0.0-dev.1
 
+- Add five standard bot use cases (six configurations, including publication A/B)
+  with active QLoRA/Ollama, lightweight Ollama and OpenRouter premium routing,
+  plus a shared-Control/PostgreSQL
+  Docker development wrapper with separate tenant ports, execution pools and
+  destination-local custody. Startup can import an exported bot independently
+  into either tenant. Graph preparation binds each tenant reader to its own
+  HTTPS Control origin; obsolete single-origin reader configuration is refused.
+
 - Add optional multi-bot Quickstart setup with a blank default, private credential
   reuse, per-bot configurators and readiness-gated activation of standard demos.
 - Give current tenant Super Admins tenant-wide human runtime authority and run

@@ -78,18 +78,30 @@ class ControlCandidates:
     Control verifies runtime service authority on every request. This
     adapter requires a reviewed candidate; it cannot publish or provision it.
     """
-    def __init__(self, origin, readers, *, ca_file=None, timeout=10):
-        parts = urlsplit(origin)
-        if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.path not in ('','/') or parts.query or parts.fragment:
-            raise ValueError('Use a direct TLS Control origin')
+    def __init__(self, readers, *, ca_file=None, timeout=10):
         if not 0 < timeout <= 30 or not isinstance(readers,dict) or not readers:
             raise ValueError('Configure bounded Control readers')
-        self.origin,self.readers,self.timeout = origin.rstrip('/'),dict(readers),timeout
+        if len(readers)>256:
+            raise ValueError('Configure bounded Control readers')
+        selected={}
+        for tenant,reader in readers.items():
+            if (not isinstance(tenant,str) or not tenant or len(tenant)>128
+                    or not isinstance(reader,dict) or set(reader)!={'origin','tokenFile'}
+                    or not isinstance(reader['origin'],str) or not isinstance(reader['tokenFile'],str)
+                    or not Path(reader['tokenFile']).is_absolute()):
+                raise ValueError('Configure a tenant origin and absolute reader token file')
+            parts=urlsplit(reader['origin'])
+            if (parts.scheme!='https' or not parts.hostname or parts.username or parts.password
+                    or parts.path not in ('','/') or parts.query or parts.fragment):
+                raise ValueError('Use a direct TLS Control origin')
+            parts.port  # Refuse malformed ports before loading credentials or opening transport.
+            selected[tenant]=dict(origin=reader['origin'].rstrip('/'),tokenFile=reader['tokenFile'])
+        self.readers,self.timeout=selected,timeout
         context = ssl.create_default_context(cafile=ca_file)
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect(),urllib.request.HTTPSHandler(context=context))
 
-    def _get(self, path, token):
-        request=urllib.request.Request(self.origin+path,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+    def _get(self, origin, path, token):
+        request=urllib.request.Request(origin+path,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
         try:
             with self.opener.open(request,timeout=self.timeout) as response:
                 if response.status != 200 or response.headers.get_content_type() != 'application/json':
@@ -104,18 +116,18 @@ class ControlCandidates:
             raise GraphRefused('GRAPH_CANDIDATE_UNAVAILABLE') from None
 
     def __call__(self, request):
-        filename=self.readers.get(request['tenantId'])
-        if not filename:
+        reader=self.readers.get(request['tenantId'])
+        if reader is None:
             raise GraphRefused('GRAPH_TENANT_REFUSED')
         try:
-            with Path(filename).open(encoding='ascii') as stream:
+            with Path(reader['tokenFile']).open(encoding='ascii') as stream:
                 token=stream.read(8193).strip()
             if not token or len(token)>8192:
                 raise ValueError()
         except (OSError,ValueError):
             raise GraphRefused('GRAPH_READER_UNAVAILABLE') from None
         path='/internal/v1/runtime/graph-candidates/'+quote(request['profileId'],safe='')+'/'+quote(request['profileDigest'],safe='')+'/'+quote(request['workflowId'],safe='')
-        value=self._get(path+'?expectedGeneration='+str(request['expectedGeneration']),token)
+        value=self._get(reader['origin'],path+'?expectedGeneration='+str(request['expectedGeneration']),token)
         if (not contract('WorkflowGraphCandidate').is_valid(value)
                 or (value['tenantId'],value['profileId'],value['profileDigest'],value['workflowId'],value['generation'])
                     != (request['tenantId'],request['profileId'],request['profileDigest'],request['workflowId'],request['expectedGeneration'])):

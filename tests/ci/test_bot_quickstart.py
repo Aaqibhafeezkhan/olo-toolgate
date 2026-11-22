@@ -38,13 +38,18 @@ class BotSelectionTests(unittest.TestCase):
                          [row['id'] for row in setup.selection('2,3', rows)])
         self.assertEqual(['ollama-summary', 'multiagent-incident'],
                          [row['id'] for row in setup.selection('2, 3,2', rows)])
-        for answer in ('0,2', '11', '-1', '2;3', '2,,3', '9,10'):
+        for answer in ('0,2', str(len(rows)+1), '-1', '2;3', '2,,3', '9,10'):
             with self.subTest(answer=answer), self.assertRaises(Refused): setup.selection(answer, rows)
 
     def test_unattended_default_does_not_prompt(self):
         with patch.object(sys.stdin, 'isatty', return_value=False), patch('builtins.input') as prompt:
             self.assertEqual([], setup.choose())
             prompt.assert_not_called()
+
+    def test_mcp_menu_option_is_guidance_without_a_fake_bot_import(self):
+        self.assertEqual([],setup.choose('M'))
+        with patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value='m'):
+            self.assertEqual([],setup.choose())
 
     def test_catalog_paths_cannot_escape_the_managed_file_root(self):
         for value in ('/etc/passwd', '../private', 'a/../private', 'C:/private', 'a\\private', 'a//private'):
@@ -156,7 +161,7 @@ class ReadinessTests(unittest.TestCase):
             after_references({}); after_provision({})
             return {'state': 'PUBLISHED'}
         def files(raw, *_args):
-            return {'workflow.json': json.dumps({'workflows': {'modelDeployments': [], 'workflows': []}, 'packages': []}).encode(),
+            return {'workflow.json': json.dumps({'workflows': {'modelDeployments': [], 'modelGroups': [], 'agentDefinitions': [], 'workflows': []}, 'packages': []}).encode(),
                     'referenced-data.json': b'{"deviceGroups": []}'}
         manifests = [{'workflowId': row['workflowId'], 'connections': []} for row in rows]
         with patch.object(setup, 'load_bundle', side_effect=[b'one', b'two']),\
@@ -169,8 +174,8 @@ class ReadinessTests(unittest.TestCase):
 
     def test_existing_model_secret_is_not_overwritten_on_blank_answer(self):
         row = setup.catalog()[0]
-        scope = dict(secretName='ollama-local-key', toolGroupId='tools', deviceGroupId='devices')
-        files = {'workflow.json': json.dumps(dict(workflows=dict(modelDeployments=[scope], workflows=[]), packages=[])).encode(),
+        scope = dict(id='local', secretName='ollama-local-key', toolGroupId='tools', deviceGroupId='devices')
+        files = {'workflow.json': json.dumps(dict(workflows=dict(modelDeployments=[scope], modelGroups=[], agentDefinitions=[], workflows=[]), packages=[])).encode(),
                  'referenced-data.json': b'{"deviceGroups": []}'}
         def deploy(_client, _raw, **options): options['after_references']({}); return {'state': 'PUBLISHED'}
         existing = dict(name='ollama-local-key', toolGroupId='tools', deviceGroupId='devices')
@@ -180,6 +185,21 @@ class ReadinessTests(unittest.TestCase):
                 patch.object(setup, 'command') as command:
             setup.configure_bot(Mock(), object(), row, b'bundle', {})
         self.assertEqual(1, call.call_count); command.assert_not_called()
+
+    def test_active_three_tier_bot_requires_the_correctly_scoped_premium_key(self):
+        from bot.build import build
+        row=next(row for row in setup.catalog() if row['id']=='tenant-incident-triage')
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            rows=build(ROOT/'bot/configurations/tenant-incident-triage',folder,'1.0.0-test','a'*40,'test',{},None)
+            raw=(folder/rows[0]['filename']).read_bytes()
+            def deploy(_client,_raw,**options):options['after_references']({});return {'state':'PUBLISHED'}
+            for items in ([],[dict(name='openrouter-key',toolGroupId='another-group',deviceGroupId='default-devices')]):
+                with patch.object(setup,'deploy',side_effect=deploy), \
+                     patch.object(setup,'call',return_value={'items':items}), \
+                     patch.object(setup,'command') as command, self.assertRaisesRegex(Refused,'scoped OpenRouter'):
+                    setup.configure_bot(Mock(),object(),row,raw,{})
+                command.assert_not_called()
 
     def test_local_enrollment_key_change_stops_before_approval(self):
         current = dict(deviceId='device', state='PENDING', userCode='CODE123', keyFingerprint='original')

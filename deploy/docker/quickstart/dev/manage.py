@@ -46,7 +46,7 @@ def main():
     parser.add_argument('operation',choices=['start','stop','restart','validate','provision-runtime','ollama-vault'])
     model=parser.add_mutually_exclusive_group();model.add_argument('--with-ollama',action='store_true');model.add_argument('--without-ollama',action='store_true')
     monitor=parser.add_mutually_exclusive_group();monitor.add_argument('--with-monitoring',action='store_true');monitor.add_argument('--without-monitoring',action='store_true')
-    parser.add_argument('--bots',help='0 for no bots (default), or comma-separated AutoConfigure menu numbers')
+    parser.add_argument('--bots',help='0 for no bots (default), comma-separated menu numbers, or M for MCP setup instructions')
     parser.add_argument('--bundles-dir',type=Path,help='Directory containing one release inventory and its verified .olo bundles')
     args=parser.parse_args();values=settings();configure(values)
     selected=[];credential_updates={}

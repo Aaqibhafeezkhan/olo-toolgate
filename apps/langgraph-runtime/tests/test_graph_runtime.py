@@ -77,10 +77,11 @@ class RuntimeBuildTests(unittest.TestCase):
     def test_control_adapter_checks_authoritative_tenant_and_candidate_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
             token=Path(temporary)/'worker.token';token.write_text('test-workload-token')
-            client=ControlCandidates('https://control.invalid',{'tenant-a':str(token)})
+            client=ControlCandidates({'tenant-a':dict(origin='https://control.invalid',tokenFile=str(token))})
             value=dict(tenantId='tenant-a',profileId='profile',profileDigest=REQUEST['profileDigest'],workflowId='flow',generation=0,graph=self.candidate.graph,agentIds=[])
             observed=[]
-            def get(path,credential):
+            def get(origin,path,credential):
+                self.assertEqual('https://control.invalid',origin)
                 observed.append((path,credential));return value
             client._get=get
             self.assertEqual(self.candidate,client(REQUEST))
@@ -96,6 +97,15 @@ class RuntimeBuildTests(unittest.TestCase):
         with self.assertRaisesRegex(GraphRefused,'AGENT_UNASSIGNED'):self.runtime.rebuild(REQUEST)
         self.candidate=replace(self.candidate,agent_ids=('selected',))
         self.assertEqual('READY',self.runtime.rebuild(REQUEST)['state'])
+
+    def test_reader_locations_are_explicit_installation_data(self):
+        for reader in ('old-token-path', {'origin':'http://control.invalid','tokenFile':'/private/token'},
+                       {'origin':'https://user:password@control.invalid','tokenFile':'/private/token'},
+                       {'origin':'https://control.invalid/other','tokenFile':'/private/token'},
+                       {'origin':'https://control.invalid','tokenFile':'relative/token'},
+                       {'origin':'https://control.invalid','tokenFile':'/private/token','fallback':'tenant-b'}):
+            with self.subTest(reader=reader), self.assertRaises(ValueError):
+                ControlCandidates({'tenant-a':reader})
 
 
 @unittest.skipUnless(shutil.which('openssl'),'OpenSSL required for ephemeral mutual TLS tests')
@@ -175,7 +185,7 @@ class RuntimeTlsTests(unittest.TestCase):
         thread=threading.Thread(target=endpoint.serve_forever,daemon=True);thread.start()
         token=self.home/'candidate-reader.token';token.write_text('synthetic-workload-token')
         try:
-            reader=ControlCandidates('https://localhost:'+str(endpoint.server_port),{'tenant-a':str(token)},ca_file=str(self.home/'ca.crt'))
+            reader=ControlCandidates({'tenant-a':dict(origin='https://localhost:'+str(endpoint.server_port),tokenFile=str(token))},ca_file=str(self.home/'ca.crt'))
             result=reader(REQUEST)
             self.assertEqual(('tenant-a','flow'),(result.tenant_id,result.workflow_id))
             self.assertEqual('Bearer synthetic-workload-token',observed[0][1])
@@ -184,3 +194,45 @@ class RuntimeTlsTests(unittest.TestCase):
             with self.assertRaisesRegex(GraphRefused,'CANDIDATE_MISMATCH'):reader(REQUEST)
         finally:
             endpoint.shutdown();endpoint.server_close();thread.join(3)
+
+    def test_two_control_origins_keep_colliding_candidate_ids_and_credentials_separate(self):
+        observed=[]
+        def handler(tenant,token):
+            class CandidateHandler(http.server.BaseHTTPRequestHandler):
+                def log_message(self,*args):pass
+                def do_GET(self):
+                    observed.append((tenant,self.headers.get('Authorization')))
+                    if self.headers.get('Authorization')!='Bearer '+token:
+                        self.send_error(403);return
+                    value=dict(tenantId=tenant,profileId=REQUEST['profileId'],profileDigest=REQUEST['profileDigest'],
+                        workflowId=REQUEST['workflowId'],generation=0,
+                        graph={**installed_selection(),'config':spec()},agentIds=[])
+                    body=json.dumps(value).encode()
+                    self.send_response(200);self.send_header('Content-Type','application/json')
+                    self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+            return CandidateHandler
+        endpoints=[];threads=[];readers={}
+        try:
+            for tenant in ('tenant-a','tenant-b'):
+                token='synthetic-'+tenant
+                endpoint=http.server.ThreadingHTTPServer(('127.0.0.1',0),handler(tenant,token))
+                context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.load_cert_chain(str(self.home/'localhost.crt'),str(self.home/'localhost.key'))
+                endpoint.socket=context.wrap_socket(endpoint.socket,server_side=True)
+                thread=threading.Thread(target=endpoint.serve_forever,daemon=True);thread.start()
+                endpoints.append(endpoint);threads.append(thread)
+                path=self.home/(tenant+'.token');path.write_text(token)
+                readers[tenant]=dict(origin='https://localhost:'+str(endpoint.server_port),tokenFile=str(path))
+            client=ControlCandidates(readers,ca_file=str(self.home/'ca.crt'))
+            for tenant in readers:
+                self.assertEqual(tenant,client({**REQUEST,'tenantId':tenant}).tenant_id)
+            self.assertEqual([('tenant-a','Bearer synthetic-tenant-a'),('tenant-b','Bearer synthetic-tenant-b')],observed)
+            with self.assertRaisesRegex(GraphRefused,'TENANT_REFUSED'):
+                client({**REQUEST,'tenantId':'tenant-c'})
+            self.assertEqual(2,len(observed))
+            wrong=deepcopy(readers);wrong['tenant-b']['tokenFile']=readers['tenant-a']['tokenFile']
+            with self.assertRaisesRegex(GraphRefused,'CANDIDATE_UNAVAILABLE'):
+                ControlCandidates(wrong,ca_file=str(self.home/'ca.crt'))({**REQUEST,'tenantId':'tenant-b'})
+        finally:
+            for endpoint in endpoints:endpoint.shutdown();endpoint.server_close()
+            for thread in threads:thread.join(3)

@@ -76,8 +76,8 @@ def provision(payload):
     private(runtime/'credential-status.json',json.dumps({'expiresAtUnixMs':payload['expiresAtUnixMs']}))
     control=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL','https://localhost:8443')
     gateway=os.environ.get('TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL','https://localhost:8443')
-    graph=dict(controlOrigin=control,controlCaFile='/installation/gateway-ca.crt',
-        readers={payload['tenantId']:'/installation/worker.token'},host='0.0.0.0',port=19460,
+    graph=dict(controlCaFile='/installation/gateway-ca.crt',
+        readers={payload['tenantId']:dict(origin=control,tokenFile='/installation/worker.token')},host='0.0.0.0',port=19460,
         certificate='/installation/server.crt',key='/installation/server.key',
         clientCa='/installation/ca.crt',clientNames=['workflow-control'])
     private(runtime/'graph.json',json.dumps(graph))

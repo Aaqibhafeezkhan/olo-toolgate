@@ -1,10 +1,17 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # OLO bots
 
+For incident analysis and handover across independently configured tenants, use
+[tenant incident triage](configurations/tenant-incident-triage/README.md).
+
+Select **M** for the existing upstream MCP proxy setup guide. After infrastructure
+startup, register and review your actual upstream in the tenant console. The menu
+option displays instructions; it does not register the server.
+
 ## Quick demo setup
 
 From the repository root, run `bot\start.bat` on Windows or `sh bot/start.sh` on
-Linux/macOS. This starts the published community installation and offers all ten
+Linux/macOS. This starts the published community installation and offers all supplied
 bots from [AutoConfigure.yaml](AutoConfigure.yaml). The menu defaults to **0 None**.
 Enter **2,3** to install and configure both Ollama summary and multi-agent incident;
 when setup reports that all selected bots are ready, sign in, open **Bots** and
@@ -12,8 +19,15 @@ use **Run**. There is no separate import, model-key, device-group or publish ste
 for a successfully configured demo. File/log bots wait for their watchers too;
 their guides below explain how to supply sample input.
 
+The incident-triage option is in the same menu as other bots. For a newly added
+configuration not yet present in published release assets, build it locally and
+pass its single-inventory directory with `-BundlesDir`; see
+[tenant incident triage](configurations/tenant-incident-triage/README.md).
+
 Setup prepares local models automatically for selected standard demos and asks
-for optional OpenRouter and cloud tracing credentials. Empty answers keep saved
+for OpenRouter and optional cloud tracing credentials. The six configurations
+covering the [five use cases](../plan.md) actively use QLoRA in Ollama, lightweight
+Qwen in Ollama, then OpenRouter premium, and require its scoped key. Empty answers keep saved
 values. The local LangGraph runtime receives its service token from Control;
 it needs no cloud LangGraph API key. See the
 [quick-start prerequisites](../README.md#try-the-standard-demo-bots) and
@@ -62,10 +76,16 @@ Use sample data first and review AI-generated answers before relying on them.
 | [native-log](configurations/native-log/README.md#beginner-walkthrough-no-programming-experience-needed) | A device-log demonstration: reacts to two ERROR/FATAL lines in a minute and writes a result while leaving the log in place. |
 | [hotswap-demo-a](configurations/hotswap-demo-a/README.md#beginner-walkthrough-no-programming-experience-needed) | Demonstrates version A of a file-summary bot using inbox A and output A. |
 | [hotswap-demo-b](configurations/hotswap-demo-b/README.md#beginner-walkthrough-no-programming-experience-needed) | Demonstrates switching that same bot to version B with inbox B and output B. A and B replace one another. |
+| [tenant-incident-triage](configurations/tenant-incident-triage/README.md) | Classifies an incident and produces a handover with two agents; export saved changes and import independently into other tenants. |
+| [device-file-processing](configurations/device-file-processing/README.md) | Processes approved device input, writes a summary and archives the unchanged source. |
+| [governed-file-processing](configurations/governed-file-processing/README.md) | Scoped file processing for allowed/denied ordinary-user authority checks. |
+| [publication-switch-a](configurations/publication-switch-a/README.md) | First publication of a file-processing bot. |
+| [publication-switch-b](configurations/publication-switch-b/README.md) | Alternative publication of the same bot with separate input/output paths. |
+| [portable-summary](configurations/portable-summary/README.md) | Text-only summarization for preserving a customized export across installations. |
 
 Each linked README has a separate beginner section with the bot's purpose,
 release asset to download, device groups when needed, exact sample and expected result.
-The common steps below are maintained once for all ten bots. Complete setup
+The common steps below are maintained once for all bots. Complete setup
 once, then return to your chosen bot's beginner section.
 After your first successful run, follow
 [Adapt a bot to your use case with monitoring](../docs/help/tune-bots.md)
@@ -471,7 +491,7 @@ D:\git\olo-toolgate\bot\build.bat
 D:\git\olo-toolgate\bot\build.bat --configuration text-summary
 ```
 
-With no arguments, `build.bat` builds **all ten configurations locally** into
+With no arguments, `build.bat` builds **all configurations locally** into
 `D:\git\olo-toolgate\bot\bin` (or this checkout's `bot/bin` when cloned elsewhere).
 Upload each resulting `.olo` through **Bots → Import bot .olo** on a fresh
 setup supporting the current bundle/package contracts. Bundles carry their exact
@@ -549,10 +569,12 @@ version inventory as release assets. Publication rechecks source/version,
 configuration hashes and the full embedded package inventory rather than
 rebuilding profiles during promotion.
 
-The seven file examples use the real OLO QLoRA model first for file agents,
-then lightweight Ollama on inference failure. Other agents use the lightweight
-model; OpenRouter remains unattached standby. The three text-only examples use
-lightweight Ollama. Each source README contains exact input and output commands.
+The earlier file examples use QLoRA first for file agents, then lightweight
+Ollama on inference failure, with premium left unattached. The six configurations
+for the five use cases above actively order QLoRA, lightweight Ollama and
+OpenRouter premium for both agent groups and the workflow ceiling. They require
+the OpenRouter secret and approved origin before activation. Each bot README
+defines its inputs, outputs and destination prerequisites.
 
 For a multi-agent demonstration, build/import
 [`multiagent-incident`](configurations/multiagent-incident/README.md). One agent

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "governed-file-processing-dispatch",
+    "assignment": "governed-file-processing-watch",
+    "subscription": "governed-file-processing-watch-events",
+    "assignmentSpec": {
+      "trigger": "examples.hotfolder-watch/new-file",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "governed-file-processing-ReadAndWriteDeviceGroup"
+        ]
+      },
+      "config": {
+        "folder": "governed-file-processing/inbox",
+        "extension": ".txt"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "governed-file-processing-watch"
+        ]
+      },
+      "filter": "event.type == 'examples.files.observed.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

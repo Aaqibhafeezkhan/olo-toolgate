@@ -100,14 +100,23 @@ Weights are installation artifacts and are never embedded in `.olo`.
 
 ## Attach OpenRouter later
 
-Every supplied bot declares `premium-openrouter` at `https://openrouter.ai`,
+Supplied bot configurations declare `premium-openrouter` at `https://openrouter.ai`,
 model ID `openai/gpt-4.1-mini`, with vault reference `openrouter-key`.
-`premium-standby` has `standby: true` and is unattached: no key is required, no premium request is sent
-and local failure cannot silently cause paid usage.
+The earlier local-first configurations keep `premium-standby` unattached: no
+premium key or request is required by that default.
 
-When explicitly needed, choose your provider's current model ID, create a key at
+`tenant-incident-triage`, `device-file-processing`, `governed-file-processing`,
+`publication-switch-a`, `publication-switch-b` and `portable-summary` use an
+**active three-tier sequence** in both agent groups and the workflow ceiling:
+QLoRA in Ollama, lightweight Qwen in Ollama, then OpenRouter premium. These bots
+require both scoped model secrets and both approved HTTPS provider origins before
+activation. A blank premium key does not silently detach the third candidate.
+Each request uses candidates only as needed under the failure rules below;
+three configured tiers do not mean three provider calls on every request.
+
+For either policy, choose your provider's current model ID, create a key at
 [OpenRouter keys](https://openrouter.ai/settings/keys), and store it in the
-console vault with the deployment's tool/device scope. Add `premium-openrouter`
+console vault with the deployment's tool/device scope. For an unattached default, add `premium-openrouter`
 after the local candidate in the intended agent's group **and** to
 `local-ceiling`. Ensure the service group has `model.infer` for the chosen agent
 group. Add `https://openrouter.ai` to `TOOLGATE_WORKFLOW_MODEL_ORIGINS` in

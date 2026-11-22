@@ -2,6 +2,14 @@
 
 Use a persisted default tenant for a local evaluation, and explicit tenant provisioning for shared subdomains. Every stored tenant identity is a canonical UUID string. `quickstart`, `default` and customer names are aliases; hostnames resolve to the registered UUID. Adding a DNS record never creates a tenant.
 
+The [Docker development wrapper](../../deploy/docker/multitenant/README.md) places
+shared PostgreSQL/Control and dedicated tenant execution services under
+`deploy/docker/multitenant/dev`, with independent protected custody. Its two local
+tenant console ports do not replace hostname registration or authentication.
+Use matching rebuilt runtime/Quickstart images for the per-tenant graph-reader
+origin contract. The wrapper is not a new qualification record; execute the
+source-bound runtime and customized-bot transfer checks before claiming readiness.
+
 | Deployment | Database | Execution boundary |
 | --- | --- | --- |
 | Local Quickstart | SQLite, or explicitly configured PostgreSQL | One evaluation composition; no HA claim |

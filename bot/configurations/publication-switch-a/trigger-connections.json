@@ -1,0 +1,32 @@
+[
+  {
+    "id": "publication-switch-a-dispatch",
+    "assignment": "publication-switch-a-watch",
+    "subscription": "publication-switch-a-events",
+    "assignmentSpec": {
+      "trigger": "examples.hotfolder-watch/new-file",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "publication-switch-ReadAndWriteDeviceGroup"
+        ]
+      },
+      "config": {
+        "folder": "publication-switch/inbox-a",
+        "extension": ".txt"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "publication-switch-a-watch"
+        ]
+      },
+      "filter": "event.type == 'examples.files.observed.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

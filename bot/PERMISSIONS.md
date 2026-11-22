@@ -59,6 +59,8 @@ partial grants are automatically combined into a larger cross-product permission
 
 | Configuration | Profile / workflow ID | Entry agents | Device/tool work |
 |---|---|---|---|
+| [device-file-processing](configurations/device-file-processing/README.md) | `device-file-processing` / `device-file-processing` | `device-file-processing-langchain-linux-agent` | File tools and watcher |
+| [governed-file-processing](configurations/governed-file-processing/README.md) | `governed-file-processing` / `governed-file-processing` | `governed-file-processing-langchain-linux-agent` | File tools and watcher |
 | [hotswap-demo-a](configurations/hotswap-demo-a/README.md) | `hotswap-demo` / `hotswap-demo` | `hotswap-langchain-linux-agent` | File tools and watcher |
 | [hotswap-demo-b](configurations/hotswap-demo-b/README.md) | `hotswap-demo` / `hotswap-demo` | `hotswap-langchain-linux-agent` | File tools and watcher |
 | [interactive-summary](configurations/interactive-summary/README.md) | `interactive-summary` / `interactive-summary` | `interactive-summarizer` | Text/models only |
@@ -68,6 +70,10 @@ partial grants are automatically combined into a larger cross-product permission
 | [native-hotfolder](configurations/native-hotfolder/README.md) | `native-hotfolder` / `native-hotfolder` | `native-hotfolder-langchain-linux-agent` | File tools and watcher |
 | [native-log](configurations/native-log/README.md) | `native-log` / `native-log` | `native-log-langchain-linux-agent` | File tools and watcher |
 | [ollama-summary](configurations/ollama-summary/README.md) | `ollama-summary` / `ollama-summary` | `ollama-summarizer` | Text/models only |
+| [portable-summary](configurations/portable-summary/README.md) | `portable-summary` / `portable-summary` | `portable-summary-agent` | Text/models only |
+| [publication-switch-a](configurations/publication-switch-a/README.md) | `publication-switch` / `publication-switch` | `publication-switch-langchain-linux-agent` | File tools and watcher |
+| [publication-switch-b](configurations/publication-switch-b/README.md) | `publication-switch` / `publication-switch` | `publication-switch-langchain-linux-agent` | File tools and watcher |
+| [tenant-incident-triage](configurations/tenant-incident-triage/README.md) | `tenant-incident-triage` / `tenant-incident-triage` | `tenant-incident-triage-analyzer` | Text/models only |
 | [text-summary](configurations/text-summary/README.md) | `text-summary` / `text-summary` | `text-summary-langchain-linux-agent` | File tools and watcher |
 
 ## Installation requirements shared by the examples
@@ -92,6 +98,42 @@ Use separately scoped devices/roots when bots must not share file access.
 `hotswap-demo-a` and `hotswap-demo-b` intentionally share IDs and runtime groups.
 Publishing B changes new admissions; it does not move A's files or replace human
 permissions. Existing runs retain their pinned graph and admitted ceiling.
+
+## device-file-processing
+
+[Bot instructions](configurations/device-file-processing/README.md) · [Bot definition](configurations/device-file-processing/bot.json) · [Directory grants/resources](configurations/device-file-processing/referenced-config.json)
+
+- Workflow execution/observation resource: `workflow:device-file-processing`.
+- Workflow service resources: `workflow-group:device-file-processing`.
+- Human agent execution resources: `agent:device-file-processing-langchain-linux-agent`, `agent:device-file-processing-text-summarizer`.
+- Bound Agent Groups: `device-file-processing-langchain-linux-agents`, `device-file-processing-summary-agents`.
+- Model inference resources: `model-group:device-file-processing-general-models`, `model-group:device-file-processing-hotfolder-models`, `model-group:device-file-processing-local-ceiling`.
+- Service/capability source grants to cover: `device-file-processing-configured-workflow-service`, `device-file-processing-langchain-linux-capability`, `device-file-processing-langchain-linux-service`.
+- Declared reachable model deployments: `device-file-processing-local-lightweight → qwen3:0.6b`, `device-file-processing-local-qlora → olo-qlora-hotfolder:e376fb40`, `device-file-processing-premium-openrouter → openai/gpt-4.1-mini`.
+- Installation model secret references: `ollama-local-key`, `openrouter-key`.
+- Packages: `examples.hotfolder-watch@0.1.0`, `examples.hotfolder@0.1.0`.
+- Tool IDs: `examples.hotfolder/move`, `examples.hotfolder/read_text`, `examples.hotfolder/write_text`.
+- Execution binding `device-file-processing-langchain-linux-binding`: Tool Group `langchain-package-tools`, Device Group `device-file-processing-langchain-linux-devices`, action(s) `invoke`.
+- Watcher `device-file-processing-watch`: Device Group(s) `device-file-processing-ReadAndWriteDeviceGroup`; configuration `{"folder":"device-file-processing/inbox","extension":".txt"}`.
+- Graph file paths: `device-file-processing/processed/source.txt`, `device-file-processing/summaries/result.json`, `input path resolved from {"$path":"/message"}`.
+
+## governed-file-processing
+
+[Bot instructions](configurations/governed-file-processing/README.md) · [Bot definition](configurations/governed-file-processing/bot.json) · [Directory grants/resources](configurations/governed-file-processing/referenced-config.json)
+
+- Workflow execution/observation resource: `workflow:governed-file-processing`.
+- Workflow service resources: `workflow-group:governed-file-processing`.
+- Human agent execution resources: `agent:governed-file-processing-langchain-linux-agent`, `agent:governed-file-processing-text-summarizer`.
+- Bound Agent Groups: `governed-file-processing-langchain-linux-agents`, `governed-file-processing-summary-agents`.
+- Model inference resources: `model-group:governed-file-processing-general-models`, `model-group:governed-file-processing-hotfolder-models`, `model-group:governed-file-processing-local-ceiling`.
+- Service/capability source grants to cover: `governed-file-processing-configured-workflow-service`, `governed-file-processing-langchain-linux-capability`, `governed-file-processing-langchain-linux-service`.
+- Declared reachable model deployments: `governed-file-processing-local-lightweight → qwen3:0.6b`, `governed-file-processing-local-qlora → olo-qlora-hotfolder:e376fb40`, `governed-file-processing-premium-openrouter → openai/gpt-4.1-mini`.
+- Installation model secret references: `ollama-local-key`, `openrouter-key`.
+- Packages: `examples.hotfolder-watch@0.1.0`, `examples.hotfolder@0.1.0`.
+- Tool IDs: `examples.hotfolder/move`, `examples.hotfolder/read_text`, `examples.hotfolder/write_text`.
+- Execution binding `governed-file-processing-langchain-linux-binding`: Tool Group `langchain-package-tools`, Device Group `governed-file-processing-langchain-linux-devices`, action(s) `invoke`.
+- Watcher `governed-file-processing-watch`: Device Group(s) `governed-file-processing-ReadAndWriteDeviceGroup`; configuration `{"folder":"governed-file-processing/inbox","extension":".txt"}`.
+- Graph file paths: `governed-file-processing/processed/source.txt`, `governed-file-processing/summaries/result.json`, `input path resolved from {"$path":"/message"}`.
 
 ## hotswap-demo-a
 
@@ -243,6 +285,72 @@ permissions. Existing runs retain their pinned graph and admitted ceiling.
 - Service/capability source grants to cover: `ollama-summary-service`.
 - Declared reachable model deployments: `ollama-summary-local-lightweight → qwen3:0.6b`, `ollama-summary-local-qlora → olo-qlora-hotfolder:e376fb40`.
 - Installation model secret references: `ollama-local-key`.
+- Tool packages, tool-execution devices and file paths: none in this configuration.
+- Trigger assignments: none.
+
+## portable-summary
+
+[Bot instructions](configurations/portable-summary/README.md) · [Bot definition](configurations/portable-summary/bot.json) · [Directory grants/resources](configurations/portable-summary/referenced-config.json)
+
+- Workflow execution/observation resource: `workflow:portable-summary`.
+- Workflow service resources: `workflow-group:portable-summary`.
+- Human agent execution resources: `agent:portable-summary-agent`.
+- Bound Agent Groups: `portable-summary-agents`.
+- Model inference resources: `model-group:portable-summary-general-models`, `model-group:portable-summary-local-ceiling`.
+- Service/capability source grants to cover: `portable-summary-service`.
+- Declared reachable model deployments: `portable-summary-local-lightweight → qwen3:0.6b`, `portable-summary-local-qlora → olo-qlora-hotfolder:e376fb40`, `portable-summary-premium-openrouter → openai/gpt-4.1-mini`.
+- Installation model secret references: `ollama-local-key`, `openrouter-key`.
+- Tool packages, tool-execution devices and file paths: none in this configuration.
+- Trigger assignments: none.
+
+## publication-switch-a
+
+[Bot instructions](configurations/publication-switch-a/README.md) · [Bot definition](configurations/publication-switch-a/bot.json) · [Directory grants/resources](configurations/publication-switch-a/referenced-config.json)
+
+- Workflow execution/observation resource: `workflow:publication-switch`.
+- Workflow service resources: `workflow-group:publication-switch`.
+- Human agent execution resources: `agent:publication-switch-langchain-linux-agent`, `agent:publication-switch-text-summarizer`.
+- Bound Agent Groups: `publication-switch-langchain-linux-agents`, `publication-switch-summary-agents`.
+- Model inference resources: `model-group:publication-switch-a-general-models`, `model-group:publication-switch-a-hotfolder-models`, `model-group:publication-switch-a-local-ceiling`.
+- Service/capability source grants to cover: `publication-switch-configured-workflow-service`, `publication-switch-langchain-linux-capability`, `publication-switch-langchain-linux-service`.
+- Declared reachable model deployments: `publication-switch-a-local-lightweight → qwen3:0.6b`, `publication-switch-a-local-qlora → olo-qlora-hotfolder:e376fb40`, `publication-switch-a-premium-openrouter → openai/gpt-4.1-mini`.
+- Installation model secret references: `ollama-local-key`, `openrouter-key`.
+- Packages: `examples.hotfolder-watch@0.1.0`, `examples.hotfolder@0.1.0`.
+- Tool IDs: `examples.hotfolder/move`, `examples.hotfolder/read_text`, `examples.hotfolder/write_text`.
+- Execution binding `publication-switch-langchain-linux-binding`: Tool Group `langchain-package-tools`, Device Group `publication-switch-langchain-linux-devices`, action(s) `invoke`.
+- Watcher `publication-switch-a-watch`: Device Group(s) `publication-switch-ReadAndWriteDeviceGroup`; configuration `{"folder":"publication-switch/inbox-a","extension":".txt"}`.
+- Graph file paths: `input path resolved from {"$path":"/message"}`, `publication-switch/processed/source-a.txt`, `publication-switch/summaries/summary-a.txt`.
+
+## publication-switch-b
+
+[Bot instructions](configurations/publication-switch-b/README.md) · [Bot definition](configurations/publication-switch-b/bot.json) · [Directory grants/resources](configurations/publication-switch-b/referenced-config.json)
+
+- Workflow execution/observation resource: `workflow:publication-switch`.
+- Workflow service resources: `workflow-group:publication-switch`.
+- Human agent execution resources: `agent:publication-switch-langchain-linux-agent`, `agent:publication-switch-text-summarizer`.
+- Bound Agent Groups: `publication-switch-langchain-linux-agents`, `publication-switch-summary-agents`.
+- Model inference resources: `model-group:publication-switch-b-general-models`, `model-group:publication-switch-b-hotfolder-models`, `model-group:publication-switch-b-local-ceiling`.
+- Service/capability source grants to cover: `publication-switch-configured-workflow-service`, `publication-switch-langchain-linux-capability`, `publication-switch-langchain-linux-service`.
+- Declared reachable model deployments: `publication-switch-b-local-lightweight → qwen3:0.6b`, `publication-switch-b-local-qlora → olo-qlora-hotfolder:e376fb40`, `publication-switch-b-premium-openrouter → openai/gpt-4.1-mini`.
+- Installation model secret references: `ollama-local-key`, `openrouter-key`.
+- Packages: `examples.hotfolder-watch@0.1.0`, `examples.hotfolder@0.1.0`.
+- Tool IDs: `examples.hotfolder/move`, `examples.hotfolder/read_text`, `examples.hotfolder/write_text`.
+- Execution binding `publication-switch-langchain-linux-binding`: Tool Group `langchain-package-tools`, Device Group `publication-switch-langchain-linux-devices`, action(s) `invoke`.
+- Watcher `publication-switch-b-watch`: Device Group(s) `publication-switch-ReadAndWriteDeviceGroup`; configuration `{"folder":"publication-switch/inbox-b","extension":".txt"}`.
+- Graph file paths: `input path resolved from {"$path":"/message"}`, `publication-switch/processed/source-b.txt`, `publication-switch/summaries/summary-b.txt`.
+
+## tenant-incident-triage
+
+[Bot instructions](configurations/tenant-incident-triage/README.md) · [Bot definition](configurations/tenant-incident-triage/bot.json) · [Directory grants/resources](configurations/tenant-incident-triage/referenced-config.json)
+
+- Workflow execution/observation resource: `workflow:tenant-incident-triage`.
+- Workflow service resources: `workflow-group:tenant-incident-triage`.
+- Human agent execution resources: `agent:tenant-incident-triage-analyzer`, `agent:tenant-incident-triage-handover`.
+- Bound Agent Groups: `tenant-tenant-incident-triage-analyzers`.
+- Model inference resources: `model-group:tenant-incident-triage-general-models`, `model-group:tenant-incident-triage-local-ceiling`.
+- Service/capability source grants to cover: `tenant-incident-triage-service`.
+- Declared reachable model deployments: `tenant-incident-triage-local-lightweight → qwen3:0.6b`, `tenant-incident-triage-local-qlora → olo-qlora-hotfolder:e376fb40`, `tenant-incident-triage-premium-openrouter → openai/gpt-4.1-mini`.
+- Installation model secret references: `ollama-local-key`, `openrouter-key`.
 - Tool packages, tool-execution devices and file paths: none in this configuration.
 - Trigger assignments: none.
 
