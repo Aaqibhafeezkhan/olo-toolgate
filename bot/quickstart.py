@@ -65,15 +65,24 @@ def selection(answer, rows):
 
 def choose(answer=None):
     rows = catalog()
+    def mcp_guide():
+        print('Govern existing upstream MCP tools: '+str(ROOT/'docs/gateway/mcp-proxy.md'))
+        print('After startup, register, scan, review and grant the actual HTTPS upstream in the tenant console. No MCP server is configured automatically.')
+        return []
+    if answer is not None and answer.strip().lower()=='m':return mcp_guide()
     if answer is not None: return selection(answer, rows)
     if not sys.stdin.isatty(): return []
     print('\nBots to install and configure:\n  (0) None [default]')
     for number, row in enumerate(rows, 1): print(f'  ({number}) {row["name"]}')
+    print('  (M) Govern existing upstream MCP tools [setup guide; no bot import]')
     print('File bots allocate this managed local device, create their demo folders, and')
     print('qualify its native filesystem tools for one day. Existing files are preserved.')
     print('A current tenant Super Admin can run all installed demos.')
     while True:
-        try: return selection(input('Select bots (for example 2,3) [0]: '), rows)
+        try:
+            answer=input('Select bots (for example 2,3), M for MCP setup, or 0 [0]: ')
+            if answer.strip().lower()=='m':return mcp_guide()
+            return selection(answer, rows)
         except Refused as error: print(str(error))
 
 
@@ -93,7 +102,7 @@ def prompt_credentials(stack, *, interactive=True):
     if not interactive: return updates, False
     print('\nCredentials: Enter keeps an existing value; empty optional providers stay disabled.')
     print('The local LangGraph service token is provisioned automatically by Control.')
-    value = getpass.getpass('OpenRouter API key (optional standby model; hidden): ').strip()
+    value = getpass.getpass('OpenRouter API key (required for selected three-tier bots; otherwise optional; hidden): ').strip()
     if value: updates['openrouter-key'] = value
     path = stack.HERE/'credentials/observability.json'
     settings = json.loads(path.read_text(encoding='utf-8-sig')) if path.exists() else {}
@@ -283,6 +292,16 @@ def configure_bot(stack, client, row, raw, credential_updates):
     def setup(_profile):
         nonlocal device
         existing = call(client, '/api/control/v1/vault')['items']
+        selected_groups={workflow['modelGroupId'] for workflow in profile['workflows']['workflows']}
+        selected_groups.update(agent['modelGroupId'] for agent in profile['workflows']['agentDefinitions'])
+        active={deployment for group in profile['workflows']['modelGroups']
+                if group['id'] in selected_groups and not group.get('standby') for deployment in group['deploymentIds']}
+        for deployment in profile['workflows']['modelDeployments']:
+            if deployment['id'] not in active or deployment['secretName']!='openrouter-key':continue
+            saved=any(item['name']=='openrouter-key' and item['toolGroupId']==deployment['toolGroupId']
+                      and item['deviceGroupId']==deployment['deviceGroupId'] for item in existing)
+            if not saved and not credential_updates.get('openrouter-key'):
+                raise Refused('Selected bot requires its scoped OpenRouter vault key; premium fallback was not silently disabled')
         for name, tool_group, device_group in sorted(scopes):
             value = credential_updates.get(name)
             saved = any(item['name'] == name and item['toolGroupId'] == tool_group

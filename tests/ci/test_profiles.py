@@ -73,8 +73,10 @@ class ProfileTests(unittest.TestCase):
             self.assertLessEqual(len(a),128)
             self.assertEqual(a,builder.workflow_version_id(identity,'hotswap-demo-a','1.0.0-demo.local'))
 
-    def test_all_public_bots_route_local_agents_and_keep_premium_unattached(self):
+    def test_public_bots_keep_their_declared_local_or_three_tier_model_order(self):
         memberships={}
+        three_tier={'tenant-incident-triage','device-file-processing','governed-file-processing',
+                    'publication-switch-a','publication-switch-b','portable-summary'}
         for folder in (ROOT/'bot/configurations').iterdir():
             if not folder.is_dir():continue
             profile=json.loads((folder/'bot.json').read_text(encoding='utf-8'))
@@ -85,15 +87,19 @@ class ProfileTests(unittest.TestCase):
             def logical(value):return value if folder.name.startswith('hotswap-demo-') else value.removeprefix(folder.name+'-')
             groups={logical(g['id']):[logical(x) for x in g['deploymentIds']] for g in config['modelGroups']}
             deployments={logical(m['id']):m for m in config['modelDeployments']}
-            self.assertEqual(['local-qlora','local-lightweight'],groups['hotfolder-models'])
-            self.assertEqual(['local-lightweight'],groups['general-models'])
+            tiered=folder.name in three_tier
+            expected=['local-qlora','local-lightweight','premium-openrouter']
+            self.assertEqual(expected if tiered else ['local-qlora','local-lightweight'],groups['hotfolder-models'])
+            self.assertEqual(expected if tiered else ['local-lightweight'],groups['general-models'])
             for workflow in config['workflows']:
                 self.assertNotIn('deployment',workflow)
-                self.assertNotIn('premium-openrouter',groups[logical(workflow['modelGroupId'])])
+                if tiered:self.assertEqual(expected,groups[logical(workflow['modelGroupId'])])
+                else:self.assertNotIn('premium-openrouter',groups[logical(workflow['modelGroupId'])])
                 tools={node['agentId'] for node in workflow['graph']['config']['nodes'] if node['kind']=='tool'}
                 for agent in config['agentDefinitions']:
                     self.assertEqual('hotfolder-models' if agent['agentId'] in tools else 'general-models',logical(agent['modelGroupId']))
-                    self.assertNotIn('premium-openrouter',groups[logical(agent['modelGroupId'])])
+                    if tiered:self.assertEqual(expected,groups[logical(agent['modelGroupId'])])
+                    else:self.assertNotIn('premium-openrouter',groups[logical(agent['modelGroupId'])])
                 scoped=builder.scope(profile,workflow,json.loads((folder/'trigger-connections.json').read_text(encoding='utf-8')))
                 self.assertIn('premium-openrouter',{logical(m['id']) for m in scoped['workflows']['modelDeployments']})
             self.assertEqual('olo-qlora-hotfolder:e376fb40',deployments['local-qlora']['modelId'])

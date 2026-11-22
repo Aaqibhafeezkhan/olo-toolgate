@@ -81,7 +81,9 @@ class PublishedQuickstartTests(unittest.TestCase):
             captured={}
             with patch.object(module,'Path',side_effect=lambda path:root/str(path).lstrip('/')),patch.object(module,'private',side_effect=lambda path,value,**kwargs:captured.update({Path(path).name:value})),patch.dict(os.environ,{'TOOLGATE_CONTROL_ENDPOINT_CONTROL_URL':'https://localhost:28450','TOOLGATE_CONTROL_ENDPOINT_GATEWAY_URL':'https://localhost:28451'}):
                 module.provision(dict(accessToken='fixture-token',tenantId='tenant-fixture',expiresAtUnixMs=123))
-            self.assertEqual('https://localhost:28450',json.loads(captured['graph.json'])['controlOrigin'])
+            graph=json.loads(captured['graph.json'])
+            self.assertNotIn('controlOrigin',graph)
+            self.assertEqual({'tenant-fixture':dict(origin='https://localhost:28450',tokenFile='/installation/worker.token')},graph['readers'])
             service=json.loads(captured['service.json']);self.assertEqual('https://localhost:28450',service['controlOrigin']);self.assertEqual('https://localhost:28451',service['gatewayOrigin'])
             self.assertNotIn('fixture-token',captured['service.json'])
 

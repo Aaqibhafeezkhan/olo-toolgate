@@ -213,8 +213,13 @@ python -m toolgate_runtime.graph_server --configuration /run/credentials/runtime
 ```
 
 The file declares `host`, `port`, server `certificate`/`key`, `clientCa`, allowed
-Control certificate `clientNames`, `controlOrigin`, `controlCaFile` and a `readers`
-map from tenant IDs to workload-token file paths. Paths and private credentials
+Control certificate `clientNames`, `controlCaFile` and a `readers`
+map from tenant IDs to objects containing an exact HTTPS `origin` and absolute
+`tokenFile` path. Each tenant's origin and credential are selected together from
+this operator-owned map, so distinct tenant subdomains or ports do not send a
+foreign token to one shared hostname. A build request cannot select a URL or
+provide a token. The obsolete single `controlOrigin`/token-path map is refused;
+use fresh installation configuration, without conversion. Paths and private credentials
 are supplied by the operator, outside workflow bundles. There is no anonymous
 or plain-HTTP mode. Use a dedicated service CA/client identity; do not publish
 this internal API as an unauthenticated Internet endpoint.

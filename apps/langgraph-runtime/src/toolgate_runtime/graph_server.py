@@ -104,7 +104,9 @@ def main():
     parser.add_argument('--configuration',type=Path,required=True,help='Installation-owned TLS and Control reader paths; never a workflow profile')
     args=parser.parse_args()
     config=json.loads(args.configuration.read_text(encoding='utf-8'),object_pairs_hook=_object)
-    runtime=GraphRuntime(ControlCandidates(config['controlOrigin'],config['readers'],ca_file=config['controlCaFile']),
+    if 'controlOrigin' in config:
+        raise ValueError('Configure an explicit origin per tenant reader')
+    runtime=GraphRuntime(ControlCandidates(config['readers'],ca_file=config['controlCaFile']),
         graph_directory=config.get('graphDirectory'))
     with server((config.get('host','127.0.0.1'),config['port']),runtime,
             certificate=config['certificate'],key=config['key'],client_ca=config['clientCa'],client_names=config['clientNames']) as instance:

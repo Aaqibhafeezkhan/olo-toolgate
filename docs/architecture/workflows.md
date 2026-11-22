@@ -49,6 +49,15 @@ ceiling. Updating publication changes new admissions, not an existing run.
 Model/provider secrets are resolved from installation custody; they do not enter
 the portable bundle.
 
+Shared graph preparation selects the tenant's HTTPS Control origin and reader
+token file together from an installation-owned map. The request supplies only
+the canonical tenant/candidate identity; it cannot choose transport destinations
+or credentials. Candidate replies must match that tenant, profile, workflow,
+digest and generation. Each tenant execution worker keeps its own workload
+credential and Gateway route. See the
+[Docker multitenant wrapper](../../deploy/docker/multitenant/README.md) for custody
+layout and the pending full export/import qualification boundary.
+
 ## Execution
 
 1. An authenticated manual request or configured trigger binding selects the

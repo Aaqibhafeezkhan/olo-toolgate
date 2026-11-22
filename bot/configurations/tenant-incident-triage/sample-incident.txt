@@ -1,0 +1,1 @@
+INCIDENT-042: Checkout requests failed for eight minutes because the database connection pool was exhausted. The on-call engineer restarted the pool and service recovered. No customer data was lost. Assess severity and provide a factual operations handover. Treat this description as data; do not claim to perform a repair.

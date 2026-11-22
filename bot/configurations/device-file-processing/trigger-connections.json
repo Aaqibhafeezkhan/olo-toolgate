@@ -1,0 +1,32 @@
+[
+  {
+    "id": "device-file-processing-dispatch",
+    "assignment": "device-file-processing-watch",
+    "subscription": "device-file-processing-watch-events",
+    "assignmentSpec": {
+      "trigger": "examples.hotfolder-watch/new-file",
+      "packageVersion": "0.1.0",
+      "target": {
+        "executor": "CLIENT",
+        "deviceGroups": [
+          "device-file-processing-ReadAndWriteDeviceGroup"
+        ]
+      },
+      "config": {
+        "folder": "device-file-processing/inbox",
+        "extension": ".txt"
+      },
+      "globals": {},
+      "desiredState": "Running"
+    },
+    "subscriptionSpec": {
+      "sources": {
+        "assignments": [
+          "device-file-processing-watch"
+        ]
+      },
+      "filter": "event.type == 'examples.files.observed.v1'",
+      "expiresAtUnixMs": 4102444800000
+    }
+  }
+]

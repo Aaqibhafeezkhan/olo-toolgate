@@ -1,0 +1,19 @@
+{
+  "host": "0.0.0.0",
+  "port": 19460,
+  "certificate": "/installation/server.crt",
+  "key": "/installation/server.key",
+  "clientCa": "/installation/ca.crt",
+  "clientNames": ["workflow-control"],
+  "controlCaFile": "/installation/control-ca.crt",
+  "readers": {
+    "10000000-0000-4000-8000-000000000001": {
+      "origin": "https://tenant-a.olo.test:18443",
+      "tokenFile": "/installation/reader-a.token"
+    },
+    "10000000-0000-4000-8000-000000000002": {
+      "origin": "https://tenant-b.olo.test:19443",
+      "tokenFile": "/installation/reader-b.token"
+    }
+  }
+}

@@ -20,7 +20,7 @@
     },
     {
       "id": "multiagent-incident",
-      "name": "multiagent-incident",
+      "name": "Multi-agent incident handover",
       "workflowId": "multiagent-incident",
       "requiresOllama": true,
       "directories": [],
@@ -52,7 +52,7 @@
     },
     {
       "id": "log-triage",
-      "name": "log-triage",
+      "name": "Scoped log triage (approved inputs and output)",
       "workflowId": "log-triage",
       "requiresOllama": true,
       "directories": [
@@ -65,7 +65,7 @@
     },
     {
       "id": "native-hotfolder",
-      "name": "native-hotfolder",
+      "name": "Governed device file processing",
       "workflowId": "native-hotfolder",
       "requiresOllama": true,
       "directories": [
@@ -77,7 +77,7 @@
     },
     {
       "id": "native-log",
-      "name": "native-log",
+      "name": "Native log investigation (enrolled device)",
       "workflowId": "native-log",
       "requiresOllama": true,
       "directories": [
@@ -90,7 +90,7 @@
     },
     {
       "id": "hotswap-demo-a",
-      "name": "hotswap-demo-a",
+      "name": "Bot publication switch - revision A",
       "workflowId": "hotswap-demo",
       "requiresOllama": true,
       "directories": [
@@ -102,7 +102,7 @@
     },
     {
       "id": "hotswap-demo-b",
-      "name": "hotswap-demo-b",
+      "name": "Bot publication switch - revision B",
       "workflowId": "hotswap-demo",
       "requiresOllama": true,
       "directories": [
@@ -110,6 +110,70 @@
         "processed",
         "summaries"
       ],
+      "logFiles": []
+    },
+    {
+      "id": "tenant-incident-triage",
+      "name": "Tenant incident triage (portable bot for independent tenants)",
+      "workflowId": "tenant-incident-triage",
+      "requiresOllama": true,
+      "directories": [],
+      "logFiles": []
+    },
+    {
+      "id": "device-file-processing",
+      "name": "Governed device file processing",
+      "workflowId": "device-file-processing",
+      "requiresOllama": true,
+      "directories": [
+        "device-file-processing/inbox",
+        "device-file-processing/processed",
+        "device-file-processing/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "governed-file-processing",
+      "name": "Authority enforcement with scoped file processing",
+      "workflowId": "governed-file-processing",
+      "requiresOllama": true,
+      "directories": [
+        "governed-file-processing/inbox",
+        "governed-file-processing/processed",
+        "governed-file-processing/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "publication-switch-a",
+      "name": "Publication switching - revision A",
+      "workflowId": "publication-switch",
+      "requiresOllama": true,
+      "directories": [
+        "publication-switch/inbox-a",
+        "publication-switch/processed",
+        "publication-switch/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "publication-switch-b",
+      "name": "Publication switching - revision B",
+      "workflowId": "publication-switch",
+      "requiresOllama": true,
+      "directories": [
+        "publication-switch/inbox-b",
+        "publication-switch/processed",
+        "publication-switch/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "portable-summary",
+      "name": "Portable summary across installations",
+      "workflowId": "portable-summary",
+      "requiresOllama": true,
+      "directories": [],
       "logFiles": []
     }
   ]

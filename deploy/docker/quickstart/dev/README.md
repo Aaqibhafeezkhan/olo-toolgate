@@ -132,7 +132,9 @@ sh start.sh --bots 0 --without-ollama --without-monitoring
 Noninteractive input defaults to `0 None` unless `--bots` is supplied. No
 credential prompt is attempted without a terminal. Required credentials must
 already exist; an absent prerequisite fails readiness. Standard demos use
-local Ollama and do not require an OpenRouter key. Selecting a file bot explicitly
+local Ollama. The new three-tier use cases additionally require a scoped
+OpenRouter key and the approved provider origin; earlier unattached defaults
+remain local-only. Selecting a file bot explicitly
 sets up this managed local device, unions its declared groups with existing
 membership, creates only that bot's demo directories/empty log, and qualifies its
 installed native file tools for one day. Existing inputs and results are kept;
@@ -142,7 +144,7 @@ Setup does not create human grants, copy an identity or change management roles.
 Other users continue to require explicit runtime grants.
 
 Secret prompts are hidden. Enter retains saved vault/collector values; a supplied
-new value replaces only that credential. OpenRouter remains standby until its
+new value replaces only that credential. For earlier unattached defaults, OpenRouter remains standby until its
 routing is explicitly attached. LangSmith, Langfuse and Phoenix credentials and
 project/endpoint fields configure the optional private collector. LangGraph's
 local service token is issued by the runtime-provisioning API, not requested
@@ -285,7 +287,9 @@ For another provider, configure its HTTPS origin/CA in local `installation.env`
 and its scoped secret in the Admin vault. Model IDs, ordered groups, agent
 selection, generation/reasoning settings and optional premium activation belong
 in bot JSON. See [model setup](../../../../docs/help/models.md). Premium OpenRouter
-is unattached standby and receives no automatic paid calls.
+is unattached in the earlier local-only defaults. The new three-tier bot groups
+actively include it after both local candidates and require its destination key
+and approved origin. Eligible provider failures can therefore cause paid calls.
 
 Installation environment changes require an explicit service reconfiguration;
 ordinary bot import does not. After editing `installation.env`, from this folder:

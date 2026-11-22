@@ -1,0 +1,1 @@
+INCIDENT-B: A disk-capacity alert was resolved by an operator removing temporary files.
