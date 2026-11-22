@@ -176,7 +176,7 @@ class TargetClaimsTest {
             grant=f.issue();claims=rig.signer.verifyEffect(grant.grant());f.send(grant,"handler");
             scenario.run();
         }finally{
-            try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var q=c.createStatement()){q.execute("DROP DATABASE "+database+" WITH (FORCE)");}
+            KillStorageTest.dropDatabase(base,password,database);
         }
     }
     @Test void currentPostgresRuntimeRolesRunTargetOwnershipRevocationRecoveryAndConflictCases()throws Exception{

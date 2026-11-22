@@ -15,6 +15,10 @@ the existing readiness budget; enrollment/profile readiness alone is insufficien
 Breaking builds require a fresh empty data directory or PostgreSQL database.
 Older stores and formats are rejected; there is no migration or conversion path.
 Current-format restart and recovery remain supported.
+The restart gate checks that an ordinary user's revoked HUMAN grant still
+denies discovery, invocation and saved-result retrieval after a fresh login.
+It separately checks the live Super Admin's tenant-wide human entitlement;
+the installation owner is not the revoked-user test identity.
 
 Build and verify with `python tools/quickstart/check.py --build`. Use `--image IMAGE`, `--postgresql`, `--no-browser` or `--client-assets VERIFIED_DIRECTORY` as needed. The isolated gate records installation, real native CSR/mTLS, verified disabled-user intake, independently reviewed grants, HUMAN/SERVICE/ASK effects, exact retry, revocation, reviewed import/shadow, restart and browser accessibility. Small-fixture latency is measured in `build/quickstart/smoke.json`; it is not an enterprise throughput promise.
 

@@ -145,7 +145,7 @@ class KillAuthorityTest {
             rig.operations=new EnterpriseOperations(rig.store,rig.graph.codec,rig.signer,rig.clock,"control","toolgate-client",60000,100);
             f.base.permits=new ServicePermits(rig.store,rig.graph.codec,rig.operations);f.prepare();
             scenario.run();
-        }finally{try(var c=java.sql.DriverManager.getConnection(base,"control_migrator",password);var q=c.createStatement()){q.execute("DROP DATABASE "+database+" WITH (FORCE)");}}
+        }finally{KillStorageTest.dropDatabase(base,password,database);}
     }
     @Test void postgresRuntimeRolesQualifyKillOrderingAndAttemptBindings()throws Exception{
         for(Scenario scenario:List.<Scenario>of(this::terminateCommittedBeforeConsumeRefusesAnAlreadySentGrant,

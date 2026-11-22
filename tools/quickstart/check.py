@@ -742,8 +742,14 @@ for p in Path('/proc').glob('[0-9]*/cmdline'):
                 assert time.monotonic()<deadline,'Gateway did not rejoin the restarted fixture'
                 time.sleep(.25)
         admin=ok(api('/api/quickstart/v1/login',body={'username':'admin','password':passwords['admin']},method='POST'))['accessToken']
+        human=ok(api('/api/quickstart/v1/login',body={'username':'reviewer-1','password':passwords['reviewer-1']},method='POST'))['accessToken']
         assert ok(api('/api/control/v1/access/status',admin))['authorizationEpoch']>=authority['authorizationEpoch']
-        assert catalog(admin)==set()
+        # The revoked ordinary user stays denied; the live Super Admin retains
+        # its separate tenant-wide HUMAN entitlement across restart.
+        assert catalog(human)==set()
+        assert hello_tools<=catalog(admin)
+        assert invoke(args,key)[0]==403
+        assert api('/api/control/v1/access/human/invocations/'+invocation['id']+'/result',human)[0]==403
         assert ok(api('/api/control/v1/grants/'+grant['id'],admin))['enabled'] is False
         mark('restart preserves identity/key/revocation/monotonic epoch/no installation reseeding')
         if gateway_image and not browser:
