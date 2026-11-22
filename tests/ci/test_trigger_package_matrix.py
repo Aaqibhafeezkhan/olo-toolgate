@@ -15,11 +15,56 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TriggerPackageMatrixTests(unittest.TestCase):
+    def test_dependency_preparation_resolves_every_package_without_running_checks(self):
+        entries=[dict(buildRoot='examples/java-tools',project='log-watch',packageId='examples.log-watch'),
+                 dict(buildRoot='tests/fixtures/trigger-packages/signal-watch',project='',packageId='acceptance.signal-watch')]
+        with patch.object(sys,'argv',['package_tests.py','--prepare-dependencies','--sdk-repo','build/sdk-repo']), \
+                patch.object(package_tests,'discover',return_value=entries),patch.object(package_tests,'gradle') as build:
+            package_tests.main()
+        self.assertEqual(2,build.call_count)
+        for call in build.call_args_list:
+            command,environment,output=call.args
+            self.assertTrue(command[-1].endswith(':toolgateResolveDependencies'))
+            self.assertIn('--no-configuration-cache',command)
+            self.assertNotIn('check',command)
+            self.assertEqual('mock',environment['TOOLGATE_TEST_PROVIDER_MODE'])
+        workflow=yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
+        producer=workflow['jobs']['trigger-package-sdk']
+        consumer=workflow['jobs']['trigger-package-tests']
+        self.assertEqual(producer['env']['GRADLE_USER_HOME'],consumer['env']['GRADLE_USER_HOME'])
+        self.assertTrue(any('--prepare-dependencies' in step.get('run','') and 'gradle-cache.tar.gz' in step['run'] for step in producer['steps']))
+        self.assertTrue(any('package_tests.py --offline' in step.get('run','') and 'tar -xzf' in step['run'] for step in consumer['steps']))
+        restore=next(step for step in producer['steps'] if step.get('id')=='trigger-cache')
+        save=next(step for step in producer['steps'] if step.get('name')=='Save successfully prepared producer dependencies')
+        self.assertIn('actions/cache/restore@',restore['uses'])
+        self.assertIn('actions/cache/save@',save['uses'])
+        self.assertEqual(restore['with']['path'],save['with']['path'])
+        self.assertNotIn('always()',save['if'])
+        self.assertNotIn('gradle.properties',restore['with']['path'])
+        seed=next(step for step in producer['steps'] if step.get('name')=='Restore existing Java cache for a cold producer')
+        self.assertEqual('~/.gradle',seed['with']['path'])
+        self.assertIn('jdk21-temurin-gradle-',seed['with']['restore-keys'])
+        self.assertIn("cache-matched-key == ''",seed['if'])
+        copy=next(step for step in producer['steps'] if step.get('name')=='Seed only dependency files and metadata')
+        self.assertIn("source/'files-2.1'",copy['run'])
+        self.assertIn("source.glob('metadata-*')",copy['run'])
+        self.assertLess(producer['steps'].index(restore),next(i for i,step in enumerate(producer['steps']) if '--prepare-sdk' in step.get('run','')))
+
+    def test_offline_package_build_keeps_all_checks_and_stops_on_cache_failure(self):
+        entry=dict(buildRoot='examples/java-tools',project='log-watch',packageId='examples.log-watch',directory='examples/java-tools/log-watch')
+        with patch.object(package_tests,'gradle',side_effect=subprocess.CalledProcessError(1,['gradlew'])) as build:
+            with self.assertRaises(subprocess.CalledProcessError):
+                package_tests.run(entry,ROOT/'build/sdk-repo',ROOT/'target/debug/toolgate','test-version',offline=True)
+        command=build.call_args.args[0]
+        self.assertIn('--offline',command)
+        self.assertIn(':log-watch:check',command)
+        self.assertIn(':log-watch:toolgatePackage',command)
+
     def test_dependency_throttling_retries_a_real_failed_process_and_preserves_attempt_logs(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)
             command=[sys.executable,'-c',
-                "from pathlib import Path;import sys;p=Path(sys.argv[1]);n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));print('Could not resolve all files for configuration; Received status code 429 from server' if n==0 else 'BUILD SUCCESSFUL');sys.exit(1 if n==0 else 0)",str(root/'attempt')]
+                "from pathlib import Path;import sys;p=Path(sys.argv[1]);n=int(p.read_text()) if p.exists() else 0;p.write_text(str(n+1));print('Could not resolve all files for configuration; https://repo.maven.apache.org/maven2/example.pom Received status code 429 from server' if n==0 else 'BUILD SUCCESSFUL');sys.exit(1 if n==0 else 0)",str(root/'attempt')]
             delays=[]
             package_tests.gradle(command,{},root/'logs',sleep=delays.append)
             self.assertEqual('2',(root/'attempt').read_text())
@@ -28,7 +73,7 @@ class TriggerPackageMatrixTests(unittest.TestCase):
             self.assertIn('BUILD SUCCESSFUL',(root/'logs/gradle-2.log').read_text())
 
     def test_test_or_compilation_failures_are_not_retried_and_throttling_is_bounded(self):
-        throttle='Could not resolve all files for configuration; Received status code 429 from server'
+        throttle='Could not resolve all files for configuration; https://repo.maven.apache.org/maven2/example.pom Received status code 429 from server'
         for text,attempts in [(throttle,3),(throttle+'\n> Task :log-watch:test FAILED',1),
                 (throttle+'\nerror: compilation failed',1),('Received status code 503 from server',1)]:
             with self.subTest(text=text),tempfile.TemporaryDirectory() as temporary:
@@ -44,7 +89,7 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         with patch.object(sys,'argv',['package_tests.py','--prepare-sdk']),patch.object(package_tests,'gradle') as build:
             package_tests.main()
         command,environment,output=build.call_args.args
-        self.assertEqual(':publishJavaSdkLocally',command[-1])
+        self.assertEqual(':publishJavaGradleSdkLocally',command[-1])
         self.assertIn('tools/ci/sdk-isolation.init.gradle',command)
         self.assertEqual(ROOT/'build/trigger-package-sdk/logs',output)
         workflow=yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
@@ -52,6 +97,10 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         prepare=next(step for step in steps if step.get('name')=='Prepare the shared test SDK and offline package CLI once')
         self.assertIn('python tools/triggers/package_tests.py --prepare-sdk',prepare['run'])
         self.assertNotIn('./gradlew ',prepare['run'])
+        build_script=(ROOT/'build.gradle.kts').read_text()
+        scoped=build_script.split('tasks.register("publishJavaGradleSdkLocally") {',1)[1].split('tasks.register(',1)[0]
+        self.assertIn('filterNot { it == ":sdk-java-maven-plugin" }',scoped)
+        self.assertIn(':contracts-java:publishMavenJavaPublicationToSdkLocalRepository',scoped)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

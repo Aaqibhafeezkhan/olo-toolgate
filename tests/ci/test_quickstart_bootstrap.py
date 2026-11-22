@@ -154,6 +154,19 @@ class QuickstartBootstrapTests(unittest.TestCase):
 
 
 class QuickstartRestartTests(unittest.TestCase):
+    def test_reviewers_lose_super_admin_before_the_first_runtime_catalog_check(self):
+        source=ast.parse((ROOT/'tools/quickstart/check.py').read_text(encoding='utf-8'))
+        smoke=next(node for node in source.body if isinstance(node,ast.FunctionDef) and node.name=='smoke')
+        calls=[node for node in ast.walk(smoke) if isinstance(node,ast.Call) and isinstance(node.func,ast.Name)]
+        first_catalog=min(node.lineno for node in calls if node.func.id=='catalog')
+        owner_update=next(node for node in calls if node.func.id=='api' and len(node.args)>=4
+            and isinstance(node.args[0],ast.Constant) and node.args[0].value=='/api/control/v1/teams/installation-administrators'
+            and isinstance(node.args[3],ast.Constant) and node.args[3].value=='PUT')
+        self.assertLess(owner_update.lineno,first_catalog)
+        members=next(value for key,value in zip(owner_update.args[2].keys,owner_update.args[2].values)
+                     if isinstance(key,ast.Constant) and key.value=='userIds')
+        self.assertEqual(['admin'],ast.literal_eval(members))
+
     def test_external_gateway_refreshes_its_allowed_authority_after_port_reassignment(self):
         with tempfile.TemporaryDirectory() as temporary:
             data=Path(temporary);(data/'run').mkdir()

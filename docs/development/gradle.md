@@ -51,12 +51,39 @@ An unqualified task selector can configure unrelated subprojects while looking
 for matching tasks. The CI SDK stage also applies
 `tools/ci/sdk-isolation.init.gradle` to reject application/analysis plugin
 requests; Control and analysis builds retain their own plugins and gates.
+The trigger matrix uses `:publishJavaGradleSdkLocally`, which publishes the SDK
+libraries, contracts and Gradle plugin without building the unused Maven plugin.
+The full `:publishJavaSdkLocally` task and the Gradle/Maven SDK end-to-end gate
+still include Maven plugin publication and qualification.
 The Java SDK end-to-end and Java example scripts use the same root-qualified
 task and isolation guard. Their SDK bootstrap does not need the Control Plane's
 Quarkus plugin or its BOM; a transient lookup of that unrelated dependency must
 not be addressed by replaying tests or changing the pinned Quarkus version.
 
 ## Workspace Contracts
+
+### Maven Central resolution recovery
+
+`tools/ci/gradle_build.py` provides the shared recovery used by image builds,
+trigger SDK/package checks and Core MCP Java builds. It permits three attempts
+total, with 5- and 15-second delays. Verified false-negative metadata retries
+use `--refresh-dependencies`; HTTP 429 retries preserve the existing cache to
+avoid adding revalidation traffic while Central is throttling the runner.
+Only dependency-resolution HTTP 429 responses from Maven Central, or missing
+metadata whose exact coordinates are independently verified in Central POMs,
+qualify. Every reported missing coordinate must be verified (at most sixteen).
+The POM's artifact, group and version must match; unavailable or invalid metadata
+leaves the build failed. No version, lockfile or repository is changed.
+
+Classpath failures before Java compilation or SDK example execution can recover.
+Failed test tasks, compiler diagnostics, unrelated failed tasks and exhausted
+retries remain failures. Each attempt is retained as `gradle-<attempt>.log` in
+the caller's log directory. Core MCP keeps these logs beside its output directory,
+outside the packages copied into runtime images. A retry is build recovery;
+successful compilation, tests and package validation are still required.
+Offline builds fail immediately without metadata probes or retries. The trigger
+matrix [prepares and shares its dependency cache](../../tools/triggers/README.md#shared-sdk-preparation)
+once per run, then requires offline package checks.
 
 Default:
 

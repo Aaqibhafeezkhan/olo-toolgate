@@ -14,6 +14,8 @@ import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0,str(ROOT))
+from tools.ci import gradle_build
 CORE = ROOT / "core-mcp"
 
 
@@ -75,6 +77,7 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "build/core-mcp")
     parser.add_argument("--without-tests", action="store_true", help="Manual development packaging only; no Java test qualification")
     args = parser.parse_args()
+    logs = args.output.resolve().with_name(args.output.name + '-gradle-logs')
     packages = list(inventory(args.inventory))  # Validate every entry before any build.
     cli = args.cli.resolve(strict=True)
     env = dict(os.environ, TOOLGATE_CLI=str(cli))
@@ -85,7 +88,8 @@ def main():
     if any(p["sdk"] == "json" for p, _ in packages):
         prerequisites.append(":sdk-json:installDist")
     if prerequisites:
-        run([gradle, "--configure-on-demand", "--console=plain", *prerequisites], env)
+        gradle_build.build([str(gradle), "--configure-on-demand", "--console=plain", *prerequisites],
+                           logs/"sdk",cwd=ROOT,env=env)
     python_env = dict(env, TOOLGATE_PYTHON=sys.executable,
                       PYTHONPATH=str(ROOT / "tool-sdk/python-sdk/src") + os.pathsep + env.get("PYTHONPATH", ""))
     output = args.output.resolve()
@@ -93,8 +97,9 @@ def main():
     lock = {"schemaVersion": 1, "sdkVersion": (ROOT / "VERSION").read_text().strip(), "packages": []}
     for package, project in packages:
         if package["sdk"] == "java-gradle":
-            run([gradle, "-p", project, "--console=plain", "-PtoolgateSdkRepository=" + (ROOT / "build/sdk-repo").as_uri(),
-                 "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", *([] if args.without_tests else ["check"]), "toolgatePackage"], env)
+            gradle_build.build([str(gradle), "-p", str(project), "--console=plain", "-PtoolgateSdkRepository=" + (ROOT / "build/sdk-repo").as_uri(),
+                 "-PtoolgateSdkVersion=" + lock["sdkVersion"], "clean", *([] if args.without_tests else ["check"]), "toolgatePackage"],
+                 logs/package["id"],cwd=ROOT,env=env)
         elif package["sdk"] == "json":
             sdk = ROOT / "tool-sdk/json-sdk/build/install/toolgate-json-sdk/bin" / ("toolgate-json-sdk.bat" if os.name == "nt" else "toolgate-json-sdk")
             project = pinned_json_project(project, output / "projects" / package["project"], lock["sdkVersion"])

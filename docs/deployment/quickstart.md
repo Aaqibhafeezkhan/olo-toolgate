@@ -19,6 +19,10 @@ The restart gate checks that an ordinary user's revoked HUMAN grant still
 denies discovery, invocation and saved-result retrieval after a fresh login.
 It separately checks the live Super Admin's tenant-wide human entitlement;
 the installation owner is not the revoked-user test identity.
+The gate removes reviewer accounts from the Super Admin team before its first
+runtime catalog assertion, preserving the owner's membership. Both SQLite and
+PostgreSQL therefore exercise an ordinary user's missing-grant denial without
+depending on when newly deployed tools become visible.
 
 Build and verify with `python tools/quickstart/check.py --build`. Use `--image IMAGE`, `--postgresql`, `--no-browser` or `--client-assets VERIFIED_DIRECTORY` as needed. The isolated gate records installation, real native CSR/mTLS, verified disabled-user intake, independently reviewed grants, HUMAN/SERVICE/ASK effects, exact retry, revocation, reviewed import/shadow, restart and browser accessibility. Small-fixture latency is measured in `build/quickstart/smoke.json`; it is not an enterprise throughput promise.
 

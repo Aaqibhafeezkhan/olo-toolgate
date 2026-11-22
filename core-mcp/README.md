@@ -33,6 +33,11 @@ result with the canonical CLI, then writes packages and
 package/artifact digests. Build outputs never upload a package, create users,
 modify grants, install tools or activate a deployment profile.
 
+Java SDK preparation and Java package builds use the shared bounded
+[Maven Central resolution recovery](../docs/development/gradle.md#maven-central-resolution-recovery).
+Attempt logs live beside the output directory in `<output-name>-gradle-logs/`,
+separate from published archives and runtime-image package content.
+
 Add a project directory and an inventory entry to include another package.
 The supported adapters are `java-gradle`, `json` and `python`. Additional SDK languages
 require their shared adapter/runtime implementation before an inventory may
