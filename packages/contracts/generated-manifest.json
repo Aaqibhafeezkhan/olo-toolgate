@@ -7,7 +7,7 @@
     "packages/contracts/schemas/v1/control.schema.json": "afb1fe6351a8e592c51e216bb702f0a81da1a54739cedfaa641e62fe283e210b",
     "packages/contracts/schemas/v1/deployment.schema.json": "cd3bbc59d25050b3fd820cb2a635a73a9959f8260eda06a408646a5d52e4c7f1",
     "packages/contracts/schemas/v1/endpoint.schema.json": "41c0a52ed322855bb3017dc2a01526d88cd262617d797b72f55b72d6834f0f24",
-    "packages/contracts/schemas/v1/enterprise.schema.json": "57da0f58bc8c13217e66de3b8e7312af3361591a715e7145e8298fd3ed7b4aaf",
+    "packages/contracts/schemas/v1/enterprise.schema.json": "4dc3395c774737820ada436505a492c9f8c6893175f1b3fc2065e2cc69e04bae",
     "packages/contracts/schemas/v1/error.schema.json": "8c96d747e297adde54a12f5d094479ae6df6772df61eda4535572f5113cd9f7f",
     "packages/contracts/schemas/v1/execution.schema.json": "971ce434980977142da4cb09654f526a4f943be92b3d1214e3b678b877db8a23",
     "packages/contracts/schemas/v1/fleet.schema.json": "b5557d9166a76c7950e7767ec0a33552924fe399f2393968f3eab7a4534c01f1",
@@ -41,7 +41,7 @@
     "packages/contracts/schemas/v2/trigger.schema.json": "88202cc401b7544781501c360c12e5bf27192784fb27a556bebe89325e935226",
     "packages/contracts/schemas/v2/workflow-bundle.schema.json": "3fcaa2254b3284c64269e5fef362dd8b7d4e8dbd9d547ea44b3c89d0613cf391",
     "packages/contracts/schemas/v2/workflow-decision.schema.json": "f89d999aa3958a2b325fca073550fe77da3897d3e34d82f601c1f3689d9cf753",
-    "packages/contracts/schemas/v2/workflow.schema.json": "315c5d066a02a24f555ebb6d0c9c1887cbca22f1b381b2df8e785fd0a5aab0dd"
+    "packages/contracts/schemas/v2/workflow.schema.json": "831371183cccc7d69d54ef959dbedde8ac17960a24c5e58df62bef57c4814dbe"
   },
   "generatorSha256": "8b3bd483eb054fd38ad14efeae95a0d6d61f787a47004b9a8290164cb20deaff",
   "outputs": [

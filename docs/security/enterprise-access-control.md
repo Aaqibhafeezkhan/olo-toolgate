@@ -1,8 +1,10 @@
 # Enterprise access control
 
 Control evaluates current tenant identity, group grants, execution bindings,
-policy and request facts. Authentication, administrator access, ownership,
-installation and group membership do not supply missing runtime permission.
+policy and request facts. Live tenant Super Admin membership supplies
+Control-derived human runtime entitlements. Ordinary administrator access,
+authentication, ownership, installation and other group membership do not supply
+missing runtime permission.
 
 ## Entities and groups
 
@@ -22,7 +24,8 @@ enabling an identity does not authorize a call.
 A grant retains a complete tuple: tool-group scope, device-group scope, action,
 resource and conditions, together with its human/actor/service purpose. Do not
 flatten unrelated memberships into an accidental allow. Agent ownership is not
-delegation, and a management role is not an execution capability.
+delegation. Only the current tenant Super Admin classification carries human
+runtime authority; a workload never inherits that human entitlement.
 
 Tool Group to Device Group bindings constrain where a tool may execute. The
 actual caller, agent, tool and executor remain verified request facts; an event

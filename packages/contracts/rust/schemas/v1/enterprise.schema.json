@@ -1170,7 +1170,7 @@
     },
     "EnterpriseWitness": {
       "type": "object",
-      "description": "One complete path; Team and Agent Group identifiers cannot be mixed between witnesses.",
+      "description": "One complete tenant-scoped path; Team and Agent Group identifiers cannot be mixed between witnesses. A super-admin- prefixed grant identifier can denote a Control-derived live Super Admin entitlement rather than a persisted grant; its Team and current directory revision remain authoritative.",
       "additionalProperties": false,
       "properties": {
         "teamId": {
@@ -2607,7 +2607,7 @@
     "EnterpriseEffectiveMembership": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Current group membership provenance with intact grants; candidate grants still require the complete request evaluation.",
+      "description": "Current group membership provenance with intact persisted grants and Control-derived super-admin- entitlements for live tenant Super Admins. Derived entitlements are not stored directory grants. Candidate grants still require the complete request evaluation.",
       "properties": {
         "groupType": {
           "$ref": "enterprise.schema.json#/$defs/EnterpriseGroupType"

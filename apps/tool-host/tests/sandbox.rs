@@ -449,7 +449,8 @@ time.sleep(60)
             task.abort();
             assert!(pool.stop("stop").await);
         } else {
-            assert!(matches!(task.await.unwrap(), Ran::TimedOut));
+            let result = task.await.unwrap();
+            assert!(matches!(result, Ran::TimedOut), "{result:?}");
         }
         assert!(pool.available());
         assert_eq!(

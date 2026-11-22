@@ -36,20 +36,57 @@ cd deploy/docker/quickstart/dev
 sh start.sh
 ```
 
-The launcher asks separately about a local Ollama model service and an
-observability collector. Choose the services your installation needs. The
-[deployment guide](deploy/docker/quickstart/dev/README.md) covers unattended
-flags, CPU/GPU requirements, external model providers and private settings.
+### Try the standard demo bots
+
+For a first look, the launcher can install and configure ready-to-use demo bots
+for you. No application or bot compilation is needed. It offers a numbered menu
+from [bot/AutoConfigure.yaml](bot/AutoConfigure.yaml):
+
+| Choose | Demo | Try it with |
+|---|---|---|
+| `0` (default) | None: start a blank workspace | Import your own bot later |
+| `1` | Interactive summary | Paste a paragraph and get a short summary |
+| `2` | Ollama summary | Summarize text with the local model |
+| `3` | Multi-agent incident | Ask two agents to assess an incident and prepare a handover |
+| `4`–`8` | File and log demos | Watch sample files or logs and inspect the generated results |
+| `9` or `10` | Bot hotswap demo A or B | Explore two configurations of the same bot; choose one at a time |
+
+Enter **`2,3` to set up both bots in one run**. The launcher downloads their
+verified bundles from the release matching the running application images,
+prepares the local models, imports their configuration and publishes each bot
+after its readiness checks pass. File/log selections also prepare their local
+device, folders and watchers. The local `admin` has live tenant Super Admin
+authority to run the demos; other users need their own runtime grants.
+Wait for **All selected bots are ready to run**;
+a failed dependency stops setup and is not reported as success.
+
+The first local-model setup downloads several GB and can take time. Allow at
+least 8 GB of memory for model preparation. Ollama uses Docker NVIDIA GPU access
+when available and otherwise uses CPU, which can be slower.
+
+Credentials are requested during setup. Press **Enter** to reuse an existing
+credential. OpenRouter is optional standby; the standard local demos do not
+need a paid model key. LangSmith, Langfuse and Phoenix tracing are optional.
+The local LangGraph service token is provisioned automatically. Secrets stay in
+the installation's private custody and never enter bot bundles or the menu file.
+
+You can also start the same setup from the repository root with `bot\start.bat`
+on Windows, or `sh bot/start.sh` on Linux/macOS. The
+[deployment guide](deploy/docker/quickstart/dev/README.md#choose-demo-bots)
+covers unattended selection and standalone bot setup.
 
 1. Open **http://127.0.0.1:18090/console/**.
 2. Sign in as `admin`. Read the generated password from
    `credentials/admin/password.txt` inside the launcher directory.
-3. Import a built or released `.olo` bundle in **Bots**. Configure its model
-   credentials and review any device enrollment and required group assignments.
-4. Resolve the readiness checks, prepare and publish the bot, then use **Run**
-   or the trigger input described in its example README.
+3. Open **Bots**, choose an installed demo and click **Run**. For `2,3`, try:
+   “The database connection pool was exhausted. Restarting the pool restored
+   service. Summarize the incident and suggest an investigation.”
+4. Inspect its result and run history. For file/log bots, use the sample input
+   and output instructions in the [bot's guide](bot/README.md#first-time-users-choose-a-bot).
+   With `0 None`, import your own `.olo` and complete its readiness checks first.
 
-A fresh installation has no imported bot and no implicit runtime grants.
+A fresh installation with `0 None` has no imported bot. Its live tenant Super
+Admin has runtime authority; other users receive no runtime grants from startup.
 Restarts preserve credentials and data. Use matching image versions or digest
 pins; startup refreshes mutable development tags and rejects missing required
 image capabilities. Registry availability is not end-to-end qualification.
@@ -71,8 +108,9 @@ Bot / MCP client -> Gateway -> registered Tool Host or Device -> approved resour
 
 Control owns authorization and tenant state. Gateway authenticates and routes
 requests. Executors check Control-issued authority before protected effects;
-they run outside the Control process. Device approval, administrator access and
-package installation do not grant tool execution rights.
+they run outside the Control process. A live Super Admin has human runtime
+authority throughout its tenant. Ordinary administrator access, device approval
+and package installation do not grant tool execution rights.
 
 The local bot installation has three core services: Quickstart (Gateway,
 Control, console and SQLite), LangGraph runtime, and Device. Optional model and

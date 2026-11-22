@@ -5777,7 +5777,7 @@ pub struct WorkflowToolDecision {
     pub tool_id: String,
     pub arguments: std::collections::BTreeMap<String, serde_json::Value>,
 }
-/// Control-owned manual-run user and admitted resource ceiling; current grants and identity must still be checked. Never accepted from an external caller.
+/// Control-owned manual-run user and admitted resource ceiling, including a universal human/secret scope when admitted under live tenant Super Admin membership. Current grants or Super Admin membership and identity must still be checked. Never accepted from an external caller.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkflowUserAuthority {

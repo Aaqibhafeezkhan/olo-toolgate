@@ -51,6 +51,10 @@ An unqualified task selector can configure unrelated subprojects while looking
 for matching tasks. The CI SDK stage also applies
 `tools/ci/sdk-isolation.init.gradle` to reject application/analysis plugin
 requests; Control and analysis builds retain their own plugins and gates.
+The Java SDK end-to-end and Java example scripts use the same root-qualified
+task and isolation guard. Their SDK bootstrap does not need the Control Plane's
+Quarkus plugin or its BOM; a transient lookup of that unrelated dependency must
+not be addressed by replaying tests or changing the pinned Quarkus version.
 
 ## Workspace Contracts
 

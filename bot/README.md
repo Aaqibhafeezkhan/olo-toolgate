@@ -1,6 +1,47 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # OLO bots
 
+## Quick demo setup
+
+From the repository root, run `bot\start.bat` on Windows or `sh bot/start.sh` on
+Linux/macOS. This starts the published community installation and offers all ten
+bots from [AutoConfigure.yaml](AutoConfigure.yaml). The menu defaults to **0 None**.
+Enter **2,3** to install and configure both Ollama summary and multi-agent incident;
+when setup reports that all selected bots are ready, sign in, open **Bots** and
+use **Run**. There is no separate import, model-key, device-group or publish step
+for a successfully configured demo. File/log bots wait for their watchers too;
+their guides below explain how to supply sample input.
+
+Setup prepares local models automatically for selected standard demos and asks
+for optional OpenRouter and cloud tracing credentials. Empty answers keep saved
+values. The local LangGraph runtime receives its service token from Control;
+it needs no cloud LangGraph API key. See the
+[quick-start prerequisites](../README.md#try-the-standard-demo-bots) and
+[selection/credential details](../deploy/docker/quickstart/dev/README.md#choose-demo-bots).
+
+Each bot also has `quickstart/configure.bat` and `quickstart/configure.sh`.
+For example, from the repository root:
+
+```powershell
+.\bot\configurations\log-triage\quickstart\configure.bat
+```
+
+```sh
+sh bot/configurations/log-triage/quickstart/configure.sh
+```
+
+These entrypoints start/reuse the managed stack, configure that bot and stop on
+unresolved readiness. An external operator may pass `--origin`, `--token-file`
+and `--ca-file`; the token is read from its private file, never passed as a
+command-line secret. `--bundles-dir` selects an already downloaded inventory and
+its verified bundles. Without it, setup finds the release matching all three
+running application images. The catalog uses JSON flow syntax (valid YAML 1.2)
+so startup needs no host package installation. It lists bot IDs, labels and
+local folder prerequisites only; never put credentials there.
+
+The detailed manual walkthroughs below remain available for custom imports,
+provider changes and learning each configuration.
+
 ## First-time users: choose a bot
 
 No programming knowledge is needed to follow the Windows walkthroughs below.
@@ -53,13 +94,12 @@ and the same release downloads. Do not paste PowerShell commands into Bash.
    [Git Extensions](https://gitextensions.github.io/) using its **Download** link
    and follow its installer. It is optional; the commands below use Git directly.
    It is separate from Docker extensions and browser extensions.
-4. Before choosing local AI, check that this computer has an NVIDIA GPU with
-   working drivers and Docker GPU support. The supplied Ollama launcher requests
-   NVIDIA GPUs; this walkthrough does not provide an automatic CPU-only or Mac
-   GPU configuration. Allow several GB of downloads/disk and up to 8 GB of RAM
-   for the first model preparation. If this prerequisite is unavailable, have
-   an operator configure a [different model provider](../docs/help/models.md)
-   before proceeding to a run. Starting without Ollama alone does not supply AI.
+4. Allow several GB of downloads/disk and up to 8 GB of RAM for first model
+   preparation. The local Ollama launcher checks Docker NVIDIA GPU access and
+   uses it when available; otherwise it runs on CPU, which can be slower.
+   No host model installation is needed. Starting without Ollama requires an
+   already configured [different model provider](../docs/help/models.md);
+   omitting the service alone does not supply AI.
 
 ### 2. Download OLO and check Docker
 

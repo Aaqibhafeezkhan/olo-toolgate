@@ -8,7 +8,7 @@ The console consumes `AdminSession.permissions` and per-device `permissions` ret
 
 ## Role editor and scopes
 
-Management Roles show feature sections with action checkboxes. Each scope has a group boundary, selected groups, conditions and optional delegation ceilings. Global features require the permission over all four group dimensions. Super Admin checkboxes are checked and locked; the central resolver allows every known management permission for a live Super Admin. Unknown actions fail closed, including for Super Admin.
+Management Roles show feature sections with action checkboxes. Each scope has a group boundary, selected groups, conditions and optional delegation ceilings. Global features require the permission over all four group dimensions. Super Admin checkboxes are checked and locked; the central resolver allows every known management permission for a live Super Admin. Control also derives tenant-wide human runtime entitlements from that live role, shown as `super-admin-` scopes in inherited access. These derived scopes are not editable directory grants. Unknown management actions fail closed, including for Super Admin.
 
 `OWNED` grants device actions for associated devices in the configured placement group. `CURRENT` adds proof that the same device key belongs to the current console session. These scopes apply only to Device actions and require one explicit placement group. Multiple assigned roles combine grants; an unchecked box means that role grants no permission.
 

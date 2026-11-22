@@ -84,11 +84,8 @@ public final class WorkflowUserAccess {
     }
 
     public void observe(Directory directory, DirectoryService.Actor actor, WorkflowRunStore.QueuedRun run, String action, long now) {
-        if (run.userAuthority() == null) {
-            actor.requireAdmin();
-            if (!new ManagementAccess(codec).superAdministrator(directory, actor.userId())) throw ManagementAccess.denied();
-            return;
-        }
+        if (new ManagementAccess(codec).superAdministrator(directory, actor.userId())) return;
+        if (run.userAuthority() == null) throw ManagementAccess.denied();
         var authority = codec.model(run.userAuthority(), WorkflowUserAuthority.class);
         if (actor.userId() == null || !actor.userId().equals(authority.userId()) || !actor.id().equals(authority.principalId()))
             throw ManagementAccess.denied();
@@ -127,6 +124,7 @@ public final class WorkflowUserAccess {
 
     private List<EnterpriseScope> scopes(Directory directory, String user, EnterpriseGrantPurpose purpose, long now) {
         new ManagementAccess(codec).access(directory, user);
+        if (new ManagementAccess(codec).superAdministrator(directory, user)) return List.of(TenantSuperuser.scope());
         var teams = GroupGraph.memberships(directory, codec, Kind.USER, user, true);
         return grants(directory).stream().filter(g -> g.purpose() == purpose && sourced(directory, g, Kind.TEAM, teams))
             .map(ControlAccessGrant::scope).filter(s -> ManagementAccess.current(s.conditions(), now)
@@ -165,9 +163,8 @@ public final class WorkflowUserAccess {
         if (scopes.stream().noneMatch(s -> ManagementAccess.contains(unconditional(s), unconditional(required)))) throw ManagementAccess.denied();
     }
     private static void exact(List<EnterpriseScope> scopes, String action, String locator) {
-        if (scopes.stream().noneMatch(s -> s.toolGroups().all() && s.deviceGroups().all() && s.actions().contains(action)
-                && s.resources().stream().anyMatch(r -> r.kind() == ResourceKind.CUSTOM
-                    && r.match() == EnterpriseResourceMatch.EXACT && r.locator().equals(locator)))) throw ManagementAccess.denied();
+        if (scopes.stream().noneMatch(s -> s.toolGroups().all() && s.deviceGroups().all() && (s.allActions() || s.actions().contains(action))
+                && s.resources().stream().anyMatch(r -> EnterpriseEvaluator.resource(r, new ResourceDescriptor(ResourceKind.CUSTOM, locator))))) throw ManagementAccess.denied();
     }
     private static boolean overlap(EnterpriseScope a, EnterpriseScope b) {
         if (!a.allActions() && !b.allActions() && Collections.disjoint(a.actions(), b.actions())) return false;

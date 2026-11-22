@@ -5,7 +5,7 @@
 declare(strict_types=1);
 namespace OloLabs\ToolGate\Contracts\V2;
 
-/** Control-owned manual-run user and admitted resource ceiling; current grants and identity must still be checked. Never accepted from an external caller. */
+/** Control-owned manual-run user and admitted resource ceiling, including a universal human/secret scope when admitted under live tenant Super Admin membership. Current grants or Super Admin membership and identity must still be checked. Never accepted from an external caller. */
 final readonly class WorkflowUserAuthority implements \JsonSerializable {
     public function __construct(
         public string $userId,

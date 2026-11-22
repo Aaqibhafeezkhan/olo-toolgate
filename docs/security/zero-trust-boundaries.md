@@ -13,8 +13,10 @@ can create authority; kernel/runtime compromise invalidates host isolation.
 
 Gateway routes requests and cannot mint Control permits. Executors and brokers
 enforce current Control decisions. Agents, worker packages, event payloads and
-upstream responses are untrusted. Tenant management authority is separate from
-runtime access; Super Admin's audited review exception does not create a grant.
+upstream responses are untrusted. Control derives tenant-wide human runtime
+entitlements only from current enabled Super Admin membership. Other management
+roles confer no runtime access. Service/delegation ceilings, policy obligations
+and executor validity remain independent of that human entitlement.
 
 ## Runtime and target scope
 

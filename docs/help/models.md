@@ -52,9 +52,10 @@ $debugPython = Find-DebugPython
 
 The launcher bootstraps private Python when needed. Use the `$debugPython` path
 in the [launcher guide](../../debug/profiled/README.md). Select startup choice
-**1** to install/reuse Ollama, **2** to retain another provider. All NVIDIA GPUs
-are exposed with `gpus: all`, `OLLAMA_SCHED_SPREAD=1`; two models may stay loaded.
-A functioning GPU driver and Docker GPU support are operator prerequisites.
+**1** to install/reuse Ollama, **2** to retain another provider. The launcher probes
+Docker NVIDIA access before exposing all GPUs with `gpus: all`; otherwise it uses
+CPU. `OLLAMA_SCHED_SPREAD=1` allows two models to stay loaded. CPU inference can
+be slower; no host model installation is required.
 
 Startup pulls `qwen3:0.6b` and prepares the real
 [OLO QLoRA adapter](https://huggingface.co/olo-labs/olo-qwen2.5-0.5b-hotfolder)

@@ -1,0 +1,116 @@
+{
+  "copyright": "Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0",
+  "formatVersion": 1,
+  "bots": [
+    {
+      "id": "interactive-summary",
+      "name": "interactive-summary",
+      "workflowId": "interactive-summary",
+      "requiresOllama": true,
+      "directories": [],
+      "logFiles": []
+    },
+    {
+      "id": "ollama-summary",
+      "name": "ollama-summary",
+      "workflowId": "ollama-summary",
+      "requiresOllama": true,
+      "directories": [],
+      "logFiles": []
+    },
+    {
+      "id": "multiagent-incident",
+      "name": "multiagent-incident",
+      "workflowId": "multiagent-incident",
+      "requiresOllama": true,
+      "directories": [],
+      "logFiles": []
+    },
+    {
+      "id": "text-summary",
+      "name": "text-summary",
+      "workflowId": "text-summary",
+      "requiresOllama": true,
+      "directories": [
+        "text-summary/inbox",
+        "text-summary/processed",
+        "text-summary/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "issue-triage",
+      "name": "issue-triage",
+      "workflowId": "issue-triage",
+      "requiresOllama": true,
+      "directories": [
+        "issue-triage/inbox",
+        "issue-triage/processed",
+        "issue-triage/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "log-triage",
+      "name": "log-triage",
+      "workflowId": "log-triage",
+      "requiresOllama": true,
+      "directories": [
+        "log-triage/logs",
+        "log-triage/summaries"
+      ],
+      "logFiles": [
+        "log-triage/logs/app.log"
+      ]
+    },
+    {
+      "id": "native-hotfolder",
+      "name": "native-hotfolder",
+      "workflowId": "native-hotfolder",
+      "requiresOllama": true,
+      "directories": [
+        "native-hotfolder/inbox",
+        "native-hotfolder/processed",
+        "native-hotfolder/summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "native-log",
+      "name": "native-log",
+      "workflowId": "native-log",
+      "requiresOllama": true,
+      "directories": [
+        "native-log/logs",
+        "native-log/summaries"
+      ],
+      "logFiles": [
+        "native-log/logs/app.log"
+      ]
+    },
+    {
+      "id": "hotswap-demo-a",
+      "name": "hotswap-demo-a",
+      "workflowId": "hotswap-demo",
+      "requiresOllama": true,
+      "directories": [
+        "inbox-a",
+        "processed",
+        "summaries"
+      ],
+      "logFiles": []
+    },
+    {
+      "id": "hotswap-demo-b",
+      "name": "hotswap-demo-b",
+      "workflowId": "hotswap-demo",
+      "requiresOllama": true,
+      "directories": [
+        "inbox-b",
+        "processed",
+        "summaries"
+      ],
+      "logFiles": []
+    }
+  ]
+}

@@ -1,6 +1,10 @@
 <!-- Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0 -->
 # OLO bot: issue-triage
 
+**Automatic demo setup:** run [quickstart/configure.bat](quickstart/configure.bat) on Windows
+or [quickstart/configure.sh](quickstart/configure.sh) on Linux/macOS. See the
+[shared quick demo setup](../../README.md#quick-demo-setup) for prerequisites and credentials.
+
 **New to OLO?** Start with the [beginner walkthrough](#beginner-walkthrough-no-programming-experience-needed) below.
 
 This device-triggered flow explicitly reads the original file, asks the

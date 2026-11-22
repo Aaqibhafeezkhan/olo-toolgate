@@ -118,11 +118,9 @@ jobs:
         cli=toolgate
         if [ "$RUNNER_OS" = Windows ]; then cli=toolgate.exe; fi
         test "$("target/release/$cli" --version)" = "toolgate $expected"
-    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+    - name: Select installed Java 21
       if: inputs.run_tests && matrix.target == 'x86_64-unknown-linux-gnu'
-      with:
-        distribution: temurin
-        java-version: '21'
+      run: python3 tools/ci/select_java.py
     - name: Prove Java and Python Hello World run on pinned bases under the client sandbox
       if: inputs.run_tests && matrix.target == 'x86_64-unknown-linux-gnu'
       run: |

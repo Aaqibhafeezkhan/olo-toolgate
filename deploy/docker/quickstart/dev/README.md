@@ -66,7 +66,8 @@ reuses Python 3.11+ or installs a checksum-verified private Python runtime under
 .\start.bat
 ```
 
-Answer the two prompts: install/reuse Ollama, and create/reuse the collector.
+Choose bots from the default **0 None** menu, then answer the model/collector
+and optional credential prompts. Selected standard bots prepare Ollama automatically.
 Unattended start:
 
 ```powershell
@@ -87,6 +88,72 @@ Linux/macOS require Python 3.11+ and Docker/Compose. From this folder:
 sh start.sh --without-ollama --without-monitoring
 ```
 
+## Choose demo bots
+
+Both this folder's `start.bat` and the repository's `bot/start.bat` use
+[bot/AutoConfigure.yaml](../../../../bot/AutoConfigure.yaml). Press Enter for
+**0 None**, or enter comma-separated numbers such as **2,3**. Both selected bots
+are installed and configured before setup reports success. The two hotswap
+variants share one workflow ID and cannot be selected together. `0` does not
+remove bots from an existing installation.
+
+For a simple first look, choose `1` (interactive summary), `2` (local summary)
+or `3` (multi-agent incident). Wait for **All selected bots are ready to run**,
+sign in, open **Bots** and click **Run**. Each file/log demo's README describes
+the input that starts its watcher and where the result appears.
+
+The setup obtains bot bundles from the GitHub release whose inventory matches
+the version and source revision of all three running application images. It
+checks inventory hashes and bundle contents before importing any selected bot.
+Missing or inconsistent artifacts stop setup; a similarly named release is
+not substituted. Setup also requires current server-reported Super Admin runtime
+entitlements; older application images are rejected before bot configuration.
+All runtime operations still pass through Control's actual authorization and
+readiness checks. To use downloaded assets, provide one inventory and all selected
+bundles in `-BundlesDir` / `--bundles-dir`.
+
+```powershell
+# Install and configure both bots; skip optional cloud tracing.
+.\start.bat -Bots '2,3' -WithoutMonitoring
+# Start without importing any bot; do not prompt in an unattended invocation.
+.\start.bat -Bots '0' -WithoutOllama -WithoutMonitoring
+```
+
+```sh
+sh start.sh --bots 2,3 --without-monitoring
+sh start.sh --bots 0 --without-ollama --without-monitoring
+```
+
+Noninteractive input defaults to `0 None` unless `--bots` is supplied. No
+credential prompt is attempted without a terminal. Required credentials must
+already exist; an absent prerequisite fails readiness. Standard demos use
+local Ollama and do not require an OpenRouter key. Selecting a file bot explicitly
+sets up this managed local device, unions its declared groups with existing
+membership, creates only that bot's demo directories/empty log, and qualifies its
+installed native file tools for one day. Existing inputs and results are kept;
+setup does not inject sample events or replay an uncertain run.
+The existing `admin` runs the demos through its live tenant Super Admin role.
+Setup does not create human grants, copy an identity or change management roles.
+Other users continue to require explicit runtime grants.
+
+Secret prompts are hidden. Enter retains saved vault/collector values; a supplied
+new value replaces only that credential. OpenRouter remains standby until its
+routing is explicitly attached. LangSmith, Langfuse and Phoenix credentials and
+project/endpoint fields configure the optional private collector. LangGraph's
+local service token is issued by the runtime-provisioning API, not requested
+as a cloud API key. `-WithoutMonitoring` leaves monitoring services untouched.
+
+Each bot's `quickstart/configure.bat` / `configure.sh` independently starts/reuses
+this stack and configures that bot. It accepts `--bundles-dir` and, for explicit
+administrator credentials, `--origin`, `--token-file` and `--ca-file`. Existing
+Admin credentials are reused when these are omitted. Control still checks current
+authorization, exact device enrollment, package installation and readiness.
+Denied/review-pending/unknown operations stop setup; inspect current Control
+state before explicitly rerunning. This client-side setup is not an atomic
+multi-bot deployment: previously completed selections remain installed if a
+later selection fails. Success means publication and observed readiness, not a
+completed model inference or production qualification.
+
 ## Ports, credentials and blank installation
 
 Local Ollama setup uses the shared non-interactive preload helper: each model
@@ -99,8 +166,9 @@ startup** if another stack uses them. Stop the debug stack first when using the
 same defaults; this launcher never stops another project. Nothing requires
 opening an inbound firewall port for local hot-folder/log watchers.
 
-The initial workspace has only the Admin human login and installation defaults,
-with no bot imported and no implicit runtime access. A connected device may
+With `0 None`, the initial workspace has only the Admin human login and installation defaults,
+with no bot imported. The live tenant Super Admin has human runtime authority;
+startup creates no runtime grants for other users. A connected device may
 appear pending approval. Credentials are private and ignored:
 
 ```text

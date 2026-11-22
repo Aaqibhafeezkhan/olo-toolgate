@@ -57,29 +57,31 @@ public final class ApplicationWebhooks {
         return new Store.Reply(201,codec.json(response),0);
     }
     public Store.Reply get(DirectoryService.Actor actor,String id) {
-        Ids.valid(id);return store.transaction(actor.tenant(),false,tx->{var sub=required(tx,id);owner(actor,sub);new ManagementAccess(codec).access(tx.load(),actor.userId());return new Store.Reply(200,codec.json(projection(sub)),0);});
+        Ids.valid(id);return store.transaction(actor.tenant(),false,tx->{var sub=required(tx,id);manage(tx,actor,sub);return new Store.Reply(200,codec.json(projection(sub)),0);});
     }
     public Store.Reply list(DirectoryService.Actor actor,String after) {
         if(after!=null)Ids.valid(after);
         return store.transaction(actor.tenant(),false,tx->{new ManagementAccess(codec).access(tx.load(),actor.userId());
-            var rows=tx.applicationEvents().owned(actor.userId(),after==null?"":after,50).stream().filter(s->s.principalId().equals(actor.id())).map(this::projection).toList();
+            boolean elevated=new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId());
+            var subscriptions=elevated?tx.applicationEvents().subscriptions(after==null?"":after,50):tx.applicationEvents().owned(actor.userId(),after==null?"":after,50);
+            var rows=subscriptions.stream().filter(s->elevated||s.principalId().equals(actor.id())).map(this::projection).toList();
             return new Store.Reply(200,codec.json(Map.of("items",rows)),0);});
     }
     public Store.Reply revoke(DirectoryService.Actor actor,String id) {
-        Ids.valid(id);return store.transaction(actor.tenant(),true,tx->{var sub=required(tx,id);owner(actor,sub);new ManagementAccess(codec).access(tx.load(),actor.userId());
-            tx.applicationEvents().state(id,"REVOKED");tx.audit(actor.id(),"APPLICATION_WEBHOOK_REVOKE","application-webhook:"+id,1,"revoke-"+id,DirectoryService.digest(id));return new Store.Reply(204,"",0);});
+        Ids.valid(id);return store.transaction(actor.tenant(),true,tx->{var sub=required(tx,id);boolean elevated=manage(tx,actor,sub);
+            tx.applicationEvents().state(id,"REVOKED");tx.audit(actor.id(),"APPLICATION_WEBHOOK_REVOKE"+(elevated?"_SUPER_ADMIN":""),"application-webhook:"+id,1,"revoke-"+id,DirectoryService.digest(id));return new Store.Reply(204,"",0);});
     }
     public Store.Reply verify(DirectoryService.Actor actor,String id) {
         Ids.valid(id);
-        var sub=store.transaction(actor.tenant(),false,tx->{var stored=required(tx,id);owner(actor,stored);authorize(tx,actor,stored);
+        var sub=store.transaction(actor.tenant(),false,tx->{var stored=required(tx,id);authorizeRegistration(tx,actor,stored);
             if(!stored.state().equals("PENDING"))throw Failure.conflict();return stored;});
         byte[] secret=store.transaction(actor.tenant(),false,tx->open(tx,actor.tenant(),sub));
         String challenge=UUID.randomUUID().toString();boolean verified;
         try{verified=transport.verify(sub.endpoint(),sub.id(),challenge,secret);}finally{Arrays.fill(secret,(byte)0);}
         if(!verified)throw new Failure(ErrorCode.CONFLICT,409,"Webhook ownership verification failed");
-        return store.transaction(actor.tenant(),true,tx->{var current=required(tx,id);owner(actor,current);authorize(tx,actor,current);
+        return store.transaction(actor.tenant(),true,tx->{var current=required(tx,id);boolean elevated=authorizeRegistration(tx,actor,current);
             if(!current.state().equals("PENDING"))throw Failure.conflict();tx.applicationEvents().state(id,"ACTIVE");
-            tx.audit(actor.id(),"APPLICATION_WEBHOOK_VERIFIED","application-webhook:"+id,1,"verify-"+id,DirectoryService.digest(id));return new Store.Reply(204,"",0);});
+            tx.audit(actor.id(),"APPLICATION_WEBHOOK_VERIFIED"+(elevated?"_SUPER_ADMIN":""),"application-webhook:"+id,1,"verify-"+id,DirectoryService.digest(id));return new Store.Reply(204,"",0);});
     }
     private Map<String,Object> projection(ApplicationEventStore.Subscription sub) {
         return Map.of("id",sub.id(),"sourceType",sub.sourceType(),"sourceId",sub.sourceId(),"eventKinds",sub.eventKinds().split(","),
@@ -91,6 +93,18 @@ public final class ApplicationWebhooks {
     }
     private static void owner(DirectoryService.Actor actor,ApplicationEventStore.Subscription sub) {
         if(actor.userId()==null||!actor.userId().equals(sub.userId())||!actor.id().equals(sub.principalId()))throw ManagementAccess.denied();
+    }
+    private boolean manage(Store.Session tx,DirectoryService.Actor actor,ApplicationEventStore.Subscription sub) {
+        boolean elevated=new ManagementAccess(codec).superAdministrator(tx.load(),actor.userId());
+        if(!elevated)owner(actor,sub);
+        return elevated&&(!actor.userId().equals(sub.userId())||!actor.id().equals(sub.principalId()));
+    }
+    private boolean authorizeRegistration(Store.Session tx,DirectoryService.Actor actor,ApplicationEventStore.Subscription sub) {
+        boolean elevated=manage(tx,actor,sub);
+        // An administrator manages the registration, not the subscriber's identity or signing key.
+        var subscriber=elevated?new DirectoryService.Actor(actor.tenant(),sub.principalId(),false,false,sub.userId()):actor;
+        authorize(tx,subscriber,sub);
+        return elevated;
     }
     private static Set<ApplicationEventKind> kinds(ApplicationEventStore.Subscription sub) {
         return Arrays.stream(sub.eventKinds().split(",")).map(ApplicationEventKind::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet());

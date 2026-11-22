@@ -5,10 +5,12 @@ OLO stores bot definitions in Control and executes them in the external
 Run action and configured trigger bindings use Control's governed run path.
 
 Manual application admissions capture the enabled human user's explicit workflow,
-agent, model and full declared resource ceiling. Control rechecks current human
+agent, model and full declared resource ceiling, or Control-derived live tenant
+Super Admin entitlement. Control rechecks current human
 authority at claim and protected steps alongside independent service/effect
 authority. Session revocation invalidates the captured execution identity.
-Owner-scoped observation uses current grants; it cannot resume revoked work.
+Ordinary owner-scoped observation uses current grants; live tenant Super Admins
+can inspect any tenant run. Observation cannot resume revoked work.
 Durable tenant-scoped structural events commit with run/trigger transitions.
 SSE and leased HTTPS callbacks recheck source authority and never replay workflow
 effects. See [external applications](../api/workflow-applications.md) and the
@@ -25,6 +27,21 @@ The operator owns images, ports, mounts, device permissions, model endpoints and
 collector settings. Importing a workflow does not deploy infrastructure, grant
 device access, clean folders or rotate credentials. First startup of the
 [community installation](../../deploy/docker/quickstart/dev/README.md) is blank.
+
+The optional startup bot selector is a separate operator installation action.
+Its default is `0 None`; explicit selections authorize the listed local demo
+device allocation, private folder creation and bounded native-file qualification.
+The selector uses authenticated Control APIs for reference import, exact local
+device enrollment review, membership, vault writes and readiness-gated publication.
+It does not change tenant-wide device approval policy. Each selected bot delegates
+to the same standalone quickstart configurator. Blank credential answers retain
+installation custody; portable bundles and the selection catalog contain no secrets.
+LangGraph service credentials remain issued by the existing runtime provisioning
+flow, independently from administrator and optional cloud monitoring credentials.
+The current tenant Super Admin can run all selected demos through its live
+Control-derived human entitlement. Setup does not create copied human grants or
+change management roles. Ordinary users continue to need their own reviewed
+runtime grants; ordinary bundle import allocates no human runtime access.
 
 Control validates, stages, reviews and publishes immutable workflow revisions.
 Each admitted run pins its revision, graph selection and configured dependency

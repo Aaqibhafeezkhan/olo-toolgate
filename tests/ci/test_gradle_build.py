@@ -49,5 +49,17 @@ class GradleBuildTests(unittest.TestCase):
         self.assertRegex(runner.quarkus_version(),r'^[0-9][A-Za-z0-9_.-]{0,63}$')
         self.assertIn('tools/ci/gradle_build.py',(runner.ROOT/'debug/profiled/stack.py').read_text(encoding='utf-8'))
 
+    def test_example_sdk_bootstraps_refuse_unrelated_application_plugins(self):
+        import shlex
+        for script in ('tool-sdk/java-sdk/e2e/run.sh', 'examples/run-java-examples.sh'):
+            with self.subTest(script=script):
+                source = (runner.ROOT/script).read_text(encoding='utf-8')
+                bootstrap = next(line for line in source.splitlines() if './gradlew' in line and 'publishJavaSdkLocally' in line)
+                command = shlex.split(bootstrap.split('./gradlew', 1)[1].split('&&', 1)[0])
+                self.assertIn('--configure-on-demand', command)
+                self.assertEqual(':publishJavaSdkLocally', command[-1])
+                self.assertIn('-I', command)
+                self.assertEqual('tools/ci/sdk-isolation.init.gradle', command[command.index('-I') + 1])
+
 
 if __name__=='__main__':unittest.main()

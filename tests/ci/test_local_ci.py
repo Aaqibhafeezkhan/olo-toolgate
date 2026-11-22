@@ -59,7 +59,7 @@ class LocalCiTests(unittest.TestCase):
     def test_yaml_changes_flow_into_replay_without_mutating_source(self):
         source = self.workflows['foundation']['jobs']['scans']
         source['needs'] = 'preflight-fixture'
-        source['steps'][1]['with']['java-version'] = '25'
+        source['steps'][1]['run'] = 'python3 tools/ci/select_java.py --fixture-change'
         source['steps'].append({'name': 'New gate', 'run': 'python tools/new_gate.py'})
         body = local.replay_document('foundation.scans', self.workflows)['jobs']['replay']
         expected=copy.deepcopy(source['steps'])
