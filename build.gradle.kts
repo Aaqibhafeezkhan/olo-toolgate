@@ -193,6 +193,13 @@ tasks.register("publishJavaSdkLocally") {
     dependsOn(javaSdkModules.map { "$it:publishAllPublicationsToSdkLocalRepository" })
     dependsOn(":contracts-java:publishMavenJavaPublicationToSdkLocalRepository")
 }
+tasks.register("publishJavaGradleSdkLocally") {
+    group = "publishing"
+    description = "Publishes the Java SDK and Gradle plugin for Gradle-only package fixtures."
+    dependsOn(javaSdkModules.filterNot { it == ":sdk-java-maven-plugin" }
+        .map { "$it:publishAllPublicationsToSdkLocalRepository" })
+    dependsOn(":contracts-java:publishMavenJavaPublicationToSdkLocalRepository")
+}
 tasks.register("publishJavaSdkToMavenLocal") {
     group = "publishing"
     description = "Publishes the Java Tool SDK, with its Gradle and Maven plugins and the contracts it uses, to the local Maven repository, where toolgate init projects find it."

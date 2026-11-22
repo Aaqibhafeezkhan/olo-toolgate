@@ -89,7 +89,7 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         with patch.object(sys,'argv',['package_tests.py','--prepare-sdk']),patch.object(package_tests,'gradle') as build:
             package_tests.main()
         command,environment,output=build.call_args.args
-        self.assertEqual(':publishJavaSdkLocally',command[-1])
+        self.assertEqual(':publishJavaGradleSdkLocally',command[-1])
         self.assertIn('tools/ci/sdk-isolation.init.gradle',command)
         self.assertEqual(ROOT/'build/trigger-package-sdk/logs',output)
         workflow=yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
@@ -97,6 +97,10 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         prepare=next(step for step in steps if step.get('name')=='Prepare the shared test SDK and offline package CLI once')
         self.assertIn('python tools/triggers/package_tests.py --prepare-sdk',prepare['run'])
         self.assertNotIn('./gradlew ',prepare['run'])
+        build_script=(ROOT/'build.gradle.kts').read_text()
+        scoped=build_script.split('tasks.register("publishJavaGradleSdkLocally") {',1)[1].split('tasks.register(',1)[0]
+        self.assertIn('filterNot { it == ":sdk-java-maven-plugin" }',scoped)
+        self.assertIn(':contracts-java:publishMavenJavaPublicationToSdkLocalRepository',scoped)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

@@ -158,7 +158,7 @@ def main():
             parser.error('SDK preparation cannot be combined with package discovery or execution')
         wrapper=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
         gradle([str(wrapper),'--no-daemon','--console=plain','--configure-on-demand',
-            '-I','tools/ci/sdk-isolation.init.gradle','-PprebuiltAdminUi=true',':publishJavaSdkLocally'],
+            '-I','tools/ci/sdk-isolation.init.gradle','-PprebuiltAdminUi=true',':publishJavaGradleSdkLocally'],
             dict(os.environ),ROOT/'build/trigger-package-sdk/logs')
         return
     if args.matrix:

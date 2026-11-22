@@ -107,7 +107,9 @@ isolated producer home before publication.
 
 Run `python tools/triggers/package_tests.py --prepare-sdk` from the repository
 root to publish the shared test SDK. CI uses this command before the parallel
-package matrix. SDK preparation and each package use the shared
+package matrix. It invokes `:publishJavaGradleSdkLocally`: all required SDK
+libraries, contracts and the Gradle plugin are published, while the unused Maven
+plugin is left to the full SDK publication/end-to-end gates. SDK preparation and each package use the shared
 [Maven Central resolution recovery](../../docs/development/gradle.md#maven-central-resolution-recovery).
 SDK attempts are retained under `build/trigger-package-sdk/logs/gradle-<attempt>.log`;
 package attempts are under `build/trigger-package-tests/<package-id>/`.

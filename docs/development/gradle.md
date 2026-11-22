@@ -51,6 +51,10 @@ An unqualified task selector can configure unrelated subprojects while looking
 for matching tasks. The CI SDK stage also applies
 `tools/ci/sdk-isolation.init.gradle` to reject application/analysis plugin
 requests; Control and analysis builds retain their own plugins and gates.
+The trigger matrix uses `:publishJavaGradleSdkLocally`, which publishes the SDK
+libraries, contracts and Gradle plugin without building the unused Maven plugin.
+The full `:publishJavaSdkLocally` task and the Gradle/Maven SDK end-to-end gate
+still include Maven plugin publication and qualification.
 The Java SDK end-to-end and Java example scripts use the same root-qualified
 task and isolation guard. Their SDK bootstrap does not need the Control Plane's
 Quarkus plugin or its BOM; a transient lookup of that unrelated dependency must
