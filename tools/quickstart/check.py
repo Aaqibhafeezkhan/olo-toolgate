@@ -307,7 +307,7 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             assert {x['id'] for x in snapshot[key]}=={default,*[tier+suffix for tier in ('ReadOnly','ReadAndWrite','Admin')]}
             member={'agentGroups':'agentIds','toolGroups':'toolIds','deviceGroups':'deviceIds'}[key]
             assert all(not row[member] for row in snapshot[key] if row['id']!=default)
-        mark('fresh reviewed installation/independent identities/default groups/zero runtime rights')
+        mark('fresh reviewed installation/independent identities/default groups/zero explicit runtime grants')
         # Hit the Gateway listener directly: no supervisor forwarding or runtime bearer token.
         public=json.loads(exec_text('/opt/quickstart-python/bin/python','-c',
             "import json,urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/.well-known/olo-toolgate-client',timeout=10).read().decode())"))
@@ -320,8 +320,22 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
         assert configuration=={'serverUrl':manifest['controlUrl']}
         mark('anonymous Gateway tenant v2 discovery/fixed verified Control configuration')
         # Quickstart has no native client: its execution identities are its two Tool Hosts, approved like any device.
-        # The fresh profile then deploys Hello World to tool-host-local and enables server_greet; nobody may run it yet.
+        # The fresh profile then deploys Hello World to tool-host-local and enables server_greet; ordinary reviewers still need runtime grants.
         owner=admin
+        # The bootstrap account must retain Super Admin authority. Keep it as the installation owner;
+        # the two other local accounts become ordinary administrators for maker/checker and HUMAN tests.
+        management=ok(api('/api/control/v1/roles/installation-management',admin))
+        refused=api('/api/control/v1/roles/'+management['id'],admin,{**management,'portalRole':'ADMINISTRATOR'},
+            'PUT',revision=management['revision'])
+        assert refused[0]==409,refused
+        restricted={**management,'id':'smoke-restricted-management','name':'Smoke restricted administrator',
+                    'revision':1,'portalRole':'ADMINISTRATOR'}
+        ok(api('/api/control/v1/roles',admin,restricted,'POST'),201)
+        ok(api('/api/control/v1/teams',admin,dict(id='smoke-makers',name='Smoke makers',
+            enabled=True,revision=1,userIds=['reviewer-1','reviewer-2'],roleIds=[restricted['id']]),'POST'),201)
+        owners=ok(api('/api/control/v1/teams/installation-administrators',admin))
+        ok(api('/api/control/v1/teams/installation-administrators',owner,
+            {**owners,'userIds':['admin']},'PUT',revision=owners['revision']))
         def approve(device_id):
             deadline=time.monotonic()+45
             while True:
@@ -356,20 +370,6 @@ def smoke(image, browser, database_options=None, gateway_image=None, hello_world
             assert journal['discoveryTrust']['tenantId']==snapshot['tenantId']
             assert journal['identity']['issuerCertificatePem'].strip()!=exec_text('cat','/data/keys/device-ca.crt')
         mark('Tool Host enrollment/fresh profile installs and activates Hello World/no implicit discovery')
-        # The bootstrap account must retain Super Admin authority. Keep it as the installation owner;
-        # the two other local accounts become ordinary administrators for maker/checker and HUMAN tests.
-        management=ok(api('/api/control/v1/roles/installation-management',admin))
-        refused=api('/api/control/v1/roles/'+management['id'],admin,{**management,'portalRole':'ADMINISTRATOR'},
-            'PUT',revision=management['revision'])
-        assert refused[0]==409,refused
-        restricted={**management,'id':'smoke-restricted-management','name':'Smoke restricted administrator',
-                    'revision':1,'portalRole':'ADMINISTRATOR'}
-        ok(api('/api/control/v1/roles',admin,restricted,'POST'),201)
-        ok(api('/api/control/v1/teams',admin,dict(id='smoke-makers',name='Smoke makers',
-            enabled=True,revision=1,userIds=['reviewer-1','reviewer-2'],roleIds=[restricted['id']]),'POST'),201)
-        owners=ok(api('/api/control/v1/teams/installation-administrators',admin))
-        ok(api('/api/control/v1/teams/installation-administrators',owner,
-            {**owners,'userIds':['admin']},'PUT',revision=owners['revision']))
         def transition(change,action,user):
             return ok(api('/api/control/v1/configuration-changes/'+change['id']+'/transition',tokens[user],
                 {'action':action,'expectedRevision':change['revision']},'POST'))
