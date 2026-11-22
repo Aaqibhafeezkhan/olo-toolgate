@@ -72,6 +72,22 @@ is not claimed by mocked protocol tests.
 
 ### Shared SDK preparation
 
+CI uses a dedicated `GRADLE_USER_HOME` for the shared SDK stage. After SDK
+publication, `--prepare-dependencies --sdk-repo build/sdk-repo` serially resolves
+every registered package's resolvable classpaths without running tools or tests.
+The producer bundles Gradle's dependency and bootstrap caches with the same-run
+SDK artifact; it excludes cache locks and ZIP
+downloads. It does not bundle user Gradle settings or credentials.
+Package preparation and execution point Maven's local repository at the supplied
+SDK repository, so neither depends on ambient `~/.m2` artifacts.
+
+Each matrix job restores this bundle into its own fresh Gradle home and runs
+the complete package checks with `--offline`. An incomplete cache fails without
+network probing or an online fallback. Only the producer contacts Maven for
+these dependencies, reducing repeated downloads across ephemeral matrix jobs.
+Producer repository outages can still fail preparation; no cache or successful
+download establishes passing package/runtime qualification.
+
 Run `python tools/triggers/package_tests.py --prepare-sdk` from the repository
 root to publish the shared test SDK. CI uses this command before the parallel
 package matrix. SDK preparation and each package use the shared

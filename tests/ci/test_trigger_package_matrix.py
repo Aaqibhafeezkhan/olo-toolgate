@@ -15,6 +15,36 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TriggerPackageMatrixTests(unittest.TestCase):
+    def test_dependency_preparation_resolves_every_package_without_running_checks(self):
+        entries=[dict(buildRoot='examples/java-tools',project='log-watch',packageId='examples.log-watch'),
+                 dict(buildRoot='tests/fixtures/trigger-packages/signal-watch',project='',packageId='acceptance.signal-watch')]
+        with patch.object(sys,'argv',['package_tests.py','--prepare-dependencies','--sdk-repo','build/sdk-repo']), \
+                patch.object(package_tests,'discover',return_value=entries),patch.object(package_tests,'gradle') as build:
+            package_tests.main()
+        self.assertEqual(2,build.call_count)
+        for call in build.call_args_list:
+            command,environment,output=call.args
+            self.assertTrue(command[-1].endswith(':toolgateResolveDependencies'))
+            self.assertIn('--no-configuration-cache',command)
+            self.assertNotIn('check',command)
+            self.assertEqual('mock',environment['TOOLGATE_TEST_PROVIDER_MODE'])
+        workflow=yaml.safe_load((ROOT/'.github/workflows/foundation.yml').read_text())
+        producer=workflow['jobs']['trigger-package-sdk']
+        consumer=workflow['jobs']['trigger-package-tests']
+        self.assertEqual(producer['env']['GRADLE_USER_HOME'],consumer['env']['GRADLE_USER_HOME'])
+        self.assertTrue(any('--prepare-dependencies' in step.get('run','') and 'gradle-cache.tar.gz' in step['run'] for step in producer['steps']))
+        self.assertTrue(any('package_tests.py --offline' in step.get('run','') and 'tar -xzf' in step['run'] for step in consumer['steps']))
+
+    def test_offline_package_build_keeps_all_checks_and_stops_on_cache_failure(self):
+        entry=dict(buildRoot='examples/java-tools',project='log-watch',packageId='examples.log-watch',directory='examples/java-tools/log-watch')
+        with patch.object(package_tests,'gradle',side_effect=subprocess.CalledProcessError(1,['gradlew'])) as build:
+            with self.assertRaises(subprocess.CalledProcessError):
+                package_tests.run(entry,ROOT/'build/sdk-repo',ROOT/'target/debug/toolgate','test-version',offline=True)
+        command=build.call_args.args[0]
+        self.assertIn('--offline',command)
+        self.assertIn(':log-watch:check',command)
+        self.assertIn(':log-watch:toolgatePackage',command)
+
     def test_dependency_throttling_retries_a_real_failed_process_and_preserves_attempt_logs(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary)

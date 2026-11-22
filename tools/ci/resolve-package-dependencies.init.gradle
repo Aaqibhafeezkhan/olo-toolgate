@@ -1,0 +1,9 @@
+// Copyright 2026 OLO Labs; SPDX-License-Identifier: Apache-2.0
+// Resolve declared classpaths without executing package tests or tools.
+allprojects {
+    tasks.register('toolgateResolveDependencies') {
+        doLast {
+            configurations.findAll { it.canBeResolved }.each { it.resolve() }
+        }
+    }
+}

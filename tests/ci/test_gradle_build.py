@@ -9,6 +9,29 @@ from tools.ci import gradle_build as runner
 
 
 class GradleBuildTests(unittest.TestCase):
+    def test_throttling_preserves_cached_dependencies(self):
+        calls=[]
+        def execute(command,**options):
+            calls.append(list(command))
+            options['stdout'].write((('Could not resolve all files for configuration\n'+runner.CENTRAL+
+                'example.pom Received status code 429 from server') if len(calls)==1 else 'BUILD SUCCESSFUL').encode())
+            return subprocess.CompletedProcess(command,1 if len(calls)==1 else 0)
+        with tempfile.TemporaryDirectory() as temporary,patch.object(runner.subprocess,'run',side_effect=execute):
+            runner.build(['gradlew'],Path(temporary),sleep=lambda _:None)
+        self.assertEqual(2,len(calls))
+        self.assertNotIn('--refresh-dependencies',calls[1])
+
+    def test_offline_cache_failure_never_probes_the_network_or_retries(self):
+        def execute(command,**options):
+            options['stdout'].write(self.missing().encode())
+            return subprocess.CompletedProcess(command,1)
+        with tempfile.TemporaryDirectory() as temporary,patch.object(runner.subprocess,'run',side_effect=execute) as run:
+            with patch.object(runner.urllib.request,'build_opener') as network:
+                with self.assertRaises(subprocess.CalledProcessError):
+                    runner.build(['gradlew','--offline'],Path(temporary),sleep=lambda _:self.fail('offline retry'))
+                network.assert_not_called()
+            self.assertEqual(1,run.call_count)
+
     def missing(self,version='3.40.1'):
         coordinate=('io.quarkus','quarkus-bom',version)
         return "A problem occurred configuring project ':control-plane'.\nCould not resolve all artifacts for configuration 'classpath'.\nCould not find "+':'.join(coordinate)+'.\n'+runner.pom_url(coordinate)+'\n'

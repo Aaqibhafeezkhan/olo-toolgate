@@ -62,7 +62,9 @@ not be addressed by replaying tests or changing the pinned Quarkus version.
 
 `tools/ci/gradle_build.py` provides the shared recovery used by image builds,
 trigger SDK/package checks and Core MCP Java builds. It permits three attempts
-total, with 5- and 15-second delays and `--refresh-dependencies` on retries.
+total, with 5- and 15-second delays. Verified false-negative metadata retries
+use `--refresh-dependencies`; HTTP 429 retries preserve the existing cache to
+avoid adding revalidation traffic while Central is throttling the runner.
 Only dependency-resolution HTTP 429 responses from Maven Central, or missing
 metadata whose exact coordinates are independently verified in Central POMs,
 qualify. Every reported missing coordinate must be verified (at most sixteen).
@@ -75,6 +77,9 @@ retries remain failures. Each attempt is retained as `gradle-<attempt>.log` in
 the caller's log directory. Core MCP keeps these logs beside its output directory,
 outside the packages copied into runtime images. A retry is build recovery;
 successful compilation, tests and package validation are still required.
+Offline builds fail immediately without metadata probes or retries. The trigger
+matrix [prepares and shares its dependency cache](../../tools/triggers/README.md#shared-sdk-preparation)
+once per run, then requires offline package checks.
 
 Default:
 

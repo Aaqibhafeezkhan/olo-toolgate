@@ -72,12 +72,16 @@ def build(command,output,*,cwd=None,env=None,sleep=time.sleep,published=publishe
         with path.open('rb') as log:
             for chunk in iter(lambda:log.read(65536),b''):sys.stdout.write(chunk.decode('utf-8',errors='replace'))
         if result.returncode==0:return
+        if '--offline' in current:raise subprocess.CalledProcessError(result.returncode,current)
         reason=None if attempt==2 else retry_reason(path.read_text(encoding='utf-8',errors='replace'),published)
         if reason is None:raise subprocess.CalledProcessError(result.returncode,current)
         delay=(5,15)[attempt]
-        print(f'{reason}; refreshing dependency lookup after {delay} seconds.',flush=True)
+        print(f'{reason}; retrying dependency resolution after {delay} seconds.',flush=True)
         sleep(delay)
-        if '--refresh-dependencies' not in current:current.append('--refresh-dependencies')
+        # A 429 is not stale metadata: revalidating every cached artifact adds
+        # traffic while the repository is already throttling this runner.
+        if reason.startswith('Missing Maven metadata') and '--refresh-dependencies' not in current:
+            current.append('--refresh-dependencies')
 
 
 def main():

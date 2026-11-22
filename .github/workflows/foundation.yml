@@ -243,6 +243,7 @@ jobs:
       matrix: ${{ steps.packages.outputs.matrix }}
     env:
       TOOLGATE_BUILD: ${{ inputs.build_number || 'local' }}
+      GRADLE_USER_HOME: ${{ runner.temp }}/toolgate-trigger-gradle
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -277,6 +278,9 @@ jobs:
         mkdir -p build/trigger-package-sdk
         cp target/debug/toolgate build/trigger-package-sdk/toolgate
         cp VERSION build/trigger-package-sdk/VERSION
+        python tools/triggers/package_tests.py --prepare-dependencies --sdk-repo build/sdk-repo
+        mkdir -p "$GRADLE_USER_HOME/olo-toolgate-bootstrap"
+        tar --exclude='*.lock' --exclude='gc.properties' --exclude='*.zip' -czf build/trigger-package-sdk/gradle-cache.tar.gz -C "$GRADLE_USER_HOME" caches/modules-2 olo-toolgate-bootstrap
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: trigger-package-sdk
@@ -294,6 +298,7 @@ jobs:
       matrix: ${{ fromJSON(needs.trigger-package-sdk.outputs.matrix) }}
     env:
       TOOLGATE_BUILD: ${{ inputs.build_number || 'local' }}
+      GRADLE_USER_HOME: ${{ runner.temp }}/toolgate-trigger-gradle
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       with:
@@ -322,7 +327,10 @@ jobs:
         TOOLGATE_TEST_PROVIDER_MODE: mock
       run: |
         chmod +x "$TOOLGATE_CLI"
-        python tools/triggers/package_tests.py --sdk-version-file .dev/trigger-package-sdk/trigger-package-sdk/VERSION
+        test ! -e "$GRADLE_USER_HOME/caches"
+        mkdir -p "$GRADLE_USER_HOME"
+        tar -xzf .dev/trigger-package-sdk/trigger-package-sdk/gradle-cache.tar.gz -C "$GRADLE_USER_HOME"
+        python tools/triggers/package_tests.py --offline --sdk-version-file .dev/trigger-package-sdk/trigger-package-sdk/VERSION
     - name: Retain individual package test evidence
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
