@@ -19,6 +19,14 @@ use **Run**. There is no separate import, model-key, device-group or publish ste
 for a successfully configured demo. File/log bots wait for their watchers too;
 their guides below explain how to supply sample input.
 
+Long model preparation can outlive a device's pending enrollment code. Setup
+observes the native client's refreshed code for the same device/key, waiting at
+most 180 seconds for a current review. Missing or expired review observations
+never cause an approval write to be replayed. Identity changes, denied enrollment
+and other HTTP failures stop setup; an already active device is verified without
+another approval. Earlier successfully published selections remain installed if
+a later bot encounters a setup blocker.
+
 The incident-triage option is in the same menu as other bots. For a newly added
 configuration not yet present in published release assets, build it locally and
 pass its single-inventory directory with `-BundlesDir`; see

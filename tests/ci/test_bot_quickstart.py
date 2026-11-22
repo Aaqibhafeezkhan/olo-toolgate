@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from bot import quickstart as setup
-from tools.admin.control import Refused
+from tools.admin.control import Refused, HttpRefused
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -208,6 +208,81 @@ class ReadinessTests(unittest.TestCase):
                 patch.object(setup, 'call', return_value=changed) as call:
             with self.assertRaisesRegex(Refused, 'identity changed'): setup.local_device(Mock(), object())
         self.assertEqual(1, call.call_count)
+
+    def test_missing_enrollment_review_observes_fresh_code_then_approves_once(self):
+        old=dict(deviceId='device',state='PENDING',userCode='OLD123',keyFingerprint='pinned')
+        fresh={**old,'userCode':'NEW123'}
+        review={**fresh,'expiresAtUnixMs':200000}
+        with patch.object(setup,'command',side_effect=[json.dumps(old),json.dumps(old),json.dumps(fresh)]), \
+             patch.object(setup,'call',side_effect=[HttpRefused(404),review,{}]) as call, \
+             patch.object(setup,'wait_active') as active, \
+             patch.object(setup.time,'time',return_value=100),patch.object(setup.time,'sleep'):
+            self.assertEqual('device',setup.local_device(Mock(),object()))
+        self.assertTrue(call.call_args_list[0].args[1].endswith('code=OLD123'))
+        self.assertTrue(call.call_args_list[1].args[1].endswith('code=NEW123'))
+        writes=[item for item in call.call_args_list if len(item.args)>2]
+        self.assertEqual(1,len(writes))
+        self.assertEqual(('NEW123','pinned'),(writes[0].args[2]['userCode'],writes[0].args[2]['keyFingerprint']))
+        active.assert_called_once()
+
+    def test_expired_review_waits_for_the_same_identity_fresh_enrollment(self):
+        current=dict(deviceId='device',state='PENDING',userCode='CODE123',keyFingerprint='pinned')
+        fresh={**current,'userCode':'NEW123'}
+        for stale in ({**current,'state':'EXPIRED'}, {**current,'expiresAtUnixMs':90000}):
+            with self.subTest(stale=stale), \
+                 patch.object(setup,'command',side_effect=[json.dumps(current),json.dumps(current),json.dumps(fresh)]), \
+                 patch.object(setup,'call',side_effect=[stale,{**fresh,'expiresAtUnixMs':200000},{}]) as call, \
+                 patch.object(setup,'wait_active'),patch.object(setup.time,'time',return_value=100), \
+                 patch.object(setup.time,'sleep'):
+                setup.local_device(Mock(),object())
+            writes=[item for item in call.call_args_list if len(item.args)>2]
+            self.assertEqual(1,len(writes));self.assertEqual('NEW123',writes[0].args[2]['userCode'])
+
+    def test_review_observation_does_not_rebind_changed_local_identity(self):
+        current=dict(deviceId='device',state='PENDING',userCode='CODE123',keyFingerprint='pinned')
+        for changed in ({**current,'deviceId':'another-device'}, {**current,'keyFingerprint':'another-key'}):
+            with self.subTest(changed=changed), \
+                 patch.object(setup,'command',side_effect=[json.dumps(current),json.dumps(changed)]), \
+                 patch.object(setup,'call') as call, self.assertRaisesRegex(Refused,'identity changed'):
+                setup.local_device(Mock(),object())
+            call.assert_not_called()
+
+    def test_review_denial_and_non_missing_http_errors_never_approve(self):
+        current=dict(deviceId='device',state='PENDING',userCode='CODE123',keyFingerprint='pinned')
+        for outcome in (HttpRefused(403),HttpRefused(503),{**current,'state':'DENIED'}):
+            with self.subTest(outcome=outcome),patch.object(setup,'command',return_value=json.dumps(current)), \
+                 patch.object(setup,'call',side_effect=[outcome] if isinstance(outcome,Exception) else None,
+                              return_value=outcome) as call,self.assertRaises(Refused):
+                setup.local_device(Mock(),object())
+            self.assertEqual(1,call.call_count)
+
+    def test_uncertain_approval_is_never_replayed(self):
+        current=dict(deviceId='device',state='PENDING',userCode='CODE123',keyFingerprint='pinned')
+        for failure in (Refused('Outcome unknown'),HttpRefused(404)):
+            with self.subTest(failure=failure),patch.object(setup,'command',return_value=json.dumps(current)), \
+                 patch.object(setup,'call',side_effect=[{**current,'expiresAtUnixMs':200000},failure]) as call, \
+                 patch.object(setup,'wait_active') as active,patch.object(setup.time,'time',return_value=100), \
+                 self.assertRaises(Refused):
+                setup.local_device(Mock(),object())
+            self.assertEqual(2,call.call_count)
+            active.assert_not_called()
+
+    def test_missing_review_times_out_without_an_approval(self):
+        current=dict(deviceId='device',state='PENDING',userCode='CODE123',keyFingerprint='pinned')
+        with patch.object(setup,'command',return_value=json.dumps(current)), \
+             patch.object(setup,'call',side_effect=HttpRefused(404)) as call, \
+             patch.object(setup.time,'monotonic',side_effect=[0,0,181]), \
+             self.assertRaisesRegex(Refused,'Timed out'):
+            setup.local_device(Mock(),object())
+        self.assertEqual(1,call.call_count)
+
+    def test_observed_active_device_does_not_send_a_second_approval(self):
+        current=dict(deviceId='device',state='PENDING',userCode='CODE123',keyFingerprint='pinned')
+        active=dict(deviceId='device',state='ACTIVE')
+        with patch.object(setup,'command',side_effect=[json.dumps(current),json.dumps(active)]), \
+             patch.object(setup,'call') as call,patch.object(setup,'wait_active') as verified:
+            self.assertEqual('device',setup.local_device(Mock(),object()))
+        call.assert_not_called();verified.assert_called_once()
 
     def test_old_images_or_non_superuser_do_not_enter_configuration(self):
         with patch.object(setup, 'call', return_value={'role': 'BASIC'}) as call:

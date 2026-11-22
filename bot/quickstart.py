@@ -18,7 +18,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from bot.bundle import MAX_BUNDLE, inventory, verify
-from tools.admin.control import Control, Refused, read_file
+from tools.admin.control import Control, Refused, HttpRefused, read_file
 from tools.admin.import_workflow import call, deploy
 from tools.admin.provision_devices import allocate, wait_active
 from tools.admin.qualify_native_files import qualify
@@ -167,14 +167,42 @@ def local_device(stack, client):
     current = observe(lambda: (value if (value := status()).get('deviceId') else None))
     device = current['deviceId']
     if current['state'] == 'PENDING':
-        code = current['userCode']
-        if not re.fullmatch(r'[A-Za-z0-9]+', code): raise Refused('Invalid local enrollment code')
-        review = call(client, '/api/control/v1/endpoint/enrollments/review?code='+code)
-        if (review['deviceId'], review['keyFingerprint'], review['state']) != (device, current['keyFingerprint'], 'PENDING'):
-            raise Refused('Local enrollment identity changed; no approval was sent')
-        call(client, '/api/control/v1/endpoint/enrollments/decision', dict(userCode=code,
-            keyFingerprint=current['keyFingerprint'], choice='APPROVE',
-            connectionExpiresAtUnixMs=int(time.time()*1000)+86400000))
+        fingerprint = current['keyFingerprint']
+        def current_review():
+            latest = status()
+            if not latest.get('deviceId'): return None
+            if (latest['deviceId'] != device or
+                    latest.get('keyFingerprint', fingerprint) != fingerprint):
+                raise Refused('Local enrollment identity changed; no approval was sent')
+            if latest['state'] == 'ACTIVE': return latest, None
+            if latest['state'] in ('DENIED', 'REVOKED'):
+                raise Refused('Local enrollment was denied or revoked; no approval was sent')
+            if latest['state'] != 'PENDING': return None
+            if latest.get('keyFingerprint') != fingerprint:
+                raise Refused('Local enrollment identity changed; no approval was sent')
+            code = latest['userCode']
+            if not re.fullmatch(r'[A-Za-z0-9]+', code): raise Refused('Invalid local enrollment code')
+            try:
+                review = call(client, '/api/control/v1/endpoint/enrollments/review?code='+code)
+            except HttpRefused as error:
+                if error.status != 404: raise
+                # Model preparation may outlive an enrollment code. Observe the
+                # native client's refreshed code for this same pinned identity;
+                # a missing GET is not permission to retry an approval write.
+                return None
+            if (review['deviceId'], review['keyFingerprint']) != (device, fingerprint):
+                raise Refused('Local enrollment identity changed; no approval was sent')
+            if review['state'] == 'EXPIRED': return None
+            if review['state'] == 'APPROVED': return latest, None
+            if review['state'] != 'PENDING':
+                raise Refused('Local enrollment was denied; no approval was sent')
+            if review['expiresAtUnixMs'] <= int(time.time()*1000): return None
+            return latest, review
+        current, review = observe(current_review)
+        if review is not None:
+            call(client, '/api/control/v1/endpoint/enrollments/decision', dict(userCode=current['userCode'],
+                keyFingerprint=fingerprint, choice='APPROVE',
+                connectionExpiresAtUnixMs=int(time.time()*1000)+86400000))
     wait_active(client, device, 180)
     return device
 
