@@ -88,6 +88,15 @@ these dependencies, reducing repeated downloads across ephemeral matrix jobs.
 Producer repository outages can still fail preparation; no cache or successful
 download establishes passing package/runtime qualification.
 
+The producer restores dependency files, metadata and the Gradle bootstrap cache
+from previous successful runs before SDK publication. Its key tracks build
+scripts, dependency locks, the version catalog and wrapper pin; older matching
+OS caches can seed unchanged artifacts. A new cache is saved only after SDK,
+CLI and package dependency preparation succeed. User Gradle configuration and
+credentials are excluded. A cold/missing cache still requires Maven availability;
+unavailable publication verification remains a failure and records its HTTP
+status rather than assuming the dependency exists.
+
 Run `python tools/triggers/package_tests.py --prepare-sdk` from the repository
 root to publish the shared test SDK. CI uses this command before the parallel
 package matrix. SDK preparation and each package use the shared

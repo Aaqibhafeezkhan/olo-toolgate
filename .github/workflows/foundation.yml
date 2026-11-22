@@ -257,6 +257,16 @@ jobs:
     - name: Discover every registered trigger package and require its README
       id: packages
       run: python tools/triggers/package_tests.py --matrix --github-output
+    - name: Restore producer dependency and bootstrap caches
+      id: trigger-cache
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: |
+          ${{ env.GRADLE_USER_HOME }}/caches/modules-2/files-2.1
+          ${{ env.GRADLE_USER_HOME }}/caches/modules-2/metadata-*
+          ${{ env.GRADLE_USER_HOME }}/olo-toolgate-bootstrap
+        key: trigger-gradle-v1-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/gradle.lockfile', '**/gradle-artifact.lockfile', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties', 'tools/ci/resolve-package-dependencies.init.gradle') }}
+        restore-keys: trigger-gradle-v1-${{ runner.os }}-
     - name: Derive build versions from version.json
       env:
         GH_TOKEN: ${{ github.token }}
@@ -281,6 +291,15 @@ jobs:
         python tools/triggers/package_tests.py --prepare-dependencies --sdk-repo build/sdk-repo
         mkdir -p "$GRADLE_USER_HOME/olo-toolgate-bootstrap"
         tar --exclude='*.lock' --exclude='gc.properties' --exclude='*.zip' -czf build/trigger-package-sdk/gradle-cache.tar.gz -C "$GRADLE_USER_HOME" caches/modules-2 olo-toolgate-bootstrap
+    - name: Save successfully prepared producer dependencies
+      if: steps.trigger-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: |
+          ${{ env.GRADLE_USER_HOME }}/caches/modules-2/files-2.1
+          ${{ env.GRADLE_USER_HOME }}/caches/modules-2/metadata-*
+          ${{ env.GRADLE_USER_HOME }}/olo-toolgate-bootstrap
+        key: ${{ steps.trigger-cache.outputs.cache-primary-key }}
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: trigger-package-sdk

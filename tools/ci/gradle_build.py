@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as XML
 
@@ -36,7 +37,10 @@ def published_dependency(coordinate):
         inherited={} if parent is None else {child.tag.rsplit('}',1)[-1]:child.text for child in parent}
         return (root.tag.rsplit('}',1)[-1]=='project' and fields.get('artifactId')==artifact and (fields.get('groupId') or inherited.get('groupId'))==group
             and (fields.get('version') or inherited.get('version'))==version)
-    except (OSError,ValueError,XML.ParseError):return False
+    except (OSError,ValueError,XML.ParseError) as error:
+        detail=f'HTTP {error.code}' if isinstance(error,urllib.error.HTTPError) else type(error).__name__
+        print(f'Maven metadata verification unavailable for {group}:{artifact}:{version}: {detail}',file=sys.stderr,flush=True)
+        return False
 
 
 def retry_reason(text,published=published_dependency):

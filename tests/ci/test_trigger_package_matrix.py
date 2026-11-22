@@ -34,6 +34,14 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         self.assertEqual(producer['env']['GRADLE_USER_HOME'],consumer['env']['GRADLE_USER_HOME'])
         self.assertTrue(any('--prepare-dependencies' in step.get('run','') and 'gradle-cache.tar.gz' in step['run'] for step in producer['steps']))
         self.assertTrue(any('package_tests.py --offline' in step.get('run','') and 'tar -xzf' in step['run'] for step in consumer['steps']))
+        restore=next(step for step in producer['steps'] if step.get('id')=='trigger-cache')
+        save=next(step for step in producer['steps'] if step.get('name')=='Save successfully prepared producer dependencies')
+        self.assertIn('actions/cache/restore@',restore['uses'])
+        self.assertIn('actions/cache/save@',save['uses'])
+        self.assertEqual(restore['with']['path'],save['with']['path'])
+        self.assertNotIn('always()',save['if'])
+        self.assertNotIn('gradle.properties',restore['with']['path'])
+        self.assertLess(producer['steps'].index(restore),next(i for i,step in enumerate(producer['steps']) if '--prepare-sdk' in step.get('run','')))
 
     def test_offline_package_build_keeps_all_checks_and_stops_on_cache_failure(self):
         entry=dict(buildRoot='examples/java-tools',project='log-watch',packageId='examples.log-watch',directory='examples/java-tools/log-watch')

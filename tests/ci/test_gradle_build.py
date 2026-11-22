@@ -9,6 +9,14 @@ from tools.ci import gradle_build as runner
 
 
 class GradleBuildTests(unittest.TestCase):
+    def test_throttled_metadata_verification_reports_http_status_without_granting_retry(self):
+        from io import StringIO
+        coordinate=('com.fasterxml.jackson.core','jackson-databind','2.21.7')
+        with patch.object(runner.urllib.request,'build_opener') as opener,patch.object(runner.sys,'stderr',new_callable=StringIO) as errors:
+            opener.return_value.open.side_effect=runner.urllib.error.HTTPError(runner.pom_url(coordinate),429,'throttled',{},None)
+            self.assertFalse(runner.published_dependency(coordinate))
+            self.assertIn('HTTP 429',errors.getvalue())
+
     def test_throttling_preserves_cached_dependencies(self):
         calls=[]
         def execute(command,**options):
