@@ -2,6 +2,10 @@
 
 ## 1.0.0-dev.1
 
+- Let selected-bot setup observe a refreshed device enrollment code when model
+  preparation outlives a pending review. Preserve the pinned device/key and
+  single-shot approval; never retry denied or uncertain approval writes.
+
 - Add five standard bot use cases (six configurations, including publication A/B)
   with active QLoRA/Ollama, lightweight Ollama and OpenRouter premium routing,
   plus a shared-Control/PostgreSQL
