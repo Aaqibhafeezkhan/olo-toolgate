@@ -96,6 +96,14 @@ CLI and package dependency preparation succeed. User Gradle configuration and
 credentials are excluded. A cold/missing cache still requires Maven availability;
 unavailable publication verification remains a failure and records its HTTP
 status rather than assuming the dependency exists.
+If this producer cache has never been populated, CI can seed its dependency
+files and metadata from the branch-visible Linux JDK 21 Java cache. The seed's
+Gradle settings, init scripts and credentials are never copied into the producer
+home. A seed is an optimization; missing artifacts still require the repository.
+The seed restore uses the existing cache's exact `~/.gradle` path and Linux
+JDK 21 key prefix so GitHub's path-based cache version matches. Only
+`caches/modules-2/files-2.1` and `metadata-*` directories are copied into the
+isolated producer home before publication.
 
 Run `python tools/triggers/package_tests.py --prepare-sdk` from the repository
 root to publish the shared test SDK. CI uses this command before the parallel

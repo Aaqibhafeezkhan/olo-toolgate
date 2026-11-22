@@ -14,6 +14,11 @@ It pulls/reuses application images instead of compiling OLO. Both entry points
 share provisioning, Admin custody, device setup and optional model/collector logic;
 this installation has its own project, volumes, settings and credentials.
 
+`start.bat` prints the local start time after the final menu/credential input,
+then the end time and total elapsed seconds on completion or failure. Timing
+excludes prompt time and includes image validation, deployment, model/collector
+startup and selected-bot configuration. Elapsed time uses a monotonic clock.
+
 Startup refreshes mutable development image tags and checks required
 Quickstart/device entrypoints and runtime modules before initializing the
 installation. A registry tag alone does not establish a working deployment.

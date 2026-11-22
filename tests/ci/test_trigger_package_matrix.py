@@ -41,6 +41,13 @@ class TriggerPackageMatrixTests(unittest.TestCase):
         self.assertEqual(restore['with']['path'],save['with']['path'])
         self.assertNotIn('always()',save['if'])
         self.assertNotIn('gradle.properties',restore['with']['path'])
+        seed=next(step for step in producer['steps'] if step.get('name')=='Restore existing Java cache for a cold producer')
+        self.assertEqual('~/.gradle',seed['with']['path'])
+        self.assertIn('jdk21-temurin-gradle-',seed['with']['restore-keys'])
+        self.assertIn("cache-matched-key == ''",seed['if'])
+        copy=next(step for step in producer['steps'] if step.get('name')=='Seed only dependency files and metadata')
+        self.assertIn("source/'files-2.1'",copy['run'])
+        self.assertIn("source.glob('metadata-*')",copy['run'])
         self.assertLess(producer['steps'].index(restore),next(i for i,step in enumerate(producer['steps']) if '--prepare-sdk' in step.get('run','')))
 
     def test_offline_package_build_keeps_all_checks_and_stops_on_cache_failure(self):

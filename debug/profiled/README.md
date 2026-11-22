@@ -28,6 +28,11 @@ companions. First start leaves a blank console with `admin`; it never seeds bot
 data or device files. Existing credentials/storage are reused. Read the password
 privately at `debug/profiled/credentials/admin/password.txt`; it is never exported.
 
+`start.bat` prints the local start time immediately after the last startup choice,
+then the end time and elapsed seconds when startup finishes or fails. The elapsed
+duration uses a monotonic stopwatch, excludes time spent answering prompts and
+includes model/collector setup. Failure reporting retains the original exit code.
+
 Ollama serves **both** `olo-qlora-hotfolder:e376fb40` and `qwen3:0.6b`, with all
 available NVIDIA GPUs exposed after a successful probe, and two models permitted
 to remain loaded. Startup merges
