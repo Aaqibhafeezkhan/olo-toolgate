@@ -42,6 +42,9 @@ stopped. Docker can briefly list a stopped container as running.
 
 Use deterministic fixtures for unit tests and real service boundaries for
 integration/E2E checks. Run persistence changes against SQLite and PostgreSQL.
+Marketplace catalog and package-upload rejection fixtures derive an unsupported
+contract major from the current build, so a release version change cannot make
+the negative fixture supported. These checks require no previous-version support.
 Sonar's PL/SQL mapping is restricted to Oracle-specific file suffixes. This
 repository's .sql files use PostgreSQL and SQLite semantics, including SQLite
 empty strings; the executable engine/schema tests verify those dialects.

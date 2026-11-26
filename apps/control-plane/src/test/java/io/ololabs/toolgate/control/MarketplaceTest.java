@@ -195,16 +195,18 @@ final class MarketplaceTest {
     }
 
     @Test void marksEachCatalogVersionCompatibleOrNotAndOffersTheNewestCompatible() throws Exception {
+        var unsupportedContracts = TestSupport.unsupportedContractsVersion();
         var versions = JSON.readTree("""
             {"packageId":"acme.orders","latestVersion":"0.3.0","versions":[
-              {"version":"0.3.0","delisted":false,"compatibility":{"contractsVersion":"2.0.0","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}},
+              {"version":"0.3.0","delisted":false,"compatibility":{"contractsVersion":"@UNSUPPORTED_CONTRACTS@","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}},
               {"version":"0.2.0","delisted":true,"compatibility":{"contractsVersion":"@CONTRACTS@","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}},
-              {"version":"0.1.0","delisted":false,"compatibility":{"contractsVersion":"@CONTRACTS@","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}}]}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION));
+              {"version":"0.1.0","delisted":false,"compatibility":{"contractsVersion":"@CONTRACTS@","protocol":{"min":2,"max":2},"descriptorGeneration":1,"runtimes":[{"language":"java","version":"17"}]}}]}""".replace("@CONTRACTS@", io.ololabs.toolgate.contracts.ContractSet.VERSION)
+                .replace("@UNSUPPORTED_CONTRACTS@", unsupportedContracts));
         source.json("/api/toolgate/v1/tools/acme.orders", versions);
         var reply = JSON.readTree(marketplace().versions(actor, "acme.orders").body());
         assertEquals("0.1.0", reply.get("installVersion").asText());
         assertFalse(reply.get("versions").get(0).get("control").get("compatible").asBoolean());
-        assertTrue(reply.get("versions").get(0).get("control").get("reasons").get(0).asText().contains("contracts 2.0.0"));
+        assertTrue(reply.get("versions").get(0).get("control").get("reasons").get(0).asText().contains("contracts " + unsupportedContracts));
         assertTrue(reply.get("versions").get(2).get("control").get("compatible").asBoolean());
         var status = JSON.readTree(marketplace().status(actor).body());
         assertEquals(Marketplace.fingerprint(raw(key)), status.get("keys").get(0).get("fingerprint").asText());

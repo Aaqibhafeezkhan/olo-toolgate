@@ -8,6 +8,10 @@ import java.util.*;
 
 /** Explicit reviewed group graph for storage/enrollment tests; never a runtime authorization bypass. */
 final class TestSupport {
+    /** A future contract major for rejection fixtures, relative to this build's current contracts. */
+    static String unsupportedContractsVersion() {
+        return (Long.parseLong(ContractSet.VERSION.split("\\.", 2)[0]) + 1) + ".0.0";
+    }
     /** Explicit raw-SQL fixture boundary; the application uses PostgresStore.transaction. */
     static void scope(java.sql.Connection connection, Ids.TenantId tenant) throws java.sql.SQLException {
         connection.setAutoCommit(false);
