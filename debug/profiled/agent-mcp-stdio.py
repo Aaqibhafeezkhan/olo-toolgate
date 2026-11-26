@@ -48,7 +48,7 @@ class Bridge:
             self.initializing = True
             version = params['protocolVersion'] if params['protocolVersion'] in PROTOCOLS else PROTOCOLS[0]
             return result({'protocolVersion':version, 'capabilities':{'tools':{}},
-                'serverInfo':{'name':'olo-toolgate-debug-agent', 'version':'1.0.0'},
+                'serverInfo':{'name':'olo-toolgate-debug-agent', 'version':(ROOT/'VERSION').read_text(encoding='utf-8').strip()},
                 'instructions':'Tools run on the device bound to the configured agent credential. Discover tools with tools/list. The diagnostic setup uses the standard ReadAndWrite groups for bounded hotfolder writes through the installed HotFolder package. Gateway group permissions apply to every call.'})
         if not self.ready: return error(-32002, 'Initialize the MCP connection first')
         if method not in ('tools/list', 'tools/call'): return error(-32601, 'Method not found')

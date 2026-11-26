@@ -111,7 +111,7 @@ final class TriggerDeliveryTest {
             parsed.set("eventSchema", JSON.readTree(eventSchema));
             descriptor = JSON.writeValueAsString(parsed);
         }
-        new ServerPackages(store, codec, null, clock).acceptTriggers(true).upload(admin, TriggerPackages.build("acme.watch", "1.0.0", List.of(descriptor)), "request");
+        new ServerPackages(store, codec, null, clock).acceptTriggers(true).upload(admin, TriggerPackages.build("acme.watch", "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor)), "request");
         assertEquals(201, triggers.create(admin, """
                 {"name":"inbox","spec":{"trigger":"acme.watch/new-file","packageVersion":"1.0.0",
                  "target":{"executor":"CLIENT","deviceGroups":["finance"]},"config":{"folder":"inbox"},"desiredState":"Running"}}""", null, false, "request").status());

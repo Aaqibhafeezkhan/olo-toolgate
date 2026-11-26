@@ -5,6 +5,9 @@ OLO Orchestration runs bots/agents. OLO ToolGate governs tools, devices, trigger
 and access. Start with the real local-model path below; the separate mock
 reference later is for deterministic transport acceptance.
 
+The `agent-mcp-stdio.py` diagnostic bridge reports the checkout's `VERSION` in its
+MCP server information so clients can identify the materialized ToolGate build.
+
 ## Real local-model bots: start here
 
 Run in PowerShell from the repository root. Docker Desktop's Linux engine

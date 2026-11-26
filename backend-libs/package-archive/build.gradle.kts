@@ -21,6 +21,8 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     systemProperty("toolgate.root", rootProject.projectDir.absolutePath)
+    systemProperty("toolgate.productVersion", rootProject.file("VERSION").readText().trim())
+    systemProperty("toolgate.contractsVersion", rootProject.file("packages/contracts/VERSION").readText().trim())
     // Parity with the CLI: TOOLGATE_TRIGGER_PACKAGE names a package `toolgate pack` built, such as the hotfolder-watch sample.
     providers.environmentVariable("TOOLGATE_TRIGGER_PACKAGE").orNull?.let { systemProperty("toolgate.triggerPackage", it) }
 }

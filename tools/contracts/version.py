@@ -74,20 +74,11 @@ def expected():
         source = python_version.read_text(encoding='utf-8')
         source = re.sub(r'^SDK_VERSION = .*', f'SDK_VERSION = "{product}"', source, flags=re.M)
         outputs[python_version] = re.sub(r'^CONTRACTS_VERSION = .*', f'CONTRACTS_VERSION = "{contracts}"', source, flags=re.M)
-    gateway_api = ROOT/'packages/contracts/openapi/gateway-v1.yaml'
-    if gateway_api.exists():
-        outputs[gateway_api] = re.sub(r'^  version: .*', f'  version: {product}', gateway_api.read_text(encoding='utf-8'), flags=re.M)
-    control_api = ROOT/'packages/contracts/openapi/control-v1.yaml'
-    if control_api.exists():
-        outputs[control_api] = re.sub(r'^  version: .*', f'  version: {product}', control_api.read_text(encoding='utf-8'), flags=re.M)
-    quickstart_api = ROOT/'packages/contracts/openapi/quickstart-v1.yaml'
-    if quickstart_api.exists():
-        outputs[quickstart_api] = re.sub(r'^  version: .*', f'  version: {product}', quickstart_api.read_text(encoding='utf-8'), flags=re.M)
-    runtime_api = ROOT/'packages/contracts/openapi/runtime-v1.yaml'
-    if runtime_api.exists():
-        outputs[runtime_api] = re.sub(r'^  version: .*', f'  version: {product}', runtime_api.read_text(encoding='utf-8'), flags=re.M)
-    for proposed in (ROOT/'packages/contracts/openapi/proposed').glob('*.proposed.yaml'):
-        outputs[proposed] = re.sub(r'^  version: .*', f'  version: {product}', proposed.read_text(encoding='utf-8'), flags=re.M)
+    # Every API document ships with the selected product, including the operator
+    # listener and trigger stream. Protocol/schema versions are separate fields.
+    for family in ('openapi', 'asyncapi'):
+        for api in sorted((ROOT/'packages/contracts'/family).rglob('*.yaml')):
+            outputs[api] = re.sub(r'^  version: .*', f'  version: {product}', api.read_text(encoding='utf-8'), flags=re.M)
     return outputs
 
 

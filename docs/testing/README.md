@@ -47,6 +47,9 @@ contract major from the current build, so a release version change cannot make
 the negative fixture supported. These checks require no previous-version support.
 Catalog selection fixtures use the current product version and later patch
 versions for delisted and unsupported entries.
+Trigger security-delta fixtures advance their clock between chronological uploads.
+Security-delta comparisons order equal upload timestamps by package digest. A digest
+includes SDK/build metadata and cannot stand in for the fixture's intended chronology.
 Sonar's PL/SQL mapping is restricted to Oracle-specific file suffixes. This
 repository's .sql files use PostgreSQL and SQLite semantics, including SQLite
 empty strings; the executable engine/schema tests verify those dialects.

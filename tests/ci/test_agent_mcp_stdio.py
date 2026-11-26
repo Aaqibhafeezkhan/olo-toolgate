@@ -5,7 +5,9 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('agent_mcp_stdio',ROOT/'debug/profiled/agent-mcp-stdio.py')
@@ -23,6 +25,14 @@ class Agent:
 
 
 class BridgeTests(unittest.TestCase):
+    def test_server_info_uses_materialized_product_version(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(module, 'ROOT', Path(directory)):
+            for version in ('2.0.0-beta.3', '3.1.4'):
+                with self.subTest(version=version):
+                    (Path(directory)/'VERSION').write_text(version+'\n', encoding='utf-8')
+                    response=module.Bridge(Agent()).handle({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{}}})
+                    self.assertEqual(response['result']['serverInfo']['version'], version)
+
     def initialized(self,agent):
         bridge=module.Bridge(agent)
         response=bridge.handle({'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25','capabilities':{},'clientInfo':{'name':'test','version':'1'}}})

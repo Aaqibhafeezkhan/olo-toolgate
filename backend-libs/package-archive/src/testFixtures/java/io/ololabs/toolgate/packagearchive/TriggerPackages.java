@@ -30,13 +30,13 @@ public final class TriggerPackages {
                 .formatted(packageId, name).strip();
     }
 
-    /** A package of trigger exports only, one Java artifact, with each descriptor given as JSON text. */
-    public static byte[] build(String packageId, String version, List<String> descriptors) {
-        return build(packageId, version, descriptors, Map.of());
+    /** A package of trigger exports only for the caller's current contracts, with each descriptor given as JSON text. */
+    public static byte[] build(String packageId, String version, String sdkVersion, String contractsVersion, List<String> descriptors) {
+        return build(packageId, version, sdkVersion, contractsVersion, descriptors, Map.of());
     }
 
-    /** As {@link #build(String, String, List)}, with extra files placed into the archive and its checksums (for tampering tests). */
-    public static byte[] build(String packageId, String version, List<String> descriptors, Map<String, byte[]> extra) {
+    /** As {@link #build(String, String, String, String, List)}, with extra files placed into the archive and its checksums (for tampering tests). */
+    public static byte[] build(String packageId, String version, String sdkVersion, String contractsVersion, List<String> descriptors, Map<String, byte[]> extra) {
         byte[] artifact = ("PK tiny jar for " + packageId + " " + version + "\n").getBytes(StandardCharsets.UTF_8);
         var files = new TreeMap<String, byte[]>();
         files.put("artifacts/tool.jar", artifact);
@@ -62,13 +62,13 @@ public final class TriggerPackages {
         }
         String manifest = """
                 {"schemaVersion":2,"kind":"SDK","id":"%s","version":"%s","publisher":"Acme",
-                 "sdk":{"language":"JAVA","version":"1.0.0","protocol":{"min":2,"max":2},"descriptorGeneration":1},
-                 "compatibility":{"contractsVersion":"1.0.0"},
+                 "sdk":{"language":"JAVA","version":"%s","protocol":{"min":2,"max":2},"descriptorGeneration":1},
+                 "compatibility":{"contractsVersion":"%s"},
                  "runtimes":[{"runtimeId":"jvm","language":"java","version":"17"}],
                  "tools":[],
                  "artifacts":[{"artifactId":"tool","path":"artifacts/tool.jar","mediaType":"application/java-archive","runtimeId":"jvm","artifactDigest":"%s","sizeBytes":%d}],
                  "credentialReferences":[],"connections":[],"composition":[],
-                 "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".formatted(packageId, version, Canonical.sha256(artifact), artifact.length);
+                 "limits":{"maxTools":64,"maxDescriptorBytes":1048576}}""".formatted(packageId, version, sdkVersion, contractsVersion, Canonical.sha256(artifact), artifact.length);
         var members = new LinkedHashMap<String, Json>();
         Json parsed = Json.parse(manifest);
         for (String field : parsed.fieldNames()) members.put(field, parsed.get(field));
