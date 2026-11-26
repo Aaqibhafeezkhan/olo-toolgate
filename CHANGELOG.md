@@ -2,6 +2,10 @@
 
 ## 1.0.0-dev.1
 
+- Stage main-line contributor credits in `.changes/main`, move them into new
+  major release branches, and carry parent credits into minor child branches.
+  Preserve main and historical records, and seed 2.0 with all unreleased 1.0 credits.
+
 - Add automatic next-major and minor child release branches, plus a patch-only
   preparation option scoped to the selected release branch. Preserve the chosen
   result on retries and propose protected patch updates through a PR.

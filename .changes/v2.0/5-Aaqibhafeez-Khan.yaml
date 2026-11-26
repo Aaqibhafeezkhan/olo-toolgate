@@ -1,0 +1,18 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+schemaVersion: 1
+contributor:
+  name: Aaqibhafeez Khan
+  github: Aaqibhafeezkhan
+  roles: [documentation]
+changes:
+  - type: docs
+    pr: 200
+    component: Endpoint Client
+    summary: Add valid and malformed JSON examples for the json.validate built-in, including its expected success output and safe validation error.
+    audience: [users, developers]
+    tickets:
+      - system: github
+        id: "#23"
+        url: https://github.com/olo-labs/olo-toolgate/issues/23
+        summary: Document the supported JSON validation input and expected results.

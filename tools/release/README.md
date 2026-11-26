@@ -42,6 +42,9 @@ These checks establish packaging/integrity, not runtime support, safety or grant
 Release branches include major lines such as `release/1.x` and minor child
 lines such as `release/1.1.x`. Preparation selects a new major from main, a new
 minor within the selected release major, or a patch increment on the same branch. Each new release build reserves an immutable version and source commit.
+New major lines move main staging into their versioned contributor collection
+in the new branch only; minor children inherit the parent collection. Patch
+increments retain it. Source YAML is validated before branch writes.
 See [How to release ToolGate](../../docs/development/how-to-release.md).
 
 For product releases, use the two manual jobs documented in

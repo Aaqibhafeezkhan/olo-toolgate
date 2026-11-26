@@ -1,0 +1,18 @@
+# Copyright 2026 OLO Labs
+# SPDX-License-Identifier: Apache-2.0
+schemaVersion: 1
+contributor:
+  name: Anushree Kasturi
+  github: AnushreeKasturi
+  roles: [contributor]
+changes:
+  - type: docs
+    component: Getting started
+    summary: Added a beginner glossary that explains Users, Teams, Agents, Tools, Devices, their groups, the Gateway and Control, and the ALLOW, ASK and BLOCK decisions in plain language, linked from the getting-started guide.
+    impact: New readers can learn ToolGate's core vocabulary before reading the architecture documentation.
+    audience: [users, developers]
+    pr: 197
+    tickets:
+      - system: github
+        id: "#4"
+        url: https://github.com/olo-labs/olo-toolgate/issues/4

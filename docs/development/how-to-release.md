@@ -21,8 +21,8 @@ The release channel is not stored in the file: each **Build and release binaries
 run selects `dev`, `alpha`, `beta`, `rc` or `release` (default `dev`). The
 `release` channel publishes the plain version, such as `1.0.0`, with no channel
 or build suffix; the other channels publish `<version>-<channel>.<build>`.
-Release preparation adds a commit changing only `version.json` on the target
-branch. Package manifests, `VERSION`, SDK bindings, Helm metadata and platform versions are
+Release preparation adds a commit changing `version.json` and preparing the
+target contributor collection on the new branch. Package manifests, `VERSION`, SDK bindings, Helm metadata and platform versions are
 materialized in build checkouts; do not manually change individual versions.
 Generated files retain their checked-in baseline until build preparation.
 
@@ -119,8 +119,16 @@ gh workflow run create-release-branch.yml --ref main \
   -f source_branch=release/1.1.x -f source_commit=latest -f action=increment-patch
 ```
 
-Preparation creates a commit changing only `version.json`, retaining `tag: dev`.
-New branches reset lower version components to zero. Patch mode requires a
+Preparation retains `tag: dev`. New branches reset lower version components to
+zero and prepare their contributor collection in the same commit. From main,
+move `.changes/main/` to the target major's series folder in the **new branch
+only**; main's source tree remains unchanged. From a release branch, copy the
+parent's series to the child's new series, retaining the parent records. Set
+`.changes/config.json` to the target series and omit main staging from new
+release branches. Fragment contents and modes are preserved; conflicting
+collections or invalid/missing source fragments are rejected before ref writes.
+Patch mode changes only `version.json` and retains the current collection.
+ Patch mode requires a
 canonical release branch and its current head; it rejects main and older commits.
 It never creates a child line or updates main, parent, or sibling release lines.
 
@@ -251,8 +259,11 @@ pins and independently versioned example tools are separate from product version
 
 Shared contributor collections, such as `.changes/v1.0/`, are included in each
 corresponding 1.0 release. Exact-version collections add release-specific notes.
-Start a `.changes/v1.1/` collection for a new minor series; preserve the old
-records. See the [contribution guide](../../.changes/README.md) and
+The initial `.changes/v2.0/` collection carries all contributor fragments from
+the unreleased 1.0 series into 2.0. Keep those credits and the original 1.0
+records. Start a collection with valid fragments when preparing another new
+series through branch preparation; missing or empty selected collections fail
+before expensive builds. See the [contribution guide](../../.changes/README.md) and
 [annotated template](../../.changes/RELEASE-NOTE-SAMPLE.yaml). Contribution assets
 are generated during release; do not regenerate tracked release-note snapshots
 in ordinary PRs.

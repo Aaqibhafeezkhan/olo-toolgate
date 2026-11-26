@@ -28,6 +28,9 @@ class PreparationTests(unittest.TestCase):
         self.pulls = []
         self.moved = False
         self.fail_after_ref = False
+        self.collections = dict(main='1'*40, **{'v1.0': '1'*40, 'v1.1': '1'*40})
+        self.fragments = [dict(path='1-person.yaml', mode='100644', type='blob', sha='0'*40)]
+        self.fragment = b'schemaVersion: 1\ncontributor: {name: Contributor}\nchanges: [{type: added, summary: Initial work}]\n'
         for mock in (
                 patch.dict(os.environ, GITHUB_RUN_ID='100', GITHUB_REPOSITORY='olo-labs/olo-toolgate'),
                 patch.object(prepare, 'api', side_effect=self.api),
@@ -76,21 +79,62 @@ class PreparationTests(unittest.TestCase):
             return dict(content=base64.b64encode(json.dumps(self.config).encode()).decode())
         if path.startswith('git/commits/'):
             return dict(tree=dict(sha='e'*40))
+        if path == 'git/trees/'+'e'*40:
+            return dict(tree=[dict(path='.changes', mode='040000', type='tree', sha='f'*40)])
+        if path == 'git/trees/'+'f'*40:
+            return dict(tree=[dict(path=name, mode='040000', type='tree', sha=sha)
+                              for name, sha in self.collections.items()])
+        if path == 'git/trees/'+'1'*40:
+            return dict(tree=self.fragments)
+        if path == 'git/blobs/'+'0'*40:
+            return dict(encoding='base64', content=base64.b64encode(self.fragment).decode())
         if path.startswith('compare/'):
             return dict(status='diverged')
         if path.startswith('pulls?'):
             return self.pulls
         raise AssertionError(path)
 
-    def test_main_creates_next_major_with_only_version_configuration_changed(self):
+    def test_main_creates_next_major_and_moves_staging_only_in_the_new_tree(self):
         result = line.initialize('main', 'latest')
         self.assertEqual((result['branch'], result['version']), ('release/2.x', '2.0.0'))
         self.assertEqual(self.heads['main'], SHA)
         tree = next(data for path, data, _ in self.writes if path == 'git/trees')
-        self.assertEqual(len(tree['tree']), 1)
+        self.assertEqual(len(tree['tree']), 4)
         self.assertEqual(tree['tree'][0]['path'], 'version.json')
         self.assertEqual(json.loads(tree['tree'][0]['content']), dict(version='2.0.0', tag='dev'))
+        changes = {entry['path']: entry for entry in tree['tree']}
+        self.assertEqual(changes['.changes/v2.0']['sha'], self.collections['main'])
+        self.assertIsNone(changes['.changes/main']['sha'])
+        self.assertEqual(json.loads(changes['.changes/config.json']['content']), dict(version='v2.0'))
         self.assertEqual(set(self.tags), {'release-preparations/100'})
+
+    def test_child_copies_its_parent_collection_without_deleting_the_parent_records(self):
+        line.initialize('release/1.x', 'latest')
+        changes = next(data['tree'] for path, data, _ in self.writes if path == 'git/trees')
+        changes = {entry['path']: entry for entry in changes}
+        self.assertEqual(changes['.changes/v1.1']['sha'], self.collections['v1.0'])
+        self.assertNotIn('.changes/v1.0', changes)
+        self.assertEqual(json.loads(changes['.changes/config.json']['content']), dict(version='v1.1'))
+
+    def test_missing_empty_malformed_or_conflicting_contributors_fail_before_writes(self):
+        for case in ('missing', 'empty', 'symlink', 'malformed', 'conflicting'):
+            with self.subTest(case=case):
+                self.collections = dict(main='1'*40, **{'v1.0': '1'*40})
+                self.fragments = [dict(path='1-person.yaml', mode='100644', type='blob', sha='0'*40)]
+                self.fragment = b'schemaVersion: 1\ncontributor: {name: Contributor}\nchanges: [{type: added, summary: Initial work}]\n'
+                if case == 'missing':
+                    del self.collections['main']
+                elif case == 'empty':
+                    self.fragments.clear()
+                elif case == 'symlink':
+                    self.fragments[0]['mode'] = '120000'
+                elif case == 'malformed':
+                    self.fragment = b'schemaVersion: 999\n'
+                else:
+                    self.collections['v2.0'] = '9'*40
+                with self.assertRaises(ValueError):
+                    line.initialize('main', 'latest')
+                self.assertEqual(self.writes, [])
 
     def test_numbering_uses_highest_matching_line_and_ignores_historical_names(self):
         config = dict(version='1.0.0')
@@ -248,4 +292,6 @@ class PreparationTests(unittest.TestCase):
         job = workflow['jobs']['prepare']
         self.assertEqual(job['if'], "github.ref == 'refs/heads/main'")
         self.assertEqual(job['permissions']['pull-requests'], 'write')
+        self.assertTrue(any('pip install -r tools/release/notes-requirements.txt' in step.get('run', '')
+                            for step in job['steps']))
         self.assertEqual(job['steps'][-1]['env']['RELEASE_ACTION'], '${{ inputs.action }}')

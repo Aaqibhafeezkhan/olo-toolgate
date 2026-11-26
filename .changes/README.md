@@ -12,7 +12,7 @@ Tracked `RELEASE-NOTES.md` files are release snapshots, not files to regenerate 
 ordinary PRs. Current notes are generated into release assets during release.
 
 When human attribution is needed, add a YAML file under the active collection in `config.json`, currently
-`v1.0/`. Name it `<number>-<name>.yaml`, for example
+`main/` on the main line. Name it `<number>-<name>.yaml`, for example
 `3-your-name.yaml`. Use your own name and optional GitHub login; do not include
 email addresses or private details. Multiple files per contributor are allowed.
 The number controls display order; equal numbers sort by filename.
@@ -141,11 +141,37 @@ UTF-8 with LF newlines, stable category/file/change order and no timestamps.
 Contributor text is escaped when rendered as Markdown. Repeated builds of the
 same source produce identical bytes; changes accumulate throughout the branch.
 
-`config.json` identifies the active contribution series, currently `v1.0`.
+`config.json` identifies the active contributor collection: `main` on the main
+line, or a version series such as `v2.0` on a release line. Main-line
+development builds use that authoring collection while recording their actual
+build version in the generated contributor manifest.
 All fragments under `.changes/v1.0/` are included in every 1.0 release from the
 selected source commit: beta, RC, stable and patch releases. Prepared releases
 select their actual version from `release.json`; notes for 1.1 or 2.0 never pick
 up the 1.0 collection. Changes accumulate without consuming fragments.
+
+`Prepare release branch` handles collection selection in the same pinned commit
+as the version change:
+
+- From main, move `.changes/main/` to the new major's series folder **in the new
+  release branch only**, and set its `config.json` to that series. Main retains
+  its staging folder and is not changed by the preparation run.
+- From a release line, copy that parent's series into the new minor series and
+  set the child's `config.json` accordingly. Keep the parent's versioned records.
+- Patch increments keep the existing collection and its configuration.
+
+The controller validates the pinned source fragments against the canonical
+schema before creating any Git objects. It reuses their Git tree, preserving
+all file bytes and modes. Conflicting target collections, missing/empty source
+collections, malformed YAML, symlinks and truncated tree listings fail before
+branch creation. A target already containing the identical tree is allowed.
+New release branches omit main staging; older versioned collections remain.
+Retries use the original reserved commit and do not recollect newer source data.
+
+The initial `.changes/main/` and `.changes/v2.0/` collections copy all six
+fragments from `.changes/v1.0/` because 1.0 had not been released. These retain
+the original people, roles and change details. Preserve the 1.0 records; add
+main-line contributions under `main/` and release-line work in its active series.
 
 An optional exact-version folder, such as `.changes/v1.0.0-beta.2/`, adds notes
 only for that version, alongside the shared series entries. Keep a contribution
@@ -161,8 +187,9 @@ python tools/release/notes.py --version v1.0.0 --output build/release-notes
 ```
 
 `contributors.json` records the requested release version and original fragment
-paths. To start another series, add its collection with an initial fragment and
-update `config.json`. Preserve previous collections. Missing or empty selected
+paths. Create new release lines through branch preparation so the correct
+source collection and configuration are carried forward. Preserve previous
+versioned collections. Missing or empty selected
 collections fail validation. Historical sources without `.changes/` retain
 baseline notes and receive an empty contributor manifest.
 
