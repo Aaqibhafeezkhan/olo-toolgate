@@ -60,18 +60,26 @@ def load(root, version=None):
     from jsonschema import Draft202012Validator
 
     changes = root/'.changes'
+    collection = None
     if version is None:
         # Controller tools may build historical branches predating fragments.
         if not changes.exists():
             return None, []
         manifest = root/'release.json'
-        version = ('v'+json.loads(manifest.read_text(encoding='utf-8'))['version'] if manifest.is_file()
-                   else json.loads((changes/'config.json').read_text(encoding='utf-8'))['version'])
-    if not isinstance(version, str) or not (VERSION.fullmatch(version) or SERIES.fullmatch(version)):
+        if manifest.is_file():
+            info = json.loads(manifest.read_text(encoding='utf-8'))
+            version = 'v'+info['version']
+            if info.get('channel') == 'Development' or (info.get('sourceBranch') and not info['sourceBranch'].startswith('release/')):
+                collection = json.loads((changes/'config.json').read_text(encoding='utf-8'))['version']
+        else:
+            version = json.loads((changes/'config.json').read_text(encoding='utf-8'))['version']
+    if not isinstance(version, str) or not (version == 'main' or VERSION.fullmatch(version) or SERIES.fullmatch(version)):
         raise ValueError('Invalid release-note version')
-    series = '.'.join(version.split('.')[:2])
+    if collection is not None and (not isinstance(collection, str) or not (collection == 'main' or VERSION.fullmatch(collection) or SERIES.fullmatch(collection))):
+        raise ValueError('Invalid contributor collection')
+    series = collection or ('main' if version == 'main' else '.'.join(version.split('.')[:2]))
     folders = [changes/series]
-    if version != series:
+    if version != series and series != 'main':
         folders.append(changes/version)
     folders = [folder for folder in folders if folder.exists() or folder.is_symlink()]
     if not folders or changes.is_symlink() or any(folder.is_symlink() or not folder.is_dir() for folder in folders):

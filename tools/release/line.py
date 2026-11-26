@@ -143,10 +143,14 @@ def initialize(source, commit, action='new-branch'):
     else:
         branch, version = source, f'{major}.{minor}.{patch+1}'
     identity.versions(version, 1, 'Dev')  # Reject platform version overflow before any writes.
+    source_version = config['version']
     config = dict(version=version, tag='dev')
     parent = prepare.api('git/commits/'+sha)
-    tree = prepare.api('git/trees', dict(base_tree=parent['tree']['sha'], tree=[
-        dict(path='version.json', mode='100644', type='blob', content=json.dumps(config, indent=2)+'\n')]))
+    entries = [dict(path='version.json', mode='100644', type='blob', content=json.dumps(config, indent=2)+'\n')]
+    if action == 'new-branch':
+        from tools.release.contributors import entries as contributor_entries
+        entries.extend(contributor_entries(source, source_version, version, parent['tree']['sha']))
+    tree = prepare.api('git/trees', dict(base_tree=parent['tree']['sha'], tree=entries))
     prepared = prepare.api('git/commits', dict(message='Prepare release '+version, tree=tree['sha'], parents=[sha]))['sha']
     info = dict(schemaVersion=1, branch=branch, commit=prepared, sourceCommit=sha, sourceHead=head, sourceBranch=source,
                 requestedCommit=commit, action=action, prepareRun=run_id, **config)

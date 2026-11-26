@@ -33,7 +33,7 @@ class ReleaseNotesTests(unittest.TestCase):
 
     def test_repository_collection_is_valid(self):
         version, fragments = notes.load(notes.ROOT)
-        expected = 'v'+json.loads((notes.ROOT/'release.json').read_text())['version'] if (notes.ROOT/'release.json').is_file() else 'v1.0'
+        expected = 'v'+json.loads((notes.ROOT/'release.json').read_text())['version'] if (notes.ROOT/'release.json').is_file() else json.loads((notes.ROOT/'.changes/config.json').read_text(encoding='utf-8'))['version']
         self.assertEqual(version, expected)
         self.assertTrue(fragments)
 
@@ -58,6 +58,25 @@ class ReleaseNotesTests(unittest.TestCase):
         manifest = json.loads((self.output/'contributors.json').read_text())
         self.assertEqual(manifest['version'], 'v1.0.0-beta.1')
         self.assertEqual(len(manifest['fragments']), 2)
+
+    def test_main_authoring_and_development_use_the_main_collection(self):
+        staging = self.root/'.changes/main'
+        staging.mkdir()
+        (staging/'1-main.yaml').write_text(yaml.safe_dump(dict(self.document,
+            contributor=dict(name='Main contributor'))), encoding='utf-8')
+        (self.root/'.changes/config.json').write_text(json.dumps(dict(version='main')))
+        self.assertEqual(notes.load(self.root)[0], 'main')
+        self.assertEqual(notes.load(self.root)[1][0]['contributor']['name'], 'Main contributor')
+        for channel, branch in (('Development', 'main'), ('Development', 'feature/work'), ('Dev', 'main')):
+            with self.subTest(channel=channel, branch=branch):
+                (self.root/'release.json').write_text(json.dumps(dict(version='0.1.0-dev.1', channel=channel,
+                                                                      sourceBranch=branch)))
+                version, fragments = notes.load(self.root)
+                self.assertEqual(version, 'v0.1.0-dev.1')
+                self.assertEqual([item['contributor']['name'] for item in fragments], ['Main contributor'])
+        (self.root/'release.json').write_text(json.dumps(dict(version='0.1.0-beta.1', channel='Beta',
+                                                              sourceBranch='release/0.1.x')))
+        self.assertEqual(notes.load(self.root)[1][0]['contributor']['name'], 'Contributor')
 
     def test_accumulation_numeric_order_unicode_and_repeatable_bytes(self):
         self.write('10-last.yml')
