@@ -26,10 +26,10 @@ def run(*args, cwd=ROOT, input=None):
         raise
 
 
-def api(path, data=None, missing=False):
+def api(path, data=None, missing=False, method='POST'):
     args = ['gh', 'api', 'repos/'+os.environ['GITHUB_REPOSITORY']+'/'+path]
     if data is not None:
-        args += ['--method', 'POST', '--input', '-']
+        args += ['--method', method, '--input', '-']
     try:
         return json.loads(run(*args, input=json.dumps(data) if data is not None else None))
     except subprocess.CalledProcessError as error:
@@ -258,7 +258,7 @@ def commit_branch(root, info):
 
 
 def resolve(branch):
-    if re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', branch):
+    if identity.LINE.fullmatch(branch):
         from tools.release.line import resolve as resolve_line
         return resolve_line(branch)
     if not branch.startswith('release/'):
@@ -319,7 +319,7 @@ def main():
     else:
         sha, info = resolve(os.environ['RELEASE_BRANCH'])
         reuse = os.environ.get('BUILD_RUN_ID', '').strip()
-        line_reuse = reuse and re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', info['branch'])
+        line_reuse = reuse and identity.LINE.fullmatch(info['branch'])
         if os.environ.get('GITHUB_REF') != 'refs/heads/'+info['branch'] or (os.environ.get('GITHUB_SHA') != sha and not line_reuse):
             raise ValueError('Release workflow must run on the exact prepared release branch commit')
         if reuse and not re.fullmatch(r'[1-9][0-9]*', reuse):
