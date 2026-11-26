@@ -104,6 +104,23 @@ class VersionConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'major/channel'):
                     config.materialize(root)
 
+    def test_child_line_materializes_one_version_and_rejects_minor_drift(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root/'version.json'
+            document.write_text(json.dumps(dict(version='1.1.3', tag='dev')))
+            with patch.dict(os.environ, GITHUB_REF_NAME='release/1.1.x', GITHUB_WORKFLOW='CI'), \
+                    patch.object(prepare, 'run', return_value='a'*40), \
+                    patch.object(prepare, 'stamp_versions') as stamp:
+                config.materialize(root, build=7)
+                info = stamp.call_args.args[1]
+                self.assertEqual((info['branch'], info['version']), ('release/1.1.x', '1.1.3-dev.7'))
+                self.assertEqual(info['numericVersion'], '1.1.3.7')
+                identity.validate(info)
+                document.write_text(json.dumps(dict(version='1.2.0', tag='dev')))
+                with self.assertRaisesRegex(ValueError, 'minor differs'):
+                    config.materialize(root, build=7)
+
     def test_invalid_and_extra_config_fields_fail(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -8,6 +8,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 CORE = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 SHA = re.compile(r'[0-9a-f]{40}')
+LINE = re.compile(r'release/(0|[1-9][0-9]*)(?:\.(0|[1-9][0-9]*))?\.x')
 CHANNELS = {'Dev': 'dev', 'Alpha': 'alpha', 'Beta': 'beta', 'RC': 'rc', 'Stable': None}
 DEV_LABEL = re.compile(r'dev(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?')
 
@@ -40,10 +41,12 @@ def versions(base, build, channel, label=None):
 
 def validate(info):
     expected = versions(info['baseVersion'], info['build'], info['channel'])
-    line = re.fullmatch(r'release/(0|[1-9][0-9]*)\.x', info.get('branch', ''))
+    line = LINE.fullmatch(info.get('branch', ''))
     if line:
         if line[1] != info['baseVersion'].split('.')[0]:
             raise ValueError('Release line must match the major version')
+        if line[2] is not None and line[2] != info['baseVersion'].split('.')[1]:
+            raise ValueError('Release child line must match the minor version')
         expected['branch'] = info['branch']
     if any(info.get(key) != value for key, value in expected.items()):
         raise ValueError('Release identity/version mapping mismatch')

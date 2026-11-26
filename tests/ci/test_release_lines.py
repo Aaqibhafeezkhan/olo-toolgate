@@ -40,7 +40,7 @@ class ReleaseLineTests(unittest.TestCase):
 
     def pages(self, path):
         if path.startswith('git/matching-refs/tags/release-builds/'):
-            return [[dict(ref='refs/tags/release-builds/1.0.0/'+number, object=dict(sha=number)) for number in self.records]]
+            return [[dict(ref='refs/tags/release-builds/'+self.config['version']+'/'+number, object=dict(sha=number)) for number in self.records]]
         return [[]]
 
     def create(self, name, sha, record):
@@ -105,19 +105,31 @@ class ReleaseLineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'major version'):
             identity.validate(info)
 
-    def test_initialization_keeps_dev_config_and_does_not_reserve_a_build(self):
-        writes = []
-        def api(path, data=None):
-            if data is not None:
-                writes.append((path, data))
-                return dict(sha='b'*40)
-            if path == 'commits/main': return dict(sha=SHA)
-            if path.startswith('contents/'): return dict(content=base64.b64encode(b'{"version":"1.1.0","tag":"dev"}').decode())
-            raise AssertionError(path)
-        with patch.object(prepare, 'api', side_effect=api), patch.object(prepare, 'ref', return_value=None), \
-                patch.object(prepare, 'create_tag') as tag:
-            result = line.initialize('main', 'latest')
-            tag.assert_not_called()
-        self.assertEqual(result['branch'], BRANCH)
-        self.assertEqual(result['tag'], 'dev')
-        self.assertEqual(writes, [('git/refs', dict(ref='refs/heads/'+BRANCH, sha=SHA))])
+    def test_child_line_builds_are_resolved_and_reused_within_the_same_branch(self):
+        child = 'release/1.1.x'
+        self.config['version'] = '1.1.0'
+        with patch.dict(os.environ, GITHUB_REF='refs/heads/'+child), \
+                patch.object(prepare, 'api', side_effect=self.api), patch.object(prepare, 'pages', side_effect=self.pages), \
+                patch.object(prepare, 'create_tag', side_effect=self.create), patch.object(prepare, 'tag', side_effect=self.tags.get):
+            sha, info = prepare.resolve(child)
+            self.assertEqual(info['version'], '1.1.0-beta.1')
+            self.assertEqual(info['branch'], child)
+            self.assertEqual(prepare.resolve(child), (sha, info))
+            with patch.dict(os.environ, BUILD_RUN_ID='100', GITHUB_SHA='b'*40), \
+                    patch.object(prepare, 'api', side_effect=lambda path, *args:
+                        dict(head_branch=child, head_sha=SHA, path='.github/workflows/build-release.yml',
+                             event='workflow_dispatch', repository=dict(full_name=REPO))
+                        if path.startswith('actions/runs/') else self.api(path, *args)):
+                self.assertEqual(prepare.resolve(child), (sha, info))
+
+    def test_child_minor_mismatch_fails_before_reservation(self):
+        with patch.dict(os.environ, GITHUB_REF='refs/heads/release/1.1.x'), \
+                patch.object(prepare, 'api', side_effect=self.api), patch.object(prepare, 'allocate') as allocate:
+            with self.assertRaisesRegex(ValueError, 'minor differs'):
+                line.resolve('release/1.1.x')
+            allocate.assert_not_called()
+        info = dict(schemaVersion=1, **identity.versions('1.2.0', 1, 'Beta'),
+                    sourceBranch='release/1.1.x', sourceCommit=SHA)
+        info['branch'] = 'release/1.1.x'
+        with self.assertRaisesRegex(ValueError, 'minor version'):
+            identity.validate(info)

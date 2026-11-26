@@ -39,14 +39,15 @@ Promotion checks the inventory and preserves bytes. The release `SHA256SUMS`
 covers the tool inventory and every `.olo`/`.olotool` alongside other assets.
 These checks establish packaging/integrity, not runtime support, safety or grants.
 
-Release branches are long-lived major lines such as `release/1.x`. Compatible
-patch and minor releases share the line; breaking changes start a new major
-line. Each new release build reserves an immutable version and source commit.
+Release branches include major lines such as `release/1.x` and minor child
+lines such as `release/1.1.x`. Preparation selects a new major from main, a new
+minor within the selected release major, or a patch increment on the same branch. Each new release build reserves an immutable version and source commit.
 See [How to release ToolGate](../../docs/development/how-to-release.md).
 
 For product releases, use the two manual jobs documented in
 [How to release ToolGate](../../docs/development/how-to-release.md):
-`create-release-branch.yml` initializes a major release line, and
+`create-release-branch.yml` prepares a new release line or increments a patch
+(with a PR fallback for protected updates), and
 `build-release.yml` allocates each immutable build, tests it and publishes or reuses its retained bundle. All first-party
 release artifacts share one SemVer such as `1.0.0-beta.42`. Product publication uses
 the `production-release` environment; development publication remains separate.

@@ -2,6 +2,10 @@
 
 ## 1.0.0-dev.1
 
+- Add automatic next-major and minor child release branches, plus a patch-only
+  preparation option scoped to the selected release branch. Preserve the chosen
+  result on retries and propose protected patch updates through a PR.
+
 - Let selected-bot setup observe a refreshed device enrollment code when model
   preparation outlives a pending review. Preserve the pinned device/key and
   single-shot approval; never retry denied or uncertain approval writes.

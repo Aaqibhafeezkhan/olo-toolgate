@@ -1,11 +1,12 @@
 # Copyright 2026 OLO Labs
 # SPDX-License-Identifier: Apache-2.0
-"""Long-lived major release lines with immutable, per-build release identities."""
+"""Major/minor release lines with immutable preparation and build identities."""
 import base64
 import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from urllib.parse import quote
 
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.release import identity, prepare
 
-LINE = re.compile(r'release/(0|[1-9][0-9]*)\.x')
+LINE = identity.LINE
 # Release job choices; `release` is the stable version without a channel or build suffix.
 CHANNELS = {'dev': 'Dev', 'alpha': 'Alpha', 'beta': 'Beta', 'rc': 'RC', 'release': 'Stable'}
 
@@ -40,25 +41,130 @@ def configuration(sha):
     return document
 
 
-def initialize(source, commit):
-    if source != 'main' and not source.startswith('release/'):
-        raise ValueError('Initialize a release line from main or release/*')
+def next_branch(source, config, branches):
+    """Select a fresh major from main, or a fresh minor within the source major."""
+    major, minor, _ = map(int, config['version'].split('.'))
+    lines = [LINE.fullmatch(branch) for branch in branches]
+    lines = [match for match in lines if match]
+    if source == 'main':
+        existing = [int(match[1]) for match in lines]
+        major = max(major, max(existing, default=major-1)+1)
+        return f'release/{major}.x', f'{major}.0.0'
+    minors = [int(match[2]) for match in lines if int(match[1]) == major and match[2] is not None]
+    minor = max([minor, *minors])+1
+    return f'release/{major}.{minor}.x', f'{major}.{minor}.0'
+
+
+def apply_preparation(info):
+    """Apply only the reserved effect; interrupted runs never select another version."""
+    branch, sha = info['branch'], info['commit']
+    current = prepare.ref('heads/'+branch)
+    if current and current['object']['sha'] == sha:
+        return info
+    if current:
+        comparison = prepare.api('compare/'+sha+'...'+current['object']['sha'])
+        if comparison['status'] in ('ahead', 'identical'):
+            return info  # Already applied, then advanced through normal development.
+    if info['action'] == 'new-branch':
+        if current:
+            raise ValueError('Target branch was created by another operation; refusing to overwrite it')
+        if prepare.api('commits/'+quote(info['sourceBranch'], safe=''))['sha'] != info['sourceHead']:
+            raise ValueError('Source branch moved; dispatch a fresh preparation')
+        prepare.api('git/refs', dict(ref='refs/heads/'+branch, sha=sha))
+        return info
+    if not current or current['object']['sha'] != info['sourceCommit']:
+        raise ValueError('Patch source branch moved; dispatch a fresh preparation')
+    try:
+        # A sibling commit from a concurrently advanced branch fails the fast-forward check.
+        prepare.api('git/refs/heads/'+quote(branch, safe='/'), dict(sha=sha, force=False), method='PATCH')
+        return info
+    except subprocess.CalledProcessError as error:
+        if not re.search(r'protected branch|GH006|GH013|repository rule', error.stderr or '', re.I):
+            raise
+    # Respect protection: propose the exact same commit through a reviewable PR.
+    proposal = 'release-preparation/'+info['prepareRun']
+    existing = prepare.ref('heads/'+proposal)
+    if existing is None:
+        prepare.api('git/refs', dict(ref='refs/heads/'+proposal, sha=sha))
+    elif existing['object']['sha'] != sha:
+        raise ValueError('Patch proposal branch differs from the reserved preparation')
+    owner = os.environ['GITHUB_REPOSITORY'].split('/')[0]
+    pulls = prepare.api('pulls?state=all&head='+quote(owner+':'+proposal, safe='')+'&base='+quote(branch, safe=''))
+    if pulls:
+        if len(pulls) != 1 or pulls[0]['state'] != 'open':
+            raise ValueError('Preparation PR is closed without the reserved commit on the release branch')
+        pull = pulls[0]
+    else:
+        pull = prepare.api('pulls', dict(head=proposal, base=branch, title='Release: prepare '+info['version'],
+            body='Increment the patch version on `'+branch+'` to `'+info['version']+'`. '
+                 'Merge this PR before building the new version.'))
+    return dict(info, pullRequest=pull['html_url'])
+
+
+def initialize(source, commit, action='new-branch'):
+    match = LINE.fullmatch(source)
+    if source != 'main' and not match:
+        raise ValueError('Initialize from main or release/<major>[.<minor>].x')
+    if action not in ('new-branch', 'increment-patch') or (action == 'increment-patch' and source == 'main'):
+        raise ValueError('Select new-branch, or increment-patch on a release branch')
     prepare.run('git', 'check-ref-format', 'refs/heads/'+source)
     if commit != 'latest' and not identity.SHA.fullmatch(commit):
         raise ValueError('Invalid source commit')
+    run_id = os.environ['GITHUB_RUN_ID']
+    if not re.fullmatch(r'[1-9][0-9]*', run_id):
+        raise ValueError('Preparation requires a numeric Actions run ID')
+    record = 'release-preparations/'+run_id
+    previous = prepare.tag(record)
+    if previous:
+        sha, info = previous
+        if info.get('schemaVersion') != 1:
+            raise ValueError('Unsupported release preparation record schema')
+        if (info['sourceBranch'], info['requestedCommit'], info['action'], info['prepareRun']) != (source, commit, action, run_id):
+            raise ValueError('A preparation retry must use the original inputs')
+        if sha != info['commit']:
+            raise ValueError('Preparation record commit mismatch')
+        return apply_preparation(info)
     head = prepare.api('commits/'+quote(source, safe=''))['sha']
     sha = head if commit == 'latest' else commit
     if sha != head and prepare.api('compare/'+sha+'...'+head)['status'] not in ('ahead', 'identical'):
         raise ValueError('Selected commit must belong to the source branch history')
+    if action == 'increment-patch' and sha != head:
+        raise ValueError('Patch preparation must select the current release branch head')
     config = configuration(sha)
     if config['tag'] != 'dev':
         raise ValueError('version.json must keep tag dev; each release build selects its channel')
-    branch = 'release/'+config['version'].split('.')[0]+'.x'
-    if prepare.ref('heads/'+branch):
-        raise ValueError('Release line already exists; sync compatible main changes through a PR')
-    # The line starts at the exact source commit; version.json stays on dev.
-    prepare.api('git/refs', dict(ref='refs/heads/'+branch, sha=sha))
-    return dict(branch=branch, commit=sha, sourceCommit=sha, **config)
+    major, minor, patch = map(int, config['version'].split('.'))
+    if match and (int(match[1]) != major or (match[2] is not None and int(match[2]) != minor)):
+        raise ValueError('Source release line differs from version.json')
+    if action == 'new-branch':
+        branches = [item['ref'].removeprefix('refs/heads/')
+                    for page in prepare.pages('git/matching-refs/heads/release/?per_page=100') for item in page]
+        branch, version = next_branch(source, config, branches)
+    else:
+        branch, version = source, f'{major}.{minor}.{patch+1}'
+    identity.versions(version, 1, 'Dev')  # Reject platform version overflow before any writes.
+    config = dict(version=version, tag='dev')
+    parent = prepare.api('git/commits/'+sha)
+    tree = prepare.api('git/trees', dict(base_tree=parent['tree']['sha'], tree=[
+        dict(path='version.json', mode='100644', type='blob', content=json.dumps(config, indent=2)+'\n')]))
+    prepared = prepare.api('git/commits', dict(message='Prepare release '+version, tree=tree['sha'], parents=[sha]))['sha']
+    info = dict(schemaVersion=1, branch=branch, commit=prepared, sourceCommit=sha, sourceHead=head, sourceBranch=source,
+                requestedCommit=commit, action=action, prepareRun=run_id, **config)
+    # Store the exact pending effect before changing any branch ref.
+    prepare.create_tag(record, prepared, info)
+    return apply_preparation(info)
+
+
+def main():
+    info = initialize(os.environ.get('SOURCE_BRANCH', 'main'), os.environ.get('SOURCE_COMMIT', 'latest'),
+                      os.environ.get('RELEASE_ACTION', 'new-branch'))
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+            output.write('## Release preparation\n\n')
+            for key in ('action', 'sourceBranch', 'sourceCommit', 'branch', 'version', 'commit', 'pullRequest'):
+                if key in info:
+                    output.write(f'- {key}: `{info[key]}`\n')
+    print(json.dumps(info, indent=2))
 
 
 def resolve(branch):
@@ -66,7 +172,7 @@ def resolve(branch):
     sha = os.environ.get('GITHUB_SHA', '')
     reuse = os.environ.get('BUILD_RUN_ID', '').strip()
     if not match or not identity.SHA.fullmatch(sha):
-        raise ValueError('Release builds require release/<major>.x and an exact dispatch commit')
+        raise ValueError('Release builds require release/<major>[.<minor>].x and an exact dispatch commit')
     if os.environ.get('GITHUB_REF') != 'refs/heads/'+branch:
         raise ValueError('Release workflow must run within its release line')
     if reuse:
@@ -83,6 +189,8 @@ def resolve(branch):
     config = configuration(sha)
     if config['version'].split('.')[0] != match[1]:
         raise ValueError('Release line major differs from version.json; start a new line for breaking changes')
+    if match[2] is not None and config['version'].split('.')[1] != match[2]:
+        raise ValueError('Release child line minor differs from version.json')
     if reuse:
         # A reused bundle keeps its original channel; the channel input does not apply.
         prefix = 'git/matching-refs/tags/release-builds/'+config['version']+'/?per_page=100'
@@ -102,4 +210,4 @@ def resolve(branch):
 
 
 if __name__ == '__main__':
-    print(json.dumps(initialize(os.environ.get('SOURCE_BRANCH', 'main'), os.environ.get('SOURCE_COMMIT', 'latest')), indent=2))
+    main()
