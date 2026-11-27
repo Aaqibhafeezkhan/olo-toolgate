@@ -16,6 +16,12 @@ verified.descriptorSetDigest();
 
 ## Regression baseline
 
+The shared `TriggerPackages` test builder requires the current SDK and contract-set
+versions from its caller. Control tests pass the product build version and
+`ContractSet.VERSION`; archive tests receive `VERSION` and `packages/contracts/VERSION`
+through Gradle. The fixture never assumes a contract
+major, so the same validation, ingest and delivery gates run on each release line.
+
 `tests/fixtures/packages/baseline.json` records the decision and digests for every fixture in
 `tests/fixtures/packages/cases` and `tool-sdk/conformance/fixtures/packages`. It was recorded on Control's own
 `PackageArchive` before the extraction, and both `PackageArchiveBaselineTest` (Control) and `PackageArchiveTest`

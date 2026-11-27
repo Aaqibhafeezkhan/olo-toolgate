@@ -38,6 +38,20 @@ Java SDK preparation and Java package builds use the shared bounded
 Attempt logs live beside the output directory in `<output-name>-gradle-logs/`,
 separate from published archives and runtime-image package content.
 
+CI restores downloaded Gradle dependency files and resolution metadata into
+`.dev/core-mcp-gradle` before building. GitHub Actions retains this cache between
+otherwise fresh runners. Keys include OS, architecture, Java major, build scripts,
+dependency locks, version catalog and Gradle wrapper pins, rather than the release
+build number. A changed key can reuse existing downloads while Gradle resolves
+the current pinned dependencies. The cache is saved only after the package,
+SDK-worker and profile checks and artifact uploads succeed.
+
+The cache excludes build outputs, the locally published SDK, Gradle init scripts
+and credential configuration files such as `gradle.properties`. SDK publication
+and every build/test gate still execute. Cache
+misses, eviction and new dependencies still need network access; a warm cache
+reduces repository requests but does not guarantee an entirely offline build.
+
 Add a project directory and an inventory entry to include another package.
 The supported adapters are `java-gradle`, `json` and `python`. Additional SDK languages
 require their shared adapter/runtime implementation before an inventory may

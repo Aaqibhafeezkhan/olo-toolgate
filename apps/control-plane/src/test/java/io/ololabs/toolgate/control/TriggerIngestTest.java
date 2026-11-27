@@ -103,7 +103,7 @@ final class TriggerIngestTest {
         var packages = new ServerPackages(store, codec, null, clock).acceptTriggers(true);
         String descriptor = TriggerPackages.clientDescriptor(PACKAGE, "new-file").replace("\"onTerminalRejection\":\"HALT\"", "\"onTerminalRejection\":\"" + policy + "\"")
                 .replace("\"maxEventsPerHour\":600", "\"maxEventsPerHour\":" + perHour);
-        packages.upload(admin, TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor)), "request");
+        packages.upload(admin, TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor)), "request");
         String body = """
                 {"name":"inbox","spec":{"trigger":"acme.watch/new-file","packageVersion":"1.0.0",
                  "target":{"executor":"CLIENT","devices":["device-a"]},"config":{"folder":"inbox"},"desiredState":"Running"}}""";

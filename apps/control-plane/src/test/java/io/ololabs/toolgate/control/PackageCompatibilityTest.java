@@ -47,7 +47,7 @@ final class PackageCompatibilityTest {
 
     @Test void eachIncompatibilityIsReported() throws Exception {
         Map<String, Consumer<ObjectNode>> cases = new LinkedHashMap<>();
-        cases.put("contracts major", m -> ((ObjectNode) m.get("compatibility")).put("contractsVersion", "2.0.0"));
+        cases.put("contracts major", m -> ((ObjectNode) m.get("compatibility")).put("contractsVersion", TestSupport.unsupportedContractsVersion()));
         cases.put("contracts missing", m -> ((ObjectNode) m.get("compatibility")).remove("contractsVersion"));
         cases.put("minimum host not a version", m -> ((ObjectNode) m.get("compatibility")).put("minimumToolHostVersion", "latest"));
         cases.put("descriptor generation", m -> ((ObjectNode) m.get("sdk")).put("descriptorGeneration", 2));
@@ -96,7 +96,7 @@ final class PackageCompatibilityTest {
         var packages = new ServerPackages(store, codec, null, java.time.Clock.systemUTC());
 
         // A runtime or descriptor generation mismatch already fails the package rules (400); these pass them and fail here.
-        var contracts = ServerPackagesTest.zip(files(m -> ((ObjectNode) m.get("compatibility")).put("contractsVersion", "2.0.0")));
+        var contracts = ServerPackagesTest.zip(files(m -> ((ObjectNode) m.get("compatibility")).put("contractsVersion", TestSupport.unsupportedContractsVersion())));
         assertEquals(422, assertThrows(Failure.class, () -> packages.upload(actor, contracts, "request-1")).status());
         var protocol = ServerPackagesTest.zip(files(m -> ((ObjectNode) m.get("sdk")).putObject("protocol").put("min", 3).put("max", 4)));
         assertEquals(422, assertThrows(Failure.class, () -> packages.upload(actor, protocol, "request-2")).status());

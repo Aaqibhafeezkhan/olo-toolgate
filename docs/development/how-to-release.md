@@ -24,6 +24,8 @@ or build suffix; the other channels publish `<version>-<channel>.<build>`.
 Release preparation adds a commit changing `version.json` and preparing the
 target contributor collection on the new branch. Package manifests, `VERSION`, SDK bindings, Helm metadata and platform versions are
 materialized in build checkouts; do not manually change individual versions.
+Every OpenAPI and AsyncAPI document's `info.version` is stamped with the selected
+product version, including the emergency operator API and trigger stream.
 Generated files retain their checked-in baseline until build preparation.
 
 The release branch moves as reviewed compatible changes arrive. Each release

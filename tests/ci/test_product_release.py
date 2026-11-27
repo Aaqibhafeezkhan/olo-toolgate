@@ -140,6 +140,14 @@ class ReleaseAllocationTests(unittest.TestCase):
 
 
 class VersionPropagationTests(unittest.TestCase):
+    def assert_api_versions(self, root, expected):
+        for family in ('openapi', 'asyncapi'):
+            documents = list((root/'packages/contracts'/family).rglob('*.yaml'))
+            self.assertTrue(documents, family)
+            for path in documents:
+                with self.subTest(api=path.relative_to(root).as_posix(), version=expected):
+                    self.assertEqual(yaml.safe_load(path.read_text(encoding='utf-8'))['info']['version'], expected)
+
     def test_real_generators_stamp_all_release_components_without_changing_wire_schemas(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary)
@@ -157,6 +165,7 @@ class VersionPropagationTests(unittest.TestCase):
                     shutil.copyfile(ROOT/name, path)
             before = {p.relative_to(target).as_posix():p.read_bytes() for p in (target/'packages/contracts/schemas').rglob('*.json')}
             prepare.stamp(target, release())
+            self.assert_api_versions(target, '1.0.0-beta.42')
             rendered = (target/'RELEASE-NOTES.md').read_text(encoding='utf-8')
             self.assertIn('# OLO ToolGate 1.0.0-beta.42 release notes', rendered)
             for language in ('java', 'rust', 'typescript', 'php'):
@@ -198,6 +207,7 @@ class VersionPropagationTests(unittest.TestCase):
             with patch.dict(os.environ, GITHUB_REF_NAME='release/2.x'):
                 config.materialize(target, selection=selection)
             pipeline.verify_source(target, selected)
+            self.assert_api_versions(target, '2.0.0-beta.1')
             from tools.release import notes
             assets = target/'assets'
             notes.generate(target, assets)

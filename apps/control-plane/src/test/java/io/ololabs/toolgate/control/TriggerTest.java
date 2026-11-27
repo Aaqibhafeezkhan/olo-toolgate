@@ -148,13 +148,17 @@ final class TriggerTest {
     @Test
     void packageAcceptanceDefinitionsAndSecurityDelta() throws Exception {
         for (var entry : stores()) {
-            var w = world(entry.getValue(), "tenant-a");
-            byte[] first = TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file")));
+            var clock = new TriggerIngestTest.MutableClock();
+            clock.millis = CLOCK.millis();
+            var w = world(entry.getValue(), "tenant-a", clock);
+            byte[] first = TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file")));
             var refusing = new ServerPackages(w.store(), codec, null, CLOCK);
             assertEquals(400, status(() -> refusing.upload(w.admin(), first, "request")), "the module flag gates trigger exports");
             assertEquals(201, w.packages().upload(w.admin(), first, "request").status());
+            // Equal upload times are ordered by digest, which changes with SDK/build metadata.
+            clock.millis++;
             String wider = descriptor("new-file").replace("\"maxEventsPerHour\":600", "\"maxEventsPerHour\":1200");
-            assertEquals(201, w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.1.0", List.of(wider)), "request").status());
+            assertEquals(201, w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.1.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(wider)), "request").status());
             var page = json(w.triggers().definitions(w.admin(), null, null).body());
             assertEquals(2, page.path("items").size(), entry.getKey());
             var byVersion = new HashMap<String, JsonNode>();
@@ -176,7 +180,7 @@ final class TriggerTest {
     void scopedActionChangesOnlyTheTargetedDesiredDocument() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             var unaffected = desired(w, "device-c");
             String pause = """
@@ -231,7 +235,7 @@ final class TriggerTest {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
             TestSupport.pool(w.store(), codec, w.tenant(), "spare", "device-b", "device-c");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             String target = """
                     {"executor":"CLIENT","deviceGroups":["finance","spare"]}
                     """;
@@ -270,7 +274,7 @@ final class TriggerTest {
     void bulkActionUsesOnlyAuthorizedGroupsAndMatchingTriggers() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             for (String name : List.of("one", "two")) {
                 w.triggers().create(w.admin(), create(name, TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             }
@@ -311,7 +315,7 @@ final class TriggerTest {
     void rollingUpdateWaitsForReadinessAndStallsOnFailure() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             reportRolloutPhase(w, "device-a", "Running", true);
             reportRolloutPhase(w, "device-c", "Running", true);
@@ -344,7 +348,7 @@ final class TriggerTest {
     void completedRolloutCanRestorePreviousRevision() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             reportRolloutPhase(w, "device-a", "Running", true);
             reportRolloutPhase(w, "device-c", "Running", true);
@@ -376,7 +380,7 @@ final class TriggerTest {
             clock.millis = CLOCK.millis();
             var w = world(entry.getValue(), "tenant-a", clock);
             for (String version : List.of("1.0.0", "1.0.1")) {
-                w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, version, List.of(descriptor("new-file"))), "request");
+                w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, version, System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             }
             w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             reportRolloutPhase(w, "device-a", "Running", true);
@@ -422,7 +426,7 @@ final class TriggerTest {
     void assignmentLifecycleDesiredDocumentsAndLeases() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
 
             // Validation: config against the signed schema, a real definition, a client target, known groups.
             assertEquals(400, status(() -> w.triggers().create(w.admin(), create("bad", TARGET, "{}", "Running"), null, false, "request")));
@@ -547,7 +551,7 @@ final class TriggerTest {
     void desiredDocumentSignatureIsVerifiedAndTypeSeparated() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             var signed = w.store().transaction(w.tenant(), true, tx -> w.triggers().desired(tx, device(w, "device-a")));
             assertEquals("device-a", w.crypto().verify(signed).executorId());
@@ -569,7 +573,7 @@ final class TriggerTest {
     void crossTenantAndUnknownGiveTheSame404AndPermissionsGate() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "request");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "request");
             w.triggers().create(w.admin(), create("inbox", TARGET, "{\"folder\":\"inbox\"}", "Running"), null, false, "request");
             var b = world(entry.getValue(), "tenant-b");
             var outsider = b.admin();
@@ -620,7 +624,7 @@ final class TriggerTest {
     void ownerCanAssignOnlyTheirDeviceAndCannotWidenToTheSharedGroup() throws Exception {
         for (var entry : stores()) {
             var w = world(entry.getValue(), "tenant-a");
-            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", List.of(descriptor("new-file"))), "upload");
+            w.packages().upload(w.admin(), TriggerPackages.build(PACKAGE, "1.0.0", System.getProperty("toolgate.productVersion"), ContractSet.VERSION, List.of(descriptor("new-file"))), "upload");
             limited(w, "visitor", "finance", List.of("trigger.read", "trigger.manage", "trigger.subscribe"), "OWNED");
             w.store().transaction(w.tenant(), true, tx -> {
                 var before = tx.load();
